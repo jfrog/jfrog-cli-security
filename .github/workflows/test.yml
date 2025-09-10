@@ -1,5 +1,9 @@
 name: JFrog CLI Security Tests
 
+permissions:
+  actions: read
+  contents: read
+
 on:
   push:
     branches:
@@ -34,12 +38,20 @@ jobs:
         if: ${{ github.event_name != 'push' }}
         with:
           labels: "safe to test"
-
+          
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      
+
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          install_bashi: true
+          enabled_optimizations: 'go_test_junit_optimization'
+
       - name: Setup Go with cache
         uses: jfrog/.github/actions/install-go-with-cache@main
 
@@ -60,6 +72,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
 
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
@@ -107,6 +126,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
+
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
         with:
@@ -131,6 +157,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
+          
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -152,7 +185,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -174,7 +212,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -196,6 +239,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
 
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
@@ -219,6 +269,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
+
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -241,6 +298,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
+
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -262,6 +326,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Start FastCI Optimization
+        uses: jfrog-fastci/fastci@main
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
+          enabled_optimizations: 'go_test_junit_optimization'
 
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
