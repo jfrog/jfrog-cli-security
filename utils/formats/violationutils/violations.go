@@ -3,10 +3,10 @@ package violationutils
 import "github.com/jfrog/jfrog-cli-security/utils/severityutils"
 
 const (
-	ScaViolationType     = "sca"
-	SecretsViolationType = "secrets"
-	IacViolationType     = "iac"
-	SastViolationType    = "sast"
+	ScaViolationType     ViolationType = "sca"
+	SecretsViolationType ViolationType = "secrets"
+	IacViolationType     ViolationType = "iac"
+	SastViolationType    ViolationType = "sast"
 )
 
 type ViolationType string

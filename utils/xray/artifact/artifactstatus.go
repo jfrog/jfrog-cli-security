@@ -24,7 +24,7 @@ type XrayScanStep string
 
 const (
 	ArtifactStatusFetchingInterval = 10 * 1e9      // nanoseconds converted to 10 seconds
-	ArtifactStatusFetchTimeout     = 10 * 60 * 1e9 // nanoseconds converted to 10 minutes
+	ArtifactStatusFetchTimeout     = 20 * 60 * 1e9 // nanoseconds converted to 20 minutes
 )
 
 func GetArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path string) (*services.ArtifactStatusResponse, error) {
@@ -87,6 +87,7 @@ func WaitForArtifactScanCompletion(xrayManager *xray.XrayServicesManager, repo, 
 				log.Debug(getNotCompletedStepsStatus(status.Details, params.Steps))
 				return
 			}
+			log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
 			// We don't need to return any response body, as we don't use it.
 			// We just need to stop the polling executor.
 			shouldStop = true
@@ -97,37 +98,58 @@ func WaitForArtifactScanCompletion(xrayManager *xray.XrayServicesManager, repo, 
 	return err
 }
 
-func getNotCompletedStepsStatus(details services.ArtifactDetailedStatus, steps []XrayScanStep) string {
+func getStatusMap(details services.ArtifactDetailedStatus, steps []XrayScanStep, filterCompleted bool) map[XrayScanStep]services.ArtifactStatus {
 	statusMap := make(map[XrayScanStep]services.ArtifactStatus)
 	for _, step := range steps {
-		if !IsScanCompleted(statusMap[step]) {
-			switch step {
-			case XrayScanStepSca:
+		switch step {
+		case XrayScanStepSca:
+			if !filterCompleted || !IsScanCompleted(details.Sca.Status) {
 				statusMap[step] = details.Sca.Status
-			case XrayScanStepContextualAnalysis:
-				statusMap[step] = details.ContextualAnalysis.Status
-			case XrayScanStepIaC:
-				statusMap[step] = details.Exposures.Status
-			case XrayScanStepSecrets:
-				statusMap[step] = details.Exposures.Status
-			case XrayScanStepServices:
-				statusMap[step] = details.Exposures.Status
-			case XrayScanStepApplication:
-				statusMap[step] = details.Exposures.Status
-			case XrayScanStepViolations:
-				statusMap[step] = details.Violations.Status
-			default:
-				log.Warn(fmt.Sprintf("Unknown scan step: %s", step))
-				statusMap[step] = services.ArtifactStatusFailed
 			}
+		case XrayScanStepContextualAnalysis:
+			if !filterCompleted || !IsScanCompleted(details.ContextualAnalysis.Status) {
+				statusMap[step] = details.ContextualAnalysis.Status
+			}
+		case XrayScanStepIaC:
+			if !filterCompleted || !IsScanCompleted(details.Exposures.Status) {
+				statusMap[step] = details.Exposures.Status
+			}
+		case XrayScanStepSecrets:
+			if !filterCompleted || !IsScanCompleted(details.Exposures.Status) {
+				statusMap[step] = details.Exposures.Status
+			}
+		case XrayScanStepServices:
+			if !filterCompleted || !IsScanCompleted(details.Exposures.Status) {
+				statusMap[step] = details.Exposures.Status
+			}
+		case XrayScanStepApplication:
+			if !filterCompleted || !IsScanCompleted(details.Exposures.Status) {
+				statusMap[step] = details.Exposures.Status
+			}
+		case XrayScanStepViolations:
+			if !filterCompleted || !IsScanCompleted(details.Violations.Status) {
+				statusMap[step] = details.Violations.Status
+			}
+		default:
+			log.Warn(fmt.Sprintf("Unknown scan step: %s", step))
+			statusMap[step] = services.ArtifactStatusFailed
 		}
 	}
-	notCompleted := []string{}
+	return statusMap
+}
+
+func statusMapToString(statusMap map[XrayScanStep]services.ArtifactStatus) []string {
+	statusStrings := []string{}
 	for step, status := range statusMap {
-		notCompleted = append(notCompleted, fmt.Sprintf("%s (%s)", step, status))
+		statusStrings = append(statusStrings, fmt.Sprintf("%s (%s)", step, status))
 	}
+	return statusStrings
+}
+
+func getNotCompletedStepsStatus(details services.ArtifactDetailedStatus, steps []XrayScanStep) string {
+	notCompleted := statusMapToString(getStatusMap(details, steps, true))
 	if len(steps) == 1 {
-		return fmt.Sprintf("Waiting for: %s (%s)", steps[0], statusMap[steps[0]])
+		return fmt.Sprintf("Waiting for: %s", notCompleted[0])
 	}
 	return fmt.Sprintf("Completed %d/%d, waiting for: [%s]", len(steps)-len(notCompleted), len(steps), strings.Join(notCompleted, ", "))
 }

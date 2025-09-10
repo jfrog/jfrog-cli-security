@@ -125,7 +125,7 @@ require (
 )
 
 // attiasas:add_get_violations_api
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250907110403-bb816fe1c9f6
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250908124620-eeb30b5a401e
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 

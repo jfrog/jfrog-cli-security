@@ -1,10 +1,13 @@
 package enforcer
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -12,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 )
@@ -66,7 +70,7 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 		return
 	}
 	convertedViolations = []violationutils.Violation{}
-	log.Info("Waiting for Xray scans to complete...")
+	log.Debug("Waiting for Xray scans to complete...")
 	startedTimeStamp := time.Now()
 	err = artifact.WaitForArtifactScanCompletion(xrayManager, p.rtRepository, p.artifactPath, artifact.Steps(artifact.XrayScanStepViolations))
 	if err != nil {
@@ -81,9 +85,42 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 		return
 	}
 	if generatedViolations.Total == 0 {
-		log.Info("No violations were found")
+		log.Debug("Xray scan completed with no violations")
 	} else {
-		log.Info(fmt.Sprintf("Scans completed with %d violations", generatedViolations.Total))
+		log.Debug(fmt.Sprintf("Xray scans completed with %d violations", generatedViolations.Total))
+	}
+	return convertToLocalViolations(generatedViolations.Violations)
+}
+
+func convertToLocalViolations(generatedViolations []services.XrayViolation) (convertedViolations []violationutils.Violation, err error) {
+	convertedViolations = make([]violationutils.Violation, 0, len(generatedViolations))
+	for _, v := range generatedViolations {
+		violationType, e := getViolationType(v)
+		if e != nil {
+			err = errors.Join(err, fmt.Errorf("couldn't determine violation type for violation id %s: %w", v.Id, e))
+			continue
+		}
+		convertedViolations = append(convertedViolations, violationutils.Violation{
+			Type:        violationType,
+			IssueId:     v.IssueId,
+			ViolationId: v.Id,
+			Severity:    severityutils.XraySeverityToSeverity(v.Severity),
+		})
 	}
 	return
+}
+
+func getViolationType(xrayViolation services.XrayViolation) (violationType violationutils.ViolationType, err error) {
+	if xrayViolation.SastDetails != nil {
+		return violationutils.SastViolationType, nil
+	}
+	if xrayViolation.ExposureDetails != nil {
+		if strings.HasPrefix(xrayViolation.ExposureDetails.Id, "SEC") {
+			return violationutils.SecretsViolationType, nil
+		} else if strings.HasPrefix(xrayViolation.ExposureDetails.Id, "IAC") {
+			return violationutils.IacViolationType, nil
+		}
+	}
+	// SCA as default
+	return violationutils.ScaViolationType, nil
 }
