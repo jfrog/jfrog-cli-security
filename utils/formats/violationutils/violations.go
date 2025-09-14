@@ -95,6 +95,13 @@ type CveViolation struct {
 	Vulnerability      cyclonedx.Vulnerability `json:"vulnerability"`
 	Component          cyclonedx.Component     `json:"component"`
 	ContextualAnalysis *formats.Applicability  `json:"contextual_analysis,omitempty"`
+	// TODO:
+	DirectComponents []formats.ComponentRow   `json:"direct_components,omitempty"`
+	ImpactPaths      [][]formats.ComponentRow `json:"impact_paths,omitempty"`
+	// TODO:
+	FixedVersions *[]cyclonedx.AffectedVersions `json:"fixed_versions,omitempty"`
+	// TODO: remove after information displayed in cyclonedx.Vulnerability
+	JfrogResearchInformation *formats.JfrogResearchInformation `json:"jfrogResearchInformation,omitempty"`
 }
 
 type LicenseViolation struct {

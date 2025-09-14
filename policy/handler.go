@@ -27,7 +27,11 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 	if violations, err = generator.GenerateViolations(cmdResults); err != nil {
 		return fmt.Errorf("failed to fetch violations: %s", err.Error())
 	}
-	log.Info(fmt.Sprintf("Generated %d violations. [%s]", violations.Count(), violations.String()))
+	if violations.Count() == 0 {
+		log.Info("No violations found.")
+	} else {
+		log.Info(fmt.Sprintf("Generated %d violations. [%s]", violations.Count(), violations.String()))
+	}
 	cmdResults.SetViolations(violations)
 	return
 }

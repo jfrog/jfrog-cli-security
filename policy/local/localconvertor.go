@@ -52,9 +52,9 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 					deprecatedXrayResult.Scan.Violations,
 					cmdResults.EntitledForJas,
 					applicableRuns,
-					convertScaSecurityViolationToPolicyViolation(convertedViolations),
-					convertScaLicenseViolationToPolicyViolation(convertedViolations),
-					convertOperationalRiskViolationToPolicyViolation(convertedViolations)); e != nil {
+					convertScaSecurityViolationToPolicyViolation(&convertedViolations),
+					convertScaLicenseViolationToPolicyViolation(&convertedViolations),
+					convertOperationalRiskViolationToPolicyViolation(&convertedViolations)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.ScanTarget.Target, e))
 					continue
 				}
@@ -63,13 +63,13 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
 			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SecretsScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(convertedViolations, jasutils.Secrets))
+				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SecretsScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets))
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.IacScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(convertedViolations, jasutils.IaC))
+				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.IacScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC))
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SastScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(convertedViolations, jasutils.Sast))
+				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SastScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast))
 			}
 		}
 	}
@@ -99,7 +99,7 @@ func convertToBasicJasViolation(result *sarif.Result, severity severityutils.Sev
 	return violation
 }
 
-func convertJasViolationsToPolicyViolations(convertedViolations violationutils.Violations, jasType jasutils.JasScanType) results.ParseJasIssueFunc {
+func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.Violations, jasType jasutils.JasScanType) results.ParseJasIssueFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		switch jasType {
 		case jasutils.Secrets:
@@ -147,7 +147,7 @@ func convertToBasicScaViolation(violation services.Violation, severity severityu
 	return cmdViolation
 }
 
-func convertScaSecurityViolationToPolicyViolation(convertedViolations violationutils.Violations) ParseScanGraphViolationFunc {
+func convertScaSecurityViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		convertedViolations.Sca = append(convertedViolations.Sca, violationutils.CveViolation{
 			Violation: convertToBasicScaViolation(violation, severity),
@@ -156,7 +156,7 @@ func convertScaSecurityViolationToPolicyViolation(convertedViolations violationu
 	}
 }
 
-func convertScaLicenseViolationToPolicyViolation(convertedViolations violationutils.Violations) ParseScanGraphViolationFunc {
+func convertScaLicenseViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		convertedViolations.License = append(convertedViolations.License, violationutils.LicenseViolation{
 			Violation: convertToBasicScaViolation(violation, severity),
@@ -165,7 +165,7 @@ func convertScaLicenseViolationToPolicyViolation(convertedViolations violationut
 	}
 }
 
-func convertOperationalRiskViolationToPolicyViolation(convertedViolations violationutils.Violations) ParseScanGraphViolationFunc {
+func convertOperationalRiskViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		convertedViolations.OpRisk = append(convertedViolations.OpRisk, violationutils.OperationalRiskViolation{
 			Violation: convertToBasicScaViolation(violation, severity),

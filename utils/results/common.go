@@ -140,24 +140,28 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 				log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
 				continue
 			}
-			var fixedVersion *[]cyclonedx.AffectedVersions
-			if affectedComponent.Range != nil {
-				for _, affectedVersion := range *affectedComponent.Range {
-					if affectedVersion.Status == cyclonedx.VulnerabilityStatusNotAffected {
-						if fixedVersion == nil {
-							fixedVersion = &[]cyclonedx.AffectedVersions{}
-						}
-						*fixedVersion = append(*fixedVersion, affectedVersion)
-					}
-				}
-			}
 			// Pass the vulnerability to the handler with its related information
-			if err := handler(vulnerability, *relatedComponent, fixedVersion, applicability, cdxRatingToSeverity(vulnerability.Ratings)); err != nil {
+			if err := handler(vulnerability, *relatedComponent, GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func GetFixedVersions(affectedComponent cyclonedx.Affects) (fixedVersions *[]cyclonedx.AffectedVersions) {
+	if affectedComponent.Range == nil {
+		return
+	}
+	for _, affectedVersion := range *affectedComponent.Range {
+		if affectedVersion.Status == cyclonedx.VulnerabilityStatusNotAffected {
+			if fixedVersions == nil {
+				fixedVersions = &[]cyclonedx.AffectedVersions{}
+			}
+			*fixedVersions = append(*fixedVersions, affectedVersion)
+		}
+	}
+	return
 }
 
 func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {

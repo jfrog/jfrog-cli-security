@@ -1,7 +1,6 @@
 package simplejsonparser
 
 import (
-	"errors"
 	"sort"
 	"strconv"
 
@@ -143,39 +142,108 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom results.ScanRes
 	}
 	return results.ForEachScaBomVulnerability(sjc.currentTarget, enrichedSbom.Scan, sjc.entitledForJas, results.ScanResultsToRuns(applicableScan),
 		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersions *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-			// Prepare the required fields for the vulnerability row
-			applicabilityStatus := jasutils.NotScanned
-			if applicability != nil {
-				applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
-			}
-			compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 			dependencies := []cyclonedx.Dependency{}
 			if enrichedSbom.Scan.Dependencies != nil {
 				dependencies = append(dependencies, *enrichedSbom.Scan.Dependencies...)
 			}
 			// Convert the CycloneDX vulnerability to a simple JSON vulnerability row
-			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, formats.VulnerabilityOrViolationRow{
-				Summary: vulnerability.Description,
-				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
-					ImpactedDependencyName:    compName,
-					ImpactedDependencyVersion: compVersion,
-					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
-					Components:                results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Scan.Components, dependencies),
-				},
-				FixedVersions: results.CdxToFixedVersions(fixedVersions),
-				Cves:          results.CdxVulnToCveRows(vulnerability, applicability),
-				IssueId:       vulnerability.ID,
-				Technology:    results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), sjc.currentTarget.Technology),
-				Applicable:    applicabilityStatus.ToString(sjc.pretty),
-				References:    toReferences(vulnerability),
+			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, sjc.createVulnerabilityOrViolationRowFromCdx(
+				vulnerability.ID,
+				vulnerability.Description,
+				severity,
+				applicability,
+				vulnerability,
+				component,
+				results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Scan.Components, dependencies),
+				results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
+				fixedVersions,
 				// TODO: implement JfrogResearchInformation conversion
-				JfrogResearchInformation: nil,
-				ImpactPaths:              results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
-			})
+				nil,
+			))
 			return
 		},
 	)
+}
+
+func convertToViolationContext(violation violationutils.Violation) formats.ViolationContext {
+	context := formats.ViolationContext{
+		Watch:   violation.Watch,
+		IssueId: violation.ViolationId,
+	}
+	for _, policy := range violation.Policies {
+		context.Policies = append(context.Policies, policy.PolicyName)
+		context.FailPr = context.FailPr || policy.FailPullRequest
+	}
+	return context
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations violationutils.Violations) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	// SCA Violations
+	for _, cveViolation := range violations.Sca {
+		violation := sjc.createVulnerabilityOrViolationRowFromCdx(
+			cveViolation.Violation.ViolationId,
+			cveViolation.Vulnerability.Description,
+			cveViolation.Violation.Severity,
+			cveViolation.ContextualAnalysis,
+			cveViolation.Vulnerability,
+			cveViolation.Component,
+			cveViolation.DirectComponents,
+			cveViolation.ImpactPaths,
+			cveViolation.FixedVersions,
+			cveViolation.JfrogResearchInformation,
+		)
+		violation.ViolationContext = convertToViolationContext(cveViolation.Violation)
+		sjc.current.SecurityViolations = append(sjc.current.SecurityViolations, violation)
+	}
+	// License Violations
+	// Secrets Violations
+	for _, jasViolation := range violations.Secrets {
+		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
+		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
+		sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, violation)
+	}
+	// IaC Violations
+	for _, jasViolation := range violations.Iac {
+		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
+		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
+		sjc.current.IacsViolations = append(sjc.current.IacsViolations, violation)
+	}
+	// SAST Violations
+	for _, jasViolation := range violations.Sast {
+		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
+		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
+		sjc.current.SastViolations = append(sjc.current.SastViolations, violation)
+	}
+	return nil
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) createVulnerabilityOrViolationRowFromCdx(issueId, summary string, severity severityutils.Severity, contextualAnalysis *formats.Applicability, vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow, fixedVersions *[]cyclonedx.AffectedVersions, jfrogResearch *formats.JfrogResearchInformation) formats.VulnerabilityOrViolationRow {
+	applicabilityStatus := jasutils.NotScanned
+	if contextualAnalysis != nil {
+		applicabilityStatus = jasutils.ConvertToApplicabilityStatus(contextualAnalysis.Status)
+	}
+	compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+	return formats.VulnerabilityOrViolationRow{
+		IssueId: issueId,
+		Summary: summary,
+		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+			SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
+			ImpactedDependencyName:    compName,
+			ImpactedDependencyVersion: compVersion,
+			ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
+			Components:                directComponents,
+		},
+		ImpactPaths:              impactPaths,
+		Cves:                     results.CdxVulnToCveRows(vulnerability, contextualAnalysis),
+		FixedVersions:            results.CdxToFixedVersions(fixedVersions),
+		Technology:               results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), sjc.currentTarget.Technology),
+		References:               toReferences(vulnerability),
+		Applicable:               applicabilityStatus.ToString(sjc.pretty),
+		JfrogResearchInformation: jfrogResearch,
+	}
 }
 
 func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
@@ -190,21 +258,6 @@ func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
 		}
 	}
 	return
-}
-
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations violationutils.Violations) (err error) {
-	if sjc.current == nil {
-		return results.ErrResetConvertor
-	}
-
-	// for i := range applicableScan {
-	// 	if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
-	// 		sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
-	// 	}
-	// }
-	// return sjc.parseScaViolations(target, descriptors, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
-	// TODO: implement
-	return errors.New("not implemented")
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
@@ -270,12 +323,6 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...results.ScanRe
 		return
 	}
 	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
-
-	// if isViolationsResults {
-	// 	sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, secretsSimpleJson...)
-	// } else {
-	// 	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
-	// }
 	return
 }
 
@@ -296,12 +343,6 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(iacs ...results.ScanResult[[
 		return
 	}
 	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
-
-	// if isViolationsResults {
-	// 	sjc.current.IacsViolations = append(sjc.current.IacsViolations, iacSimpleJson...)
-	// } else {
-	// 	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
-	// }
 	return
 }
 
@@ -322,12 +363,6 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(sast ...results.ScanResult[[
 		return
 	}
 	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
-
-	// if isViolationsResults {
-	// 	sjc.current.SastViolations = append(sjc.current.SastViolations, sastSimpleJson...)
-	// } else {
-	// 	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
-	// }
 	return
 }
 
@@ -512,39 +547,41 @@ func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow) results.P
 func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif.Run) ([]formats.SourceCodeRow, error) {
 	var rows []formats.SourceCodeRow
 	err := results.ForEachJasIssue(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-		rows = append(rows,
-			formats.SourceCodeRow{
-				ScannerInfo: formats.ScannerInfo{
-					RuleId:                  sarifutils.GetResultRuleId(result),
-					Origin:                  sarifutils.GetRuleOrigin(rule),
-					Cwe:                     sarifutils.GetRuleCWE(rule),
-					ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
-					ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),
-				},
-				ViolationContext: formats.ViolationContext{
-					Watch:    sarifutils.GetResultWatches(result),
-					IssueId:  sarifutils.GetResultIssueId(result),
-					Policies: sarifutils.GetResultPolicies(result),
-					FailPr:   sarifutils.GetResultFailPrValue(result),
-				},
-				SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
-				Finding:         sarifutils.GetResultMsgText(result),
-				Fingerprint:     sarifutils.GetResultFingerprint(result),
-				Location: formats.Location{
-					File:        sarifutils.GetRelativeLocationFileName(location, run.Invocations),
-					StartLine:   sarifutils.GetLocationStartLine(location),
-					StartColumn: sarifutils.GetLocationStartColumn(location),
-					EndLine:     sarifutils.GetLocationEndLine(location),
-					EndColumn:   sarifutils.GetLocationEndColumn(location),
-					Snippet:     sarifutils.GetLocationSnippetText(location),
-				},
-				Applicability: results.GetJasResultApplicability(result),
-				CodeFlow:      codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), run.Invocations, pretty),
-			},
-		)
+		rows = append(rows, createSourceCodeRow(rule, severity, result, location, run.Invocations, pretty))
 		return nil
 	})
 	return rows, err
+}
+
+func createSourceCodeRow(rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location, invocations []*sarif.Invocation, pretty bool) formats.SourceCodeRow {
+	return formats.SourceCodeRow{
+		ScannerInfo: formats.ScannerInfo{
+			RuleId:                  sarifutils.GetResultRuleId(result),
+			Origin:                  sarifutils.GetRuleOrigin(rule),
+			Cwe:                     sarifutils.GetRuleCWE(rule),
+			ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
+			ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),
+		},
+		ViolationContext: formats.ViolationContext{
+			Watch:    sarifutils.GetResultWatches(result),
+			IssueId:  sarifutils.GetResultIssueId(result),
+			Policies: sarifutils.GetResultPolicies(result),
+			FailPr:   sarifutils.GetResultFailPrValue(result),
+		},
+		SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
+		Finding:         sarifutils.GetResultMsgText(result),
+		Fingerprint:     sarifutils.GetResultFingerprint(result),
+		Location: formats.Location{
+			File:        sarifutils.GetRelativeLocationFileName(location, invocations),
+			StartLine:   sarifutils.GetLocationStartLine(location),
+			StartColumn: sarifutils.GetLocationStartColumn(location),
+			EndLine:     sarifutils.GetLocationEndLine(location),
+			EndColumn:   sarifutils.GetLocationEndColumn(location),
+			Snippet:     sarifutils.GetLocationSnippetText(location),
+		},
+		Applicability: results.GetJasResultApplicability(result),
+		CodeFlow:      codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), invocations, pretty),
+	}
 }
 
 func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invocation, isTable bool) (flowRows [][]formats.Location) {

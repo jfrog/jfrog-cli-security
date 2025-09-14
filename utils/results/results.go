@@ -38,7 +38,7 @@ type SecurityCommandResults struct {
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
 	// Policy violations found in the command
-	Violations violationutils.Violations `json:"violations,omitempty"`
+	Violations violationutils.Violations `json:"violations"`
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
