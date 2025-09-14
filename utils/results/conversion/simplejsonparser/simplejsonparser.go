@@ -192,7 +192,7 @@ func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations violationutils.Violations) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}

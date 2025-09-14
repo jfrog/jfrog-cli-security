@@ -320,7 +320,7 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
+func (sc *CmdResultsSarifConverter) ParseViolations(violations violationutils.Violations) (err error) {
 	// TODO: implement
 	return errors.New("not implemented")
 }

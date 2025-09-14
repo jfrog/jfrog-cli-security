@@ -69,7 +69,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) error
 	ParseSast(sast ...results.ScanResult[[]*sarif.Run]) error
 	// Parse JFrog violations to the format if supported
-	ParseViolations(violations ...violationutils.Violation) error
+	ParseViolations(violations violationutils.Violations) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }
@@ -130,7 +130,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		}
 	}
 	if cmdResults.HasViolationContext() {
-		if err = parser.ParseViolations(cmdResults.Violations...); err != nil {
+		if err = parser.ParseViolations(cmdResults.Violations); err != nil {
 			return
 		}
 	}

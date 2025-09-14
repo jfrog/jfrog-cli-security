@@ -215,7 +215,7 @@ func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.Pa
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.Violations) (err error) {
 	// scanResponse := results.ScanResult[services.ScanResponse]{
 	// 	Scan: services.ScanResponse{
 	// 		Violations: violations,

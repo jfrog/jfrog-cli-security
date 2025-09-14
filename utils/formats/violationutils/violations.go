@@ -1,15 +1,15 @@
 package violationutils
 
-import "github.com/jfrog/jfrog-cli-security/utils/severityutils"
+import (
+	"fmt"
+	"strings"
 
-const (
-	ScaViolationType     ViolationType = "sca"
-	SecretsViolationType ViolationType = "secrets"
-	IacViolationType     ViolationType = "iac"
-	SastViolationType    ViolationType = "sast"
+	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 )
-
-type ViolationType string
 
 const (
 	ScaViolationTypeSecurity        ScaViolationIssueType = "security"
@@ -25,15 +25,87 @@ func (v ScaViolationIssueType) String() string {
 	return string(v)
 }
 
-type Violation struct {
-	Type        ViolationType          `json:"type"`
-	ViolationId string                 `json:"violation_id"`
-	Severity    severityutils.Severity `json:"severity"`
-	// Can be used to match the related vulnerability in the scan results.
-	IssueId string `json:"issue_id"`
+type Violations struct {
+	Sca     []CveViolation             `json:"sca,omitempty"`
+	License []LicenseViolation         `json:"license,omitempty"`
+	OpRisk  []OperationalRiskViolation `json:"operational_risk,omitempty"`
+	Secrets []JasViolation             `json:"secrets,omitempty"`
+	Iac     []JasViolation             `json:"iac,omitempty"`
+	Sast    []JasViolation             `json:"sast,omitempty"`
 }
 
-type MatchedPolicy struct {
-	Watch  string `json:"watch_name"`
-	Policy string `json:"policy"`
+func (vs *Violations) HasViolations() bool {
+	return len(vs.Sca) > 0 || len(vs.License) > 0 || len(vs.OpRisk) > 0 || len(vs.Secrets) > 0 || len(vs.Iac) > 0 || len(vs.Sast) > 0
+}
+
+func (vs *Violations) Count() int {
+	return len(vs.Sca) + len(vs.License) + len(vs.OpRisk) + len(vs.Secrets) + len(vs.Iac) + len(vs.Sast)
+}
+
+func (vs *Violations) String() string {
+	if !vs.HasViolations() {
+		return "No violations found"
+	}
+	out := []string{}
+	if len(vs.Sca) > 0 {
+		out = append(out, fmt.Sprintf("SCA (%d)", len(vs.Sca)))
+	}
+	if len(vs.License) > 0 {
+		out = append(out, fmt.Sprintf("License (%d)", len(vs.License)))
+	}
+	if len(vs.OpRisk) > 0 {
+		out = append(out, fmt.Sprintf("Operational Risk (%d)", len(vs.OpRisk)))
+	}
+	if len(vs.Secrets) > 0 {
+		out = append(out, fmt.Sprintf("Secrets (%d)", len(vs.Secrets)))
+	}
+	if len(vs.Iac) > 0 {
+		out = append(out, fmt.Sprintf("IaC (%d)", len(vs.Iac)))
+	}
+	if len(vs.Sast) > 0 {
+		out = append(out, fmt.Sprintf("SAST (%d)", len(vs.Sast)))
+	}
+	return strings.Join(out, ", ")
+}
+
+type Violation struct {
+	ViolationId string                 `json:"violation_id"`
+	Severity    severityutils.Severity `json:"severity"`
+	Watch       string                 `json:"watch_name"`
+	Policies    []Policy               `json:"matched_policies,omitempty"`
+}
+
+type Policy struct {
+	PolicyName        string `json:"policy"`
+	Rule              string `json:"rule"`
+	FailBuild         bool   `json:"fail_build,omitempty"`
+	FailPullRequest   bool   `json:"fail_pull_request,omitempty"`
+	SkipNotApplicable bool   `json:"skip_not_applicable,omitempty"`
+}
+
+type JasViolation struct {
+	Violation
+	Rule     *sarif.ReportingDescriptor `json:"rule,omitempty"`
+	Result   *sarif.Result              `json:"result,omitempty"`
+	Location *sarif.Location            `json:"location,omitempty"`
+}
+
+type CveViolation struct {
+	Violation
+	Vulnerability      cyclonedx.Vulnerability `json:"vulnerability"`
+	Component          cyclonedx.Component     `json:"component"`
+	ContextualAnalysis *formats.Applicability  `json:"contextual_analysis,omitempty"`
+}
+
+type LicenseViolation struct {
+	Violation
+	LicenseKey  string              `json:"license_key"`
+	LicenseName string              `json:"license_name"`
+	Component   cyclonedx.Component `json:"component"`
+}
+
+type OperationalRiskViolation struct {
+	Violation
+	Vulnerability cyclonedx.Vulnerability `json:"vulnerability"`
+	Component     cyclonedx.Component     `json:"component"`
 }

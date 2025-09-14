@@ -64,12 +64,12 @@ func (p *PolicyEnforcerViolationGenerator) WithOptions(options ...policy.PolicyH
 	return p
 }
 
-func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *results.SecurityCommandResults) (convertedViolations []violationutils.Violation, err error) {
+func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *results.SecurityCommandResults) (convertedViolations violationutils.Violations, err error) {
 	xrayManager, err := xray.CreateXrayServiceManager(p.serverDetails, xray.WithScopedProjectKey(p.projectKey))
 	if err != nil {
 		return
 	}
-	convertedViolations = []violationutils.Violation{}
+	convertedViolations = violationutils.Violations{}
 	log.Debug("Waiting for Xray scans to complete...")
 	startedTimeStamp := time.Now()
 	err = artifact.WaitForArtifactScanCompletion(xrayManager, p.rtRepository, p.artifactPath, artifact.Steps(artifact.XrayScanStepViolations))
@@ -89,38 +89,93 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	} else {
 		log.Debug(fmt.Sprintf("Xray scans completed with %d violations", generatedViolations.Total))
 	}
-	return convertToLocalViolations(generatedViolations.Violations)
+	return convertToViolations(cmdResults, generatedViolations.Violations)
 }
 
-func convertToLocalViolations(generatedViolations []services.XrayViolation) (convertedViolations []violationutils.Violation, err error) {
-	convertedViolations = make([]violationutils.Violation, 0, len(generatedViolations))
-	for _, v := range generatedViolations {
-		violationType, e := getViolationType(v)
-		if e != nil {
-			err = errors.Join(err, fmt.Errorf("couldn't determine violation type for violation id %s: %w", v.Id, e))
-			continue
+func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {
+	convertedViolations = violationutils.Violations{}
+	for _, violation := range generatedViolations {
+		if violation.SastDetails != nil {
+			convertedViolations.Sast = append(convertedViolations.Sast, convertToSastViolation(violation))
+		} else if violation.ExposureDetails != nil {
+			if strings.HasPrefix(violation.ExposureDetails.Id, "SEC") {
+				convertedViolations.Secrets = append(convertedViolations.Secrets, convertToSecretViolation(violation))
+			} else if strings.HasPrefix(violation.ExposureDetails.Id, "IAC") {
+				convertedViolations.Iac = append(convertedViolations.Iac, convertToIacViolation(violation))
+			}
+		} else {
+			// SCA as default
+			switch violation.Type {
+			case xrayUtils.SecurityViolation:
+				convertedViolations.Sca = append(convertedViolations.Sca, convertToScaViolation(violation))
+			case xrayUtils.LicenseViolation:
+				convertedViolations.License = append(convertedViolations.License, convertToLicenseViolation(violation))
+			case xrayUtils.OperationalRiskViolation:
+				convertedViolations.OpRisk = append(convertedViolations.OpRisk, convertToOpRiskViolation(violation))
+			default:
+				err = errors.Join(err, fmt.Errorf("unknown violation type %s for violation id %s", violation.Type, violation.Id))
+			}
 		}
-		convertedViolations = append(convertedViolations, violationutils.Violation{
-			Type:        violationType,
-			IssueId:     v.IssueId,
-			ViolationId: v.Id,
-			Severity:    severityutils.XraySeverityToSeverity(v.Severity),
-		})
 	}
 	return
 }
 
-func getViolationType(xrayViolation services.XrayViolation) (violationType violationutils.ViolationType, err error) {
-	if xrayViolation.SastDetails != nil {
-		return violationutils.SastViolationType, nil
+func convertToBasicViolation(violation services.XrayViolation) violationutils.Violation {
+	cmdViolation := violationutils.Violation{
+		ViolationId: violation.Id,
+		Watch:       violation.Watch,
+		Severity:    severityutils.XraySeverityToSeverity(violation.Severity),
 	}
-	if xrayViolation.ExposureDetails != nil {
-		if strings.HasPrefix(xrayViolation.ExposureDetails.Id, "SEC") {
-			return violationutils.SecretsViolationType, nil
-		} else if strings.HasPrefix(xrayViolation.ExposureDetails.Id, "IAC") {
-			return violationutils.IacViolationType, nil
-		}
+	for _, policy := range violation.Policies {
+		cmdViolation.Policies = append(cmdViolation.Policies, violationutils.Policy{
+			PolicyName:        policy.PolicyName,
+			Rule:              policy.Rule,
+			FailBuild:         policy.FailBuild,
+			FailPullRequest:   policy.FailPullRequest,
+			SkipNotApplicable: policy.SkipNotApplicable,
+		})
 	}
-	// SCA as default
-	return violationutils.ScaViolationType, nil
+	return cmdViolation
+}
+
+func convertToScaViolation(violation services.XrayViolation) violationutils.CveViolation {
+	cveViolation := violationutils.CveViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return cveViolation
+}
+
+func convertToLicenseViolation(violation services.XrayViolation) violationutils.LicenseViolation {
+	licenseViolation := violationutils.LicenseViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return licenseViolation
+}
+
+func convertToOpRiskViolation(violation services.XrayViolation) violationutils.OperationalRiskViolation {
+	opRiskViolation := violationutils.OperationalRiskViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return opRiskViolation
+}
+
+func convertToSecretViolation(violation services.XrayViolation) violationutils.JasViolation {
+	secretViolation := violationutils.JasViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return secretViolation
+}
+
+func convertToIacViolation(violation services.XrayViolation) violationutils.JasViolation {
+	iacViolation := violationutils.JasViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return iacViolation
+}
+
+func convertToSastViolation(violation services.XrayViolation) violationutils.JasViolation {
+	sastViolation := violationutils.JasViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	return sastViolation
 }
