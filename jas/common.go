@@ -398,11 +398,30 @@ func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogap
 	return nil
 }
 
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
+func ShouldSkipScanner(root string, module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
 	lowerScanType := strings.ToLower(string(scanType))
 	if slices.Contains(module.ExcludeScanners, lowerScanType) {
 		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
 		return true
+	}
+	exclusions := []string{}
+	switch scanType {
+	case jasutils.Sast:
+		exclusions = append(module.ExcludePatterns, module.Scanners.Sast.ExcludePatterns...)
+	case jasutils.Secrets:
+		exclusions = append(module.ExcludePatterns, module.Scanners.Secrets.ExcludePatterns...)
+	case jasutils.IaC:
+		exclusions = append(module.ExcludePatterns, module.Scanners.Iac.ExcludePatterns...)
+	}
+	// Check if target (root) is excluded in the module exclude patterns
+	if pattern := fspatterns.PrepareExcludePathPattern(exclusions, goclientutils.WildCardPattern, true); pattern != "" {
+		if match, err := regexp.MatchString(pattern, root); err != nil {
+			log.Warn("Failed to check if path is excluded:", err.Error())
+			return false
+		} else if match {
+			log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+			return true
+		}
 	}
 	return false
 }
@@ -420,16 +439,20 @@ func ShouldSkipScannerByRemoteConfig(root string, module xscServices.Module, sca
 		exclusions = append(module.ExcludePatterns, module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
 	}
 	// Check if target (root) is excluded in the module exclude patterns
-	if pattern := fspatterns.PrepareExcludePathPattern(exclusions, goclientutils.WildCardPattern, true); pattern != "" {
-		if match, err := regexp.MatchString(pattern, root); err != nil {
-			log.Warn("Failed to check if path is excluded:", err.Error())
-			return false
-		} else if match {
-			log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
-			return true
-		}
+	if isPathExcluded(root, exclusions) {
+		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+		return true
 	}
 	return false
+}
+
+func isPathExcluded(root string, exclusions []string) bool {
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(exclusions, goclientutils.WildCardPattern, true), root)
+	if err != nil {
+		log.Warn("Failed to check if path is excluded:", err.Error())
+		return false
+	}
+	return match
 }
 
 func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) ([]string, error) {
