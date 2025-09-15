@@ -124,8 +124,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// attiasas:add_download_indexer
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250908083254-6e7f4ad3dfff
+replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.54.8-0.20250915095642-2bfe57d4024b
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
