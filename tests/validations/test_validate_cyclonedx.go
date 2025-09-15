@@ -14,7 +14,7 @@ import (
 )
 
 func VerifyCycloneDxResults(t *testing.T, content string, params ValidationParams) {
-	var results cdxutils.FullBOM
+	var results *cdxutils.FullBOM
 	err := json.Unmarshal([]byte(content), &results)
 	assert.NoError(t, err, "Failed to unmarshal content to json.")
 	params.Actual = results
