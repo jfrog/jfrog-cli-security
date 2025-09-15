@@ -407,21 +407,25 @@ func ShouldSkipScanner(root string, module jfrogappsconfig.Module, scanType jasu
 	exclusions := []string{}
 	switch scanType {
 	case jasutils.Sast:
+		if module.Scanners.Sast == nil {
+			return true
+		}
 		exclusions = append(module.ExcludePatterns, module.Scanners.Sast.ExcludePatterns...)
 	case jasutils.Secrets:
+		if module.Scanners.Secrets == nil {
+			return true
+		}
 		exclusions = append(module.ExcludePatterns, module.Scanners.Secrets.ExcludePatterns...)
 	case jasutils.IaC:
+		if module.Scanners.Iac == nil {
+			return true
+		}
 		exclusions = append(module.ExcludePatterns, module.Scanners.Iac.ExcludePatterns...)
 	}
 	// Check if target (root) is excluded in the module exclude patterns
-	if pattern := fspatterns.PrepareExcludePathPattern(exclusions, goclientutils.WildCardPattern, true); pattern != "" {
-		if match, err := regexp.MatchString(pattern, root); err != nil {
-			log.Warn("Failed to check if path is excluded:", err.Error())
-			return false
-		} else if match {
-			log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
-			return true
-		}
+	if isPathExcluded(root, exclusions) {
+		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+		return true
 	}
 	return false
 }
