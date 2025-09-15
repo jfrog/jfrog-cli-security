@@ -405,7 +405,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 	serverDetails, err := ca.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.GetXrayVersion(),
-		ExclusionPattern: technologies.GetExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
+		ExclusionPattern: technologies.GetScaExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
 		Progress:         ca.Progress(),
 		// Artifactory Repository params
 		ServerDetails:          serverDetails,

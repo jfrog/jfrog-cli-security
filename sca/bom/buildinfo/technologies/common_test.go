@@ -71,7 +71,7 @@ func TestGetExcludePattern(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetExcludePattern(test.configProfile, test.isRecursiveScan, test.exclusions...)
+			result := GetScaExcludePattern(test.configProfile, test.isRecursiveScan, test.exclusions...)
 			assert.Equal(t, test.expected, result)
 		})
 	}
