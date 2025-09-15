@@ -101,12 +101,10 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
 		}
-		if enabled {
-			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
-		} else {
+		if !enabled || jas.ShouldSkipScannerByRemoteConfig(params.Module.SourceRoot, params.ConfigProfile.Modules[0], jasType) {
 			log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, params.ConfigProfile.ProfileName))
 		}
-		return
+		return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 	}
 	if jas.ShouldSkipScanner(params.Module, jasType) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", subScan))
