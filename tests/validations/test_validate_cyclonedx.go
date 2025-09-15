@@ -27,7 +27,7 @@ func ValidateCommandCycloneDxOutput(t *testing.T, params ValidationParams) {
 	if assert.True(t, ok, "Actual result is not of type *cyclonedx.BOM") {
 		ValidateCycloneDxIssuesCount(t, params, results)
 		if params.ExactResultsMatch && params.Expected != nil {
-			expectedResults, ok := params.Expected.(*cyclonedx.BOM)
+			expectedResults, ok := params.Expected.(*cdxutils.FullBOM)
 			if assert.True(t, ok, "Expected content is not of type *cyclonedx.BOM") {
 				assert.Equal(t, expectedResults, results, "CycloneDX BOM output does not match expected values")
 			}
