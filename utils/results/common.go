@@ -1174,9 +1174,13 @@ func ParseScanGraphLicenseToSbom(destination *cyclonedx.BOM) ParseLicenseFunc {
 	}
 }
 
+func GetXrayService() *cyclonedx.Service {
+	return &cyclonedx.Service{Name: utils.XrayToolName}
+}
+
 func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGraphVulnerabilityFunc {
 	// Prepare the information needed to create the SCA vulnerability
-	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
+	xrayService := GetXrayService()
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		// Add the vulnerability related component if it is not already existing
 		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
@@ -1421,4 +1425,25 @@ func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *form
 		})
 	}
 	return
+}
+
+func ConvertJfrogResearchInformation(extendedInfo *services.ExtendedInformation) *formats.JfrogResearchInformation {
+	if extendedInfo == nil {
+		return nil
+	}
+	var severityReasons []formats.JfrogResearchSeverityReason
+	for _, severityReason := range extendedInfo.JfrogResearchSeverityReasons {
+		severityReasons = append(severityReasons, formats.JfrogResearchSeverityReason{
+			Name:        severityReason.Name,
+			Description: severityReason.Description,
+			IsPositive:  severityReason.IsPositive,
+		})
+	}
+	return &formats.JfrogResearchInformation{
+		Summary:         extendedInfo.ShortDescription,
+		Details:         extendedInfo.FullDescription,
+		SeverityDetails: formats.SeverityDetails{Severity: extendedInfo.JfrogResearchSeverity},
+		SeverityReasons: severityReasons,
+		Remediation:     extendedInfo.Remediation,
+	}
 }

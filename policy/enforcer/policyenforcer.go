@@ -140,21 +140,27 @@ func convertToBasicViolation(violation services.XrayViolation) violationutils.Vi
 
 func convertToScaViolation(violation services.XrayViolation) violationutils.CveViolation {
 	cveViolation := violationutils.CveViolation{
-		Violation: convertToBasicViolation(violation),
+		ScaViolation: violationutils.ScaViolation{
+			Violation: convertToBasicViolation(violation),
+		},
 	}
 	return cveViolation
 }
 
 func convertToLicenseViolation(violation services.XrayViolation) violationutils.LicenseViolation {
 	licenseViolation := violationutils.LicenseViolation{
-		Violation: convertToBasicViolation(violation),
+		ScaViolation: violationutils.ScaViolation{
+			Violation: convertToBasicViolation(violation),
+		},
 	}
 	return licenseViolation
 }
 
 func convertToOpRiskViolation(violation services.XrayViolation) violationutils.OperationalRiskViolation {
 	opRiskViolation := violationutils.OperationalRiskViolation{
-		Violation: convertToBasicViolation(violation),
+		ScaViolation: violationutils.ScaViolation{
+			Violation: convertToBasicViolation(violation),
+		},
 	}
 	return opRiskViolation
 }

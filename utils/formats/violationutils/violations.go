@@ -90,14 +90,18 @@ type JasViolation struct {
 	Location *sarif.Location            `json:"location,omitempty"`
 }
 
-type CveViolation struct {
+type ScaViolation struct {
 	Violation
-	Vulnerability      cyclonedx.Vulnerability `json:"vulnerability"`
-	Component          cyclonedx.Component     `json:"component"`
-	ContextualAnalysis *formats.Applicability  `json:"contextual_analysis,omitempty"`
+	ImpactedComponent cyclonedx.Component `json:"impacted_component"`
 	// TODO:
 	DirectComponents []formats.ComponentRow   `json:"direct_components,omitempty"`
 	ImpactPaths      [][]formats.ComponentRow `json:"impact_paths,omitempty"`
+}
+
+type CveViolation struct {
+	ScaViolation
+	CveVulnerability   cyclonedx.Vulnerability
+	ContextualAnalysis *formats.Applicability `json:"contextual_analysis,omitempty"`
 	// TODO:
 	FixedVersions *[]cyclonedx.AffectedVersions `json:"fixed_versions,omitempty"`
 	// TODO: remove after information displayed in cyclonedx.Vulnerability
@@ -105,14 +109,19 @@ type CveViolation struct {
 }
 
 type LicenseViolation struct {
-	Violation
-	LicenseKey  string              `json:"license_key"`
-	LicenseName string              `json:"license_name"`
-	Component   cyclonedx.Component `json:"component"`
+	ScaViolation
+	LicenseKey  string `json:"license_key"`
+	LicenseName string `json:"license_name"`
 }
 
 type OperationalRiskViolation struct {
-	Violation
-	Vulnerability cyclonedx.Vulnerability `json:"vulnerability"`
-	Component     cyclonedx.Component     `json:"component"`
+	ScaViolation
+	RiskReason    string `json:"riskReason"`
+	IsEol         string `json:"isEndOfLife"`
+	EolMessage    string `json:"endOfLifeMessage"`
+	Cadence       string `json:"cadence"`
+	Commits       string `json:"commits"`
+	Committers    string `json:"committers"`
+	NewerVersions string `json:"newerVersions"`
+	LatestVersion string `json:"latestVersion"`
 }
