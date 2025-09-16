@@ -6,7 +6,6 @@ import (
 
 	securityDocs "github.com/jfrog/jfrog-cli-security/cli/docs"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
@@ -15,8 +14,8 @@ import (
 func TestXrayCurl(t *testing.T) {
 	integration.InitXrayTest(t, "")
 	// Configure a new server named "default".
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
-	defer securityTestUtils.CleanTestsHomeEnv()
+	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
 	// Check curl command with the default configured server.
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/v1/system/version")
 	assert.NoError(t, err)
