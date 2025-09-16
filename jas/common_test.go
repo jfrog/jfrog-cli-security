@@ -67,11 +67,11 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogAppsConfig.Module{}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.False(t, ShouldSkipScanner("", module, jasutils.IaC))
 
 	module = jfrogAppsConfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
-	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
+	assert.False(t, ShouldSkipScanner("", module, jasutils.IaC))
+	assert.True(t, ShouldSkipScanner("", module, jasutils.Sast))
 }
 
 var getSourceRootsCases = []struct {
