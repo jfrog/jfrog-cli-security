@@ -10,6 +10,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/uuid"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/gofrog/datastructures"
 
@@ -18,6 +19,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
+
+type FullBOM struct {
+	cyclonedx.BOM
+	Sast []*sarif.Run `json:"sast,omitempty"`
+}
 
 // Regular expression to match CWE IDs, which can be in the format "CWE-1234" or just "1234".
 var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
@@ -229,7 +235,7 @@ func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dep
 		// The component is the root
 		return append(roots, dependency)
 	}
-	// In SCANG the root can be a file or directory component (the Metadata component) and the actual roots are the component children
+	// In Xray-Lib-Plugin the root can be a file or directory component (the Metadata component) and the actual roots are the component children
 	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
 		roots = append(roots, dependency)
 	} else if bom.Metadata != nil && bom.Metadata.Component != nil && bom.Metadata.Component.BOMRef == dependency.Ref {
