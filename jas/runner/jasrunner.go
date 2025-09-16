@@ -51,7 +51,7 @@ type JasRunnerParams struct {
 // Cves are only available after the SCA scan is performed, so we need a provider to dynamically pass the discovered cves.
 type CveProvider func() (directCves []string, indirectCves []string)
 
-func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
+func AddJasScannersTasks(params JasRunnerParams) error {
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
@@ -59,44 +59,32 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	}
 
 	var errorsCollection error
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
-		if !params.AllowPartialResults {
-			return
-		}
-		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
-		return
+		return errorsCollection
 	}
 
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
-		if !params.AllowPartialResults {
-			return
-		}
-		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
 	if !runAllScanners {
 		// Binary scan only supports secrets and contextual scans.
-		return
+		return errorsCollection
 	}
 
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
-		if !params.AllowPartialResults {
-			return
-		}
-		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
-		if !params.AllowPartialResults {
-			return
-		}
-		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 	return errorsCollection
