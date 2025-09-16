@@ -57,24 +57,49 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
+
+	var errorsCollection error
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
-		return
+		if !params.AllowPartialResults {
+			return
+		}
+		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
+
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
-		return
+		if !params.AllowPartialResults {
+			return
+		}
+		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
+
 	if !runAllScanners {
 		// Binary scan only supports secrets and contextual scans.
 		return
 	}
+
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
-		return
+		if !params.AllowPartialResults {
+			return
+		}
+		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params))
+
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
+		if !params.AllowPartialResults {
+			return
+		}
+		// If allow_partial_results enabled we collect all errors and return all at the end of the function.
+		errorsCollection = errors.Join(errorsCollection, generalError)
+	}
+	return errorsCollection
 }
 
 func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
