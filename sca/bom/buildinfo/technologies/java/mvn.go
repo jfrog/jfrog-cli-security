@@ -184,7 +184,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if err != nil {
 		stringOutput := string(cmdOutput)
 		if len(cmdOutput) > 0 {
-			log.Info(stringOutput)
+			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)

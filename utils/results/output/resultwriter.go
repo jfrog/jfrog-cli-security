@@ -225,7 +225,7 @@ func (rw *ResultsWriter) printRawResultsLog() (err error) {
 		if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
 			return
 		}
-		log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
+		log.Verbose(fmt.Sprintf("Raw scan results:\n%s", msg))
 		return
 	}
 	// Save the raw results to a file.
