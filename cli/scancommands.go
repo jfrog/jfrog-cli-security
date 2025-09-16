@@ -30,10 +30,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
-	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -196,17 +194,12 @@ func SourceMcpCmd(c *components.Context) error {
 		return err
 	}
 
-	am_env, err := jas.GetAnalyzerManagerEnvVariables(serverDetails)
-	if err != nil {
-		return err
-	}
-
 	mcp_cmd := source_mcp.McpCommand{
-		Env:        am_env,
-		Arguments:  c.Arguments,
-		InputPipe:  os.Stdin,
-		OutputPipe: os.Stdout,
-		ErrorPipe:  os.Stderr,
+		ServerDetails: serverDetails,
+		Arguments:     c.Arguments,
+		InputPipe:     os.Stdin,
+		OutputPipe:    os.Stdout,
+		ErrorPipe:     os.Stderr,
 	}
 	return mcp_cmd.Run()
 }
@@ -450,8 +443,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	}
 	// Set dynamic command logic based on flags
 	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
-	auditCmd.SetBomGenerator(sbomGenerator).
-		SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.ScangBinaryCustomPath))
+	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	// Make sure include SBOM is only set if the output format supports it
 	includeSbom := c.GetBoolFlagValue(flags.Sbom)
@@ -633,21 +625,6 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 	return curationAuditCommand, nil
-}
-
-func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
-	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
-	if scansOutputDir == "" {
-		return "", nil
-	}
-	exists, err := fileutils.IsDirExists(scansOutputDir, false)
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
-	}
-	return scansOutputDir, nil
 }
 
 func DockerScanMockCommand() components.Command {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -26,34 +27,52 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
+	// Git context property
+	gitContextProperty = "jfrog:git:context"
 )
 
 type CmdResultsCycloneDxConverter struct {
-	entitledForJas bool
-	xrayVersion    string
+	entitledForJas                 bool
+	gitContext                     *xscServices.XscGitInfoContext
+	xrayVersion                    string
+	parseSastResultDirectlyIntoCDX bool
 
 	targetsComponent map[string]cyclonedx.Component
-	bom              *cyclonedx.BOM
+	bom              *cdxutils.FullBOM
 }
 
-func NewCmdResultsCycloneDxConverter() *CmdResultsCycloneDxConverter {
-	return &CmdResultsCycloneDxConverter{}
+func NewCmdResultsCycloneDxConverter(parseSast bool) *CmdResultsCycloneDxConverter {
+	return &CmdResultsCycloneDxConverter{
+		parseSastResultDirectlyIntoCDX: parseSast,
+	}
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
+func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error) {
 	if cdc.bom == nil {
-		return cyclonedx.NewBOM(), nil
+		return &cdxutils.FullBOM{BOM: *cyclonedx.NewBOM()}, nil
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
+	// Append git context to the BOM metadata if exists
+	if cdc.gitContext != nil {
+		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
+			log.Warn("Failed to serialize git context to JSON: %v", err)
+		} else {
+			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
+				Name:  gitContextProperty,
+				Value: gitContextStr,
+			})
+		}
+	}
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
 	cdc.entitledForJas = entitledForJas
+	cdc.gitContext = gitContext
 	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
-	cdc.bom = cyclonedx.NewBOM()
+	cdc.bom = &cdxutils.FullBOM{BOM: *cyclonedx.NewBOM()}
 	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(multiScanId)
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),
@@ -71,7 +90,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
@@ -82,7 +101,7 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results
 	}
 	cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
-	return results.ForEachScanGraphVulnerability(target, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(cdc.bom))
+	return results.ForEachScanGraphVulnerability(target, descriptors, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(&cdc.bom.BOM))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
@@ -90,7 +109,7 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.
 		return results.ErrResetConvertor
 	}
 	cdc.addXrayToolIfMissing()
-	return results.ForEachLicense(target, scaResponse.Scan.Licenses, results.ParseScanGraphLicenseToSbom(cdc.bom))
+	return results.ForEachLicense(target, scaResponse.Scan.Licenses, results.ParseScanGraphLicenseToSbom(&cdc.bom.BOM))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
@@ -102,8 +121,8 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbom(_ results.ScanTarget, sbom *c
 	}
 	// Append the information from the sbom to the current BOM
 	cdc.appendMetadata(sbom.Metadata)
-	cdxutils.AppendComponents(cdc.bom, sbom.Components)
-	cdxutils.AppendDependencies(cdc.bom, sbom.Dependencies)
+	cdxutils.AppendComponents(&cdc.bom.BOM, sbom.Components)
+	cdxutils.AppendDependencies(&cdc.bom.BOM, sbom.Dependencies)
 	return
 }
 
@@ -128,7 +147,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 			// Add the vulnerability to the BOM if it is not already existing
 			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
 			// Attach JAS information to the vulnerability
-			results.AttachApplicabilityToVulnerability(cdc.bom, vulnerability, applicability)
+			results.AttachApplicabilityToVulnerability(&cdc.bom.BOM, vulnerability, applicability)
 			return
 		},
 	)
@@ -226,6 +245,11 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		return nil
 	}
 	source := cdc.addJasService(sast)
+	if !cdc.parseSastResultDirectlyIntoCDX {
+		// SAST parsing is disabled, add the runs without parsing the issues
+		cdc.bom.Sast = append(cdc.bom.Sast, results.ScanResultsToRuns(sast)...)
+		return
+	}
 	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, target))
 		// Create a new JAS vulnerability, add it to the BOM and return it
@@ -243,7 +267,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	})
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	// Violations are not supported in CycloneDX
 	log.Warn("Violations are not supported in CycloneDX. Skipping violations parsing.")
 	return
@@ -287,7 +311,7 @@ func (cdc *CmdResultsCycloneDxConverter) appendMetadata(metadata *cyclonedx.Meta
 	}
 	if metadata.Tools != nil && metadata.Tools.Services != nil && len(*metadata.Tools.Services) > 0 {
 		for _, service := range *metadata.Tools.Services {
-			cdxutils.AddServiceToBomIfNotExists(cdc.bom, service)
+			cdxutils.AddServiceToBomIfNotExists(&cdc.bom.BOM, service)
 		}
 	}
 	// Resolve the target path from the SBOM metadata component if it exists and set it as the target component.
@@ -311,7 +335,7 @@ func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult
 				Name:    sarifutils.GetRunToolName(run),
 				Version: sarifutils.GetToolVersion(run),
 			}
-			cdxutils.AddServiceToBomIfNotExists(cdc.bom, *service)
+			cdxutils.AddServiceToBomIfNotExists(&cdc.bom.BOM, *service)
 		}
 	}
 	return
@@ -329,7 +353,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateFileComponent(filePathOrUri 
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, description string, source *cyclonedx.Service, cwe []string, ratings []cyclonedx.VulnerabilityRating, properties ...cyclonedx.Property) (vulnerability *cyclonedx.Vulnerability) {
-	if vulnerability = cdxutils.SearchVulnerabilityByRef(cdc.bom, ref); vulnerability != nil {
+	if vulnerability = cdxutils.SearchVulnerabilityByRef(&cdc.bom.BOM, ref); vulnerability != nil {
 		return
 	}
 	// Create a new SCA vulnerability, add it to the BOM and return it
@@ -363,7 +387,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponent(compToParse cyc
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclonedx.Vulnerability) (vulnerability *cyclonedx.Vulnerability) {
-	if vulnerability = cdxutils.SearchVulnerabilityByRef(cdc.bom, vulnToParse.BOMRef); vulnerability != nil {
+	if vulnerability = cdxutils.SearchVulnerabilityByRef(&cdc.bom.BOM, vulnToParse.BOMRef); vulnerability != nil {
 		return
 	}
 	// Add the vulnerability to the BOM
@@ -375,14 +399,14 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclone
 	// Ensure the source is set for the vulnerability
 	if vulnerability.Source == nil {
 		vulnerability.Source = &cyclonedx.Source{Name: cdc.addXrayToolIfMissing().Name}
-	} else if source := cdxutils.SearchForServiceByName(cdc.bom, vulnerability.Source.Name); source == nil {
-		cdxutils.AddServiceToBomIfNotExists(cdc.bom, cyclonedx.Service{Name: vulnerability.Source.Name})
+	} else if source := cdxutils.SearchForServiceByName(&cdc.bom.BOM, vulnerability.Source.Name); source == nil {
+		cdxutils.AddServiceToBomIfNotExists(&cdc.bom.BOM, cyclonedx.Service{Name: vulnerability.Source.Name})
 	}
 	return
 }
 
 func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclonedx.Service) {
-	if service = cdxutils.SearchForServiceByName(cdc.bom, utils.XrayToolName); service != nil || cdc.bom == nil {
+	if service = cdxutils.SearchForServiceByName(&cdc.bom.BOM, utils.XrayToolName); service != nil || cdc.bom == nil {
 		// The service is already in the BOM
 		return
 	}
@@ -390,7 +414,7 @@ func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclon
 		Name:    utils.XrayToolName,
 		Version: cdc.xrayVersion,
 	}
-	cdxutils.AddServiceToBomIfNotExists(cdc.bom, *service)
+	cdxutils.AddServiceToBomIfNotExists(&cdc.bom.BOM, *service)
 	return
 }
 

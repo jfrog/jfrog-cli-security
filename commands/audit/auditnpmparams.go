@@ -1,4 +1,4 @@
-package utils
+package audit
 
 type AuditNpmParams struct {
 	AuditParams

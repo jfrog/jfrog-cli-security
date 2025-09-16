@@ -294,17 +294,15 @@ func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
 }
 
 func CopyResult(result *sarif.Result) *sarif.Result {
-	copied := &sarif.Result{
-		RuleID:              result.RuleID,
-		RuleIndex:           result.RuleIndex,
-		Kind:                result.Kind,
-		Fingerprints:        result.Fingerprints,
-		CodeFlows:           copyCodeFlows(result.CodeFlows...),
-		Level:               result.Level,
-		Message:             copyMsgAttribute(result.Message),
-		Properties:          result.Properties,
-		PartialFingerprints: result.PartialFingerprints,
-	}
+	copied := sarif.NewRuleResult(GetResultRuleId(result)).
+		WithKind(result.Kind).
+		WithMessage(copyMsgAttribute(result.Message)).
+		WithLevel(result.Level).
+		WithRuleIndex(result.RuleIndex).
+		WithPartialFingerprints(result.PartialFingerprints).
+		WithFingerprints(result.Fingerprints).
+		WithCodeFlows(copyCodeFlows(result.CodeFlows...)).
+		WithProperties(result.Properties)
 	for _, location := range result.Locations {
 		copied.Locations = append(copied.Locations, CopyLocation(location))
 	}
@@ -312,7 +310,7 @@ func CopyResult(result *sarif.Result) *sarif.Result {
 }
 
 func copyCodeFlows(flows ...*sarif.CodeFlow) []*sarif.CodeFlow {
-	var copied []*sarif.CodeFlow
+	copied := make([]*sarif.CodeFlow, 0, len(flows))
 	for _, flow := range flows {
 		copied = append(copied, copyCodeFlow(flow))
 	}
@@ -320,7 +318,7 @@ func copyCodeFlows(flows ...*sarif.CodeFlow) []*sarif.CodeFlow {
 }
 
 func copyCodeFlow(flow *sarif.CodeFlow) *sarif.CodeFlow {
-	copied := &sarif.CodeFlow{}
+	copied := sarif.NewCodeFlow()
 	for _, threadFlow := range flow.ThreadFlows {
 		copied.ThreadFlows = append(copied.ThreadFlows, copyThreadFlow(threadFlow))
 	}
@@ -336,20 +334,31 @@ func copyThreadFlow(threadFlow *sarif.ThreadFlow) *sarif.ThreadFlow {
 }
 
 func copyMsgAttribute(attr *sarif.Message) *sarif.Message {
-	return &sarif.Message{
-		Text:     copyStrAttribute(attr.Text),
-		Markdown: copyStrAttribute(attr.Markdown),
+	if attr == nil {
+		return nil
 	}
+	copiedMsg := sarif.NewMessage()
+	if attr.Text != nil {
+		copiedMsg.WithText(*attr.Text)
+	}
+	if attr.Markdown != nil {
+		copiedMsg.WithMarkdown(*attr.Markdown)
+	}
+	return copiedMsg
 }
 
 func copyMultiMsgAttribute(attr *sarif.MultiformatMessageString) *sarif.MultiformatMessageString {
 	if attr == nil {
 		return nil
 	}
-	return &sarif.MultiformatMessageString{
-		Text:     copyStrAttribute(attr.Text),
-		Markdown: copyStrAttribute(attr.Markdown),
+	copiedMultiMsgAttr := sarif.NewMultiformatMessageString()
+	if attr.Text != nil {
+		copiedMultiMsgAttr.WithText(*attr.Text)
 	}
+	if attr.Markdown != nil {
+		copiedMultiMsgAttr.WithMarkdown(*attr.Markdown)
+	}
+	return copiedMultiMsgAttr
 }
 
 func copyStrAttribute(attr *string) *string {

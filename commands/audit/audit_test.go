@@ -607,7 +607,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			defer cleanUp()
 
 			configProfile := testcase.configProfile
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetXrayVersion(utils.EntitlementsMinVersion).
 				SetXscVersion(services.ConfigProfileMinXscVersion).
@@ -662,7 +662,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"))
 	defer cleanUp()
 
-	auditBasicParams := (&utils.AuditBasicParams{}).
+	auditBasicParams := (&AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
 		SetXrayVersion(utils.EntitlementsMinVersion).
@@ -797,7 +797,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 				defer remoteCallbackEnv()
 			}
 
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat(format.Table).
 				SetXrayVersion("3.108.0").
@@ -1007,7 +1007,7 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 			mockServer, serverDetails, apiCallsCount := validations.XrayServer(t, testParams)
 			defer mockServer.Close()
 
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetXrayVersion(utils.EntitlementsMinVersion).
 				SetXscVersion(services.ConfigProfileMinXscVersion).

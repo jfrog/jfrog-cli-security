@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -35,6 +34,8 @@ type ResultsWriter struct {
 	subScansPerformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
+	// TableNotes - Option array of notes, to be displayed if the format is Table at the end of the tables.
+	tableNotes []string
 	// OutputDir - The output directory to save the raw results.
 	outputDir string
 }
@@ -83,6 +84,11 @@ func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 	return rw
 }
 
+func (rw *ResultsWriter) SetTableNotes(tableNotes []string) *ResultsWriter {
+	rw.tableNotes = tableNotes
+	return rw
+}
+
 func printMessages(messages []string) {
 	if len(messages) > 0 {
 		log.Output()
@@ -93,7 +99,11 @@ func printMessages(messages []string) {
 }
 
 func printMessage(message string) {
-	log.Output("💬" + message)
+	icon := "*"
+	if isPrettyOutputSupported() {
+		icon = "💬"
+	}
+	log.Output(icon + " " + message)
 }
 
 func isPrettyOutputSupported() bool {
@@ -182,10 +192,12 @@ func (rw *ResultsWriter) printCycloneDx() error {
 	if err != nil {
 		return err
 	}
-	if err = cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil || rw.outputDir == "" {
+	outputBytes, err := utils.GetAsJsonBytes(bom, true, true)
+	if err != nil {
 		return err
 	}
-	return utils.DumpCdxContentToFile(bom, rw.outputDir, rw.getOutputFileName(), 0)
+	log.Output(string(outputBytes))
+	return utils.DumpFullBOMContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 }
 
 func (rw *ResultsWriter) getOutputFileName() string {
@@ -245,7 +257,13 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
 		return
 	}
-	return rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast)
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
+		return
+	}
+	if len(rw.tableNotes) > 0 {
+		printMessages(rw.tableNotes)
+	}
+	return
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
@@ -277,7 +295,7 @@ func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTabl
 	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.subScansPerformed...) {
 		return
 	}
-	if rw.showViolations || rw.commandResults.HasViolationContext() {
+	if (rw.showViolations || rw.commandResults.HasViolationContext()) && len(rw.commandResults.ResultContext.GitRepoHttpsCloneUrl) > 0 {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, true); err != nil {
 			return
 		}

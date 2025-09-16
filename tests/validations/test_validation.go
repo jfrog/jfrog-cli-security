@@ -379,7 +379,7 @@ func ValidateSbomComponentsCount(t *testing.T, outputType string, exactMatch boo
 		return
 	}
 	ValidateContent(t, exactMatch,
-		CountValidation[int]{Expected: params.Root, Actual: rootComponents, Msg: GetValidationCountErrMsg("root components", outputType, exactMatch, params.Root, 0)},
+		CountValidation[int]{Expected: params.Root, Actual: rootComponents, Msg: GetValidationCountErrMsg("root components", outputType, exactMatch, params.Root, rootComponents)},
 		CountValidation[int]{Expected: params.Direct, Actual: directComponents, Msg: GetValidationCountErrMsg("direct components", outputType, exactMatch, params.Direct, directComponents)},
 		CountValidation[int]{Expected: params.Transitive, Actual: transitiveComponents, Msg: GetValidationCountErrMsg("transitive components", outputType, exactMatch, params.Transitive, transitiveComponents)},
 	)
