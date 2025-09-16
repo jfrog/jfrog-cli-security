@@ -229,3 +229,31 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 		}()
 	}
 }
+
+func TestGradleCurationAuditMode(t *testing.T) {
+	// Test that curation audit mode flag is added when IsCurationCmd is true
+	params := &DepTreeParams{
+		IsCurationCmd: true,
+	}
+
+	manager := &gradleDepTreeManager{
+		DepTreeManager: NewDepTreeManager(params),
+		isCurationCmd:  params.IsCurationCmd,
+	}
+
+	// Verify that the manager has the curation flag set
+	assert.True(t, manager.isCurationCmd, "isCurationCmd should be true for curation commands")
+
+	// Test with non-curation command
+	paramsNonCuration := &DepTreeParams{
+		IsCurationCmd: false,
+	}
+
+	managerNonCuration := &gradleDepTreeManager{
+		DepTreeManager: NewDepTreeManager(paramsNonCuration),
+		isCurationCmd:  paramsNonCuration.IsCurationCmd,
+	}
+
+	// Verify that the manager does not have the curation flag set
+	assert.False(t, managerNonCuration.isCurationCmd, "isCurationCmd should be false for non-curation commands")
+}
