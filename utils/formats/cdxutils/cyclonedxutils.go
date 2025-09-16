@@ -214,7 +214,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
 func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
-	if strings.Contains(dependency.Ref, techutils.ToPackageRef("root","","")) && skipDefaultRoot {
+	if strings.Contains(dependency.Ref, techutils.ToPackageRef("root", "", "")) && skipDefaultRoot {
 		// dummy root, the actual roots are the dependencies of this component.
 		roots = []cyclonedx.Dependency{}
 		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {

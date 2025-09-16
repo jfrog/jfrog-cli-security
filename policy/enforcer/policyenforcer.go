@@ -144,9 +144,9 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Components == nil {
 			continue
 		}
-		pUrl := techutils.XrayComponentIdToPurl(impactedComponentXrayId)
+		ref := techutils.XrayComponentIdToCdxComponentRef(impactedComponentXrayId)
 		for _, component := range *target.ScaResults.Sbom.Components {
-			if strings.HasPrefix(component.PackageURL, pUrl) {
+			if strings.HasPrefix(component.BOMRef, ref) {
 				// Found the relevant component
 				impactedComponent = &component
 				dependencies := []cyclonedx.Dependency{}

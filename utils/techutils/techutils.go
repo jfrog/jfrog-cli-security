@@ -914,11 +914,11 @@ func ToPackageRef(compName, version, packageType string) (output string) {
 	if packageType == "" {
 		packageType = "generic"
 	}
-	if version == "" {
-		// If the version is empty, we return the component name only
-		return fmt.Sprintf("%s:%s", packageType, compName)
+	output = fmt.Sprintf("pkg:%s/%s", packageType, strings.ReplaceAll(compName, ":", "/"))
+	if version != "" {
+		output += fmt.Sprintf("@%s", version)
 	}
-	return fmt.Sprintf("pkg:%s:%s:%s", packageType, compName, version)
+	return output
 }
 
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id
