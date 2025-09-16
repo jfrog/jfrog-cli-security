@@ -124,7 +124,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go master
+// attiasas:xray_get_violations_api
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250916121001-bf30b1660ad0
 
 // jfrog:master
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.59.8-0.20250916064928-808474c96b43

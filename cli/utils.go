@@ -24,6 +24,9 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
@@ -109,14 +112,20 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 	return
 }
 
-func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomScanStrategy) {
-	var bomGenerator bom.SbomGenerator = buildinfo.NewBuildInfoBomGenerator()
-	var scanStrategy scan.SbomScanStrategy = scangraph.NewScanGraphStrategy()
+// Get the dynamic logic for the scan based on the provided flags to support backward compatibility
+func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.PolicyHandler, uploadResults, remediationService bool) {
+	bomGenerator = buildinfo.NewBuildInfoBomGenerator()
+	scanStrategy = scangraph.NewScanGraphStrategy()
+	violationGenerator = local.NewDeprecatedViolationGenerator()
+	// New flow - static SCA scan
 	if c.GetBoolFlagValue(flags.StaticSca) {
 		bomGenerator = xrayplugin.NewXrayLibBomGenerator()
 		scanStrategy = enrich.NewEnrichScanStrategy()
+		violationGenerator = enforcer.NewPolicyEnforcerViolationGenerator()
+		uploadResults = true
+		remediationService = true
 	}
-	return bomGenerator, scanStrategy
+	return
 }
 
 func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {

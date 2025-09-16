@@ -47,13 +47,12 @@ func (sg *ScanGraphStrategy) PrepareStrategy() error {
 	return clientutils.ValidateMinimumVersion(clientutils.Xray, sg.XrayGraphScanParams().XrayVersion, scangraph.GraphScanMinXrayVersion)
 }
 
-func (sg *ScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
+func (sg *ScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, err error) {
 	scanResponse, err := sg.DeprecatedScanTask(target)
 	if err != nil {
 		return
 	}
 	// Convert the scan results to CycloneDX BOM
-	violations = scanResponse.Violations
 	enriched = target
 	err = results.ScanResponseToSbom(enriched, scanResponse)
 	return
