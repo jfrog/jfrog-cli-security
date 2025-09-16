@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 )
 
 type UploadCycloneDxCommand struct {
@@ -23,7 +23,7 @@ type UploadCycloneDxCommand struct {
 	scanResultsRepository string
 
 	fileToUpload    string
-	contentToUpload *cyclonedx.BOM
+	contentToUpload *cdxutils.FullBOM
 	filePrefix      string
 
 	projectKey string
@@ -37,7 +37,7 @@ func (ucc *UploadCycloneDxCommand) CommandName() string {
 	return "upload-cdx"
 }
 
-func (ucc *UploadCycloneDxCommand) SetContentToUpload(bom *cyclonedx.BOM) *UploadCycloneDxCommand {
+func (ucc *UploadCycloneDxCommand) SetContentToUpload(bom *cdxutils.FullBOM) *UploadCycloneDxCommand {
 	ucc.contentToUpload = bom
 	return ucc
 }
@@ -97,7 +97,11 @@ func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to create temp dir: %w", err)
 		}
-		if ucc.fileToUpload, err = utils.DumpCdxContentToFile(ucc.contentToUpload, tempDir, ucc.filePrefix, 0); err != nil {
+		outputBytes, err := utils.GetAsJsonBytes(ucc.contentToUpload, true, true)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert CycloneDx content to JSON: %w", err)
+		}
+		if ucc.fileToUpload, err = utils.DumpCdxJsonContentToFile(outputBytes, tempDir, ucc.filePrefix, 0); err != nil {
 			return "", fmt.Errorf("failed to save CycloneDx content to file: %w", err)
 		}
 		log.Debug(fmt.Sprintf("Created temp CycloneDx file: %s", ucc.fileToUpload))

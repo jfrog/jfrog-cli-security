@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -193,10 +192,15 @@ func (rw *ResultsWriter) printCycloneDx() (err error) {
 	if err != nil {
 		return
 	}
-	if err = cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil || rw.outputDir == "" {
+	outputBytes, err := utils.GetAsJsonBytes(bom, true, true)
+	if err != nil {
 		return
 	}
-	_, err = utils.DumpCdxContentToFile(bom, rw.outputDir, rw.getOutputFileName(), 0)
+	log.Output(string(outputBytes))
+	if rw.outputDir == "" {
+		return
+	}
+	_, err = utils.DumpCdxJsonContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 	return
 }
 
@@ -225,7 +229,7 @@ func (rw *ResultsWriter) printRawResultsLog() (err error) {
 		if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
 			return
 		}
-		log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
+		log.Verbose(fmt.Sprintf("Raw scan results:\n%s", msg))
 		return
 	}
 	// Save the raw results to a file.

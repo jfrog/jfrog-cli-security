@@ -4,6 +4,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
@@ -27,6 +28,8 @@ type ResultConvertParams struct {
 	IncludeVulnerabilities bool
 	// If true and commandType.IsTargetBinary(), binary inner paths in results will be converted to the CI job file (relevant only for SARIF)
 	PatchBinaryPaths bool
+	// Control if SAST results should be parsed directly into the CycloneDX BOM, if false SARIF runs will be attached at "sast" attribute, diverting from the CDX spec (relevant only for CycloneDX)
+	ParseSastResultDirectlyIntoCDX bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool
 	// Control if the output should include SBOM information (relevant only for Table)
@@ -74,8 +77,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Get() (T, error)
 }
 
-func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cyclonedx.BOM, err error) {
-	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter()
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cdxutils.FullBOM, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter(c.Params.ParseSastResultDirectlyIntoCDX)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 

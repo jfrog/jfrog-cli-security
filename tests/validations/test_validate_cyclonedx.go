@@ -1,7 +1,7 @@
 package validations
 
 import (
-	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -14,19 +14,20 @@ import (
 )
 
 func VerifyCycloneDxResults(t *testing.T, content string, params ValidationParams) {
-	results := cyclonedx.NewBOM()
-	assert.NoError(t, cyclonedx.NewBOMDecoder(bytes.NewReader([]byte(content)), cyclonedx.BOMFileFormatJSON).Decode(results), "Failed to decode CycloneDX BOM")
+	var results *cdxutils.FullBOM
+	err := json.Unmarshal([]byte(content), &results)
+	assert.NoError(t, err, "Failed to unmarshal content to json.")
 	params.Actual = results
 	ValidateCommandCycloneDxOutput(t, params)
 }
 
 // ValidateCommandCycloneDxOutput validates the CycloneDX BOM output against expected values.
 func ValidateCommandCycloneDxOutput(t *testing.T, params ValidationParams) {
-	results, ok := params.Actual.(*cyclonedx.BOM)
+	results, ok := params.Actual.(*cdxutils.FullBOM)
 	if assert.True(t, ok, "Actual result is not of type *cyclonedx.BOM") {
 		ValidateCycloneDxIssuesCount(t, params, results)
 		if params.ExactResultsMatch && params.Expected != nil {
-			expectedResults, ok := params.Expected.(*cyclonedx.BOM)
+			expectedResults, ok := params.Expected.(*cdxutils.FullBOM)
 			if assert.True(t, ok, "Expected content is not of type *cyclonedx.BOM") {
 				assert.Equal(t, expectedResults, results, "CycloneDX BOM output does not match expected values")
 			}
@@ -34,11 +35,11 @@ func ValidateCommandCycloneDxOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
-func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content *cyclonedx.BOM) {
+func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content *cdxutils.FullBOM) {
 	actualValues := validationCountActualValues{}
 
-	actualValues.SbomComponents, actualValues.RootComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(content)
-	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities = countScaVulnerabilities(content)
+	actualValues.SbomComponents, actualValues.RootComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(&content.BOM)
+	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities = countScaVulnerabilities(&content.BOM)
 	actualValues.SastVulnerabilities, actualValues.SecretsVulnerabilities, actualValues.IacVulnerabilities, actualValues.InactiveSecretsVulnerabilities = countJasVulnerabilities(content)
 
 	actualValues.Vulnerabilities = actualValues.ScaVulnerabilities + actualValues.SastVulnerabilities + actualValues.SecretsVulnerabilities + actualValues.IacVulnerabilities
@@ -107,7 +108,7 @@ func countScaVulnerabilities(content *cyclonedx.BOM) (scaVulnerabilities, applic
 	return
 }
 
-func countJasVulnerabilities(content *cyclonedx.BOM) (sastVulnerabilities, secretsVulnerabilities, iacVulnerabilities, inactiveSecretsVulnerabilities int) {
+func countJasVulnerabilities(content *cdxutils.FullBOM) (sastVulnerabilities, secretsVulnerabilities, iacVulnerabilities, inactiveSecretsVulnerabilities int) {
 	if content == nil || content.Vulnerabilities == nil {
 		return
 	}
@@ -136,5 +137,8 @@ func countJasVulnerabilities(content *cyclonedx.BOM) (sastVulnerabilities, secre
 			}
 		}
 	}
+	sarifSastVuln, sarifSastViolations := countJasResults(content.Sast)
+	sastVulnerabilities += sarifSastVuln
+	secretsVulnerabilities += sarifSastViolations
 	return
 }

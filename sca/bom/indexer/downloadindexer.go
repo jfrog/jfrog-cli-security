@@ -2,8 +2,6 @@ package indexer
 
 import (
 	"errors"
-	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +13,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/lock"
-	"github.com/jfrog/jfrog-client-go/http/httpclient"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -65,8 +62,43 @@ func DownloadIndexerIfNeeded(xrayManager *xray.XrayServicesManager, xrayVersionS
 }
 
 func downloadIndexer(xrayManager *xray.XrayServicesManager, indexerDirPath, indexerBinaryName string) (string, error) {
-	tempDirPath := filepath.Join(indexerDirPath, tempIndexerDirName)
+	tempDirPath, err := getTempDirForDownload(indexerDirPath)
+	if err != nil {
+		return "", err
+	}
+	// Delete all old indexers, but the two newest
+	err = deleteOldIndexers(indexerDirPath)
+	if err != nil {
+		return "", err
+	}
+	// Download the indexer to a temporary directory
+	binaryTempPath, err := xrayManager.DownloadIndexer(tempDirPath, indexerBinaryName)
+	if err != nil {
+		return "", err
+	}
+	// Get actual version of the downloaded indexer
+	indexerVersion, err := getIndexerVersion(binaryTempPath)
+	if err != nil {
+		return "", err
+	}
+	log.Info("The downloaded Xray Indexer version is " + indexerVersion)
+	// In case of a hot upgrade of Xray in progress, the version of the downloaded indexer might be different from the Xray version we got above,
+	// so the indexer we just downloaded may already exist.
+	newDirPath := filepath.Join(indexerDirPath, indexerVersion)
+	newDirExists, err := fileutils.IsDirExists(newDirPath, false)
+	if err != nil {
+		return "", err
+	}
+	if newDirExists {
+		err = fileutils.RemoveTempDir(tempDirPath)
+	} else {
+		err = fileutils.MoveDir(tempDirPath, newDirPath)
+	}
+	return filepath.Join(newDirPath, indexerBinaryName), errorutils.CheckError(err)
+}
 
+func getTempDirForDownload(indexerDirPath string) (string, error) {
+	tempDirPath := filepath.Join(indexerDirPath, tempIndexerDirName)
 	// Delete the temporary directory if it exists
 	tempDirExists, err := fileutils.IsDirExists(tempDirPath, false)
 	if err != nil {
@@ -78,58 +110,7 @@ func downloadIndexer(xrayManager *xray.XrayServicesManager, indexerDirPath, inde
 			return "", errorutils.CheckErrorf("Temporary download directory already exists, and can't be removed: %s\nRemove this directory manually and try again: %s", err.Error(), tempDirPath)
 		}
 	}
-
-	// Delete all old indexers, but the two newest
-	err = deleteOldIndexers(indexerDirPath)
-	if err != nil {
-		return "", err
-	}
-
-	// Download the indexer from Xray to the temporary directory
-	url := fmt.Sprintf("%sapi/v1/indexer-resources/download/%s/%s", xrayManager.Config().GetServiceDetails().GetUrl(), runtime.GOOS, runtime.GOARCH)
-	downloadFileDetails := &httpclient.DownloadFileDetails{
-		DownloadPath:  url,
-		LocalPath:     tempDirPath,
-		LocalFileName: indexerBinaryName,
-	}
-	httpClientDetails := xrayManager.Config().GetServiceDetails().CreateHttpClientDetails()
-	resp, err := xrayManager.Client().DownloadFile(downloadFileDetails, "", &httpClientDetails, false, false)
-	if err != nil {
-		return "", fmt.Errorf("an error occurred while trying to download '%s':\n%s", url, err.Error())
-	}
-	if err = errorutils.CheckResponseStatus(resp, http.StatusOK); err != nil {
-		if resp.StatusCode == http.StatusUnauthorized {
-			err = fmt.Errorf("%s \nHint: It appears that the credentials provided do not have sufficient permissions for JFrog Xray. This could be due to either incorrect credentials or limited permissions restricted to Artifactory only.", err.Error())
-		}
-		return "", fmt.Errorf("failed while attempting to download '%s':\n%s", url, err.Error())
-	}
-
-	// Add execution permissions to the indexer
-	indexerPath := filepath.Join(tempDirPath, indexerBinaryName)
-	err = os.Chmod(indexerPath, 0777)
-	if err != nil {
-		return "", errorutils.CheckError(err)
-	}
-	indexerVersion, err := getIndexerVersion(indexerPath)
-	if err != nil {
-		return "", err
-	}
-	log.Info("The downloaded Xray Indexer version is " + indexerVersion)
-	newDirPath := filepath.Join(indexerDirPath, indexerVersion)
-
-	// In case of a hot upgrade of Xray in progress, the version of the downloaded indexer might be different from the Xray version we got above,
-	// so the indexer we just downloaded may already exist.
-	newDirExists, err := fileutils.IsDirExists(newDirPath, false)
-	if err != nil {
-		return "", err
-	}
-	if newDirExists {
-		err = fileutils.RemoveTempDir(tempDirPath)
-	} else {
-		err = fileutils.MoveDir(tempDirPath, newDirPath)
-	}
-
-	return filepath.Join(newDirPath, indexerBinaryName), errorutils.CheckError(err)
+	return tempDirPath, nil
 }
 
 func getIndexerVersion(indexerPath string) (string, error) {

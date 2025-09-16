@@ -336,23 +336,29 @@ func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
+func DumpCdxJsonContentToFile(fileContent []byte, scanResultsOutputDir, filePrefix string, threadId int) (resultsFileFullPath string, err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, filePrefix, "cdx.json", threadId)
+}
+
 func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	return
 }
 
 func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	return
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (err error) {
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (resultsFileFullPath string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
+	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+		return "", fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
 }
