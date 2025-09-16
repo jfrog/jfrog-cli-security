@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -193,10 +192,12 @@ func (rw *ResultsWriter) printCycloneDx() error {
 	if err != nil {
 		return err
 	}
-	if err = cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil || rw.outputDir == "" {
+	outputBytes, err := utils.GetAsJsonBytes(bom, true, true)
+	if err != nil {
 		return err
 	}
-	return utils.DumpCdxContentToFile(bom, rw.outputDir, rw.getOutputFileName(), 0)
+	log.Output(string(outputBytes))
+	return utils.DumpFullBOMContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 }
 
 func (rw *ResultsWriter) getOutputFileName() string {
