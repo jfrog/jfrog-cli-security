@@ -3,7 +3,6 @@ package local
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
@@ -134,7 +133,7 @@ func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.
 	}
 }
 
-func convertToBasicScaViolation(violation services.Violation, severity severityutils.Severity) violationutils.Violation {
+func convertToBasicViolation(violation services.Violation, severity severityutils.Severity) violationutils.Violation {
 	cmdViolation := violationutils.Violation{
 		ViolationId: violation.IssueId,
 		Watch:       violation.WatchName,
@@ -151,10 +150,19 @@ func convertToBasicScaViolation(violation services.Violation, severity severityu
 	return cmdViolation
 }
 
+func convertToScaViolation(violation services.Violation, severity severityutils.Severity, affectedComponent cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) violationutils.ScaViolation {
+	return violationutils.ScaViolation{
+		Violation:         convertToBasicViolation(violation, severity),
+		ImpactedComponent: affectedComponent,
+		DirectComponents:  directComponents,
+		ImpactPaths:       impactPaths,
+	}
+}
+
 func convertScaSecurityViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	xrayService := results.GetXrayService()
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		// Add the vulnerability related component if it is not already existing
+		// Create the CycloneDX component for the impacted package
 		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
 		// Extract the vulnerability CVE's information and create the SCA vulnerability for each
 		cveIds, applicability, cwes, ratings := results.ExtractIssuesInfoForCdx(violation.IssueId, cves, severity, applicabilityStatus, xrayService)
@@ -173,22 +181,15 @@ func convertScaSecurityViolationToPolicyViolation(convertedViolations *violation
 				References:  violation.References,
 				Service:     xrayService,
 			})
-
 			// Attach the affected impacted library component to the vulnerability
-			// cdxutils.AttachComponentAffects(&vulnerability, affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-			// 	return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
-			// })
-
+			cdxutils.AttachComponentAffects(&vulnerability, affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+				return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
+			})
 			convertedViolations.Sca = append(convertedViolations.Sca, violationutils.CveViolation{
-				ScaViolation: violationutils.ScaViolation{
-					Violation:         convertToBasicScaViolation(violation, severity),
-					ImpactedComponent: affectedComponent,
-					DirectComponents:  directComponents,
-					ImpactPaths:       impactPaths,
-				},
+				ScaViolation:             convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
 				CveVulnerability:         vulnerability,
 				ContextualAnalysis:       applicability[i],
-				FixedVersions:            convertToAffectedVersions(affectedComponent, fixedVersion),
+				FixedVersions:            cdxutils.ConvertToAffectedVersions(affectedComponent, fixedVersion),
 				JfrogResearchInformation: results.ConvertJfrogResearchInformation(violation.ExtendedInformation),
 			})
 		}
@@ -196,34 +197,15 @@ func convertScaSecurityViolationToPolicyViolation(convertedViolations *violation
 	}
 }
 
-func convertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersion []string) *[]cyclonedx.AffectedVersions {
-	if len(fixedVersion) == 0 {
-		return nil
-	}
-	affected := cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
-	if affected.Range == nil {
-		return nil
-	}
-	affectedVersions := []cyclonedx.AffectedVersions{}
-	for _, version := range *affected.Range {
-		if version.Status != cyclonedx.VulnerabilityStatusNotAffected {
-			affectedVersions = append(affectedVersions, version)
-		}
-	}
-	if len(affectedVersions) == 0 {
-		return nil
-	}
-	return &affectedVersions
-}
-
 func convertScaLicenseViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		// Create the CycloneDX component for the impacted package
+		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+		// Add the license violation
 		convertedViolations.License = append(convertedViolations.License, violationutils.LicenseViolation{
-			ScaViolation: violationutils.ScaViolation{
-				Violation: convertToBasicScaViolation(violation, severity),
-			},
-			LicenseKey:  violation.LicenseKey,
-			LicenseName: violation.LicenseName,
+			ScaViolation: convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
+			LicenseKey:   violation.LicenseKey,
+			LicenseName:  violation.LicenseName,
 		})
 		return nil
 	}
@@ -231,64 +213,23 @@ func convertScaLicenseViolationToPolicyViolation(convertedViolations *violationu
 
 func convertOperationalRiskViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		opRiskData := getOperationalRiskViolationReadableData(violation)
+		// Create the CycloneDX component for the impacted package
+		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+		// Add the operational risk violation
 		convertedViolations.OpRisk = append(convertedViolations.OpRisk, violationutils.OperationalRiskViolation{
-			ScaViolation: violationutils.ScaViolation{
-				Violation: convertToBasicScaViolation(violation, severity),
-			},
-			RiskReason:    opRiskData.riskReason,
-			IsEol:         opRiskData.isEol,
-			EolMessage:    opRiskData.eolMessage,
-			Cadence:       opRiskData.cadence,
-			Commits:       opRiskData.commits,
-			Committers:    opRiskData.committers,
-			LatestVersion: opRiskData.latestVersion,
-			NewerVersions: opRiskData.newerVersions,
+			ScaViolation: convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
+			OperationalRiskViolationReadableData: policy.GetOperationalRiskViolationReadableData(
+				violation.RiskReason,
+				violation.IsEol,
+				violation.EolMessage,
+				violation.Cadence,
+				violation.Commits,
+				violation.Committers,
+				violation.LatestVersion,
+				violation.NewerVersions,
+			),
 		})
 		return nil
-	}
-}
-
-type operationalRiskViolationReadableData struct {
-	isEol         string
-	cadence       string
-	commits       string
-	committers    string
-	eolMessage    string
-	riskReason    string
-	latestVersion string
-	newerVersions string
-}
-
-func getOperationalRiskViolationReadableData(violation services.Violation) *operationalRiskViolationReadableData {
-	isEol, cadence, commits, committers, newerVersions, latestVersion := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
-	if violation.IsEol != nil {
-		isEol = strconv.FormatBool(*violation.IsEol)
-	}
-	if violation.Cadence != nil {
-		cadence = strconv.FormatFloat(*violation.Cadence, 'f', -1, 64)
-	}
-	if violation.Committers != nil {
-		committers = strconv.FormatInt(int64(*violation.Committers), 10)
-	}
-	if violation.Commits != nil {
-		commits = strconv.FormatInt(*violation.Commits, 10)
-	}
-	if violation.NewerVersions != nil {
-		newerVersions = strconv.FormatInt(int64(*violation.NewerVersions), 10)
-	}
-	if violation.LatestVersion != "" {
-		latestVersion = violation.LatestVersion
-	}
-	return &operationalRiskViolationReadableData{
-		isEol:         isEol,
-		cadence:       cadence,
-		commits:       commits,
-		committers:    committers,
-		eolMessage:    violation.EolMessage,
-		riskReason:    violation.RiskReason,
-		latestVersion: latestVersion,
-		newerVersions: newerVersions,
 	}
 }
 

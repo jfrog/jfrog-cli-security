@@ -107,7 +107,7 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 			// SCA as default
 			switch violation.Type {
 			case xrayUtils.SecurityViolation:
-				convertedViolations.Sca = append(convertedViolations.Sca, convertToScaViolation(violation))
+				convertedViolations.Sca = append(convertedViolations.Sca, convertToCveViolation(violation))
 			case xrayUtils.LicenseViolation:
 				convertedViolations.License = append(convertedViolations.License, convertToLicenseViolation(violation))
 			case xrayUtils.OperationalRiskViolation:
@@ -138,29 +138,52 @@ func convertToBasicViolation(violation services.XrayViolation) violationutils.Vi
 	return cmdViolation
 }
 
-func convertToScaViolation(violation services.XrayViolation) violationutils.CveViolation {
-	cveViolation := violationutils.CveViolation{
-		ScaViolation: violationutils.ScaViolation{
+func convertToScaViolations(violation services.XrayViolation) []violationutils.ScaViolation {
+	return []violationutils.ScaViolation{
+		{
 			Violation: convertToBasicViolation(violation),
 		},
+	}
+}
+
+func convertToScaViolation(violation services.XrayViolation) violationutils.ScaViolation {
+	return violationutils.ScaViolation{
+		Violation: convertToBasicViolation(violation),
+		// ImpactedComponent: affectedComponent,
+		// DirectComponents:  directComponents,
+		// ImpactPaths:       impactPaths,
+	}
+}
+
+func convertToCveViolation(violation services.XrayViolation) violationutils.CveViolation {
+	cveViolation := violationutils.CveViolation{
+		ScaViolation: convertToScaViolation(violation),
+		// FixedVersions: cdxutils.ConvertToAffectedVersions(affectedComponent, violation.FixVersions),
+		JfrogResearchInformation: results.ConvertJfrogResearchInformation(violation.JfrogResearchInformation),
 	}
 	return cveViolation
 }
 
 func convertToLicenseViolation(violation services.XrayViolation) violationutils.LicenseViolation {
 	licenseViolation := violationutils.LicenseViolation{
-		ScaViolation: violationutils.ScaViolation{
-			Violation: convertToBasicViolation(violation),
-		},
+		ScaViolation: convertToScaViolation(violation),
 	}
 	return licenseViolation
 }
 
 func convertToOpRiskViolation(violation services.XrayViolation) violationutils.OperationalRiskViolation {
 	opRiskViolation := violationutils.OperationalRiskViolation{
-		ScaViolation: violationutils.ScaViolation{
-			Violation: convertToBasicViolation(violation),
-		},
+		ScaViolation: convertToScaViolation(violation),
+		OperationalRiskViolationReadableData: policy.GetOperationalRiskViolationReadableData(
+			violation.OperationalRisk.RiskReason,
+			violation.OperationalRisk.IsEol,
+			violation.OperationalRisk.EolMessage,
+			violation.OperationalRisk.Cadence,
+			violation.OperationalRisk.Commits,
+			violation.OperationalRisk.Committers,
+			violation.OperationalRisk.LatestVersion,
+			violation.OperationalRisk.NewerVersions,
+		),
 	}
 	return opRiskViolation
 }

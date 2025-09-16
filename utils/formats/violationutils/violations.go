@@ -114,8 +114,7 @@ type LicenseViolation struct {
 	LicenseName string `json:"license_name"`
 }
 
-type OperationalRiskViolation struct {
-	ScaViolation
+type OperationalRiskViolationReadableData struct {
 	RiskReason    string `json:"riskReason"`
 	IsEol         string `json:"isEndOfLife"`
 	EolMessage    string `json:"endOfLifeMessage"`
@@ -124,4 +123,9 @@ type OperationalRiskViolation struct {
 	Committers    string `json:"committers"`
 	NewerVersions string `json:"newerVersions"`
 	LatestVersion string `json:"latestVersion"`
+}
+
+type OperationalRiskViolation struct {
+	ScaViolation
+	OperationalRiskViolationReadableData
 }

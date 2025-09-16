@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -72,4 +73,36 @@ func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) 
 		}
 	}
 	return
+}
+
+func GetOperationalRiskViolationReadableData(riskReason string, isEol *bool, eolMsg string, cadence *float64, commits *int64, committers *int, latestVersion string, newerVersion *int) violationutils.OperationalRiskViolationReadableData {
+	isEolStr, cadenceStr, commitsStr, committersStr, newerVersionsStr, latestVersionStr := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+	if isEol != nil {
+		isEolStr = strconv.FormatBool(*isEol)
+	}
+	if cadence != nil {
+		cadenceStr = strconv.FormatFloat(*cadence, 'f', -1, 64)
+	}
+	if committers != nil {
+		committersStr = strconv.FormatInt(int64(*committers), 10)
+	}
+	if commits != nil {
+		commitsStr = strconv.FormatInt(*commits, 10)
+	}
+	if newerVersion != nil {
+		newerVersionsStr = strconv.FormatInt(int64(*newerVersion), 10)
+	}
+	if latestVersion != "" {
+		latestVersionStr = latestVersion
+	}
+	return violationutils.OperationalRiskViolationReadableData{
+		IsEol:         isEolStr,
+		Cadence:       cadenceStr,
+		Commits:       commitsStr,
+		Committers:    committersStr,
+		EolMessage:    eolMsg,
+		RiskReason:    riskReason,
+		LatestVersion: latestVersionStr,
+		NewerVersions: newerVersionsStr,
+	}
 }

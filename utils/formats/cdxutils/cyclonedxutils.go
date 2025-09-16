@@ -276,6 +276,26 @@ func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
 }
 
+func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersion []string) *[]cyclonedx.AffectedVersions {
+	if len(fixedVersion) == 0 {
+		return nil
+	}
+	affected := CreateScaImpactedAffects(affectedComponent, fixedVersion)
+	if affected.Range == nil {
+		return nil
+	}
+	affectedVersions := []cyclonedx.AffectedVersions{}
+	for _, version := range *affected.Range {
+		if version.Status != cyclonedx.VulnerabilityStatusNotAffected {
+			affectedVersions = append(affectedVersions, version)
+		}
+	}
+	if len(affectedVersions) == 0 {
+		return nil
+	}
+	return &affectedVersions
+}
+
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
 	if bom.Components == nil || len(*bom.Components) == 0 || bom.Dependencies == nil || len(*bom.Dependencies) == 0 {
 		// No components or dependencies to filter, return the original BOM
