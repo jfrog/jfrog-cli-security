@@ -144,6 +144,7 @@ func convertToBasicViolation(violation services.Violation, severity severityutil
 			PolicyName:        policy.Policy,
 			Rule:              policy.Rule,
 			FailBuild:         violation.FailBuild,
+			FailPullRequest:   violation.FailPr,
 			SkipNotApplicable: policy.SkipNotApplicable,
 		})
 	}

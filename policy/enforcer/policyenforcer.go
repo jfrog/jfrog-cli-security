@@ -3,6 +3,7 @@ package enforcer
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -102,12 +104,12 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 	convertedViolations = violationutils.Violations{}
 	for _, violation := range generatedViolations {
 		if violation.SastDetails != nil {
-			convertedViolations.Sast = append(convertedViolations.Sast, convertToJasViolation(cmdResults, jasutils.Sast, violation))
+			convertedViolations.Sast = append(convertedViolations.Sast, convertToJasViolations(cmdResults, jasutils.Sast, violation)...)
 		} else if violation.ExposureDetails != nil {
-			if strings.HasPrefix(violation.ExposureDetails.Id, "SEC") {
-				convertedViolations.Secrets = append(convertedViolations.Secrets, convertToJasViolation(cmdResults, jasutils.Secrets, violation))
-			} else if strings.HasPrefix(violation.ExposureDetails.Id, "IAC") {
-				convertedViolations.Iac = append(convertedViolations.Iac, convertToJasViolation(cmdResults, jasutils.IaC, violation))
+			if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
+				convertedViolations.Secrets = append(convertedViolations.Secrets, convertToJasViolations(cmdResults, jasutils.Secrets, violation)...)
+			} else {
+				log.Warn(fmt.Sprintf("Skipping Jas violation with unknown exposure ID prefix for violation ID %s", violation.Id))
 			}
 		} else {
 			// SCA as default
@@ -184,7 +186,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 				return nil
 			},
 		); err != nil {
-			log.Warn(fmt.Sprintf("Failed to search for vulnerability %s in the scan results: %s", issueId, err.Error()))
+			log.Verbose(fmt.Sprintf("Failed to search for vulnerability %s in the scan results: %s", issueId, err.Error()))
 		}
 	}
 	if relevantVulnerability == nil {
@@ -193,22 +195,72 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 	return
 }
 
-func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) violationutils.JasViolation {
-	rule, result, location := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
-	secretViolation := violationutils.JasViolation{
-		Violation: convertToBasicViolation(violation),
-		Rule:      rule,
-		Result:    result,
-		Location:  location,
+func convertToJasViolations(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations []violationutils.JasViolation) {
+	matches := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
+	for _, match := range matches {
+		JasViolation := violationutils.JasViolation{
+			Violation: convertToBasicViolation(violation),
+			Rule:      match.rule,
+			Result:    match.result,
+			Location:  match.location,
+		}
+		jasViolations = append(jasViolations, JasViolation)
 	}
-	return secretViolation
+	return
 }
 
-func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (rule *sarif.ReportingDescriptor, result *sarif.Result, location *sarif.Location) {
-	// for _, target := range cmdResults.Targets {
-	// 	target.GetJasScansResults(jasType)
-	// }
+type matchedJsaVulnerability struct {
+	rule     *sarif.ReportingDescriptor
+	result   *sarif.Result
+	location *sarif.Location
+}
+
+func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (matches []matchedJsaVulnerability) {
+	id := getJasVulnerabilityId(violation, jasType)
+	if id == "" {
+		log.Debug(fmt.Sprintf("Skipping Jas violation with empty ID for issue ID %s violation ID %s", violation.IssueId, violation.Id))
+		return
+	}
+	for _, target := range cmdResults.Targets {
+		if target.JasResults == nil {
+			log.Debug(fmt.Sprintf("Skipping %s violation search for target %s with no Jas results", jasType, target.ScanTarget))
+			continue
+		}
+		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.EntitledForJas,
+			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
+				if sarifutils.GetRuleId(rule) == id && slices.Contains(violation.PhysicalPaths, sarifutils.GetLocationFileName(location)) {
+					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
+					matches = append(matches, matchedJsaVulnerability{
+						rule:     rule,
+						result:   result,
+						location: location,
+					})
+				}
+				return nil
+			},
+		); err != nil {
+			log.Verbose(fmt.Sprintf("Failed to search for %s issue %s in the scan results: %s", jasType, violation.IssueId, err.Error()))
+		}
+	}
 	return
+}
+
+func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.JasScanType) string {
+	switch jasType {
+	case jasutils.Sast:
+		if violation.SastDetails == nil {
+			log.Debug(fmt.Sprintf("Skipping SAST violation with mismatched or missing SAST details for ID %s", violation.IssueId))
+			return ""
+		}
+		return violation.SastDetails.Abbreviation
+	case jasutils.Secrets:
+		if violation.ExposureDetails == nil || !strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
+			log.Debug(fmt.Sprintf("Skipping Secrets violation with mismatched or missing Exposure details for ID %s", violation.IssueId))
+			return ""
+		}
+		return violation.ExposureDetails.Abbreviation
+	}
+	return ""
 }
 
 func convertToBasicViolation(violation services.XrayViolation) violationutils.Violation {
@@ -232,22 +284,22 @@ func convertToBasicViolation(violation services.XrayViolation) violationutils.Vi
 func convertToCveViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (cveViolations []violationutils.CveViolation) {
 	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
 		if infectedComponentXrayId == "" {
-			log.Debug("Skipping CVE violation with empty infected component ID")
+			log.Verbose(fmt.Sprintf("Skipping CVE violation with empty infected component ID for violation ID %s", violation.Id))
 			continue
 		}
 		affectedComponent, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
 		if affectedComponent == nil {
-			log.Debug("Skipping CVE violation with no located affected component")
+			log.Verbose(fmt.Sprintf("Skipping CVE violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
 			continue
 		}
 		for _, cve := range violation.Cves {
 			if cve.Id == "" {
-				log.Debug("Skipping CVE violation with empty CVE ID")
+				log.Verbose(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
 				continue
 			}
 			vulnerability, contextualAnalysis := locateBomVulnerabilityInfo(cmdResults, cve.Id, *affectedComponent)
 			if vulnerability == nil {
-				log.Debug(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s", cve.Id))
+				log.Verbose(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s, violation ID %s and infected component ID %s", cve.Id, violation.Id, infectedComponentXrayId))
 				continue
 			}
 			cveViolation := violationutils.CveViolation{
@@ -266,7 +318,7 @@ func convertToCveViolations(cmdResults *results.SecurityCommandResults, violatio
 func convertToLicenseViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (licenseViolations []violationutils.LicenseViolation) {
 	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
 		if infectedComponentXrayId == "" {
-			log.Debug("Skipping license violation with empty infected component ID")
+			log.Verbose(fmt.Sprintf("Skipping license violation with empty infected component ID for violation ID %s", violation.Id))
 			continue
 		}
 		_, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
@@ -283,7 +335,7 @@ func convertToLicenseViolations(cmdResults *results.SecurityCommandResults, viol
 func convertToOpRiskViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (opRiskViolations []violationutils.OperationalRiskViolation) {
 	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
 		if infectedComponentXrayId == "" {
-			log.Debug("Skipping operational risk violation with empty infected component ID")
+			log.Verbose(fmt.Sprintf("Skipping operational risk violation with empty infected component ID for violation ID %s", violation.Id))
 			continue
 		}
 		_, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)

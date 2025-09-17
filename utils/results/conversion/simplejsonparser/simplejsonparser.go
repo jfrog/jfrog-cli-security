@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/CycloneDX/cyclonedx-go"
-	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -166,6 +165,7 @@ func convertToViolationContext(violation violationutils.Violation) formats.Viola
 	for _, policy := range violation.Policies {
 		context.Policies = append(context.Policies, policy.PolicyName)
 		context.FailPr = context.FailPr || policy.FailPullRequest
+		context.FailBuild = context.FailBuild || policy.FailBuild
 	}
 	return context
 }
@@ -504,39 +504,32 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 // 	}
 // }
 
-func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
-		*licenseViolationsRows = append(*licenseViolationsRows,
-			formats.LicenseViolationRow{
-				ViolationContext: formats.ViolationContext{
-					Watch:    violation.WatchName,
-					Policies: results.ConvertPolicesToString(violation.Policies),
-					FailPr:   violation.FailPr,
-				},
-				LicenseRow: formats.LicenseRow{
-					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
-					LicenseName: violation.LicenseName,
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-						ImpactedDependencyName:    impactedPackagesName,
-						ImpactedDependencyVersion: impactedPackagesVersion,
-						ImpactedDependencyType:    impactedPackagesType,
-						Components:                directComponents,
-					},
-				},
-			},
-		)
-		return nil
-	}
-}
-
-func getLicenseKey(licenseKey, issueId string) string {
-	if licenseKey == "" {
-		return issueId
-	}
-	return licenseKey
-}
+// func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
+// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+// 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
+// 		*licenseViolationsRows = append(*licenseViolationsRows,
+// 			formats.LicenseViolationRow{
+// 				ViolationContext: formats.ViolationContext{
+// 					Watch:    violation.WatchName,
+// 					Policies: results.ConvertPolicesToString(violation.Policies),
+// 					FailPr:   violation.FailPr,
+// 				},
+// 				LicenseRow: formats.LicenseRow{
+// 					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
+// 					LicenseName: violation.LicenseName,
+// 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+// 						SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
+// 						ImpactedDependencyName:    impactedPackagesName,
+// 						ImpactedDependencyVersion: impactedPackagesVersion,
+// 						ImpactedDependencyType:    impactedPackagesType,
+// 						Components:                directComponents,
+// 					},
+// 				},
+// 			},
+// 		)
+// 		return nil
+// 	}
+// }
 
 // func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
 // 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
@@ -610,12 +603,6 @@ func createSourceCodeRow(rule *sarif.ReportingDescriptor, severity severityutils
 			Cwe:                     sarifutils.GetRuleCWE(rule),
 			ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
 			ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),
-		},
-		ViolationContext: formats.ViolationContext{
-			Watch:    sarifutils.GetResultWatches(result),
-			IssueId:  sarifutils.GetResultIssueId(result),
-			Policies: sarifutils.GetResultPolicies(result),
-			FailPr:   sarifutils.GetResultFailPrValue(result),
 		},
 		SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
 		Finding:         sarifutils.GetResultMsgText(result),
