@@ -38,7 +38,7 @@ type SecurityCommandResults struct {
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
 	// Policy violations found in the command
-	Violations violationutils.Violations `json:"violations"`
+	Violations ScanResult[violationutils.Violations] `json:"violations"`
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
@@ -316,8 +316,8 @@ func (r *SecurityCommandResults) HasFindings() bool {
 	return false
 }
 
-func (r *SecurityCommandResults) SetViolations(violations violationutils.Violations) *SecurityCommandResults {
-	r.Violations = violations
+func (r *SecurityCommandResults) SetViolations(errorCode int, violations violationutils.Violations) *SecurityCommandResults {
+	r.Violations = ScanResult[violationutils.Violations]{StatusCode: errorCode, Scan: violations}
 	return r
 }
 

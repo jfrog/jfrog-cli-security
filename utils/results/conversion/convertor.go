@@ -72,7 +72,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) error
 	ParseSast(sast ...results.ScanResult[[]*sarif.Run]) error
 	// Parse JFrog violations to the format if supported
-	ParseViolations(violations violationutils.Violations) error
+	ParseViolations(violations results.ScanResult[violationutils.Violations]) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }

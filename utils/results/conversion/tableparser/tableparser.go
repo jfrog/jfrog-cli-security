@@ -77,7 +77,7 @@ func (tc *CmdResultsTableConverter) ParseCVEs(enrichedSbom results.ScanResult[*c
 	return tc.simpleJsonConvertor.ParseCVEs(enrichedSbom, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(violations violationutils.Violations) (err error) {
+func (tc *CmdResultsTableConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
 	return tc.simpleJsonConvertor.ParseViolations(violations)
 }
 

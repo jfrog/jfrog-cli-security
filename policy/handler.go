@@ -24,8 +24,10 @@ type PolicyHandlerOption func(sg PolicyHandler)
 
 func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.SecurityCommandResults) (err error) {
 	log.Info("Generating violations...")
-	var violations violationutils.Violations
-	if violations, err = generator.GenerateViolations(cmdResults); err != nil {
+	violations, err := generator.GenerateViolations(cmdResults)
+	// We add the results before checking for errors, so we can display the results even if an error occur
+	cmdResults.SetViolations(getStatusCode(err), violations)
+	if err != nil {
 		return fmt.Errorf("failed to fetch violations: %s", err.Error())
 	}
 	if violations.Count() == 0 {
@@ -33,8 +35,14 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 	} else {
 		log.Info(fmt.Sprintf("Generated %d violations. [%s]", violations.Count(), violations.String()))
 	}
-	cmdResults.SetViolations(violations)
 	return
+}
+
+func getStatusCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	return 1
 }
 
 func CheckPolicyFailure(cmdResults *results.SecurityCommandResults) (err error) {

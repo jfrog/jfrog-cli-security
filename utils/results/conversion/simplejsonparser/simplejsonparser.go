@@ -170,10 +170,14 @@ func convertToViolationContext(violation violationutils.Violation) formats.Viola
 	return context
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations violationutils.Violations) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violationsScanResults results.ScanResult[violationutils.Violations]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
+	if violationsScanResults.IsScanFailed() {
+		return
+	}
+	violations := violationsScanResults.Scan
 	// SCA Violations
 	for _, cveViolation := range violations.Sca {
 		violation := sjc.createVulnerabilityOrViolationRowFromCdx(

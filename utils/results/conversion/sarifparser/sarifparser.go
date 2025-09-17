@@ -1,7 +1,6 @@
 package sarifparser
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -320,9 +319,11 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseViolations(violations violationutils.Violations) (err error) {
-	// TODO: implement
-	return errors.New("not implemented")
+func (sc *CmdResultsSarifConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
+	if err = sc.validateBeforeParse(); err != nil {
+		return
+	}
+	return
 }
 
 func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
