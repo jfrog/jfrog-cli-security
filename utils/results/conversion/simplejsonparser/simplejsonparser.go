@@ -69,7 +69,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}

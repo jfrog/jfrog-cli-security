@@ -61,7 +61,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
 	// Missing attributes:
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
-	DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	DeprecatedParseLicenses(scaResponse results.ScanResult[services.ScanResponse]) error
 	// Parse SCA content to the current scan target
 	ParseSbom(sbom *cyclonedx.BOM) error
@@ -194,7 +194,7 @@ func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser
 	// Parse deprecated SCA results
 	for _, scaResults := range targetScansResults.ScaResults.DeprecatedXrayResults {
 		if params.IncludeVulnerabilities {
-			if err = parser.DeprecatedParseScaIssues(targetScansResults.ScaResults.Descriptors, scaResults, applicableRuns...); err != nil {
+			if err = parser.DeprecatedParseScaVulnerabilities(targetScansResults.ScaResults.Descriptors, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		}

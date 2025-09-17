@@ -77,7 +77,7 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	// if violations {
 	// 	return sc.parseScaViolations(descriptors, scaResponse, applicableScan...)
 	// }

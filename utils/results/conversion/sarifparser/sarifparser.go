@@ -178,7 +178,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	return sc.parseScaVulnerabilities(sc.currentTargetConvertedRuns.currentTarget, descriptors, scaResponse, applicableScan...)
 
 	// if violations {
@@ -191,6 +191,13 @@ func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(descriptors []strin
 	// 	return
 	// }
 	// return
+}
+
+func (sc *CmdResultsSarifConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
+	if err = sc.validateBeforeParse(); err != nil {
+		return
+	}
+	return
 }
 
 func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
@@ -316,13 +323,6 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	}
 	// Prepare the markdown description
 	markdownDescription, err = getScaIssueMarkdownDescription(directDependencies, maxCveScore, applicabilityStatus, fixedVersions)
-	return
-}
-
-func (sc *CmdResultsSarifConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil {
-		return
-	}
 	return
 }
 

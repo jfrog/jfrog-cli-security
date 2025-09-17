@@ -61,8 +61,8 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(descriptors, scaResponse, applicableScan...)
+func (tc *CmdResultsTableConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.DeprecatedParseScaVulnerabilities(descriptors, scaResponse, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(scaResponse results.ScanResult[services.ScanResponse]) (err error) {

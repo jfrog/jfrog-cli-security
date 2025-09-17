@@ -93,7 +93,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
