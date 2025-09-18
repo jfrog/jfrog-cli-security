@@ -84,10 +84,28 @@ const (
 	waiverHeader = "X-Artifactory-Curation-Request-Waiver"
 )
 
-// generateWaiverHeaderValue creates a header value with a unique batch ID
 func generateWaiverHeaderValue() string {
-	batchID := fmt.Sprintf("batch_%s", uuid.New().String()[:8])
-	return fmt.Sprintf("syn_JFrog-Curation-Client_%s", batchID)
+	batchID := uuid.New().String()
+	headerData := map[string]string{
+		"batch_id": batchID,
+	}
+	jsonData, _ := json.Marshal(headerData)
+	return string(jsonData)
+}
+
+// addFieldToWaiverHeader adds a field to the existing waiver header JSON and returns the updated JSON string
+func addFieldToWaiverHeader(fieldName string, fieldValue interface{}) (string, error) {
+	// Parse the existing header
+	var headerData map[string]interface{}
+	if err := json.Unmarshal([]byte(waiverHeaderValue), &headerData); err != nil {
+		return "", fmt.Errorf("failed to parse waiver header: %v", err)
+	}
+	headerData[fieldName] = fieldValue
+	updatedHeaderData, err := json.Marshal(headerData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal updated header: %v", err)
+	}
+	return string(updatedHeaderData), nil
 }
 
 // createRequestDetails creates a copy of httpClientDetails for thread-safe header modification
@@ -919,9 +937,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
 	// Create a copy of httpClientDetails for this request to avoid modifying the shared one
 	requestDetails := nc.createRequestDetails()
-
-	// Set the header for regular GET request
-	requestDetails.Headers[waiverHeader] = waiverHeaderValue
+	requestDetails.Headers[waiverHeader] = "syn"
 
 	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &requestDetails)
 	if err != nil {
@@ -963,16 +979,14 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	return nil, nil
 }
 
-// sendCompletedRequest sends a final request with the _completed header
 func (nc *treeAnalyzer) sendCompletedRequest(packageUrl string) error {
-	// Create a copy of httpClientDetails for this request
 	requestDetails := nc.createRequestDetails()
-
-	// Set the header with _completed suffix
-	requestDetails.Headers[waiverHeader] = waiverHeaderValue + "_completed"
-
-	// Send a HEAD request with the completed header
-	_, _, err := nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
+	completedHeaderData, err := addFieldToWaiverHeader("completed", true)
+	if err != nil {
+		return err
+	}
+	requestDetails.Headers[waiverHeader] = completedHeaderData
+	_, _, err = nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
 	return err
 }
 
