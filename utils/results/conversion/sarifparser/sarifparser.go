@@ -1,6 +1,7 @@
 package sarifparser
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -8,12 +9,15 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -33,6 +37,7 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	BinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
+	PolicyEnforcerToolName      = "JFrog Policy Enforcer"
 )
 
 var (
@@ -41,6 +46,16 @@ var (
 	dockerScaComponentNamePattern = regexp.MustCompile(`(?P<algorithm>[^__]+)__(?P<hash>[0-9a-fA-F]+)\.tar`)
 )
 
+const (
+	ScaRun        RunInJfrogReport = "sca"
+	SecretsRun    RunInJfrogReport = "secrets"
+	IacRun        RunInJfrogReport = "iac"
+	SastRun       RunInJfrogReport = "sast"
+	ViolationsRun RunInJfrogReport = "violations"
+)
+
+type RunInJfrogReport string
+
 type CmdResultsSarifConverter struct {
 	baseJfrogUrl string
 	// If we are running on Github actions, we need to add/change information to the output
@@ -48,6 +63,7 @@ type CmdResultsSarifConverter struct {
 	// Current stream parse cache information
 	current                    *sarif.Report
 	currentTargetConvertedRuns *currentTargetRuns
+	violationsRun              *sarif.Run
 	currentErrors              []error
 	// General information on the current command results
 	entitledForJas bool
@@ -57,7 +73,7 @@ type CmdResultsSarifConverter struct {
 
 type currentTargetRuns struct {
 	currentTarget results.ScanTarget
-	// Current run cache information, we combine vulnerabilities and violations in the same run
+	// Current run cache information
 	scaCurrentRun     *sarif.Run
 	secretsCurrentRun *sarif.Run
 	iacCurrentRun     *sarif.Run
@@ -70,24 +86,18 @@ type scaParseParams struct {
 	IssueId                 string
 	Summary                 string
 	MarkdownDescription     string
-	CveScore                string
+	SeverityScore           string
 	ImpactedPackagesName    string
 	ImpactedPackagesVersion string
-	Watch                   string
 	GenerateTitleFunc       func(depName string, version string, issueId string, watch string) string
 	Cves                    []formats.CveRow
+	AddFixedVersionProperty bool
 	Severity                severityutils.Severity
 	ApplicabilityStatus     jasutils.ApplicabilityStatus
 	FixedVersions           []string
 	DirectComponents        []formats.ComponentRow
-	Violation               *violationContext
+	Violation               *violationutils.Violation
 	ImpactPaths             [][]formats.ComponentRow
-}
-
-// holds the violation context for the results
-type violationContext struct {
-	Watch    string
-	Policies []string
 }
 
 func NewCmdResultsSarifConverter(baseUrl string, patchBinaryPaths bool) *CmdResultsSarifConverter {
@@ -101,6 +111,14 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	// Flush the current run
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
 		return sarif.NewReport(), err
+	}
+	// Add the violations run if needed
+	if sc.violationsRun != nil && len(sc.violationsRun.Results) > 0 {
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(PatchSarifParams{
+			BaseJfrogUrl: sc.baseJfrogUrl,
+			CmdType:      sc.currentCmdType,
+			IsViolations: true,
+		}, sc.violationsRun)...)
 	}
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
@@ -133,6 +151,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 	}
 	// Flush Sca if needed
 	if sc.currentTargetConvertedRuns.scaCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.ScaScan), sc.currentTargetConvertedRuns.scaCurrentRun)...)
 		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, sc.currentTargetConvertedRuns.scaCurrentRun)...)
 	}
 	// Flush secrets if needed
@@ -165,6 +184,14 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 	return run
 }
 
+func (sc *CmdResultsSarifConverter) createViolationsRun() *sarif.Run {
+	run := sarif.NewRunWithInformationURI(PolicyEnforcerToolName, utils.XrayInfoURL)
+	run.Tool.Driver.Version = &sc.xrayVersion
+	currentWd, _ := os.Getwd()
+	run.Invocations = append(run.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(currentWd))).WithExecutionSuccessful(true))
+	return run
+}
+
 // validateBeforeParse checks if the parser is initialized to parse results (checks if Reset and at least one ParseNewTargetResults was called before)
 func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	if sc.current == nil {
@@ -176,34 +203,233 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if violations {
-		if err = sc.parseScaViolations(target, descriptors, scaResponse, applicableScan...); err != nil {
-			return
-		}
+func (sc *CmdResultsSarifConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return sc.parseScaVulnerabilities(sc.currentTargetConvertedRuns.currentTarget, descriptors, scaResponse, applicableScan...)
+
+	// if violations {
+	// 	if err = sc.parseScaViolations(target, descriptors, scaResponse, applicableScan...); err != nil {
+	// 		return
+	// 	}
+	// 	return
+	// }
+	// if err = sc.parseScaVulnerabilities(target, descriptors, scaResponse, applicableScan...); err != nil {
+	// 	return
+	// }
+	// return
+}
+
+func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults results.ScanResult[violationutils.Violations]) (err error) {
+	if sc.current == nil {
+		return results.ErrResetConvertor
+	}
+	if violationsScanResults.IsScanFailed() {
 		return
 	}
-	if err = sc.parseScaVulnerabilities(target, descriptors, scaResponse, applicableScan...); err != nil {
-		return
+	// Create the violations run if needed
+	if sc.violationsRun == nil {
+		sc.violationsRun = sc.createViolationsRun()
+	}
+	violations := violationsScanResults.Scan
+	// Sca violations (Operational risk are not supported in Sarif format)
+	scaSarifResults := []*sarif.Result{}
+	scaRules := map[string]*sarif.ReportingDescriptor{}
+	// Cve violations
+	for _, cveViolation := range violations.Sca {
+		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(
+			cveViolation.CveVulnerability,
+			cveViolation.Severity,
+			cveViolation.ContextualAnalysis,
+			cveViolation.DirectComponents,
+			cveViolation.FixedVersions,
+		)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
+		}
+		compName, compVersion, _ := techutils.SplitPackageURL(cveViolation.ImpactedComponent.PackageURL)
+		createAndAddScaIssue(scaParseParams{
+			CmdType:                 sc.currentCmdType,
+			IssueId:                 cveViolation.CveVulnerability.ID,
+			Summary:                 cveViolation.CveVulnerability.Description,
+			Violation:               &cveViolation.Violation,
+			MarkdownDescription:     markdownDescription,
+			SeverityScore:           maxCveScore,
+			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+			Cves:                    cves,
+			Severity:                cveViolation.Severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    compName,
+			ImpactedPackagesVersion: compVersion,
+			AddFixedVersionProperty: true,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        cveViolation.DirectComponents,
+			ImpactPaths:             cveViolation.ImpactPaths,
+		}, &scaSarifResults, &scaRules)
+	}
+	// License violations
+	for _, licenseViolation := range violations.License {
+		compName, compVersion, _ := techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
+		markdownDescription, e := getScaLicenseViolationMarkdown(compName, compVersion, licenseViolation.LicenseKey, licenseViolation.DirectComponents)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
+		}
+		createAndAddScaIssue(scaParseParams{
+			CmdType:                 sc.currentCmdType,
+			IssueId:                 licenseViolation.LicenseKey,
+			Summary:                 getLicenseViolationSummary(compName, compVersion, licenseViolation.LicenseKey),
+			Violation:               &licenseViolation.Violation,
+			MarkdownDescription:     markdownDescription,
+			SeverityScore:           fmt.Sprintf("%.1f", severityutils.GetSeverityScore(licenseViolation.Severity, jasutils.Applicable)),
+			GenerateTitleFunc:       getXrayLicenseSarifHeadline,
+			Severity:                licenseViolation.Severity,
+			ImpactedPackagesName:    compName,
+			ImpactedPackagesVersion: compVersion,
+			DirectComponents:        licenseViolation.DirectComponents,
+			ImpactPaths:             licenseViolation.ImpactPaths,
+		}, &scaSarifResults, &scaRules)
+	}
+	if len(scaRules) > 0 && len(scaSarifResults) > 0 {
+		sc.addResultsToCurrentRun(ViolationsRun, maps.Values(scaRules), scaSarifResults...)
+	}
+	// Secrets violations
+	for _, secretViolation := range violations.Secrets {
+		secretResult, secretRule := createJasViolation(secretViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{secretRule}, secretResult)
+	}
+	// IaC violations
+	for _, iacViolation := range violations.Iac {
+		iacResult, iacRule := createJasViolation(iacViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{iacRule}, iacResult)
+	}
+	// Sast violations
+	for _, sastViolation := range violations.Sast {
+		sastResult, sastRule := createJasViolation(sastViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{sastRule}, sastResult)
 	}
 	return
 }
 
-func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil {
-		return
-	}
-	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
-		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
-	}
-	// Parse violations
-	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, descriptors, scanResponse.Scan.Violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
-	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
-		return
-	}
-	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
-	return
-}
+// func parseCveViolation() {
+
+// }
+
+// func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+// 	if err = sc.validateBeforeParse(); err != nil {
+// 		return
+// 	}
+// 	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+// 		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
+// 	}
+// 	// Parse violations
+// 	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, descriptors, scanResponse.Scan.Violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
+// 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
+// 		return
+// 	}
+// 	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+// 	return
+// }
+
+// func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
+// 	sarifResults := []*sarif.Result{}
+// 	rules := map[string]*sarif.ReportingDescriptor{}
+// 	_, _, err := local.ForEachScanGraphViolation(
+// 		target,
+// 		descriptors,
+// 		violations,
+// 		entitledForJas,
+// 		applicabilityRuns,
+// 		addSarifScaSecurityViolation(cmdType, &sarifResults, &rules),
+// 		addSarifScaLicenseViolation(cmdType, &sarifResults, &rules),
+// 		// Operational risks violations are not supported in Sarif format
+// 		nil,
+// 	)
+// 	return sarifResults, rules, err
+// }
+
+// func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) local.ParseScanGraphViolationFunc {
+// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+// 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		markdownDescription, err := getScaIssueMarkdownDescription(directComponents, maxCveScore, applicabilityStatus, fixedVersions)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		impactedPackagesName, impactedPackagesVersion, _ := techutils.SplitComponentId(impactedPackagesId)
+// 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+// 			CmdType:                 cmdType,
+// 			IssueId:                 violation.IssueId,
+// 			Watch:                   violation.WatchName,
+// 			Summary:                 violation.Summary,
+// 			MarkdownDescription:     markdownDescription,
+// 			CveScore:                maxCveScore,
+// 			GenerateTitleFunc:       getScaSecurityViolationSarifHeadline,
+// 			Cves:                    cves,
+// 			Severity:                severity,
+// 			ApplicabilityStatus:     applicabilityStatus,
+// 			ImpactedPackagesName:    impactedPackagesName,
+// 			ImpactedPackagesVersion: impactedPackagesVersion,
+// 			FixedVersions:           fixedVersions,
+// 			DirectComponents:        directComponents,
+// 			ImpactPaths:             impactPaths,
+// 			Violation: &violationContext{
+// 				Watch:    violation.WatchName,
+// 				Policies: results.ConvertPolicesToString(violation.Policies),
+// 			},
+// 		})
+// 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.IssueId, "_"))
+// 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
+// 			// New Rule
+// 			(*rules)[cveImpactedComponentRuleId] = currentRule
+// 		}
+// 		*sarifResults = append(*sarifResults, currentResults...)
+// 		return nil
+// 	}
+// }
+
+// func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) local.ParseScanGraphViolationFunc {
+// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+// 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		impactedPackagesName, impactedPackagesVersion, _ := techutils.SplitComponentId(impactedPackagesId)
+// 		markdownDescription, err := getScaLicenseViolationMarkdown(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey, directComponents)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+// 			CmdType:                 cmdType,
+// 			Watch:                   violation.WatchName,
+// 			IssueId:                 violation.LicenseKey,
+// 			Summary:                 getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
+// 			MarkdownDescription:     markdownDescription,
+// 			CveScore:                maxCveScore,
+// 			GenerateTitleFunc:       getXrayLicenseSarifHeadline,
+// 			Cves:                    cves,
+// 			Severity:                severity,
+// 			ApplicabilityStatus:     applicabilityStatus,
+// 			ImpactedPackagesName:    impactedPackagesName,
+// 			ImpactedPackagesVersion: impactedPackagesVersion,
+// 			FixedVersions:           fixedVersions,
+// 			DirectComponents:        directComponents,
+// 			ImpactPaths:             impactPaths,
+// 			Violation: &violationutils.Violation{
+// 				Watch:    violation.WatchName,
+// 				Policies: results.ConvertPolicesToString(violation.Policies),
+// 			},
+// 		})
+// 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.LicenseKey, "_"))
+// 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
+// 			// New Rule
+// 			(*rules)[cveImpactedComponentRuleId] = currentRule
+// 		}
+// 		*sarifResults = append(*sarifResults, currentResults...)
+// 		return nil
+// 	}
+// }
 
 func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanTarget, descriptors []string, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil {
@@ -216,46 +442,47 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
-	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) DeprecatedParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseLicenses(_ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
 	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
-		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
+		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(sc.currentTargetConvertedRuns.currentTarget, len(sc.currentErrors))
 	}
 	sarifResults := []*sarif.Result{}
 	sarifRules := map[string]*sarif.ReportingDescriptor{}
-	err = results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sc.entitledForJas, results.ScanResultsToRuns(applicableScan), addCdxScaVulnerability(sc.currentCmdType, enrichedSbom.Scan, &sarifResults, &sarifRules))
+	err = results.ForEachScaBomVulnerability(sc.currentTargetConvertedRuns.currentTarget, enrichedSbom.Scan, sc.entitledForJas, results.ScanResultsToRuns(applicableScan), addCdxScaVulnerability(sc.currentCmdType, enrichedSbom.Scan, &sarifResults, &sarifRules))
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
-	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
 }
 
 func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
 	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
 		// Prepare the required fields
-		applicabilityStatus, maxCveScore, cves, directDependencies, fixedVersions, markdownDescription, e := prepareCdxVulnerabilitiesForSarif(enrichedSbom, vulnerability, severity, applicability, component, fixedVersion)
+		directDependencies := getDirectDependenciesForSarif(component, enrichedSbom)
+		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
 		if e != nil {
 			return
 		}
@@ -264,33 +491,37 @@ func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.B
 			dependencies = append(dependencies, *enrichedSbom.Dependencies...)
 		}
 		compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
-		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+		createAndAddScaIssue(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 vulnerability.ID,
 			Summary:                 vulnerability.Description,
 			MarkdownDescription:     markdownDescription,
-			CveScore:                maxCveScore,
+			SeverityScore:           maxCveScore,
 			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
 			Cves:                    cves,
 			Severity:                severity,
 			ApplicabilityStatus:     applicabilityStatus,
 			ImpactedPackagesName:    compName,
 			ImpactedPackagesVersion: compVersion,
+			AddFixedVersionProperty: true,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directDependencies,
 			ImpactPaths:             results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...),
-		})
-		cveImpactedComponentRuleId := results.GetScaIssueId(compName, compVersion, vulnerability.ID)
-		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
-			// New Rule
-			(*rules)[cveImpactedComponentRuleId] = currentRule
-		}
-		*sarifResults = append(*sarifResults, currentResults...)
+		}, sarifResults, rules)
 		return
 	}
 }
 
-func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerability cyclonedx.Vulnerability, severity severityutils.Severity, applicability *formats.Applicability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions) (applicabilityStatus jasutils.ApplicabilityStatus, maxCveScore string, cves []formats.CveRow, directDependencies []formats.ComponentRow, fixedVersions []string, markdownDescription string, err error) {
+func getDirectDependenciesForSarif(component cyclonedx.Component, enrichedSbom *cyclonedx.BOM) (directDependencies []formats.ComponentRow) {
+	// Extract the direct dependencies
+	dependencies := []cyclonedx.Dependency{}
+	if enrichedSbom.Dependencies != nil {
+		dependencies = append(dependencies, *enrichedSbom.Dependencies...)
+	}
+	return results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies)
+}
+
+func prepareCdxInfoForSarif(vulnerability cyclonedx.Vulnerability, severity severityutils.Severity, applicability *formats.Applicability, directDependencies []formats.ComponentRow, fixedVersion *[]cyclonedx.AffectedVersions) (applicabilityStatus jasutils.ApplicabilityStatus, maxCveScore string, cves []formats.CveRow, fixedVersions []string, markdownDescription string, err error) {
 	// Extract the applicability status
 	applicabilityStatus = jasutils.NotScanned
 	if applicability != nil {
@@ -298,12 +529,6 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	}
 	// Extract the CVEs
 	cves = results.CdxVulnToCveRows(vulnerability, applicability)
-	// Extract the direct dependencies
-	dependencies := []cyclonedx.Dependency{}
-	if enrichedSbom.Dependencies != nil {
-		dependencies = append(dependencies, *enrichedSbom.Dependencies...)
-	}
-	directDependencies = results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies)
 	// Extract the fixed versions
 	fixedVersions = results.CdxToFixedVersions(fixedVersion)
 	// Extract the maximum CVE score
@@ -315,44 +540,68 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+func (sc *CmdResultsSarifConverter) getVulnerabilitiesPathParams(scanType utils.SubScanType) PatchSarifParams {
+	return PatchSarifParams{
+		BaseJfrogUrl:     sc.baseJfrogUrl,
+		CmdType:          sc.currentCmdType,
+		SubScanType:      scanType,
+		PatchBinaryPaths: sc.patchBinaryPaths,
+		Target:           &sc.currentTargetConvertedRuns.currentTarget,
+		ConvertPaths:     true,
+		CopyContent:      true,
+	}
 }
 
-func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(secrets)...)...)
+	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SecretsScan), results.ScanResultsToRuns(secrets)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(iacs)...)...)
+	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.IacScan), results.ScanResultsToRuns(iacs)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(sast)...)...)
+	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SastScan), results.ScanResultsToRuns(sast)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*sarif.ReportingDescriptor, results ...*sarif.Result) {
+func (sc *CmdResultsSarifConverter) addResultsToCurrentRun(runType RunInJfrogReport, rules []*sarif.ReportingDescriptor, results ...*sarif.Result) {
+	var currentRun *sarif.Run
+	switch runType {
+	case ScaRun:
+		currentRun = sc.currentTargetConvertedRuns.scaCurrentRun
+	case SecretsRun:
+		currentRun = sc.currentTargetConvertedRuns.secretsCurrentRun
+	case IacRun:
+		currentRun = sc.currentTargetConvertedRuns.iacCurrentRun
+	case SastRun:
+		currentRun = sc.currentTargetConvertedRuns.sastCurrentRun
+	case ViolationsRun:
+		currentRun = sc.violationsRun
+	default:
+		log.Error(fmt.Sprintf("Unknown run type: %s", runType))
+		return
+	}
 	for _, rule := range rules {
-		if exist := sarifutils.GetRuleById(sc.currentTargetConvertedRuns.scaCurrentRun, sarifutils.GetRuleId(rule)); exist != nil {
+		if exist := sarifutils.GetRuleById(currentRun, sarifutils.GetRuleId(rule)); exist != nil {
 			// Rule already exists, skip adding it again
 			continue
 		}
-		sc.currentTargetConvertedRuns.scaCurrentRun.Tool.Driver.AddRule(rule)
+		currentRun.Tool.Driver.AddRule(rule)
 	}
 	for _, result := range results {
-		sc.currentTargetConvertedRuns.scaCurrentRun.AddResult(result)
+		currentRun.AddResult(result)
 	}
 }
 
@@ -383,23 +632,6 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 	return destination
 }
 
-func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
-	sarifResults := []*sarif.Result{}
-	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.ForEachScanGraphViolation(
-		target,
-		descriptors,
-		violations,
-		entitledForJas,
-		applicabilityRuns,
-		addSarifScaSecurityViolation(cmdType, &sarifResults, &rules),
-		addSarifScaLicenseViolation(cmdType, &sarifResults, &rules),
-		// Operational risks violations are not supported in Sarif format
-		nil,
-	)
-	return sarifResults, rules, err
-}
-
 func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, descriptors []string, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
@@ -425,114 +657,43 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 			return err
 		}
 		impactedPackagesName, impactedPackagesVersion, _ := techutils.SplitComponentId(impactedPackagesId)
-		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+		createAndAddScaIssue(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 vulnerability.IssueId,
 			Summary:                 vulnerability.Summary,
 			MarkdownDescription:     markdownDescription,
-			CveScore:                maxCveScore,
+			SeverityScore:           maxCveScore,
 			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
 			Cves:                    cves,
 			Severity:                severity,
 			ApplicabilityStatus:     applicabilityStatus,
 			ImpactedPackagesName:    impactedPackagesName,
 			ImpactedPackagesVersion: impactedPackagesVersion,
+			AddFixedVersionProperty: true,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directComponents,
 			ImpactPaths:             impactPaths,
-		})
-		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, vulnerability.IssueId, "_"))
-		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
-			// New Rule
-			(*rules)[cveImpactedComponentRuleId] = currentRule
-		}
-		*sarifResults = append(*sarifResults, currentResults...)
+		}, sarifResults, rules)
 		return nil
 	}
 }
 
-func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
-		if err != nil {
-			return err
-		}
-		markdownDescription, err := getScaIssueMarkdownDescription(directComponents, maxCveScore, applicabilityStatus, fixedVersions)
-		if err != nil {
-			return err
-		}
-		impactedPackagesName, impactedPackagesVersion, _ := techutils.SplitComponentId(impactedPackagesId)
-		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
-			CmdType:                 cmdType,
-			IssueId:                 violation.IssueId,
-			Watch:                   violation.WatchName,
-			Summary:                 violation.Summary,
-			MarkdownDescription:     markdownDescription,
-			CveScore:                maxCveScore,
-			GenerateTitleFunc:       getScaSecurityViolationSarifHeadline,
-			Cves:                    cves,
-			Severity:                severity,
-			ApplicabilityStatus:     applicabilityStatus,
-			ImpactedPackagesName:    impactedPackagesName,
-			ImpactedPackagesVersion: impactedPackagesVersion,
-			FixedVersions:           fixedVersions,
-			DirectComponents:        directComponents,
-			ImpactPaths:             impactPaths,
-			Violation: &violationContext{
-				Watch:    violation.WatchName,
-				Policies: results.ConvertPolicesToString(violation.Policies),
-			},
-		})
-		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.IssueId, "_"))
-		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
-			// New Rule
-			(*rules)[cveImpactedComponentRuleId] = currentRule
-		}
-		*sarifResults = append(*sarifResults, currentResults...)
-		return nil
+func createAndAddScaIssue(params scaParseParams, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) {
+	currentResults, currentRule := parseScaToSarifFormat(params)
+	cveImpactedComponentRuleId := results.GetScaIssueId(params.ImpactedPackagesName, params.ImpactedPackagesVersion, results.GetIssueIdentifier(params.Cves, params.IssueId, "_"))
+	if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
+		// New Rule
+		(*rules)[cveImpactedComponentRuleId] = currentRule
 	}
+	*sarifResults = append(*sarifResults, currentResults...)
 }
 
-func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
-		if err != nil {
-			return err
-		}
-		impactedPackagesName, impactedPackagesVersion, _ := techutils.SplitComponentId(impactedPackagesId)
-		markdownDescription, err := getScaLicenseViolationMarkdown(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey, directComponents)
-		if err != nil {
-			return err
-		}
-		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
-			CmdType:                 cmdType,
-			Watch:                   violation.WatchName,
-			IssueId:                 violation.LicenseKey,
-			Summary:                 getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
-			MarkdownDescription:     markdownDescription,
-			CveScore:                maxCveScore,
-			GenerateTitleFunc:       getXrayLicenseSarifHeadline,
-			Cves:                    cves,
-			Severity:                severity,
-			ApplicabilityStatus:     applicabilityStatus,
-			ImpactedPackagesName:    impactedPackagesName,
-			ImpactedPackagesVersion: impactedPackagesVersion,
-			FixedVersions:           fixedVersions,
-			DirectComponents:        directComponents,
-			ImpactPaths:             impactPaths,
-			Violation: &violationContext{
-				Watch:    violation.WatchName,
-				Policies: results.ConvertPolicesToString(violation.Policies),
-			},
-		})
-		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.LicenseKey, "_"))
-		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
-			// New Rule
-			(*rules)[cveImpactedComponentRuleId] = currentRule
-		}
-		*sarifResults = append(*sarifResults, currentResults...)
-		return nil
-	}
+func createJasViolation(jasViolation violationutils.JasViolation) (sarifResult *sarif.Result, rule *sarif.ReportingDescriptor) {
+	// Rule is the same as the vulnerability rule, no need to create a new one
+	rule = jasViolation.Rule
+	// Copy the result to avoid modifying the original one, Append the violation context to the result properties
+	sarifResult = appendViolationContextToSarifResult(sarifutils.CopyResult(jasViolation.Result), jasViolation.Violation)
+	return
 }
 
 func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
@@ -540,35 +701,37 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	issueId := results.GetIssueIdentifier(params.Cves, params.IssueId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId)
 	level := severityutils.SeverityToSarifSeverityLevel(params.Severity)
+	isViolation := params.Violation != nil
+	watch := ""
+	if isViolation {
+		watch = params.Violation.Watch
+	}
 	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
 		params.ImpactPaths,
 		cveImpactedComponentRuleId,
-		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId, params.Watch),
-		params.CveScore,
+		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId, watch),
+		params.SeverityScore,
 		params.Summary,
 		params.MarkdownDescription,
 	)
 	for _, directDependency := range params.DirectComponents {
 		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
-			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId, params.Watch))).
+			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId, watch))).
 			WithLevel(level.String())
 		// Add properties
 		resultsProperties := sarif.NewPropertyBag()
 		if params.ApplicabilityStatus != jasutils.NotScanned {
 			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, params.ApplicabilityStatus.String())
 		}
-		if params.Violation != nil {
-			// Add violation context
-			if params.Violation.Watch != "" {
-				resultsProperties.Add(sarifutils.WatchSarifPropertyKey, params.Violation.Watch)
-			}
-			if len(params.Violation.Policies) > 0 {
-				resultsProperties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(params.Violation.Policies, ","))
-			}
+		if isViolation {
+			issueResult = appendViolationContextToSarifResult(issueResult, *params.Violation)
 		}
-		resultsProperties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(params.FixedVersions))
+		if params.AddFixedVersionProperty {
+			// Add fixed versions property
+			resultsProperties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(params.FixedVersions))
+		}
 		issueResult.WithProperties(resultsProperties)
 		// Add location
 		issueLocation := getComponentSarifLocation(params.CmdType, directDependency)
@@ -578,6 +741,23 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 		sarifResults = append(sarifResults, issueResult)
 	}
 	return
+}
+
+func appendViolationContextToSarifResult(sarifResult *sarif.Result, violation violationutils.Violation) *sarif.Result {
+	if sarifResult.Properties == nil {
+		sarifResult.Properties = sarif.NewPropertyBag()
+	}
+	if violation.Watch != "" {
+		sarifResult.Properties.Add(sarifutils.WatchSarifPropertyKey, violation.Watch)
+	}
+	if len(violation.Policies) > 0 {
+		policies := []string{}
+		for _, policy := range violation.Policies {
+			policies = append(policies, strings.TrimSpace(policy.PolicyName))
+		}
+		sarifResult.Properties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(policies, ","))
+	}
+	return sarifResult
 }
 
 func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
@@ -691,7 +871,55 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 	return fmt.Sprintf("%s<br/>Direct dependencies:<br/>%s", getLicenseViolationSummary(depName, version, key), formattedDirectDependencies), nil
 }
 
-func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
+type PatchSarifParams struct {
+	// Required parameters
+	CmdType     utils.CommandType
+	SubScanType utils.SubScanType
+	// Optional parameters
+	CopyContent  bool
+	ConvertPaths bool
+	// Use instead of invocation to convert the paths to relative
+	WorkingDirectory string
+	// Indicate if the runs are violations runs
+	IsViolations bool
+	// Add Analytics to the runs when viewed in web
+	BaseJfrogUrl string
+	// For uploading to Source Code Scanning, replace binary inner paths with the DOCKER file path or workflow path
+	// (append the replaced path to the help text)
+	PatchBinaryPaths bool
+	// Add docker image tag for docker image scans
+	Target *results.ScanTarget
+}
+
+// PatchSarifRuns patches the given SARIF runs according to the given parameters.
+// If CopyContent is true, the runs are copied before patching to avoid modifying the original runs.
+// This is needed in order to support and insure the content to pass the ingestion rules for JFrog platform and GitHub code scanning.
+func patchSarifRuns(params PatchSarifParams, runs ...*sarif.Run) []*sarif.Run {
+	// Prepare the runs according to the parameters
+	patchedRuns := []*sarif.Run{}
+	if params.CopyContent {
+		for _, run := range runs {
+			patchedRuns = append(patchedRuns, sarifutils.CopyRun(run))
+		}
+	} else {
+		patchedRuns = runs
+	}
+	// Patch the runs to pass the ingestion rules
+	for _, run := range runs {
+		// Since we run in temp directories files should be relative
+		// Patch by converting the file paths to relative paths according to the invocations
+		patchPaths(params, run)
+		// Patch the tool content according to the parameters
+		pathTool(params, run)
+		// Patch the results according to the parameters
+		run.Results = patchResults(params.CmdType, params.SubScanType, params.PatchBinaryPaths, params.IsViolations, *params.Target, run, run.Results...)
+		// Add the patched run to the list
+		patchedRuns = append(patchedRuns, run)
+	}
+	return patchedRuns
+}
+
+func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
 	patchedRuns := []*sarif.Run{}
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
@@ -704,12 +932,46 @@ func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandTyp
 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
 		}
 		if patched.Tool.Driver != nil {
-			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isJasViolations, patched.Tool.Driver.Rules...)
+			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isViolations, patched.Tool.Driver.Rules...)
 		}
-		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isJasViolations, target, patched, patched.Results...)
+		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isViolations, target, patched, patched.Results...)
 		patchedRuns = append(patchedRuns, patched)
 	}
 	return patchedRuns
+}
+
+func patchPaths(params PatchSarifParams, runs ...*sarif.Run) {
+	if !params.ConvertPaths {
+		return
+	}
+	if params.WorkingDirectory == "" {
+		// Convert base on invocation
+		sarifutils.ConvertRunsPathsToRelative(runs...)
+	} else {
+		// Convert base on the given working directory
+		sarifutils.ConvertRunsPathsToRelativeFromWd(params.WorkingDirectory, runs...)
+	}
+	if !(params.CmdType == utils.DockerImage && params.SubScanType == utils.SecretsScan) {
+		return
+	}
+	for _, run := range runs {
+		for _, result := range run.Results {
+			// For Docker secret scan, patch the logical location if not exists
+			patchDockerSecretLocations(result)
+		}
+	}
+}
+
+func pathTool(params PatchSarifParams, runs ...*sarif.Run) {
+	for _, run := range runs {
+		if params.CmdType.IsTargetBinary() && params.SubScanType == utils.SecretsScan {
+			// Patch the tool name in case of secret binary scan
+			sarifutils.SetRunToolName(BinarySecretScannerToolName, run)
+		}
+		if run.Tool.Driver != nil {
+			run.Tool.Driver.Rules = patchRules(params.BaseJfrogUrl, params.CmdType, params.SubScanType, params.IsViolations, run.Tool.Driver.Rules...)
+		}
+	}
 }
 
 func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
@@ -749,11 +1011,12 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
 			rule.Name = nil
 		}
-		if commandType.IsTargetBinary() && subScanType == utils.SecretsScan {
+		scanType := getScanTypeFromRule(subScanType, rule)
+		if commandType.IsTargetBinary() && scanType == utils.SecretsScan {
 			// Patch the rule name in case of binary scan
 			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
-		if isViolations && subScanType != utils.ScaScan {
+		if isViolations {
 			// Add prefix to the rule description for violations
 			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Security Violation] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
@@ -763,7 +1026,7 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 			rule.Help = rule.FullDescription
 		}
 		// Add analytics hidden pixel to the help content if needed (Github code scanning)
-		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, subScanType); rule.Help != nil && analytics != "" {
+		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, scanType); rule.Help != nil && analytics != "" {
 			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s\n%s", analytics, sarifutils.GetRuleHelpMarkdown(rule)))
 		}
 		patched = append(patched, rule)
@@ -771,16 +1034,46 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 	return
 }
 
+func getScanTypeFromRule(subScanType utils.SubScanType, rule *sarif.ReportingDescriptor) utils.SubScanType {
+	if rule == nil {
+		return subScanType
+	}
+	return getScanType(utils.SastScan, sarifutils.GetRuleId(rule))
+}
+
+func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) utils.SubScanType {
+	if result == nil {
+		return subScanType
+	}
+	return getScanType(utils.SastScan, sarifutils.GetResultRuleId(result))
+}
+
+func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
+	if defaultType != "" || scanType == "" {
+		return defaultType
+	}
+	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
+		return utils.ScaScan
+	}
+	if strings.HasPrefix(scanType, "EXP") {
+		return utils.SecretsScan
+	}
+	// TODO: Add more rules to identify IAC
+	// Default to SAST
+	return utils.SastScan
+}
+
 func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
 	patched = []*sarif.Result{}
 	for _, result := range results {
+		scanType := getScanTypeFromResult(subScanType, result)
 		if len(result.Locations) == 0 {
 			// Github code scanning ingestion rules rejects results without locations.
 			// Patch by removing results without locations.
-			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", subScanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
+			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", scanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 			continue
 		}
-		patchResultMsg(result, target, commandType, subScanType, isJasViolations)
+		patchResultMsg(result, target, commandType, scanType, isJasViolations)
 		if commandType.IsTargetBinary() {
 			if patchBinaryPaths {
 				// For Binary scans, override the physical location if applicable (after data already used for markdown)
@@ -798,7 +1091,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 	return patched
 }
 
-func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isJasViolations bool) {
+func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isViolations bool) {
 	if commandType.IsTargetBinary() {
 		var markdown string
 		if subScanType == utils.SecretsScan {
@@ -813,7 +1106,7 @@ func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType
 	if markdown == "" {
 		markdown = sarifutils.GetResultMsgText(result)
 	}
-	if isJasViolations {
+	if isViolations {
 		// Add prefix to the rule description for violations
 		markdown = fmt.Sprintf("Security Violation %s", markdown)
 	}

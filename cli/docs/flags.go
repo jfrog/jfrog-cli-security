@@ -102,6 +102,7 @@ const (
 	Watches             = "watches"
 	RepoPath            = "repo-path"
 	UploadRepoPath      = "rt-" + RepoPath
+	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
 	Fail                = "fail"
@@ -170,7 +171,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -184,7 +185,7 @@ var commandFlags = map[string][]string{
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable, OutputDir,
+		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath,
 	},
@@ -267,6 +268,7 @@ var flagsMap = map[string]components.Flag{
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
 	UploadRepoPath:      components.NewStringFlag(UploadRepoPath, "Artifactory repository name or path to upload the cyclonedx file to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray.", components.WithStrDefaultValue("import-cdx-scan-results")),
+	UploadRtRepoPath:    components.NewStringFlag(UploadRtRepoPath, fmt.Sprintf("Artifactory repository name or path to upload the scan results to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray. only relevant when using --%s", StaticSca), components.WithStrDefaultValue("cli-scan-results")),
 	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
 	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(

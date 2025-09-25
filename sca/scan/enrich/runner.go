@@ -52,10 +52,10 @@ func (ess *EnrichScanStrategy) PrepareStrategy() (err error) {
 	return
 }
 
-func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
+func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, err error) {
 	catalogManager, err := catalog.CreateCatalogServiceManager(ess.serverDetails, catalog.WithScopedProjectKey(ess.projectKey))
 	if err != nil {
-		return nil, []services.Violation{}, fmt.Errorf("failed to create catalog service manager: %w", err)
+		return nil, fmt.Errorf("failed to create catalog service manager: %w", err)
 	}
 	enriched, err = catalogManager.Enrich(target)
 	return

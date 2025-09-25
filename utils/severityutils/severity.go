@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -369,6 +370,23 @@ func CycloneDxSeverityToSeverity(severity cyclonedx.Severity) Severity {
 	case cyclonedx.SeverityLow:
 		return Low
 	case cyclonedx.SeverityInfo:
+		return Information
+	default:
+		return Unknown
+	}
+}
+
+func XraySeverityToSeverity(severity xrayUtils.Severity) Severity {
+	switch severity {
+	case xrayUtils.Critical:
+		return Critical
+	case xrayUtils.High:
+		return High
+	case xrayUtils.Medium:
+		return Medium
+	case xrayUtils.Low:
+		return Low
+	case xrayUtils.Information:
 		return Information
 	default:
 		return Unknown
