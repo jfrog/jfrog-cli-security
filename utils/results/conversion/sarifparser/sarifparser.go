@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
@@ -35,6 +37,7 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	BinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
+	PolicyEnforcerToolName      = "JFrog Policy Enforcer"
 )
 
 var (
@@ -43,6 +46,16 @@ var (
 	dockerScaComponentNamePattern = regexp.MustCompile(`(?P<algorithm>[^__]+)__(?P<hash>[0-9a-fA-F]+)\.tar`)
 )
 
+const (
+	ScaRun        RunInJfrogReport = "sca"
+	SecretsRun    RunInJfrogReport = "secrets"
+	IacRun        RunInJfrogReport = "iac"
+	SastRun       RunInJfrogReport = "sast"
+	ViolationsRun RunInJfrogReport = "violations"
+)
+
+type RunInJfrogReport string
+
 type CmdResultsSarifConverter struct {
 	baseJfrogUrl string
 	// If we are running on Github actions, we need to add/change information to the output
@@ -50,6 +63,7 @@ type CmdResultsSarifConverter struct {
 	// Current stream parse cache information
 	current                    *sarif.Report
 	currentTargetConvertedRuns *currentTargetRuns
+	violationsRun              *sarif.Run
 	currentErrors              []error
 	// General information on the current command results
 	entitledForJas bool
@@ -59,7 +73,7 @@ type CmdResultsSarifConverter struct {
 
 type currentTargetRuns struct {
 	currentTarget results.ScanTarget
-	// Current run cache information, we combine vulnerabilities and violations in the same run
+	// Current run cache information
 	scaCurrentRun     *sarif.Run
 	secretsCurrentRun *sarif.Run
 	iacCurrentRun     *sarif.Run
@@ -98,6 +112,14 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
 		return sarif.NewReport(), err
 	}
+	// Add the violations run if needed
+	if sc.violationsRun != nil && len(sc.violationsRun.Results) > 0 {
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(PatchSarifParams{
+			BaseJfrogUrl: sc.baseJfrogUrl,
+			CmdType:      sc.currentCmdType,
+			IsViolations: true,
+		}, sc.violationsRun)...)
+	}
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
 
@@ -129,6 +151,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 	}
 	// Flush Sca if needed
 	if sc.currentTargetConvertedRuns.scaCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.ScaScan), sc.currentTargetConvertedRuns.scaCurrentRun)...)
 		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, sc.currentTargetConvertedRuns.scaCurrentRun)...)
 	}
 	// Flush secrets if needed
@@ -161,6 +184,14 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 	return run
 }
 
+func (sc *CmdResultsSarifConverter) createViolationsRun() *sarif.Run {
+	run := sarif.NewRunWithInformationURI(PolicyEnforcerToolName, utils.XrayInfoURL)
+	run.Tool.Driver.Version = &sc.xrayVersion
+	currentWd, _ := os.Getwd()
+	run.Invocations = append(run.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(currentWd))).WithExecutionSuccessful(true))
+	return run
+}
+
 // validateBeforeParse checks if the parser is initialized to parse results (checks if Reset and at least one ParseNewTargetResults was called before)
 func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	if sc.current == nil {
@@ -188,11 +219,15 @@ func (sc *CmdResultsSarifConverter) DeprecatedParseScaVulnerabilities(descriptor
 }
 
 func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults results.ScanResult[violationutils.Violations]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil {
-		return
+	if sc.current == nil {
+		return results.ErrResetConvertor
 	}
 	if violationsScanResults.IsScanFailed() {
 		return
+	}
+	// Create the violations run if needed
+	if sc.violationsRun == nil {
+		sc.violationsRun = sc.createViolationsRun()
 	}
 	violations := violationsScanResults.Scan
 	// Sca violations (Operational risk are not supported in Sarif format)
@@ -200,9 +235,6 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults result
 	scaRules := map[string]*sarif.ReportingDescriptor{}
 	// Cve violations
 	for _, cveViolation := range violations.Sca {
-		if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
-			sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(sc.currentTargetConvertedRuns.currentTarget, len(sc.currentErrors))
-		}
 		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(
 			cveViolation.CveVulnerability,
 			cveViolation.Severity,
@@ -236,9 +268,6 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults result
 	}
 	// License violations
 	for _, licenseViolation := range violations.License {
-		if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
-			sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(sc.currentTargetConvertedRuns.currentTarget, len(sc.currentErrors))
-		}
 		compName, compVersion, _ := techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
 		markdownDescription, e := getScaLicenseViolationMarkdown(compName, compVersion, licenseViolation.LicenseKey, licenseViolation.DirectComponents)
 		if e != nil {
@@ -261,7 +290,22 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults result
 		}, &scaSarifResults, &scaRules)
 	}
 	if len(scaRules) > 0 && len(scaSarifResults) > 0 {
-		sc.addScaResultsToCurrentRun(scaRules, scaSarifResults...)
+		sc.addResultsToCurrentRun(ViolationsRun, maps.Values(scaRules), scaSarifResults...)
+	}
+	// Secrets violations
+	for _, secretViolation := range violations.Secrets {
+		secretResult, secretRule := createJasViolation(secretViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{secretRule}, secretResult)
+	}
+	// IaC violations
+	for _, iacViolation := range violations.Iac {
+		iacResult, iacRule := createJasViolation(iacViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{iacRule}, iacResult)
+	}
+	// Sast violations
+	for _, sastViolation := range violations.Sast {
+		sastResult, sastRule := createJasViolation(sastViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{sastRule}, sastResult)
 	}
 	return
 }
@@ -398,7 +442,7 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
-	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
 }
 
@@ -430,7 +474,7 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom results.ScanResult[*c
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
-	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
 }
 
@@ -496,11 +540,23 @@ func prepareCdxInfoForSarif(vulnerability cyclonedx.Vulnerability, severity seve
 	return
 }
 
+func (sc *CmdResultsSarifConverter) getVulnerabilitiesPathParams(scanType utils.SubScanType) PatchSarifParams {
+	return PatchSarifParams{
+		BaseJfrogUrl:     sc.baseJfrogUrl,
+		CmdType:          sc.currentCmdType,
+		SubScanType:      scanType,
+		PatchBinaryPaths: sc.patchBinaryPaths,
+		Target:           &sc.currentTargetConvertedRuns.currentTarget,
+		ConvertPaths:     true,
+		CopyContent:      true,
+	}
+}
+
 func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, results.ScanResultsToRuns(secrets)...)...)
+	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SecretsScan), results.ScanResultsToRuns(secrets)...)...)
 	return
 }
 
@@ -508,7 +564,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...results.ScanResult[[]*sari
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, results.ScanResultsToRuns(iacs)...)...)
+	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.IacScan), results.ScanResultsToRuns(iacs)...)...)
 	return
 }
 
@@ -516,20 +572,36 @@ func (sc *CmdResultsSarifConverter) ParseSast(sast ...results.ScanResult[[]*sari
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, results.ScanResultsToRuns(sast)...)...)
+	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SastScan), results.ScanResultsToRuns(sast)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*sarif.ReportingDescriptor, results ...*sarif.Result) {
+func (sc *CmdResultsSarifConverter) addResultsToCurrentRun(runType RunInJfrogReport, rules []*sarif.ReportingDescriptor, results ...*sarif.Result) {
+	var currentRun *sarif.Run
+	switch runType {
+	case ScaRun:
+		currentRun = sc.currentTargetConvertedRuns.scaCurrentRun
+	case SecretsRun:
+		currentRun = sc.currentTargetConvertedRuns.secretsCurrentRun
+	case IacRun:
+		currentRun = sc.currentTargetConvertedRuns.iacCurrentRun
+	case SastRun:
+		currentRun = sc.currentTargetConvertedRuns.sastCurrentRun
+	case ViolationsRun:
+		currentRun = sc.violationsRun
+	default:
+		log.Error(fmt.Sprintf("Unknown run type: %s", runType))
+		return
+	}
 	for _, rule := range rules {
-		if exist := sarifutils.GetRuleById(sc.currentTargetConvertedRuns.scaCurrentRun, sarifutils.GetRuleId(rule)); exist != nil {
+		if exist := sarifutils.GetRuleById(currentRun, sarifutils.GetRuleId(rule)); exist != nil {
 			// Rule already exists, skip adding it again
 			continue
 		}
-		sc.currentTargetConvertedRuns.scaCurrentRun.Tool.Driver.AddRule(rule)
+		currentRun.Tool.Driver.AddRule(rule)
 	}
 	for _, result := range results {
-		sc.currentTargetConvertedRuns.scaCurrentRun.AddResult(result)
+		currentRun.AddResult(result)
 	}
 }
 
@@ -614,6 +686,13 @@ func createAndAddScaIssue(params scaParseParams, sarifResults *[]*sarif.Result, 
 		(*rules)[cveImpactedComponentRuleId] = currentRule
 	}
 	*sarifResults = append(*sarifResults, currentResults...)
+}
+
+func createJasViolation(jasViolation violationutils.JasViolation) (sarifResult *sarif.Result, rule *sarif.ReportingDescriptor) {
+	// Rule is the same as the vulnerability rule, no need to create a new one
+	rule = jasViolation.Rule
+	// Copy the result to avoid modifying the original one, Append the violation context to the result properties
+	sarifResult = appendViolationContextToSarifResult(sarifutils.CopyResult(jasViolation.Result), jasViolation.Violation)
 	return
 }
 
@@ -647,17 +726,7 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, params.ApplicabilityStatus.String())
 		}
 		if isViolation {
-			// Add violation context
-			if watch != "" {
-				resultsProperties.Add(sarifutils.WatchSarifPropertyKey, watch)
-			}
-			if len(params.Violation.Policies) > 0 {
-				policies := []string{}
-				for _, policy := range params.Violation.Policies {
-					policies = append(policies, strings.TrimSpace(policy.PolicyName))
-				}
-				resultsProperties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(policies, ","))
-			}
+			issueResult = appendViolationContextToSarifResult(issueResult, *params.Violation)
 		}
 		if params.AddFixedVersionProperty {
 			// Add fixed versions property
@@ -672,6 +741,23 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 		sarifResults = append(sarifResults, issueResult)
 	}
 	return
+}
+
+func appendViolationContextToSarifResult(sarifResult *sarif.Result, violation violationutils.Violation) *sarif.Result {
+	if sarifResult.Properties == nil {
+		sarifResult.Properties = sarif.NewPropertyBag()
+	}
+	if violation.Watch != "" {
+		sarifResult.Properties.Add(sarifutils.WatchSarifPropertyKey, violation.Watch)
+	}
+	if len(violation.Policies) > 0 {
+		policies := []string{}
+		for _, policy := range violation.Policies {
+			policies = append(policies, strings.TrimSpace(policy.PolicyName))
+		}
+		sarifResult.Properties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(policies, ","))
+	}
+	return sarifResult
 }
 
 func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
@@ -785,7 +871,55 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 	return fmt.Sprintf("%s<br/>Direct dependencies:<br/>%s", getLicenseViolationSummary(depName, version, key), formattedDirectDependencies), nil
 }
 
-func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
+type PatchSarifParams struct {
+	// Required parameters
+	CmdType     utils.CommandType
+	SubScanType utils.SubScanType
+	// Optional parameters
+	CopyContent  bool
+	ConvertPaths bool
+	// Use instead of invocation to convert the paths to relative
+	WorkingDirectory string
+	// Indicate if the runs are violations runs
+	IsViolations bool
+	// Add Analytics to the runs when viewed in web
+	BaseJfrogUrl string
+	// For uploading to Source Code Scanning, replace binary inner paths with the DOCKER file path or workflow path
+	// (append the replaced path to the help text)
+	PatchBinaryPaths bool
+	// Add docker image tag for docker image scans
+	Target *results.ScanTarget
+}
+
+// PatchSarifRuns patches the given SARIF runs according to the given parameters.
+// If CopyContent is true, the runs are copied before patching to avoid modifying the original runs.
+// This is needed in order to support and insure the content to pass the ingestion rules for JFrog platform and GitHub code scanning.
+func patchSarifRuns(params PatchSarifParams, runs ...*sarif.Run) []*sarif.Run {
+	// Prepare the runs according to the parameters
+	patchedRuns := []*sarif.Run{}
+	if params.CopyContent {
+		for _, run := range runs {
+			patchedRuns = append(patchedRuns, sarifutils.CopyRun(run))
+		}
+	} else {
+		patchedRuns = runs
+	}
+	// Patch the runs to pass the ingestion rules
+	for _, run := range runs {
+		// Since we run in temp directories files should be relative
+		// Patch by converting the file paths to relative paths according to the invocations
+		patchPaths(params, run)
+		// Patch the tool content according to the parameters
+		pathTool(params, run)
+		// Patch the results according to the parameters
+		run.Results = patchResults(params.CmdType, params.SubScanType, params.PatchBinaryPaths, params.IsViolations, *params.Target, run, run.Results...)
+		// Add the patched run to the list
+		patchedRuns = append(patchedRuns, run)
+	}
+	return patchedRuns
+}
+
+func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
 	patchedRuns := []*sarif.Run{}
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
@@ -798,12 +932,46 @@ func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandTyp
 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
 		}
 		if patched.Tool.Driver != nil {
-			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isJasViolations, patched.Tool.Driver.Rules...)
+			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isViolations, patched.Tool.Driver.Rules...)
 		}
-		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isJasViolations, target, patched, patched.Results...)
+		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isViolations, target, patched, patched.Results...)
 		patchedRuns = append(patchedRuns, patched)
 	}
 	return patchedRuns
+}
+
+func patchPaths(params PatchSarifParams, runs ...*sarif.Run) {
+	if !params.ConvertPaths {
+		return
+	}
+	if params.WorkingDirectory == "" {
+		// Convert base on invocation
+		sarifutils.ConvertRunsPathsToRelative(runs...)
+	} else {
+		// Convert base on the given working directory
+		sarifutils.ConvertRunsPathsToRelativeFromWd(params.WorkingDirectory, runs...)
+	}
+	if !(params.CmdType == utils.DockerImage && params.SubScanType == utils.SecretsScan) {
+		return
+	}
+	for _, run := range runs {
+		for _, result := range run.Results {
+			// For Docker secret scan, patch the logical location if not exists
+			patchDockerSecretLocations(result)
+		}
+	}
+}
+
+func pathTool(params PatchSarifParams, runs ...*sarif.Run) {
+	for _, run := range runs {
+		if params.CmdType.IsTargetBinary() && params.SubScanType == utils.SecretsScan {
+			// Patch the tool name in case of secret binary scan
+			sarifutils.SetRunToolName(BinarySecretScannerToolName, run)
+		}
+		if run.Tool.Driver != nil {
+			run.Tool.Driver.Rules = patchRules(params.BaseJfrogUrl, params.CmdType, params.SubScanType, params.IsViolations, run.Tool.Driver.Rules...)
+		}
+	}
 }
 
 func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
@@ -843,11 +1011,12 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
 			rule.Name = nil
 		}
-		if commandType.IsTargetBinary() && subScanType == utils.SecretsScan {
+		scanType := getScanTypeFromRule(subScanType, rule)
+		if commandType.IsTargetBinary() && scanType == utils.SecretsScan {
 			// Patch the rule name in case of binary scan
 			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
-		if isViolations && subScanType != utils.ScaScan {
+		if isViolations {
 			// Add prefix to the rule description for violations
 			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Security Violation] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
@@ -857,7 +1026,7 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 			rule.Help = rule.FullDescription
 		}
 		// Add analytics hidden pixel to the help content if needed (Github code scanning)
-		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, subScanType); rule.Help != nil && analytics != "" {
+		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, scanType); rule.Help != nil && analytics != "" {
 			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s\n%s", analytics, sarifutils.GetRuleHelpMarkdown(rule)))
 		}
 		patched = append(patched, rule)
@@ -865,16 +1034,46 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 	return
 }
 
+func getScanTypeFromRule(subScanType utils.SubScanType, rule *sarif.ReportingDescriptor) utils.SubScanType {
+	if rule == nil {
+		return subScanType
+	}
+	return getScanType(utils.SastScan, sarifutils.GetRuleId(rule))
+}
+
+func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) utils.SubScanType {
+	if result == nil {
+		return subScanType
+	}
+	return getScanType(utils.SastScan, sarifutils.GetResultRuleId(result))
+}
+
+func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
+	if defaultType != "" || scanType == "" {
+		return defaultType
+	}
+	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
+		return utils.ScaScan
+	}
+	if strings.HasPrefix(scanType, "EXP") {
+		return utils.SecretsScan
+	}
+	// TODO: Add more rules to identify IAC
+	// Default to SAST
+	return utils.SastScan
+}
+
 func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
 	patched = []*sarif.Result{}
 	for _, result := range results {
+		scanType := getScanTypeFromResult(subScanType, result)
 		if len(result.Locations) == 0 {
 			// Github code scanning ingestion rules rejects results without locations.
 			// Patch by removing results without locations.
-			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", subScanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
+			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", scanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 			continue
 		}
-		patchResultMsg(result, target, commandType, subScanType, isJasViolations)
+		patchResultMsg(result, target, commandType, scanType, isJasViolations)
 		if commandType.IsTargetBinary() {
 			if patchBinaryPaths {
 				// For Binary scans, override the physical location if applicable (after data already used for markdown)
@@ -892,7 +1091,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 	return patched
 }
 
-func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isJasViolations bool) {
+func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isViolations bool) {
 	if commandType.IsTargetBinary() {
 		var markdown string
 		if subScanType == utils.SecretsScan {
@@ -907,7 +1106,7 @@ func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType
 	if markdown == "" {
 		markdown = sarifutils.GetResultMsgText(result)
 	}
-	if isJasViolations {
+	if isViolations {
 		// Add prefix to the rule description for violations
 		markdown = fmt.Sprintf("Security Violation %s", markdown)
 	}

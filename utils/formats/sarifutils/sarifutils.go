@@ -666,14 +666,38 @@ func ConvertRunsPathsToRelative(runs ...*sarif.Run) {
 	}
 }
 
+func ConvertRunsPathsToRelativeFromWd(wd string, runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				SetLocationFileName(location, GetRelativeLocationFile(location, wd))
+			}
+			for _, flows := range result.CodeFlows {
+				for _, flow := range flows.ThreadFlows {
+					for _, location := range flow.Locations {
+						SetLocationFileName(location.Location, GetRelativeLocationFile(location.Location, wd))
+					}
+				}
+			}
+		}
+	}
+}
+
+func GetRelativeLocationFile(location *sarif.Location, wd string) string {
+	filePath := GetLocationFileName(location)
+	if filePath != "" {
+		return utils.GetRelativePath(filePath, wd)
+	}
+	return ""
+}
+
 func GetRelativeLocationFileName(location *sarif.Location, invocations []*sarif.Invocation) string {
 	if len(invocations) == 0 {
 		return GetLocationFileName(location)
 	}
-	wd := GetInvocationWorkingDirectory(invocations[0])
 	filePath := GetLocationFileName(location)
 	if filePath != "" {
-		return utils.GetRelativePath(filePath, wd)
+		return utils.GetRelativePath(filePath, GetInvocationWorkingDirectory(invocations[0]))
 	}
 	return ""
 }
