@@ -114,11 +114,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	}
 	// Add the violations run if needed
 	if sc.violationsRun != nil && len(sc.violationsRun.Results) > 0 {
-		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(PatchSarifParams{
-			BaseJfrogUrl: sc.baseJfrogUrl,
-			CmdType:      sc.currentCmdType,
-			IsViolations: true,
-		}, sc.violationsRun)...)
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getViolationsConvertParams(), sc.violationsRun)...)
 	}
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
@@ -151,8 +147,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 	}
 	// Flush Sca if needed
 	if sc.currentTargetConvertedRuns.scaCurrentRun != nil {
-		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.ScaScan), sc.currentTargetConvertedRuns.scaCurrentRun)...)
-		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, sc.currentTargetConvertedRuns.scaCurrentRun)...)
+		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.ScaScan), sc.currentTargetConvertedRuns.scaCurrentRun)...)
 	}
 	// Flush secrets if needed
 	if sc.currentTargetConvertedRuns.secretsCurrentRun != nil {
@@ -540,23 +535,32 @@ func prepareCdxInfoForSarif(vulnerability cyclonedx.Vulnerability, severity seve
 	return
 }
 
-func (sc *CmdResultsSarifConverter) getVulnerabilitiesPathParams(scanType utils.SubScanType) PatchSarifParams {
+func getSarifConvertParams(cmdType utils.CommandType, scanType utils.SubScanType, target *results.ScanTarget, isViolations, patchBinaryPaths bool, baseUrl string) PatchSarifParams {
 	return PatchSarifParams{
-		BaseJfrogUrl:     sc.baseJfrogUrl,
-		CmdType:          sc.currentCmdType,
+		BaseJfrogUrl:     baseUrl,
+		CmdType:          cmdType,
 		SubScanType:      scanType,
-		PatchBinaryPaths: sc.patchBinaryPaths,
-		Target:           &sc.currentTargetConvertedRuns.currentTarget,
-		ConvertPaths:     true,
-		CopyContent:      true,
+		Target:           target,
+		IsViolations:     isViolations,
+		PatchBinaryPaths: patchBinaryPaths,
+		ConvertPaths:     !isViolations,
+		CopyContent:      !isViolations,
 	}
+}
+
+func (sc *CmdResultsSarifConverter) getViolationsConvertParams() PatchSarifParams {
+	return getSarifConvertParams(sc.currentCmdType, "", nil, true, sc.patchBinaryPaths, sc.baseJfrogUrl)
+}
+
+func (sc *CmdResultsSarifConverter) getVulnerabilitiesConvertParams(scanType utils.SubScanType) PatchSarifParams {
+	return getSarifConvertParams(sc.currentCmdType, scanType, &sc.currentTargetConvertedRuns.currentTarget, false, sc.patchBinaryPaths, sc.baseJfrogUrl)
 }
 
 func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SecretsScan), results.ScanResultsToRuns(secrets)...)...)
+	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.SecretsScan), results.ScanResultsToRuns(secrets)...)...)
 	return
 }
 
@@ -564,7 +568,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...results.ScanResult[[]*sari
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.IacScan), results.ScanResultsToRuns(iacs)...)...)
+	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.IacScan), results.ScanResultsToRuns(iacs)...)...)
 	return
 }
 
@@ -572,7 +576,7 @@ func (sc *CmdResultsSarifConverter) ParseSast(sast ...results.ScanResult[[]*sari
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchSarifRuns(sc.getVulnerabilitiesPathParams(utils.SastScan), results.ScanResultsToRuns(sast)...)...)
+	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.SastScan), results.ScanResultsToRuns(sast)...)...)
 	return
 }
 
