@@ -65,13 +65,19 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
 			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SecretsScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets))
+				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SecretsScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.ScanTarget.Target, e))
+				}
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.IacScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC))
+				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.IacScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.ScanTarget.Target, e))
+				}
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
-				results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SastScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast))
+				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SastScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.ScanTarget.Target, e))
+				}
 			}
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -103,16 +104,8 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {
 	convertedViolations = violationutils.Violations{}
 	for _, violation := range generatedViolations {
-		if violation.SastDetails != nil {
-			convertedViolations.Sast = append(convertedViolations.Sast, convertToJasViolations(cmdResults, jasutils.Sast, violation)...)
-		} else if violation.ExposureDetails != nil {
-			if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
-				convertedViolations.Secrets = append(convertedViolations.Secrets, convertToJasViolations(cmdResults, jasutils.Secrets, violation)...)
-			} else {
-				log.Warn(fmt.Sprintf("Skipping Jas violation with unknown exposure ID prefix for violation ID %s", violation.Id))
-			}
-		} else {
-			// SCA as default
+		switch getViolationType(violation) {
+		case utils.ScaScan:
 			switch violation.Type {
 			case xrayUtils.SecurityViolation:
 				convertedViolations.Sca = append(convertedViolations.Sca, convertToCveViolations(cmdResults, violation)...)
@@ -123,9 +116,28 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 			default:
 				err = errors.Join(err, fmt.Errorf("unknown violation type %s for violation id %s", violation.Type, violation.Id))
 			}
+		case utils.SastScan:
+			convertedViolations.Sast = append(convertedViolations.Sast, convertToJasViolations(cmdResults, jasutils.Sast, violation)...)
+		case utils.SecretsScan:
+			convertedViolations.Secrets = append(convertedViolations.Secrets, convertToJasViolations(cmdResults, jasutils.Secrets, violation)...)
+		default:
+			log.Warn(fmt.Sprintf("Skipping violation with unknown scan type for violation ID %s", violation.Id))
 		}
 	}
 	return
+}
+
+func getViolationType(violation services.XrayViolation) utils.SubScanType {
+	if violation.SastDetails != nil {
+		return utils.SastScan
+	}
+	if violation.ExposureDetails != nil {
+		if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
+			return utils.SecretsScan
+		}
+		return ""
+	}
+	return utils.ScaScan
 }
 
 func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (*cyclonedx.Component, violationutils.ScaViolation) {

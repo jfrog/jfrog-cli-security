@@ -254,7 +254,7 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults result
 			Violation:               &cveViolation.Violation,
 			MarkdownDescription:     markdownDescription,
 			SeverityScore:           maxCveScore,
-			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+			GenerateTitleFunc:       getScaSecurityViolationSarifHeadline,
 			Cves:                    cves,
 			Severity:                cveViolation.Severity,
 			ApplicabilityStatus:     applicabilityStatus,

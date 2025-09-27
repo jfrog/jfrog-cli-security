@@ -109,7 +109,7 @@ func getArtifactsPaths(repo string, reader *content.ContentReader) (paths []stri
 
 func AddSuffixSlashIfNeeded(path string) string {
 	if path != "" && !strings.HasSuffix(path, "/") {
-		path = path + "/"
+		path += "/"
 	}
 	return path
 }
