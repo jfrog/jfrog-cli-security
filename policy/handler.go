@@ -1,9 +1,7 @@
 package policy
 
 import (
-	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -28,7 +26,7 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 		log.Debug(fmt.Sprintf("Filtered out %d not applicable SCA violations based on policy settings.", len(violations.Sca)-len(filteredScaViolations)))
 		violations.Sca = filteredScaViolations
 	}
-	cmdResults.SetViolations(getStatusCode(err), violations)
+	cmdResults.SetViolations(getStatusCodeFromErr(err), violations)
 	if err != nil {
 		return fmt.Errorf("failed to fetch violations: %s", err.Error())
 	}
@@ -43,32 +41,38 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 func filterNotApplicableViolations(violations []violationutils.CveViolation) (filteredViolations []violationutils.CveViolation) {
 	filteredViolations = make([]violationutils.CveViolation, 0)
 	for _, violation := range violations {
-		shouldSkip := false
-		for _, policy := range violation.Policies {
-			shouldSkip = shouldSkip || policy.SkipNotApplicable
-		}
-		if !shouldSkip || violation.ContextualAnalysis == nil || jasutils.ConvertToApplicabilityStatus(violation.ContextualAnalysis.Status) != jasutils.NotApplicable {
+		if !violation.ShouldSkipNotApplicable() || violation.ContextualAnalysis == nil || jasutils.ConvertToApplicabilityStatus(violation.ContextualAnalysis.Status) != jasutils.NotApplicable {
 			filteredViolations = append(filteredViolations, violation)
 		}
 	}
 	return filteredViolations
 }
 
-func getStatusCode(err error) int {
+func getStatusCodeFromErr(err error) int {
 	if err == nil {
 		return 0
 	}
 	return 1
 }
 
-func CheckPolicyFailure(cmdResults *results.SecurityCommandResults) (err error) {
-	policyErrors := []error{}
+func CheckPolicyFailBuildError(cmdResults *results.SecurityCommandResults) (err error) {
+	if cmdResults == nil || cmdResults.Violations.IsScanFailed() {
+		return
+	}
+	if cmdResults.Violations.Scan.ShouldFailBuild() {
+		err = NewFailBuildError()
+	}
+	return
+}
 
-	// for _, violation := range cmdResults.Violations {
-
-	// }
-
-	return errors.Join(policyErrors...)
+func CheckPolicyFailPrError(cmdResults *results.SecurityCommandResults) (err error) {
+	if cmdResults == nil || cmdResults.Violations.IsScanFailed() {
+		return
+	}
+	if cmdResults.Violations.Scan.ShouldFailPR() {
+		err = NewFailPrError()
+	}
+	return
 }
 
 func NewFailBuildError() error {
@@ -77,36 +81,4 @@ func NewFailBuildError() error {
 
 func NewFailPrError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeError, ErrorMsg: "One or more of the detected violations are configured to fail the pull request that including them"}
-}
-
-func GetOperationalRiskViolationReadableData(riskReason string, isEol *bool, eolMsg string, cadence *float64, commits *int64, committers *int, latestVersion string, newerVersion *int) violationutils.OperationalRiskViolationReadableData {
-	isEolStr, cadenceStr, commitsStr, committersStr, newerVersionsStr, latestVersionStr := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
-	if isEol != nil {
-		isEolStr = strconv.FormatBool(*isEol)
-	}
-	if cadence != nil {
-		cadenceStr = strconv.FormatFloat(*cadence, 'f', -1, 64)
-	}
-	if committers != nil {
-		committersStr = strconv.FormatInt(int64(*committers), 10)
-	}
-	if commits != nil {
-		commitsStr = strconv.FormatInt(*commits, 10)
-	}
-	if newerVersion != nil {
-		newerVersionsStr = strconv.FormatInt(int64(*newerVersion), 10)
-	}
-	if latestVersion != "" {
-		latestVersionStr = latestVersion
-	}
-	return violationutils.OperationalRiskViolationReadableData{
-		IsEol:         isEolStr,
-		Cadence:       cadenceStr,
-		Commits:       commitsStr,
-		Committers:    committersStr,
-		EolMessage:    eolMsg,
-		RiskReason:    riskReason,
-		LatestVersion: latestVersionStr,
-		NewerVersions: newerVersionsStr,
-	}
 }

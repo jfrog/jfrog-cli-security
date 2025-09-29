@@ -352,7 +352,7 @@ func convertToOpRiskViolations(cmdResults *results.SecurityCommandResults, viola
 		_, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
 		opRiskViolation := violationutils.OperationalRiskViolation{
 			ScaViolation: scaViolation,
-			OperationalRiskViolationReadableData: policy.GetOperationalRiskViolationReadableData(
+			OperationalRiskViolationReadableData: violationutils.GetOperationalRiskViolationReadableData(
 				violation.OperationalRisk.RiskReason,
 				violation.OperationalRisk.IsEol,
 				violation.OperationalRisk.EolMessage,

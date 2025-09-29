@@ -2,6 +2,7 @@ package violationutils
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -68,11 +69,107 @@ func (vs *Violations) String() string {
 	return strings.Join(out, ", ")
 }
 
+func (vs *Violations) ShouldFailBuild() bool {
+	for _, v := range vs.Sca {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.License {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.OpRisk {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.Secrets {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.Iac {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.Sast {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	return false
+}
+
+func (vs *Violations) ShouldFailPR() bool {
+	for _, v := range vs.Sca {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.License {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.OpRisk {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.Secrets {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.Iac {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.Sast {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	return false
+}
+
 type Violation struct {
 	ViolationId string                 `json:"violation_id"`
 	Severity    severityutils.Severity `json:"severity"`
 	Watch       string                 `json:"watch_name"`
 	Policies    []Policy               `json:"matched_policies,omitempty"`
+}
+
+func (v *Violation) ShouldSkipNotApplicable() bool {
+	// If at least one of the policies does not have SkipNotApplicable, we do not skip the violation.
+	for _, p := range v.Policies {
+		if !p.SkipNotApplicable {
+			return false
+		}
+	}
+	return true
+}
+
+func (v *Violation) ShouldFailBuild() bool {
+	for _, p := range v.Policies {
+		if p.FailBuild {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *Violation) ShouldFailPR() bool {
+	for _, p := range v.Policies {
+		if p.FailPullRequest {
+			return true
+		}
+	}
+	return false
 }
 
 type Policy struct {
@@ -123,6 +220,38 @@ type OperationalRiskViolationReadableData struct {
 	Committers    string `json:"committers"`
 	NewerVersions string `json:"newerVersions"`
 	LatestVersion string `json:"latestVersion"`
+}
+
+func GetOperationalRiskViolationReadableData(riskReason string, isEol *bool, eolMsg string, cadence *float64, commits *int64, committers *int, latestVersion string, newerVersion *int) OperationalRiskViolationReadableData {
+	isEolStr, cadenceStr, commitsStr, committersStr, newerVersionsStr, latestVersionStr := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+	if isEol != nil {
+		isEolStr = strconv.FormatBool(*isEol)
+	}
+	if cadence != nil {
+		cadenceStr = strconv.FormatFloat(*cadence, 'f', -1, 64)
+	}
+	if committers != nil {
+		committersStr = strconv.FormatInt(int64(*committers), 10)
+	}
+	if commits != nil {
+		commitsStr = strconv.FormatInt(*commits, 10)
+	}
+	if newerVersion != nil {
+		newerVersionsStr = strconv.FormatInt(int64(*newerVersion), 10)
+	}
+	if latestVersion != "" {
+		latestVersionStr = latestVersion
+	}
+	return OperationalRiskViolationReadableData{
+		IsEol:         isEolStr,
+		Cadence:       cadenceStr,
+		Commits:       commitsStr,
+		Committers:    committersStr,
+		EolMessage:    eolMsg,
+		RiskReason:    riskReason,
+		LatestVersion: latestVersionStr,
+		NewerVersions: newerVersionsStr,
+	}
 }
 
 type OperationalRiskViolation struct {

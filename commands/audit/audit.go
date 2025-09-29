@@ -252,13 +252,9 @@ func OutputResultsAndCmdError(auditResults *results.SecurityCommandResults, outp
 		// Return the scan results errors.
 		return
 	}
-	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	shouldFailBuildByPolicy, err := local.CheckIfFailBuild(auditResults)
-	if err != nil {
-		return fmt.Errorf("failed to check if the build should fail: %w", err)
-	}
-	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
-		err = policy.NewFailBuildError()
+	if failBuild {
+		// Only in case the user asked to fail the build accordingly, do so.
+		err = policy.CheckPolicyFailBuildError(auditResults)
 	}
 	return
 }
