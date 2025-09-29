@@ -113,7 +113,7 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 }
 
 // Get the dynamic logic for the scan based on the provided flags to support backward compatibility
-func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.PolicyHandler, uploadResults, remediationService bool) {
+func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.PolicyHandler, uploadResults bool) {
 	bomGenerator = buildinfo.NewBuildInfoBomGenerator()
 	scanStrategy = scangraph.NewScanGraphStrategy()
 	violationGenerator = local.NewDeprecatedViolationGenerator()
@@ -123,7 +123,6 @@ func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator,
 		scanStrategy = enrich.NewEnrichScanStrategy()
 		violationGenerator = enforcer.NewPolicyEnforcerViolationGenerator()
 		uploadResults = true
-		remediationService = true
 	}
 	return
 }

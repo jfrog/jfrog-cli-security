@@ -38,7 +38,6 @@ type AuditParams struct {
 	scaScanStrategy                 scan.SbomScanStrategy
 	uploadCdxResults                bool
 	rtResultRepository              string
-	remediationService              bool
 	violationGenerator              policy.PolicyHandler
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
@@ -313,13 +312,4 @@ func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *Aud
 
 func (params *AuditParams) RtResultRepository() string {
 	return params.rtResultRepository
-}
-
-func (params *AuditParams) SetRemediationService(remediationService bool) *AuditParams {
-	params.remediationService = remediationService
-	return params
-}
-
-func (params *AuditParams) RemediationService() bool {
-	return params.remediationService
 }

@@ -191,7 +191,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetViolationGenerator(auditCmd.violationGenerator).
 		SetRtResultRepository(auditCmd.rtResultRepository).
 		SetUploadCdxResults(auditCmd.uploadCdxResults).
-		SetRemediationService(auditCmd.remediationService).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
@@ -653,15 +652,6 @@ func getSignedDescriptions(currentFormat format.OutputFormat) bool {
 }
 
 func processScanResults(params *AuditParams, cmdResults *results.SecurityCommandResults) *results.SecurityCommandResults {
-	// In new flow we get remediation from Xray service
-	if params.remediationService {
-		if params.Progress() != nil {
-			params.Progress().SetHeadlineMsg("Fetching remediation information")
-		}
-		if err := enrichWithRemediation(cmdResults, params); err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich scan results with remediation: %s", err.Error()), params.AllowPartialResults())
-		}
-	}
 	// Upload results to Artifactory (should be the last step not including violations fetching so the uploaded results will include everything else).
 	var err error
 	uploadPath := ""
@@ -687,19 +677,6 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		}
 	}
 	return cmdResults
-}
-
-func enrichWithRemediation(cmdResults *results.SecurityCommandResults, params *AuditParams) (err error) {
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return fmt.Errorf("failed to get server details: %s", err.Error())
-	}
-	_, err = xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
-	if err != nil {
-		return fmt.Errorf("failed to create Xray services manager: %s", err.Error())
-	}
-	log.Warn("Enriching scan results with remediation information is not yet implemented")
-	return
 }
 
 func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {

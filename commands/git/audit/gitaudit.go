@@ -99,7 +99,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
 	auditParams.SetUploadCdxResults(params.uploadResults).SetRtResultRepository(params.rtResultRepository)
 	// Cmd information
-	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator).SetRemediationService(params.remediationService)
+	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator)
 	// Basic params
 	isRecursiveScan := true
 	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {

@@ -442,12 +442,11 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		return "", "", nil, nil, err
 	}
 	// Set dynamic command logic based on flags
-	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, remediationService := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults := getScanDynamicLogic(c)
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	auditCmd.SetViolationGenerator(violationGenerator)
 	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
-	auditCmd.SetRemediationService(remediationService)
 	// Make sure include SBOM is only set if the output format supports it
 	includeSbom := c.GetBoolFlagValue(flags.Sbom)
 	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
