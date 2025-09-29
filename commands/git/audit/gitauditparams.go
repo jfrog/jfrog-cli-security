@@ -41,7 +41,6 @@ type GitAuditParams struct {
 	violationGenerator policy.PolicyHandler
 	uploadResults      bool
 	rtResultRepository string
-	remediationService bool
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -163,13 +162,4 @@ func (gap *GitAuditParams) SetRtResultRepository(rtResultRepository string) *Git
 
 func (gap *GitAuditParams) RtResultRepository() string {
 	return gap.rtResultRepository
-}
-
-func (gap *GitAuditParams) SetRemediationService(remediationService bool) *GitAuditParams {
-	gap.remediationService = remediationService
-	return gap
-}
-
-func (gap *GitAuditParams) RemediationService() bool {
-	return gap.remediationService
 }
