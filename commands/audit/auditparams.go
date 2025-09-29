@@ -29,6 +29,7 @@ type AuditParams struct {
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
+	allowedLicenses             []string
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Dynamic logic params
@@ -294,6 +295,15 @@ func (params *AuditParams) SetViolationGenerator(violationGenerator policy.Polic
 
 func (params *AuditParams) ViolationGenerator() policy.PolicyHandler {
 	return params.violationGenerator
+}
+
+func (params *AuditParams) SetAllowedLicenses(allowedLicenses []string) *AuditParams {
+	params.allowedLicenses = allowedLicenses
+	return params
+}
+
+func (params *AuditParams) AllowedLicenses() []string {
+	return params.allowedLicenses
 }
 
 func (params *AuditParams) SetUploadCdxResults(uploadCdxResults bool) *AuditParams {

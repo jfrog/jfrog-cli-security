@@ -38,8 +38,6 @@ type ResultConvertParams struct {
 	IsMultipleRoots *bool
 	// The requested scans to be included in the results, if empty all scans will be included
 	RequestedScans []utils.SubScanType
-	// // Create local license violations if repo context was not provided and a license is not in this list
-	// AllowedLicenses []string
 	// Output will contain only the unique violations determined by the GetUniqueKey function (SimpleJson only)
 	SimplifiedOutput bool
 	// Convert the results to a pretty format if supported (Table and SimpleJson only)

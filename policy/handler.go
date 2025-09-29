@@ -3,17 +3,14 @@ package policy
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 )
 
 type PolicyHandler interface {
@@ -80,26 +77,6 @@ func NewFailBuildError() error {
 
 func NewFailPrError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeError, ErrorMsg: "One or more of the detected violations are configured to fail the pull request that including them"}
-}
-
-func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) (violatedLicenses []services.Violation) {
-	if len(allowedLicenses) == 0 {
-		return
-	}
-	for _, license := range licenses {
-		if !slices.Contains(allowedLicenses, license.Key) {
-			violatedLicenses = append(violatedLicenses, services.Violation{
-				LicenseKey:    license.Key,
-				LicenseName:   license.Name,
-				Severity:      severityutils.Medium.String(),
-				Components:    license.Components,
-				IssueId:       violationutils.CustomLicenseViolationId,
-				WatchName:     fmt.Sprintf("jfrog_%s", violationutils.CustomLicenseViolationId),
-				ViolationType: violationutils.ScaViolationTypeLicense.String(),
-			})
-		}
-	}
-	return
 }
 
 func GetOperationalRiskViolationReadableData(riskReason string, isEol *bool, eolMsg string, cadence *float64, commits *int64, committers *int, latestVersion string, newerVersion *int) violationutils.OperationalRiskViolationReadableData {

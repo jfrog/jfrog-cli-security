@@ -697,6 +697,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		return fmt.Errorf("failed to get server details: %s", err.Error())
 	}
 	generator := auditParams.ViolationGenerator().WithOptions(
+		local.WithAllowedLicenses(auditParams.allowedLicenses),
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
 		enforcer.WithParams(auditParams.rtResultRepository, uploadPath),

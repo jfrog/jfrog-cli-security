@@ -3,6 +3,7 @@ package local
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
@@ -28,6 +29,14 @@ func NewDeprecatedViolationGenerator() *DeprecatedViolationGenerator {
 	return &DeprecatedViolationGenerator{}
 }
 
+func WithAllowedLicenses(allowedLicenses []string) policy.PolicyHandlerOption {
+	return func(sg policy.PolicyHandler) {
+		if d, ok := sg.(*DeprecatedViolationGenerator); ok {
+			d.AllowedLicenses = allowedLicenses
+		}
+	}
+}
+
 func (d *DeprecatedViolationGenerator) WithOptions(options ...policy.PolicyHandlerOption) policy.PolicyHandler {
 	for _, option := range options {
 		option(d)
@@ -42,24 +51,8 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 	for _, target := range cmdResults.Targets {
 		// SCA violations (from DeprecatedXrayResults)
 		if target.ScaResults != nil {
-			for _, deprecatedXrayResult := range target.ScaResults.DeprecatedXrayResults {
-				applicableRuns := []*sarif.Run{}
-				if target.JasResults != nil {
-					applicableRuns = target.JasResults.GetApplicabilityScanResults()
-				}
-				// Convert DeprecatedXrayResults violations
-				if _, _, e := ForEachScanGraphViolation(
-					target.ScanTarget,
-					target.ScaResults.Descriptors,
-					deprecatedXrayResult.Scan.Violations,
-					cmdResults.EntitledForJas,
-					applicableRuns,
-					convertScaSecurityViolationToPolicyViolation(&convertedViolations),
-					convertScaLicenseViolationToPolicyViolation(&convertedViolations),
-					convertOperationalRiskViolationToPolicyViolation(&convertedViolations)); e != nil {
-					err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.ScanTarget.Target, e))
-					continue
-				}
+			if e := d.generateScaViolations(target, &convertedViolations, cmdResults.EntitledForJas); e != nil {
+				err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.ScanTarget.Target, e))
 			}
 		}
 		// JAS violations (from JasResults)
@@ -81,15 +74,71 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 			}
 		}
 	}
-	// Deprecated option to provide allowed-licenses to generate local violations (only if no violations were found)
-	// if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
-	// 	// If no violations were found, check if there are licenses that are not allowed
-	// 	if scaResults.Scan.Violations = policy.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
-	// 		if err = parser.DeprecatedParseScaIssues(targetScansResults.ScaResults.Descriptors, scaResults); err != nil {
-	// 			return
-	// 		}
-	// 	}
-	// }
+	return
+}
+
+func (d *DeprecatedViolationGenerator) generateScaViolations(target *results.TargetResults, convertedViolations *violationutils.Violations, entitledForJas bool) (err error) {
+	licenses := []services.License{}
+	for _, deprecatedXrayResult := range target.ScaResults.DeprecatedXrayResults {
+		applicableRuns := []*sarif.Run{}
+		if target.JasResults != nil {
+			applicableRuns = target.JasResults.GetApplicabilityScanResults()
+		}
+		// Convert DeprecatedXrayResults violations
+		_, _, e := ForEachScanGraphViolation(
+			target.ScanTarget,
+			target.ScaResults.Descriptors,
+			deprecatedXrayResult.Scan.Violations,
+			entitledForJas,
+			applicableRuns,
+			convertScaSecurityViolationToPolicyViolation(convertedViolations),
+			convertScaLicenseViolationToPolicyViolation(convertedViolations),
+			convertOperationalRiskViolationToPolicyViolation(convertedViolations),
+		)
+		if e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to convert scan graph results (scanId: %s): %w", deprecatedXrayResult.Scan.ScanId, e))
+			continue
+		}
+		// Collect licenses for local license violation generation
+		licenses = append(licenses, deprecatedXrayResult.Scan.Licenses...)
+	}
+	if len(convertedViolations.License) > 0 || len(d.AllowedLicenses) == 0 {
+		// Deprecated option to provide allowed-licenses to generate local violations (only if no violations were found)
+		return
+	}
+	_, _, e := ForEachScanGraphViolation(
+		target.ScanTarget,
+		target.ScaResults.Descriptors,
+		getAllowedLicensesViolations(d.AllowedLicenses, licenses),
+		entitledForJas,
+		[]*sarif.Run{},
+		nil,
+		convertScaLicenseViolationToPolicyViolation(convertedViolations),
+		nil,
+	)
+	if e != nil {
+		err = errors.Join(err, fmt.Errorf("failed to generate local license violations for target from allowed licenses: %w", e))
+	}
+	return
+}
+
+func getAllowedLicensesViolations(allowedLicenses []string, licenses []services.License) (violatedLicenses []services.Violation) {
+	if len(allowedLicenses) == 0 {
+		return
+	}
+	for _, license := range licenses {
+		if !slices.Contains(allowedLicenses, license.Key) {
+			violatedLicenses = append(violatedLicenses, services.Violation{
+				LicenseKey:    license.Key,
+				LicenseName:   license.Name,
+				Severity:      severityutils.Medium.String(),
+				Components:    license.Components,
+				IssueId:       violationutils.CustomLicenseViolationId,
+				WatchName:     fmt.Sprintf("jfrog_%s", violationutils.CustomLicenseViolationId),
+				ViolationType: violationutils.ScaViolationTypeLicense.String(),
+			})
+		}
+	}
 	return
 }
 
