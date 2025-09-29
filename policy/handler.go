@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 )
@@ -26,6 +27,10 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 	log.Info("Generating violations...")
 	violations, err := generator.GenerateViolations(cmdResults)
 	// We add the results before checking for errors, so we can display the results even if an error occur
+	if filteredScaViolations := filterNotApplicableViolations(violations.Sca); len(filteredScaViolations) != len(violations.Sca) {
+		log.Debug(fmt.Sprintf("Filtered out %d not applicable SCA violations based on policy settings.", len(violations.Sca)-len(filteredScaViolations)))
+		violations.Sca = filteredScaViolations
+	}
 	cmdResults.SetViolations(getStatusCode(err), violations)
 	if err != nil {
 		return fmt.Errorf("failed to fetch violations: %s", err.Error())
@@ -36,6 +41,20 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 		log.Info(fmt.Sprintf("Generated %d violations. [%s]", violations.Count(), violations.String()))
 	}
 	return
+}
+
+func filterNotApplicableViolations(violations []violationutils.CveViolation) (filteredViolations []violationutils.CveViolation) {
+	filteredViolations = make([]violationutils.CveViolation, 0)
+	for _, violation := range violations {
+		shouldSkip := false
+		for _, policy := range violation.Policies {
+			shouldSkip = shouldSkip || policy.SkipNotApplicable
+		}
+		if !shouldSkip || violation.ContextualAnalysis == nil || jasutils.ConvertToApplicabilityStatus(violation.ContextualAnalysis.Status) != jasutils.NotApplicable {
+			filteredViolations = append(filteredViolations, violation)
+		}
+	}
+	return filteredViolations
 }
 
 func getStatusCode(err error) int {

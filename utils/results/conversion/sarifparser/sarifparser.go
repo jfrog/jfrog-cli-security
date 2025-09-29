@@ -916,33 +916,33 @@ func patchSarifRuns(params PatchSarifParams, runs ...*sarif.Run) []*sarif.Run {
 		// Patch the tool content according to the parameters
 		pathTool(params, run)
 		// Patch the results according to the parameters
-		run.Results = patchResults(params.CmdType, params.SubScanType, params.PatchBinaryPaths, params.IsViolations, *params.Target, run, run.Results...)
+		run.Results = patchResults(params.CmdType, params.SubScanType, params.PatchBinaryPaths, params.IsViolations, params.Target, run, run.Results...)
 		// Add the patched run to the list
 		patchedRuns = append(patchedRuns, run)
 	}
 	return patchedRuns
 }
 
-func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
-	patchedRuns := []*sarif.Run{}
-	// Patch changes may alter the original run, so we will create a new run for each
-	for _, run := range runs {
-		patched := sarifutils.CopyRun(run)
-		// Since we run in temp directories files should be relative
-		// Patch by converting the file paths to relative paths according to the invocations
-		convertPaths(cmdType, subScanType, patched)
-		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
-			// Patch the tool name in case of binary scan
-			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
-		}
-		if patched.Tool.Driver != nil {
-			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isViolations, patched.Tool.Driver.Rules...)
-		}
-		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isViolations, target, patched, patched.Results...)
-		patchedRuns = append(patchedRuns, patched)
-	}
-	return patchedRuns
-}
+// func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isViolations bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
+// 	patchedRuns := []*sarif.Run{}
+// 	// Patch changes may alter the original run, so we will create a new run for each
+// 	for _, run := range runs {
+// 		patched := sarifutils.CopyRun(run)
+// 		// Since we run in temp directories files should be relative
+// 		// Patch by converting the file paths to relative paths according to the invocations
+// 		convertPaths(cmdType, subScanType, patched)
+// 		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
+// 			// Patch the tool name in case of binary scan
+// 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
+// 		}
+// 		if patched.Tool.Driver != nil {
+// 			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, isViolations, patched.Tool.Driver.Rules...)
+// 		}
+// 		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, isViolations, target, patched, patched.Results...)
+// 		patchedRuns = append(patchedRuns, patched)
+// 	}
+// 	return patchedRuns
+// }
 
 func patchPaths(params PatchSarifParams, runs ...*sarif.Run) {
 	if !params.ConvertPaths {
@@ -1067,7 +1067,7 @@ func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanTy
 	return utils.SastScan
 }
 
-func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
+func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target *results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
 	patched = []*sarif.Result{}
 	for _, result := range results {
 		scanType := getScanTypeFromResult(subScanType, result)
@@ -1095,7 +1095,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 	return patched
 }
 
-func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isViolations bool) {
+func patchResultMsg(result *sarif.Result, target *results.ScanTarget, commandType utils.CommandType, subScanType utils.SubScanType, isViolations bool) {
 	if commandType.IsTargetBinary() {
 		var markdown string
 		if subScanType == utils.SecretsScan {
@@ -1197,7 +1197,7 @@ func getWorkflowFileLocationIfExists() (location string) {
 	return
 }
 
-func getSecretInBinaryMarkdownMsg(commandType utils.CommandType, target results.ScanTarget, result *sarif.Result) string {
+func getSecretInBinaryMarkdownMsg(commandType utils.CommandType, target *results.ScanTarget, result *sarif.Result) string {
 	if !commandType.IsTargetBinary() {
 		return ""
 	}
@@ -1209,11 +1209,11 @@ func getSecretInBinaryMarkdownMsg(commandType utils.CommandType, target results.
 	return content + getBaseBinaryDescriptionMarkdown(commandType, target, utils.SecretsScan, result)
 }
 
-func getScaInBinaryMarkdownMsg(commandType utils.CommandType, target results.ScanTarget, result *sarif.Result) string {
+func getScaInBinaryMarkdownMsg(commandType utils.CommandType, target *results.ScanTarget, result *sarif.Result) string {
 	return sarifutils.GetResultMsgText(result) + getBaseBinaryDescriptionMarkdown(commandType, target, utils.ScaScan, result)
 }
 
-func getBaseBinaryDescriptionMarkdown(commandType utils.CommandType, target results.ScanTarget, subScanType utils.SubScanType, result *sarif.Result) (content string) {
+func getBaseBinaryDescriptionMarkdown(commandType utils.CommandType, target *results.ScanTarget, subScanType utils.SubScanType, result *sarif.Result) (content string) {
 	// If in github action, add the workflow name and run number
 	if workflowLocation := getWorkflowFileLocationIfExists(); workflowLocation != "" {
 		content += fmt.Sprintf("\nGithub Actions Workflow: %s", workflowLocation)
@@ -1234,8 +1234,8 @@ func getBaseBinaryDescriptionMarkdown(commandType utils.CommandType, target resu
 	return content + getBinaryLocationMarkdownString(commandType, subScanType, result, location)
 }
 
-func getDockerImageTag(commandType utils.CommandType, target results.ScanTarget) string {
-	if commandType != utils.DockerImage {
+func getDockerImageTag(commandType utils.CommandType, target *results.ScanTarget) string {
+	if commandType != utils.DockerImage || target == nil {
 		return ""
 	}
 	if target.Name != "" {
