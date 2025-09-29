@@ -81,8 +81,7 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	convertedViolations = violationutils.Violations{}
 	log.Debug("Waiting for Xray scans to complete...")
 	startedTimeStamp := time.Now()
-	err = artifact.WaitForArtifactScanCompletion(xrayManager, p.rtRepository, p.artifactPath, artifact.Steps(artifact.XrayScanStepViolations))
-	if err != nil {
+	if err = artifact.WaitForArtifactScanStatus(xrayManager, p.rtRepository, p.artifactPath, artifact.Steps(artifact.XrayScanStepViolations)); err != nil {
 		return
 	}
 	log.Debug(fmt.Sprintf("Xray scan completed in %s seconds", time.Since(startedTimeStamp).String()))

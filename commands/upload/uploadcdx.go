@@ -14,19 +14,21 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 )
 
 type UploadCycloneDxCommand struct {
 	serverDetails *config.ServerDetails
 	progress      ioUtils.ProgressMgr
 
-	scanResultsRepository string
-
 	fileToUpload    string
 	contentToUpload *cdxutils.FullBOM
 	filePrefix      string
 
-	projectKey string
+	// Options
+	scanResultsRepository string
+	projectKey            string
 }
 
 func NewUploadCycloneDxCommand() *UploadCycloneDxCommand {
@@ -80,7 +82,9 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	if _, err = ucc.Upload(); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
-	// TODO: Wait for SCA to finish uploading
+	if err = ucc.waitForUploadCompletion(); err != nil {
+		return fmt.Errorf("failed while waiting for Xray to start scanning the uploaded CycloneDx file: %w", err)
+	}
 	// Report the URL for the scan results
 	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
 	if err != nil {
@@ -88,6 +92,15 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	}
 	log.Output(fmt.Sprintf("Your CycloneDx file was successfully uploaded. You may view the file content in the JFrog platform, under Xray -> Scans List -> Repositories :\n%s", scanResultsUrl))
 	return
+}
+
+func (ucc *UploadCycloneDxCommand) waitForUploadCompletion() error {
+	xrayManager, err := xray.CreateXrayServiceManager(ucc.serverDetails, xray.WithScopedProjectKey(ucc.projectKey))
+	if err != nil {
+		return err
+	}
+	// Not providing any options means we are waiting for the scan to start (so the UI can show content when pressing the generate scan results link)
+	return artifact.WaitForArtifactScanStatus(xrayManager, ucc.scanResultsRepository, ucc.fileToUpload)
 }
 
 func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {

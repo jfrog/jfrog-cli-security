@@ -58,7 +58,8 @@ func NewScanCompleteParams(options ...ScanCompleteOption) *ScanCompleteParams {
 	return params
 }
 
-func WaitForArtifactScanCompletion(xrayManager *xray.XrayServicesManager, repo, path string, options ...ScanCompleteOption) error {
+// No options provided = waiting for scan to start
+func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path string, options ...ScanCompleteOption) error {
 	params := NewScanCompleteParams(options...)
 	if !params.Overall && len(params.Steps) == 0 {
 		return fmt.Errorf("no scan completion criteria were provided")
