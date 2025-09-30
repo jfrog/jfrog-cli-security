@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -73,6 +74,8 @@ func TestGenerateURLFromPath(t *testing.T) {
 		Component: &fileComponent,
 	}
 	assert.NoError(t, utils.SaveCdxContentToFile(validCdxFilePath, cdx))
+	expectedSha, err := calculateFileSHA256(validCdxFilePath)
+	assert.NoError(t, err)
 
 	tests := []struct {
 		name     string
@@ -85,13 +88,15 @@ func TestGenerateURLFromPath(t *testing.T) {
 			name:     "No metadata component",
 			repoPath: "testdata/",
 			filePath: validCdxFilePath,
-			expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
+			expected: fmt.Sprintf("https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%%3A%%2F%%2Fsha256%%3A%s%%2Fvalid_cdx.json&page_type=overview&path=testdata%%2F%%2Fvalid_cdx.json", expectedSha),
+			// expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
 		},
 		{
 			name:     "With subdirectory in repoPath",
 			repoPath: "testdata/subdir/",
 			filePath: validCdxFilePath,
-			expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2Fsubdir%2F%2Fvalid_cdx.json",
+			expected: fmt.Sprintf("https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%%3A%%2F%%2Fsha256%%3A%s%%2Fvalid_cdx.json&page_type=overview&path=testdata%%2Fsubdir%%2F%%2Fvalid_cdx.json", expectedSha),
+			// expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2Fsubdir%2F%2Fvalid_cdx.json",
 		},
 	}
 
