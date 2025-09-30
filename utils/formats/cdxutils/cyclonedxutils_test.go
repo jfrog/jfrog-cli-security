@@ -350,13 +350,13 @@ func TestGetComponentRelation(t *testing.T) {
 			name: "Root - skip generic root, actual roots are dependencies",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual-root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual-root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
 					{Ref: "actual-root1", Dependencies: &[]string{"comp1"}},
 					{Ref: "actual-root2", Dependencies: &[]string{}},
 				},
@@ -678,13 +678,13 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			name: "BuildInfo - generic root with skipDefaultRoot=true",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual_root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 					{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				},
 			},
@@ -692,24 +692,24 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			expected: []cyclonedx.Dependency{
 				{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				{Ref: "actual_root2"},
-				{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 			},
 		},
 		{
 			name: "BuildInfo - generic root with skipDefaultRoot=false",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "not_actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Not Actual Root 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 					{Ref: "not_actual_root1", Dependencies: &[]string{}},
 				},
 			},
 			skipRoot: false,
 			expected: []cyclonedx.Dependency{
-				{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 			},
 		},
 		{
