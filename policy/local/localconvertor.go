@@ -466,19 +466,19 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 // }
 
 // Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
-func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
-	if applicabilityStatus != jasutils.NotApplicable {
-		return false, nil
-	}
+// func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
+// 	if applicabilityStatus != jasutils.NotApplicable {
+// 		return false, nil
+// 	}
 
-	if len(violation.Policies) == 0 {
-		return false, errors.New("a violation with no policies was provided")
-	}
+// 	if len(violation.Policies) == 0 {
+// 		return false, errors.New("a violation with no policies was provided")
+// 	}
 
-	for _, policy := range violation.Policies {
-		if !policy.SkipNotApplicable {
-			return false, nil
-		}
-	}
-	return true, nil
-}
+// 	for _, policy := range violation.Policies {
+// 		if !policy.SkipNotApplicable {
+// 			return false, nil
+// 		}
+// 	}
+// 	return true, nil
+// }
