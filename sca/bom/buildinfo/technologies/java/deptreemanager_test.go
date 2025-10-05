@@ -12,7 +12,7 @@ import (
 )
 
 func TestGetGradleGraphFromDepTree(t *testing.T) {
-	//test for both curation and non-curation commands
+	// Test for both curation and non-curation commands
 	for _, isCurationCmd := range []bool{false, true} {
 		// Create and change directory to test workspace
 		tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
