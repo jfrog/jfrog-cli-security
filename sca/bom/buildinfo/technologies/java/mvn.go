@@ -28,7 +28,7 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.3"
+	mavenDepTreeVersion = "1.1.5"
 	settingsXmlFile     = "settings.xml"
 )
 
@@ -122,6 +122,11 @@ func (mdt *MavenDepTreeManager) installMavenDepTreePlugin(depTreeExecDir string)
 
 func GetMavenPluginInstallationGoals(pluginPath string) []string {
 	return []string{"org.apache.maven.plugins:maven-install-plugin:3.1.1:install-file", "-Dfile=" + pluginPath, "-B"}
+}
+
+// GetMavenDepTreeVersion returns the version of the maven-dep-tree plugin
+func GetMavenDepTreeVersion() string {
+	return mavenDepTreeVersion
 }
 
 func (mdt *MavenDepTreeManager) execMavenDepTree(depTreeExecDir string) (string, error) {
