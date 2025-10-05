@@ -3,6 +3,8 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -16,7 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -154,9 +156,9 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func (auditCmd *AuditCommand) Run() (err error) {
 	isRecursiveScan := false
-	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
+			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
 	} else {
 		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
@@ -199,6 +201,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
 		)).
+		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
@@ -285,17 +288,17 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	}
 	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
 	// Initialize the BOM generator
 	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
-	}
-	// Initialize the SCA scan strategy
-	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
 	}
 	populateScanTargets(cmdResults, params)
+	// Initialize the SCA scan strategy
+	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), params.AllowPartialResults())
+	}
 	return
 }
 
@@ -308,9 +311,9 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
-		// SCANG Bom Generator Options
-		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
-		scang.WithIgnorePatterns(params.Exclusions()),
+		// Xray-Scan-Plugin Bom Generator Options
+		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
+		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -338,6 +341,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
+	cmdResults.SetGitContext(params.GitContext())
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
@@ -453,9 +457,8 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			}
 		}
 	}
-	// If no scan targets were detected, we should proceed with the scan.
-	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		// add the root directory as a target for JAS scans.
+	// If no scan targets were detected, we should still proceed with the scans.
+	if len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
 		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
 	}
 }
@@ -579,12 +582,17 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}()
 		// First download the analyzer manager if needed
 		if auditParams.customAnalyzerManagerBinaryPath == "" {
-			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
+			if generalError = jas.DownloadAnalyzerManagerIfNeeded(threadId); generalError != nil {
+				return fmt.Errorf("failed to download analyzer manager: %s", generalError.Error())
+			}
+			if scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+				return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 			}
 		} else {
-			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
+			scanner.AnalyzerManager.AnalyzerManagerFullPath = auditParams.customAnalyzerManagerBinaryPath
+			log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "using custom analyzer manager binary path")
 		}
+		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
 			if targetResult.AppsConfigModule == nil {
@@ -593,15 +601,14 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                          auditParallelRunner,
-				ServerDetails:                   serverDetails,
-				Scanner:                         scanner,
-				CustomAnalyzerManagerBinaryPath: auditParams.customAnalyzerManagerBinaryPath,
-				Module:                          appsConfigModule,
-				ConfigProfile:                   auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:                  auditParams.ScansToPerform(),
-				SourceResultsToCompare:          scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:                 secrets.SecretsScannerType,
+				Runner:                 auditParallelRunner,
+				ServerDetails:          serverDetails,
+				Scanner:                scanner,
+				Module:                 appsConfigModule,
+				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:         auditParams.ScansToPerform(),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
@@ -612,7 +619,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
-				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
+				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				ScanResults:                 targetResult,
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 				AllowPartialResults:         auditParams.AllowPartialResults(),
@@ -625,4 +632,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getSignedDescriptions(currentFormat format.OutputFormat) bool {
+	allowEmojis, err := strconv.ParseBool(os.Getenv(utils.IsAllowEmojis))
+	if err != nil {
+		// default value
+		allowEmojis = true
+	}
+	return currentFormat == format.Sarif && allowEmojis
 }

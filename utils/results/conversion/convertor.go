@@ -4,6 +4,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
@@ -11,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/tableparser"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -25,6 +27,8 @@ type ResultConvertParams struct {
 	IncludeVulnerabilities bool
 	// If true and commandType.IsTargetBinary(), binary inner paths in results will be converted to the CI job file (relevant only for SARIF)
 	PatchBinaryPaths bool
+	// Control if SAST results should be parsed directly into the CycloneDX BOM, if false SARIF runs will be attached at "sast" attribute, diverting from the CDX spec (relevant only for CycloneDX)
+	ParseSastResultDirectlyIntoCDX bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool
 	// Control if the output should include SBOM information (relevant only for Table)
@@ -50,7 +54,7 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 // Parse a stream of results and convert them to the desired format T
 type ResultsStreamFormatParser[T interface{}] interface {
 	// Reset the convertor to start converting a new command results
-	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) error
+	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewTargetResults(target results.ScanTarget, errors ...error) error
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
@@ -72,8 +76,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Get() (T, error)
 }
 
-func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cyclonedx.BOM, err error) {
-	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter()
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cdxutils.FullBOM, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter(c.Params.ParseSastResultDirectlyIntoCDX)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
@@ -103,7 +107,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 	if params.IsMultipleRoots != nil {
 		multipleTargets = *params.IsMultipleRoots
 	}
-	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets, cmdResults.GeneralError); err != nil {
+	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets, cmdResults.GitContext, cmdResults.GeneralError); err != nil {
 		return
 	}
 	for _, targetScansResults := range cmdResults.Targets {

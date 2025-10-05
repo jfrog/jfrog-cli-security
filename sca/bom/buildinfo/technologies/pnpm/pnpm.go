@@ -135,7 +135,7 @@ func calculateDependencies(executablePath, workingDir string, params technologie
 	if err != nil {
 		return
 	}
-	log.Debug("Pnpm ls command output:\n", string(npmLsCmdContent))
+	log.Verbose("Pnpm ls command output:\n", string(npmLsCmdContent))
 	output := &[]pnpmLsProject{}
 	if err = json.Unmarshal(npmLsCmdContent, output); err != nil {
 		return
