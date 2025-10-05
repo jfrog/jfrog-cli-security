@@ -50,14 +50,31 @@ runs:
       with:
         nuget-version: 6.11.0
     - name: Install dotnet
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5  # Try v5 for better MSBuild handling
       with:
         dotnet-version: '6.x'
+    
+    - name: Debug .NET installation
+      if: runner.os == 'macOS'
+      run: |
+        echo "🔍 Debugging .NET installation:"
+        echo "DOTNET_ROOT: $DOTNET_ROOT"
+        echo ".NET version:"
+        dotnet --version
+        echo "MSBuild in .NET SDK:"
+        find $DOTNET_ROOT -name "*MSBuild*" 2>/dev/null || echo "No MSBuild found in DOTNET_ROOT"
+        find /Users/runner/.dotnet -name "*MSBuild*" 2>/dev/null || echo "No MSBuild found in .dotnet"
+        echo "dotnet --list-sdks:"
+        dotnet --list-sdks
+      shell: bash
 
     - name: Install Mono on MacOS
-      run: brew install mono
       if: runner.os == 'macOS'
-      shell: 'bash'
+      run: |
+        echo "Installing Mono 5.2 for better .NET compatibility"
+        curl -L "https://download.mono-project.com/archive/5.2.0/macos-10-universal/MonoFramework-MDK-5.2.0.224.macos10.xamarin.universal.pkg" -o /tmp/mono-5.2.pkg
+        sudo installer -pkg /tmp/mono-5.2.pkg -target /
+      shell: bash
 
     - name: Install Mono on Linux
       run: |
