@@ -900,16 +900,16 @@ type PatchSarifParams struct {
 // This is needed in order to support and insure the content to pass the ingestion rules for JFrog platform and GitHub code scanning.
 func patchSarifRuns(params PatchSarifParams, runs ...*sarif.Run) []*sarif.Run {
 	// Prepare the runs according to the parameters
-	patchedRuns := []*sarif.Run{}
+	input, patchedRuns := []*sarif.Run{}, []*sarif.Run{}
 	if params.CopyContent {
 		for _, run := range runs {
-			patchedRuns = append(patchedRuns, sarifutils.CopyRun(run))
+			input = append(input, sarifutils.CopyRun(run))
 		}
 	} else {
-		patchedRuns = runs
+		input = runs
 	}
 	// Patch the runs to pass the ingestion rules
-	for _, run := range runs {
+	for _, run := range input {
 		// Since we run in temp directories files should be relative
 		// Patch by converting the file paths to relative paths according to the invocations
 		patchPaths(params, run)
@@ -978,19 +978,19 @@ func pathTool(params PatchSarifParams, runs ...*sarif.Run) {
 	}
 }
 
-func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
-	// Convert base on invocation for source code
-	sarifutils.ConvertRunsPathsToRelative(runs...)
-	if !(commandType == utils.DockerImage && subScanType == utils.SecretsScan) {
-		return
-	}
-	for _, run := range runs {
-		for _, result := range run.Results {
-			// For Docker secret scan, patch the logical location if not exists
-			patchDockerSecretLocations(result)
-		}
-	}
-}
+// func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
+// 	// Convert base on invocation for source code
+// 	sarifutils.ConvertRunsPathsToRelative(runs...)
+// 	if !(commandType == utils.DockerImage && subScanType == utils.SecretsScan) {
+// 		return
+// 	}
+// 	for _, run := range runs {
+// 		for _, result := range run.Results {
+// 			// For Docker secret scan, patch the logical location if not exists
+// 			patchDockerSecretLocations(result)
+// 		}
+// 	}
+// }
 
 // Patch the URI to be the file path from sha<number>/<hash>/
 // Extract the layer from the location URI, adds it as a logical location kind "layer"
@@ -1042,18 +1042,19 @@ func getScanTypeFromRule(subScanType utils.SubScanType, rule *sarif.ReportingDes
 	if rule == nil {
 		return subScanType
 	}
-	return getScanType(utils.SastScan, sarifutils.GetRuleId(rule))
+	return getScanType(subScanType, sarifutils.GetRuleId(rule))
 }
 
 func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) utils.SubScanType {
 	if result == nil {
 		return subScanType
 	}
-	return getScanType(utils.SastScan, sarifutils.GetResultRuleId(result))
+	return getScanType(subScanType, sarifutils.GetResultRuleId(result))
 }
 
 func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
 	if defaultType != "" || scanType == "" {
+		// If default type is given, use it
 		return defaultType
 	}
 	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
