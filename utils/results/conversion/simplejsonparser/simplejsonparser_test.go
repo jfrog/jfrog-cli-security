@@ -52,62 +52,62 @@ var (
 			},
 		},
 	}
-	testScaScanViolation = []services.Violation{
-		{
-			IssueId:       "XRAY-1",
-			Summary:       "summary-1",
-			Severity:      "High",
-			WatchName:     "watch-name",
-			ViolationType: "security",
-			Cves:          []services.Cve{{Id: "CVE-1", CvssV3Score: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L", Cwe: []string{"cwe-1"}}},
-			Components: map[string]services.Component{
-				"component-A": {
-					ImpactPaths: [][]services.ImpactPathNode{{
-						{ComponentId: "root"},
-						{ComponentId: "component-A"},
-					}},
-				},
-				"component-B": {
-					ImpactPaths: [][]services.ImpactPathNode{{
-						{ComponentId: "root"},
-						{ComponentId: "component-B"},
-					}},
-				},
-			},
-		},
-		{
-			IssueId:       "XRAY-2",
-			Summary:       "summary-2",
-			Severity:      "Low",
-			WatchName:     "watch-name",
-			ViolationType: "security",
-			Cves:          []services.Cve{{Id: "CVE-2", CvssV2Score: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P", Cwe: []string{"CWE-284", "NVD-CWE-noinfo"}}},
-			Components: map[string]services.Component{
-				"component-B": {
-					ImpactPaths: [][]services.ImpactPathNode{{
-						{ComponentId: "root"},
-						{ComponentId: "component-B"},
-					}},
-				},
-			},
-		},
-		{
-			IssueId:       "XRAY-3",
-			Summary:       "summary-3",
-			Severity:      "Low",
-			WatchName:     "lic-watch-name",
-			ViolationType: "license",
-			LicenseKey:    "license-1",
-			Components: map[string]services.Component{
-				"component-B": {
-					ImpactPaths: [][]services.ImpactPathNode{{
-						{ComponentId: "root"},
-						{ComponentId: "component-B"},
-					}},
-				},
-			},
-		},
-	}
+	// testScaScanViolation = []services.Violation{
+	// 	{
+	// 		IssueId:       "XRAY-1",
+	// 		Summary:       "summary-1",
+	// 		Severity:      "High",
+	// 		WatchName:     "watch-name",
+	// 		ViolationType: "security",
+	// 		Cves:          []services.Cve{{Id: "CVE-1", CvssV3Score: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L", Cwe: []string{"cwe-1"}}},
+	// 		Components: map[string]services.Component{
+	// 			"component-A": {
+	// 				ImpactPaths: [][]services.ImpactPathNode{{
+	// 					{ComponentId: "root"},
+	// 					{ComponentId: "component-A"},
+	// 				}},
+	// 			},
+	// 			"component-B": {
+	// 				ImpactPaths: [][]services.ImpactPathNode{{
+	// 					{ComponentId: "root"},
+	// 					{ComponentId: "component-B"},
+	// 				}},
+	// 			},
+	// 		},
+	// 	},
+	// 	{
+	// 		IssueId:       "XRAY-2",
+	// 		Summary:       "summary-2",
+	// 		Severity:      "Low",
+	// 		WatchName:     "watch-name",
+	// 		ViolationType: "security",
+	// 		Cves:          []services.Cve{{Id: "CVE-2", CvssV2Score: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P", Cwe: []string{"CWE-284", "NVD-CWE-noinfo"}}},
+	// 		Components: map[string]services.Component{
+	// 			"component-B": {
+	// 				ImpactPaths: [][]services.ImpactPathNode{{
+	// 					{ComponentId: "root"},
+	// 					{ComponentId: "component-B"},
+	// 				}},
+	// 			},
+	// 		},
+	// 	},
+	// 	{
+	// 		IssueId:       "XRAY-3",
+	// 		Summary:       "summary-3",
+	// 		Severity:      "Low",
+	// 		WatchName:     "lic-watch-name",
+	// 		ViolationType: "license",
+	// 		LicenseKey:    "license-1",
+	// 		Components: map[string]services.Component{
+	// 			"component-B": {
+	// 				ImpactPaths: [][]services.ImpactPathNode{{
+	// 					{ComponentId: "root"},
+	// 					{ComponentId: "component-B"},
+	// 				}},
+	// 			},
+	// 		},
+	// 	},
+	// }
 )
 
 func TestSortVulnerabilityOrViolationRows(t *testing.T) {

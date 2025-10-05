@@ -126,7 +126,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if !jasEntitled {
 			continue
 		}
-		if err = parseJasResults(params, parser, targetScansResults, cmdResults.CmdType); err != nil {
+		if err = parseJasResults(params, parser, targetScansResults); err != nil {
 			return
 		}
 	}
@@ -206,7 +206,7 @@ func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser
 	return
 }
 
-func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults, cmdType utils.CommandType) (err error) {
+func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults) (err error) {
 	if targetResults.JasResults == nil || !params.IncludeVulnerabilities {
 		return
 	}

@@ -1,17 +1,17 @@
 package policy
 
 import (
-	// "testing"
+// "testing"
 
-	// "github.com/stretchr/testify/assert"
+// "github.com/stretchr/testify/assert"
 
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+// "github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-client-go/xray/services"
+// "github.com/jfrog/jfrog-cli-security/utils"
+// "github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
+// "github.com/jfrog/jfrog-cli-security/utils/jasutils"
+// "github.com/jfrog/jfrog-cli-security/utils/results"
+// "github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 // func TestViolationFailErrors(t *testing.T) {
@@ -186,73 +186,73 @@ import (
 // 	}
 // }
 
-func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, skipNotApplicable *bool) *results.SecurityCommandResults {
-	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
-	cveId := "CVE-2024-1234"
+// func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, skipNotApplicable *bool) *results.SecurityCommandResults {
+// 	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
+// 	cveId := "CVE-2024-1234"
 
-	target := &results.TargetResults{
-		ScanTarget: results.ScanTarget{Target: "test-target"},
-		ScaResults: &results.ScaScanResults{},
-	}
+// 	target := &results.TargetResults{
+// 		ScanTarget: results.ScanTarget{Target: "test-target"},
+// 		ScaResults: &results.ScaScanResults{},
+// 	}
 
-	violation := services.Violation{
-		Components:    components,
-		ViolationType: violationutils.ScaViolationTypeSecurity.String(),
-		FailBuild:     true,
-		Cves:          []services.Cve{{Id: cveId}},
-		Severity:      "High",
-	}
+// 	violation := services.Violation{
+// 		Components:    components,
+// 		ViolationType: violationutils.ScaViolationTypeSecurity.String(),
+// 		FailBuild:     true,
+// 		Cves:          []services.Cve{{Id: cveId}},
+// 		Severity:      "High",
+// 	}
 
-	if skipNotApplicable != nil {
-		violation.Policies = []services.Policy{{SkipNotApplicable: *skipNotApplicable}}
-	}
+// 	if skipNotApplicable != nil {
+// 		violation.Policies = []services.Policy{{SkipNotApplicable: *skipNotApplicable}}
+// 	}
 
-	if useNewViolations {
-		// target.ScaResults.Violations = []services.Violation{violation}
-	} else {
-		target.ScaResults.DeprecatedXrayResults = []results.ScanResult[services.ScanResponse]{
-			{
-				Scan: services.ScanResponse{
-					Violations: []services.Violation{violation},
-				},
-			},
-		}
-	}
+// 	if useNewViolations {
+// 		// target.ScaResults.Violations = []services.Violation{violation}
+// 	} else {
+// 		target.ScaResults.DeprecatedXrayResults = []results.ScanResult[services.ScanResponse]{
+// 			{
+// 				Scan: services.ScanResponse{
+// 					Violations: []services.Violation{violation},
+// 				},
+// 			},
+// 		}
+// 	}
 
-	if hasJasResults {
-		target.JasResults = &results.JasScansResults{
-			ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
-				{
-					Scan: []*sarif.Run{
-						{
-							Tool: &sarif.Tool{
-								Driver: &sarif.ToolComponent{
-									Rules: []*sarif.ReportingDescriptor{
-										{
-											ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId(cveId)),
-											Properties: &sarif.PropertyBag{
-												Properties: map[string]interface{}{
-													jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	} else {
-		target.JasResults = nil
-	}
+// 	if hasJasResults {
+// 		target.JasResults = &results.JasScansResults{
+// 			ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
+// 				{
+// 					Scan: []*sarif.Run{
+// 						{
+// 							Tool: &sarif.Tool{
+// 								Driver: &sarif.ToolComponent{
+// 									Rules: []*sarif.ReportingDescriptor{
+// 										{
+// 											ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId(cveId)),
+// 											Properties: &sarif.PropertyBag{
+// 												Properties: map[string]interface{}{
+// 													jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
+// 												},
+// 											},
+// 										},
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}
+// 	} else {
+// 		target.JasResults = nil
+// 	}
 
-	return &results.SecurityCommandResults{
-		EntitledForJas: true,
-		Targets:        []*results.TargetResults{target},
-	}
-}
+// 	return &results.SecurityCommandResults{
+// 		EntitledForJas: true,
+// 		Targets:        []*results.TargetResults{target},
+// 	}
+// }
 
 // func TestShouldSkipNotApplicable(t *testing.T) {
 // 	testCases := []struct {

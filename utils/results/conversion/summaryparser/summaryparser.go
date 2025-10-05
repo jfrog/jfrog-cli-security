@@ -367,18 +367,18 @@ func jasHandler(count *formats.ResultSummary, location *sarif.Location, severity
 	(*count)[severity.String()][resultStatus] += 1
 }
 
-func getJasScansWatches(scans ...results.ScanResult[[]*sarif.Run]) (watches []string) {
-	for _, scanInfo := range scans {
-		for _, run := range scanInfo.Scan {
-			for _, result := range run.Results {
-				if watch := sarifutils.GetResultWatches(result); watch != "" {
-					watches = append(watches, watch)
-				}
-			}
-		}
-	}
-	return
-}
+// func getJasScansWatches(scans ...results.ScanResult[[]*sarif.Run]) (watches []string) {
+// 	for _, scanInfo := range scans {
+// 		for _, run := range scanInfo.Scan {
+// 			for _, result := range run.Results {
+// 				if watch := sarifutils.GetResultWatches(result); watch != "" {
+// 					watches = append(watches, watch)
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return
+// }
 
 func (sc *CmdResultsSummaryConverter) parseSecretsViolations(secretsViolations []violationutils.JasViolation) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
