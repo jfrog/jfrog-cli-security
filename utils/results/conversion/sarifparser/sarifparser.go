@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 const (
@@ -104,7 +105,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
 	sc.current = sarif.NewReport()
 	// Reset the current stream general information
 	sc.currentCmdType = cmdType

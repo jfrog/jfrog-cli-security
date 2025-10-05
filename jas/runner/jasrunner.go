@@ -23,10 +23,9 @@ import (
 )
 
 type JasRunnerParams struct {
-	Runner                          *utils.SecurityParallelRunner
-	ServerDetails                   *config.ServerDetails
-	Scanner                         *jas.JasScanner
-	CustomAnalyzerManagerBinaryPath string
+	Runner        *utils.SecurityParallelRunner
+	ServerDetails *config.ServerDetails
+	Scanner       *jas.JasScanner
 	// Module flags
 	Module        jfrogappsconfig.Module
 	ConfigProfile *services.ConfigProfile
@@ -52,37 +51,43 @@ type JasRunnerParams struct {
 // Cves are only available after the SCA scan is performed, so we need a provider to dynamically pass the discovered cves.
 type CveProvider func() (directCves []string, indirectCves []string)
 
-func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
-	// Set the analyzer manager executable path.
-	if params.CustomAnalyzerManagerBinaryPath != "" {
-		params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = params.CustomAnalyzerManagerBinaryPath
-	} else if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
-		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
-	}
-	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", params.Scanner.AnalyzerManager.AnalyzerManagerFullPath))
+func AddJasScannersTasks(params JasRunnerParams) error {
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
-		return
+
+	var errorsCollection error
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
-		return
+		return errorsCollection
 	}
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
-		return
+
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
+
 	if !runAllScanners {
 		// Binary scan only supports secrets and contextual scans.
-		return
+		return errorsCollection
 	}
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
-		return
+
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params))
+
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
+	}
+	return errorsCollection
 }
 
 func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
