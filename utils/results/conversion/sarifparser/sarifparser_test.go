@@ -425,7 +425,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cmdType: utils.Build,
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(filepath.ToSlash(filepath.Join("dir", "file")))),
@@ -555,7 +555,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "binary"))),
+					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "binary")),
 				),
 			},
 			expectedResults: []*sarif.Run{
@@ -571,7 +571,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultInPath(filepath.Join(wd, "Package-Descriptor")),
+					sarifutils.CreateDummyResultInPath("Package-Descriptor"),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
@@ -589,7 +589,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.SecretsScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPathWithPartialFingerprint(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
+					sarifutils.CreateDummyResultInPathWithPartialFingerprint(filepath.Join("dir", "file"), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
@@ -608,7 +608,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			isJasViolations: true,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
 				),
 			},
 			expectedResults: []*sarif.Run{
