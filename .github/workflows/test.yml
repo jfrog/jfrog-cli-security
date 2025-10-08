@@ -58,6 +58,27 @@ jobs:
       - name: Run Go vet
         run: go vet -v ./...
   
+  NuGet_Unit_Tests_Fast:
+    name: "[${{ matrix.os }}] NuGet Unit Tests (Fast Check)"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos ]  # Only test macOS where the issue occurs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test only NuGet unit tests for fast feedback
+      - name: Run NuGet tests only
+        run: go test ./sca/bom/buildinfo/technologies/nuget -v -timeout 5m
+
   Unit_Tests:
     name: "[${{ matrix.os }}] Unit Tests"
     needs: Pretest
@@ -98,6 +119,8 @@ jobs:
       matrix:
         os: [ ubuntu, windows, macos ]
         suite:
+          - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
+            testFlags: '--test.audit.C'
           - name: 'General Suite (Detection, MultiTech, NoTech...)'
             testFlags: '--test.audit'
           - name: 'JAS Suite'
@@ -110,8 +133,6 @@ jobs:
             testFlags: '--test.audit.Java'
           - name: 'Go Suite (Go Modules, Dep, Glide)'
             testFlags: '--test.audit.Go'
-          - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
-            testFlags: '--test.audit.C'
           - name: 'Cocoapods Suite'
             testFlags: '--test.audit.Cocoapods'
           - name: 'Swift Suite'
