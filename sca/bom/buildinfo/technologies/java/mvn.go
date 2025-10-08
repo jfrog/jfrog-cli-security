@@ -28,7 +28,7 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.1"
+	mavenDepTreeVersion = "1.1.5"
 	settingsXmlFile     = "settings.xml"
 )
 
@@ -124,6 +124,10 @@ func GetMavenPluginInstallationGoals(pluginPath string) []string {
 	return []string{"org.apache.maven.plugins:maven-install-plugin:3.1.1:install-file", "-Dfile=" + pluginPath, "-B"}
 }
 
+func GetMavenDepTreeVersion() string {
+	return mavenDepTreeVersion
+}
+
 func (mdt *MavenDepTreeManager) execMavenDepTree(depTreeExecDir string) (string, error) {
 	if mdt.cmdName == Tree {
 		return mdt.runTreeCmd(depTreeExecDir)
@@ -184,7 +188,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if err != nil {
 		stringOutput := string(cmdOutput)
 		if len(cmdOutput) > 0 {
-			log.Info(stringOutput)
+			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)

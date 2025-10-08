@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -44,7 +45,7 @@ func (sjc *CmdResultsSimpleJsonConverter) Get() (formats.SimpleJsonResults, erro
 	return *sjc.current, nil
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, generalError error) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
 	sjc.multipleRoots = multipleTargets
@@ -66,7 +67,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -79,9 +80,9 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target result
 		}
 	}
 	if violations {
-		err = sjc.parseScaViolations(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
+		err = sjc.parseScaViolations(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	} else {
-		err = sjc.parseScaVulnerabilities(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
+		err = sjc.parseScaVulnerabilities(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	}
 	return
 }
@@ -184,7 +185,7 @@ func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -193,14 +194,14 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTar
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
-	return sjc.parseScaViolations(target, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
+	return sjc.parseScaViolations(target, descriptors, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, scaResponse, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
+	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, descriptors, scaResponse, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
 	if err != nil {
 		return
 	}
@@ -210,11 +211,11 @@ func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.Scan
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, scaResponse, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
+	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, descriptors, scaResponse, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
 	if err != nil || len(vulSimpleJson) == 0 {
 		return
 	}
@@ -314,12 +315,13 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 	return
 }
 
-func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services.ScanResponse, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseViolationRow, []formats.OperationalRiskViolationRow, error) {
+func PrepareSimpleJsonViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseViolationRow, []formats.OperationalRiskViolationRow, error) {
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
 	var licenseViolationsRows []formats.LicenseViolationRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
 	_, _, err := results.ForEachScanGraphViolation(
 		target,
+		descriptors,
 		scaResponse.Violations,
 		jasEntitled,
 		applicabilityRuns,
@@ -330,10 +332,11 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 	return securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err
 }
 
-func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
+func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
 	err := results.ForEachScanGraphVulnerability(
 		target,
+		descriptors,
 		scaResponse.Vulnerabilities,
 		entitledForJas,
 		applicabilityRuns,

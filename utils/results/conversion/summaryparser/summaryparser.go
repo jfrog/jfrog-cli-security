@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -37,7 +38,7 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	return *sc.current, nil
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ error) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
 	sc.current = &formats.ResultsSummary{}
 	sc.entitledForJas = entitledForJas
 	return
@@ -71,14 +72,14 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if violations {
-		return sc.parseScaViolations(target, scaResponse, applicableScan...)
+		return sc.parseScaViolations(target, descriptors, scaResponse, applicableScan...)
 	}
-	return sc.parseScaVulnerabilities(target, scaResponse, applicableScan...)
+	return sc.parseScaVulnerabilities(target, descriptors, scaResponse, applicableScan...)
 }
 
-func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
 		return
 	}
@@ -106,6 +107,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	parsed := datastructures.MakeSet[string]()
 	watches, failBuild, err := results.ForEachScanGraphViolation(
 		target,
+		descriptors,
 		scaResponse.Scan.Violations,
 		sc.entitledForJas,
 		applicabilityRuns,
@@ -175,7 +177,7 @@ func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(pars
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -203,6 +205,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	parsed := datastructures.MakeSet[string]()
 	err = results.ForEachScanGraphVulnerability(
 		target,
+		descriptors,
 		scaResponse.Scan.Vulnerabilities,
 		sc.entitledForJas,
 		applicabilityRuns,
@@ -304,7 +307,7 @@ func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.Pa
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	scanResponse := results.ScanResult[services.ScanResponse]{
 		Scan: services.ScanResponse{
 			Violations: violations,
@@ -313,7 +316,7 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget,
 			XrayDataUrl: "",
 		},
 	}
-	return sc.parseScaViolations(target, scanResponse, applicableScan...)
+	return sc.parseScaViolations(target, descriptors, scanResponse, applicableScan...)
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {

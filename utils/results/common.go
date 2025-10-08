@@ -89,6 +89,7 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 	// Here we iterate the new violation results and check if any of them should fail the build.
 	_, _, err := ForEachScanGraphViolation(
 		target.ScanTarget,
+		[]string{},
 		newViolations,
 		entitledForJas,
 		jasApplicabilityResults,
@@ -105,6 +106,7 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 		deprecatedViolations := result.Scan.Violations
 		_, _, err = ForEachScanGraphViolation(
 			target.ScanTarget,
+			[]string{},
 			deprecatedViolations,
 			entitledForJas,
 			jasApplicabilityResults,
@@ -196,7 +198,7 @@ func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIss
 }
 
 // ForEachScanGraphVulnerability allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScanGraphVulnerabilityFunc) error {
+func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScanGraphVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -206,7 +208,7 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		if err != nil {
 			return err
 		}
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(getBestMatch(target, descriptors), vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -219,7 +221,20 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 	return nil
 }
 
-func ForEachScaBomVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
+// Get the best match for the scan target in the sca results
+func getBestMatch(target ScanTarget, descriptors []string) string {
+	// Get the one that it's directory is the prefix of the target and the shortest
+	// This is for multi module projects where there are multiple sca results for the same target
+	var bestMatch string
+	for _, descriptor := range descriptors {
+		if strings.HasPrefix(descriptor, target.Target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
+			bestMatch = descriptor
+		}
+	}
+	return bestMatch
+}
+
+func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
 	if handler == nil || bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
 		return nil
 	}
@@ -278,7 +293,7 @@ func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity sev
 }
 
 // Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func ForEachScanGraphViolation(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScanGraphViolationFunc, licenseHandler ParseScanGraphViolationFunc, operationalRiskHandler ParseScanGraphViolationFunc) (watches []string, failBuild bool, err error) {
+func ForEachScanGraphViolation(target ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScanGraphViolationFunc, licenseHandler ParseScanGraphViolationFunc, operationalRiskHandler ParseScanGraphViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -288,7 +303,7 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
 		// Prepare violation information
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(getBestMatch(target, descriptors), violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)
 			continue
@@ -1362,7 +1377,7 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 
 func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
 	target := ScanTarget{}
-	if err = ForEachScanGraphVulnerability(target, scanResponse.Vulnerabilities, false, []*sarif.Run{}, ParseScanGraphVulnerabilityToSbom(destination)); err != nil {
+	if err = ForEachScanGraphVulnerability(target, []string{}, scanResponse.Vulnerabilities, false, []*sarif.Run{}, ParseScanGraphVulnerabilityToSbom(destination)); err != nil {
 		return
 	}
 	return ForEachLicense(target, scanResponse.Licenses, ParseScanGraphLicenseToSbom(destination))
@@ -1395,7 +1410,7 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 		if vulnerability.ExtendedInformation != nil {
 			extendedInformation = vulnerability.ExtendedInformation.FullDescription
 		}
-		for i := 0; i < len(cveIds); i++ {
+		for i := range cveIds {
 			params := cdxutils.CdxVulnerabilityParams{
 				Ref:         cveIds[i],
 				Ratings:     ratings[i],

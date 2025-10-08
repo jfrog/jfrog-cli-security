@@ -15,6 +15,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type CmdResultsTableConverter struct {
@@ -51,16 +52,16 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 	}, nil
 }
 
-func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
-	return tc.simpleJsonConvertor.Reset(cmdType, multiScanId, xrayVersion, entitledForJas, multipleTargets, generalError)
+func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
+	return tc.simpleJsonConvertor.Reset(cmdType, multiScanId, xrayVersion, entitledForJas, multipleTargets, gitContext, generalError)
 }
 
 func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(target, violations, scaResponse, applicableScan...)
+func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(target, descriptors, violations, scaResponse, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
@@ -75,8 +76,8 @@ func (tc *CmdResultsTableConverter) ParseCVEs(target results.ScanTarget, enriche
 	return tc.simpleJsonConvertor.ParseCVEs(target, enrichedSbom, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, violations, applicableScan...)
+func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseViolations(target, descriptors, violations, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {

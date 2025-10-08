@@ -7,22 +7,23 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
+	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
-	*xrayutils.AuditBasicParams
+	*AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
@@ -42,8 +43,17 @@ type AuditParams struct {
 
 func NewAuditParams() *AuditParams {
 	return &AuditParams{
-		AuditBasicParams: &xrayutils.AuditBasicParams{},
+		AuditBasicParams: &AuditBasicParams{},
 	}
+}
+
+func (params *AuditParams) SetGitContext(gitContext *xscServices.XscGitInfoContext) *AuditParams {
+	params.gitContext = gitContext
+	return params
+}
+
+func (params *AuditParams) GitContext() *xscServices.XscGitInfoContext {
+	return params.gitContext
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {
@@ -108,7 +118,7 @@ func (params *AuditParams) StartTime() time.Time {
 	return params.startTime
 }
 
-func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
+func (params *AuditParams) SetGraphBasicParams(gbp *AuditBasicParams) *AuditParams {
 	params.AuditBasicParams = gbp
 	return params
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/froggit-go/vcsclient"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -226,7 +227,7 @@ func TestCreateGithubSnapshotFromSbom(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			var bom *cyclonedx.BOM
+			var bom *cdxutils.FullBOM
 			if test.components == nil {
 				bom = nil
 			} else {
@@ -264,15 +265,16 @@ func TestCreateGithubSnapshotFromSbom(t *testing.T) {
 }
 
 // createTestBOM creates a test BOM with the specified components and dependencies
-func createTestBOM(components []cyclonedx.Component, dependencies []cyclonedx.Dependency) *cyclonedx.BOM {
-	bom := cyclonedx.NewBOM()
+func createTestBOM(components []cyclonedx.Component, dependencies []cyclonedx.Dependency) *cdxutils.FullBOM {
+	innerBom := cyclonedx.NewBOM()
 	if len(components) > 0 {
-		bom.Components = &components
+		innerBom.Components = &components
 	}
 	if len(dependencies) > 0 {
-		bom.Dependencies = &dependencies
+		innerBom.Dependencies = &dependencies
 	}
-	return bom
+	fullBom := cdxutils.FullBOM{BOM: *innerBom}
+	return &fullBom
 }
 
 // createTestComponent creates a test component with evidence occurrences

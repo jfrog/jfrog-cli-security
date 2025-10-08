@@ -53,6 +53,12 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
+
+    - name: Install Mono on MacOS
+      run: brew install mono
+      if: runner.os == 'macOS'
+      shell: 'bash'
+
     - name: Install Mono on Linux
       run: |
         sudo apt-get update
@@ -64,7 +70,7 @@ runs:
 
       if: runner.os == 'Linux'
       shell: 'bash'
-    
+
     - name: Setup Python3
       uses: actions/setup-python@v5
       with:
@@ -96,3 +102,11 @@ runs:
         branch: swift-6.1-release
         tag: 6.1-RELEASE
       if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows'}}
+
+    # Ensure Java 11 remains active after all installations (Swift setup might override it)
+    - name: Force Java 11 on Windows
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        echo "JAVA_HOME=$env:JAVA_HOME_11_X64" >> $env:GITHUB_ENV
+        echo "$env:JAVA_HOME_11_X64\bin" >> $env:GITHUB_PATH
