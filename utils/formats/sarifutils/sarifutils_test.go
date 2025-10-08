@@ -12,6 +12,7 @@ import (
 )
 
 func TestAggregateMultipleRunsIntoSingle(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		runs           []*sarif.Run
 		expectedOutput *sarif.Run

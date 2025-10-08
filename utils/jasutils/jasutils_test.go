@@ -6,10 +6,12 @@ import (
 )
 
 func TestCveToApplicabilityRuleId(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "applic_cve", CveToApplicabilityRuleId("cve"))
 }
 
 func TestApplicabilityRuleIdToCve(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		ruleId         string
 		expectedOutput string

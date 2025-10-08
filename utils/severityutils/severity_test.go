@@ -11,6 +11,7 @@ import (
 )
 
 func TestParseSeverity(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		input          string
 		isSarifFormat  bool
@@ -38,6 +39,7 @@ func TestParseSeverity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s (isSarifInput=%t)", tc.input, tc.isSarifFormat), func(t *testing.T) {
+			t.Parallel()
 			output, err := ParseSeverity(tc.input, tc.isSarifFormat)
 			if tc.expectedError != nil {
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
@@ -50,6 +52,7 @@ func TestParseSeverity(t *testing.T) {
 }
 
 func TestGetSeverityScoreFloat64(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		severity Severity
@@ -64,6 +67,7 @@ func TestGetSeverityScoreFloat64(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actual := GetSeverityScoreFloat64(tc.severity, tc.status)
 			assert.NotNil(t, actual)
 			assert.InDelta(t, tc.expected, *actual, 0.0001)
@@ -72,6 +76,7 @@ func TestGetSeverityScoreFloat64(t *testing.T) {
 }
 
 func TestGetCvssScore(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -83,6 +88,7 @@ func TestGetCvssScore(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actual := GetCvssScore(tc.input)
 			if tc.expected == nil {
 				assert.Nil(t, actual)
@@ -95,6 +101,7 @@ func TestGetCvssScore(t *testing.T) {
 }
 
 func TestSeverityToCycloneDxSeverity(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    Severity
@@ -108,6 +115,7 @@ func TestSeverityToCycloneDxSeverity(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actual := SeverityToCycloneDxSeverity(tc.input)
 			assert.Equal(t, tc.expected, actual)
 		})
@@ -115,6 +123,7 @@ func TestSeverityToCycloneDxSeverity(t *testing.T) {
 }
 
 func TestCycloneDxSeverityToSeverity(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    cyclonedx.Severity
@@ -128,6 +137,7 @@ func TestCycloneDxSeverityToSeverity(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actual := CycloneDxSeverityToSeverity(tc.input)
 			assert.Equal(t, tc.expected, actual)
 		})
@@ -135,6 +145,7 @@ func TestCycloneDxSeverityToSeverity(t *testing.T) {
 }
 
 func TestCreateSeverityRating(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		severity    Severity
@@ -149,6 +160,7 @@ func TestCreateSeverityRating(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rating := CreateSeverityRating(tc.severity, tc.status, tc.service)
 			assert.Equal(t, tc.service.Name, rating.Source.Name)
 			assert.Equal(t, tc.expSeverity, rating.Severity)
