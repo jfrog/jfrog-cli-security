@@ -669,7 +669,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
 		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), params.AllowPartialResults())
+			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), params.AllowPartialResults())
 		}
 	}
 	return cmdResults
@@ -700,7 +700,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 	)
 	// Fetch violations from Xray
 	if err = policy.EnrichWithGeneratedViolations(generator, cmdResults); err != nil {
-		return fmt.Errorf("failed to fetch violations: %s", err.Error())
+		return fmt.Errorf("failed to enrich with violations: %s", err.Error())
 	}
 	return
 }

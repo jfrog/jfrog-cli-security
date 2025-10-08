@@ -350,15 +350,15 @@ func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, sca
 	return
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (resultsFileFullPath string, err error) {
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, prefix, suffix string, threadId int) (resultsFileFullPath string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
-	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
+	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(prefix), GetCurrentTimeUnix(), suffix))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, prefix, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
-		return "", fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+		return "", fmt.Errorf("failed to write %s scan results to file: %s", prefix, err.Error())
 	}
 	return
 }
