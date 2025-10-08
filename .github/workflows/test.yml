@@ -85,7 +85,16 @@ jobs:
         with:
           install-swift: 'true'
 
-      # Test and generate code coverage
+      # Test and generate code coverage  
+      - name: Show runner specs
+        run: |
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Number of CPUs:"
+          nproc || sysctl -n hw.ncpu || echo $NUMBER_OF_PROCESSORS
+          echo "Memory info:"
+          free -h || vm_stat || systeminfo | findstr "Total Physical Memory"
+        shell: bash
+        
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
