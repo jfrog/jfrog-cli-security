@@ -54,26 +54,18 @@ runs:
       with:
         dotnet-version: '6.x'
     
-    - name: Debug .NET installation
-      if: runner.os == 'macOS'
-      run: |
-        echo "🔍 Debugging .NET installation:"
-        echo "DOTNET_ROOT: $DOTNET_ROOT"
-        echo ".NET version:"
-        dotnet --version
-        echo "MSBuild in .NET SDK:"
-        find $DOTNET_ROOT -name "*MSBuild*" 2>/dev/null || echo "No MSBuild found in DOTNET_ROOT"
-        find /Users/runner/.dotnet -name "*MSBuild*" 2>/dev/null || echo "No MSBuild found in .dotnet"
-        echo "dotnet --list-sdks:"
-        dotnet --list-sdks
-      shell: bash
 
-    - name: Install Mono on MacOS
+    - name: Install Mono on MacOS with MSBuild environment setup
       if: runner.os == 'macOS'
       run: |
-        echo "Installing Mono 5.2 for better .NET compatibility"
-        curl -L "https://download.mono-project.com/archive/5.2.0/macos-10-universal/MonoFramework-MDK-5.2.0.224.macos10.xamarin.universal.pkg" -o /tmp/mono-5.2.pkg
-        sudo installer -pkg /tmp/mono-5.2.pkg -target /
+        echo "Installing modern Mono with .NET MSBuild integration"
+        brew install mono
+        
+        # Set MSBuild environment variables to use .NET SDK MSBuild instead of Mono's
+        echo "MSBUILD_EXE_PATH=$HOME/.dotnet/sdk/6.0.428/MSBuild.dll" >> $GITHUB_ENV
+        echo "MSBuildSDKsPath=$HOME/.dotnet/sdk/6.0.428/Sdks" >> $GITHUB_ENV
+        
+        echo "Configured to use .NET MSBuild with Mono runtime"
       shell: bash
 
     - name: Install Mono on Linux
