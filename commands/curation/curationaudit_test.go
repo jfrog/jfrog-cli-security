@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -833,7 +834,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
 				require.NoError(t, err)
 				cleanUpTestDirChange()
-				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
+				return []string{"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
 			},
 			expectedBuildRequest: map[string]bool{
 				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
