@@ -124,6 +124,10 @@ func GetMavenPluginInstallationGoals(pluginPath string) []string {
 	return []string{"org.apache.maven.plugins:maven-install-plugin:3.1.1:install-file", "-Dfile=" + pluginPath, "-B"}
 }
 
+func GetMavenDepTreeVersion() string {
+	return mavenDepTreeVersion
+}
+
 func (mdt *MavenDepTreeManager) execMavenDepTree(depTreeExecDir string) (string, error) {
 	if mdt.cmdName == Tree {
 		return mdt.runTreeCmd(depTreeExecDir)
