@@ -31,7 +31,7 @@ env:
 jobs:
   Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-cores
     steps:
       - name: Remove 'safe to test' label
         uses: actions-ecosystem/action-remove-labels@v1
@@ -106,7 +106,12 @@ jobs:
   Audit_Command_Integration_Tests:
     name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -159,7 +164,12 @@ jobs:
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -188,7 +198,12 @@ jobs:
   Xray_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Xray Commands Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -215,7 +230,12 @@ jobs:
   Xsc_Integration_Tests:
     name: "[${{ matrix.os }}] XSC Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -242,7 +262,12 @@ jobs:
   Binary_Scan_Command_Integration_Tests:
     name: "[${{ matrix.os }}] Binary Scan Command Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -271,7 +296,12 @@ jobs:
   Docker_Scan_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Docker Scan Commands Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -300,7 +330,12 @@ jobs:
   Other_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Commands Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
@@ -329,7 +364,12 @@ jobs:
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
