@@ -61,7 +61,12 @@ jobs:
   Unit_Tests:
     name: "[${{ matrix.os }}] Unit Tests"
     needs: Pretest
-    runs-on: ${{ matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' || matrix.os == 'windows' && 'windows-latest-8-cores' || matrix.os == 'macos' && 'macos-latest-large' || format('{0}-latest', matrix.os) }}
+    runs-on: ${{ 
+      matrix.os == 'ubuntu' && 'ubuntu-latest-8-cores' ||
+      matrix.os == 'windows' && 'windows-latest-8-cores' || 
+      matrix.os == 'macos' && 'macos-latest-large' ||
+      format('{0}-latest', matrix.os) 
+    }}
     strategy:
       fail-fast: false
       matrix:
