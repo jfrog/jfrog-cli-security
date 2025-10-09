@@ -137,7 +137,7 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 		for _, affectedComponent := range *vulnerability.Affects {
 			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
 			if relatedComponent == nil {
-				log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
+				log.Verbose(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
 				continue
 			}
 			// Pass the vulnerability to the handler with its related information

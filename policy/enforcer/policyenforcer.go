@@ -139,17 +139,16 @@ func getViolationType(violation services.XrayViolation) utils.SubScanType {
 	return utils.ScaScan
 }
 
-func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (*cyclonedx.Component, violationutils.ScaViolation) {
-	affectedComponent, directComponents, impactPaths := locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
+func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (affectedComponent *cyclonedx.Component, scaViolation violationutils.ScaViolation) {
+	scaViolation = violationutils.ScaViolation{
+		Violation: convertToBasicViolation(violation),
+	}
+	affectedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
 	if affectedComponent == nil {
-		return nil, violationutils.ScaViolation{}
+		return
 	}
-	return affectedComponent, violationutils.ScaViolation{
-		Violation:         convertToBasicViolation(violation),
-		ImpactedComponent: *affectedComponent,
-		DirectComponents:  directComponents,
-		ImpactPaths:       impactPaths,
-	}
+	scaViolation.ImpactedComponent = *affectedComponent
+	return
 }
 
 func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (impactedComponent *cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) {
@@ -173,31 +172,36 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 		}
 	}
 	if impactedComponent == nil {
-		log.Debug(fmt.Sprintf("Could not locate component with Xray ID %s in the scan results for violation ID %s", impactedComponentXrayId, violation.Id))
+		log.Debug(fmt.Sprintf("Could not locate component %s in the scan results for (%s) violation ID %s", impactedComponentXrayId, violation.Type, violation.Id))
 	}
 	return
 }
 
 func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issueId string, impactedComponent cyclonedx.Component) (relevantVulnerability *cyclonedx.Vulnerability, contextualAnalysis *formats.Applicability) {
 	for _, target := range cmdResults.Targets {
-		if target.ScaResults == nil || target.ScaResults.Sbom == nil {
+		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Vulnerabilities == nil {
 			continue
 		}
-		var applicableRuns []*sarif.Run
+		var applicabilityRuns []*sarif.Run
 		if cmdResults.EntitledForJas && target.JasResults != nil {
-			applicableRuns = results.ScanResultsToRuns(target.JasResults.ApplicabilityScanResults)
+			applicabilityRuns = results.ScanResultsToRuns(target.JasResults.ApplicabilityScanResults)
 		}
-		if err := results.ForEachScaBomVulnerability(target.ScanTarget, target.ScaResults.Sbom, cmdResults.EntitledForJas, applicableRuns,
-			func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error {
-				if vulnerability.ID == issueId && impactedComponent.BOMRef == component.BOMRef {
+		for _, vulnerability := range *target.ScaResults.Sbom.Vulnerabilities {
+			if vulnerability.ID != issueId || vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+				continue
+			}
+			for _, affected := range *vulnerability.Affects {
+				if affected.Ref == impactedComponent.BOMRef {
 					// Found the relevant component in a vulnerability
 					relevantVulnerability = &vulnerability
-					contextualAnalysis = applicability
+					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, applicabilityRuns)
+					break
 				}
-				return nil
-			},
-		); err != nil {
-			log.Verbose(fmt.Sprintf("Failed to search for vulnerability %s in the scan results: %s", issueId, err.Error()))
+			}
+			if relevantVulnerability != nil {
+				// Found the relevant vulnerability, no need to continue searching
+				break
+			}
 		}
 	}
 	if relevantVulnerability == nil {
@@ -295,22 +299,22 @@ func convertToBasicViolation(violation services.XrayViolation) violationutils.Vi
 func convertToCveViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (cveViolations []violationutils.CveViolation) {
 	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
 		if infectedComponentXrayId == "" {
-			log.Verbose(fmt.Sprintf("Skipping CVE violation with empty infected component ID for violation ID %s", violation.Id))
+			log.Warn(fmt.Sprintf("Skipping CVE violation with empty infected component ID for violation ID %s", violation.Id))
 			continue
 		}
 		affectedComponent, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
 		if affectedComponent == nil {
-			log.Verbose(fmt.Sprintf("Skipping CVE violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
+			log.Warn(fmt.Sprintf("Skipping CVE violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
 			continue
 		}
 		for _, cve := range violation.Cves {
 			if cve.Id == "" {
-				log.Verbose(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
+				log.Warn(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
 				continue
 			}
 			vulnerability, contextualAnalysis := locateBomVulnerabilityInfo(cmdResults, cve.Id, *affectedComponent)
 			if vulnerability == nil {
-				log.Verbose(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s, violation ID %s and infected component ID %s", cve.Id, violation.Id, infectedComponentXrayId))
+				log.Warn(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s, violation ID %s and infected component ID %s", cve.Id, violation.Id, infectedComponentXrayId))
 				continue
 			}
 			cveViolation := violationutils.CveViolation{
