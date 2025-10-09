@@ -252,7 +252,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(sast ...results.ScanResult[[]
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
 	// Violations are not supported in CycloneDX
-	log.Warn("Violations are not supported in CycloneDX. Skipping violations parsing.")
 	return
 }
 

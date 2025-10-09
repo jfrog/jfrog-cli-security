@@ -53,7 +53,11 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
 	// Set violations params
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return err
+	}
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
 	if c.IsFlagSet(flags.Watches) {
@@ -73,10 +77,6 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
 	// Set output params
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
 	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
 	if err != nil {

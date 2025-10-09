@@ -32,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -212,8 +213,8 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
-		return err
+	if serverDetails.XrayUrl == "" {
+		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
 	}
 	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
 	if err = spec.ValidateSpec(specFile.Files, false, false); err != nil {
@@ -238,7 +239,11 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return err
+	}
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
 	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
@@ -261,10 +266,6 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	threads, err := pluginsCommon.GetThreadsCount(c)
-	if err != nil {
-		return err
-	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
 	}
@@ -349,11 +350,11 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
-		return err
-	}
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
+		return err
+	}
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
 	buildScanCmd := scan.NewBuildScanCommand().
@@ -422,17 +423,18 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return "", "", nil, nil, err
 	}
 	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return "", "", nil, nil, err
-	}
+
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return "", "", nil, nil, err
@@ -676,15 +678,14 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
-		return err
-	}
-	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
 	}
-	containerScanCommand := scan.NewDockerScanCommand()
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
+		return err
+	}
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
@@ -692,7 +693,8 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	containerScanCommand.SetImageTag(image).
+	containerScanCommand := scan.NewDockerScanCommand().
+		SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetServerDetails(serverDetails).

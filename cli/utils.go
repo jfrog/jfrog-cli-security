@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -35,7 +36,7 @@ func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.Serv
 	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
 }
 
-func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
+func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails, format outputFormat.OutputFormat) error {
 	if serverDetails.XrayUrl == "" {
 		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
 	}
@@ -51,6 +52,9 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 	}
 	if contextFlag > 1 {
 		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
+	}
+	if contextFlag > 0 && format == outputFormat.CycloneDx {
+		return errorutils.CheckErrorf("Violations are not supported in CycloneDX format.")
 	}
 	return nil
 }
