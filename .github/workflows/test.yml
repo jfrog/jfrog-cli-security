@@ -89,6 +89,16 @@ jobs:
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
+      # Test Reporter - Shows pass/fail summary
+      - name: Unit Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: '${{ matrix.os }} Unit Tests'
+          path: '**/junit*.xml'
+          reporter: java-junit
+          fail-on-error: false
+
   Audit_Command_Integration_Tests:
     name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
     needs: Pretest
@@ -142,6 +152,16 @@ jobs:
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
 
+      # Test Reporter - Shows pass/fail summary
+      - name: Audit Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: '${{ matrix.os }} ${{ matrix.suite.name }}'
+          path: '**/junit*.xml'
+          reporter: java-junit
+          fail-on-error: false
+
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
     needs: Pretest
@@ -170,6 +190,16 @@ jobs:
       # Test
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
+
+      # Test Reporter - Shows pass/fail summary  
+      - name: Artifactory Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: '${{ matrix.os }} Artifactory Integration Tests'
+          path: '**/junit*.xml'
+          reporter: java-junit
+          fail-on-error: false
     
   Xray_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Xray Commands Integration Tests"

@@ -1,0 +1,41 @@
+name: 'Test Summary'
+description: 'Generate test summaries and job summaries for test results'
+
+inputs:
+  test-name:
+    description: 'Name of the test suite'
+    required: true
+  test-type:
+    description: 'Type/description of tests being run'
+    required: true
+  os:
+    description: 'Operating system'
+    required: true
+  additional-info:
+    description: 'Additional information to include in summary'
+    required: false
+    default: ''
+  junit-path:
+    description: 'Path pattern for JUnit XML files'
+    required: false
+    default: '**/*junit*.xml'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Test Summary
+      uses: test-summary/action@v2
+      with:
+        paths: ${{ inputs.junit-path }}
+      if: always()
+
+    - name: Generate Job Summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### 🧪 ${{ inputs.test-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "📊 **Test Type:** ${{ inputs.test-type }}" >> $GITHUB_STEP_SUMMARY
+        echo "🖥️ **OS:** ${{ inputs.os }}" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${{ inputs.additional-info }}" ]; then
+          echo "${{ inputs.additional-info }}" >> $GITHUB_STEP_SUMMARY
+        fi
