@@ -1110,6 +1110,13 @@ func TestDepTreeToSbom(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			components, dependencies := DepsTreeToSbom(test.depTrees...)
+			if dependencies != nil {
+				for i := range *dependencies {
+					if (*dependencies)[i].Dependencies != nil {
+						sort.Strings(*(*dependencies)[i].Dependencies)
+					}
+				}
+			}
 			assert.Equal(t, test.expectedComponents, components)
 			assert.Equal(t, test.expectedDependencies, dependencies)
 		})
