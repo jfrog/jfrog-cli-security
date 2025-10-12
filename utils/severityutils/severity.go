@@ -288,14 +288,6 @@ func GetSeverity(severity string) Severity {
 	return parsed
 }
 
-func GetSarifSeverityLevel(severity string) SarifSeverityLevel {
-	sarifLevel, err := ParseToSarifSeverityLevel(severity)
-	if err != nil {
-		return LevelNone
-	}
-	return sarifLevel
-}
-
 // -- Conversion functions --
 
 func SeverityToSarifSeverityLevel(severity Severity) SarifSeverityLevel {
