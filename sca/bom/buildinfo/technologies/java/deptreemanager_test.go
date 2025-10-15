@@ -33,7 +33,6 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 			"org.apache.wicket:wicket:1.3.7":      "",
 			"org.jfrog.example.gradle:shared:1.0": "",
 			"commons-lang:commons-lang:2.4":       "",
-			"commons-io:commons-io:1.2":           "",
 		},
 	}
 	expectedUniqueDeps := []string{
