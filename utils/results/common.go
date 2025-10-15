@@ -1103,10 +1103,12 @@ func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[strin
 }
 
 func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
-	dependencies = &[]string{}
+	depSet := datastructures.MakeSet[string]()
 	for _, dep := range node.Nodes {
-		*dependencies = append(*dependencies, techutils.XrayComponentIdToCdxComponentRef(dep.Id))
+		depSet.Add(techutils.XrayComponentIdToCdxComponentRef(dep.Id))
 	}
+	dependencies = &[]string{}
+	*dependencies = depSet.ToSlice()
 	return
 }
 
