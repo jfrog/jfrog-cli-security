@@ -24,7 +24,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/container"
-	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
+	containerUtils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -277,7 +277,8 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 	if !assert.NoError(t, dockerPullCommand.Run()) {
 		return
 	}
-	defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+	// TODO: wait for service to be moved to jfrog-cli-artifactory and import from there
+	// defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 	// Run docker scan on image
 	cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
 	if validateSecrets {
@@ -321,7 +322,8 @@ func runAdvancedSecurityDockerScan(t *testing.T, testCli *coreTests.JfrogCli, im
 	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
 	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
 	if assert.NoError(t, dockerPullCommand.Run()) {
-		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+		// TODO: wait for service to be moved to jfrog-cli-artifactory and import from there
+		// defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 		args := []string{"docker", "scan", imageTag, "--server-id=default", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
 
 		// Run docker scan on image
