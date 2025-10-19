@@ -36,13 +36,8 @@ func AttachFixedVersionsToVulnerabilities(xrayManager *xray.XrayServicesManager,
 					log.Debug("Affected component " + affect.Ref + " not found in BOM components, skipping attaching fixed versions for vulnerability " + vulnerability.ID)
 					continue
 				}
-				steps := getAffectComponentCveRemediationStepsByFixedVersion(*affectComponent, cveRemediationOptions)
-				if len(steps) == 0 {
-					log.Debug("No remediation steps by forcing fixed version found for component " + affect.Ref + " in vulnerability " + vulnerability.ID)
-					continue
-				}
 				// Convert remediation steps to fixed versions affected versions
-				for _, step := range steps {
+				for _, step := range getAffectComponentCveRemediationStepsByFixedVersion(vulnerability.ID, *affectComponent, cveRemediationOptions) {
 					cdxutils.AppendAffectedVersions(&affect, cyclonedx.AffectedVersions{
 						Version: step.UpgradeTo.Version,
 						Status:  cyclonedx.VulnerabilityStatusNotAffected,
@@ -57,22 +52,29 @@ func AttachFixedVersionsToVulnerabilities(xrayManager *xray.XrayServicesManager,
 	return nil
 }
 
-func getAffectComponentCveRemediationStepsByFixedVersion(component cyclonedx.Component, cveRemediationOptions []utils.Option) (steps []utils.OptionStep) {
+func getAffectComponentCveRemediationStepsByFixedVersion(cve string, component cyclonedx.Component, cveRemediationOptions []utils.Option) (steps []utils.OptionStep) {
 	for _, cveRemediationOption := range cveRemediationOptions {
 		if cveRemediationOption.Type != utils.InLock {
 			// We only want InLock remediation type (forcing the actual component to a specific fix version)
 			continue
 		}
 		for _, step := range cveRemediationOption.Steps {
-			if step.StepType != utils.FixVersion {
-				// We only want FixVersion step type
+			if step.StepType == utils.NoFixVersion {
+				log.Debug(fmt.Sprintf("No fix version available for component '%s' in vulnerability '%s'", component.Name, cve))
+				continue
+			} else if step.StepType == utils.PackageNotFound {
+				log.Debug(fmt.Sprintf("Component '%s' not found in catalog for vulnerability '%s'", component.Name, cve))
 				continue
 			}
-			if step.PkgVersion.Name == component.Name && step.PkgVersion.Version == component.Version {
+			// We only want FixVersion step type
+			if step.StepType == utils.FixVersion && step.PkgVersion.Name == component.Name && step.PkgVersion.Version == component.Version {
 				// This step is relevant for the affected component
 				steps = append(steps, step)
 			}
 		}
+	}
+	if len(steps) == 0 {
+		log.Debug(fmt.Sprintf("No remediation steps by forcing fixed version found for component '%s' in vulnerability '%s'", component.Name, cve))
 	}
 	return
 }
