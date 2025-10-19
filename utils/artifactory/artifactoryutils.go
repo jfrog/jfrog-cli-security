@@ -89,7 +89,7 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (uploaded []string, err error) {
 	uploadCmd := generic.NewUploadCommand()
 	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Project(relatedProjectKey).Target(repo).Flat(true).BuildSpec())
-	uploadCmd.SetDetailedSummary(true)
+	uploadCmd.SetDetailedSummary(true).SetQuiet(true)
 	err = uploadCmd.Run()
 	result := uploadCmd.Result()
 	defer common.CleanupResult(result, &err)

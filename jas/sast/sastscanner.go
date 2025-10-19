@@ -3,6 +3,7 @@ package sast
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -30,7 +31,7 @@ type SastScanManager struct {
 	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), threadId); err != nil {
 		return
@@ -39,11 +40,12 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.SastScan.ToTextString(), module.SourceRoot))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.SastScan, threadId, module, targetCount))
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...)))
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime))
 	return
 }
 

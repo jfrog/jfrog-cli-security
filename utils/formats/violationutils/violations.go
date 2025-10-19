@@ -45,26 +45,26 @@ func (vs *Violations) Count() int {
 
 func (vs *Violations) String() string {
 	if !vs.HasViolations() {
-		return "No violations found"
+		return "No violations were found"
 	}
 	out := []string{}
 	if len(vs.Sca) > 0 {
-		out = append(out, fmt.Sprintf("SCA (%d)", len(vs.Sca)))
+		out = append(out, fmt.Sprintf("%d SCA", len(vs.Sca)))
 	}
 	if len(vs.License) > 0 {
-		out = append(out, fmt.Sprintf("License (%d)", len(vs.License)))
+		out = append(out, fmt.Sprintf("%d License", len(vs.License)))
 	}
 	if len(vs.OpRisk) > 0 {
-		out = append(out, fmt.Sprintf("Operational Risk (%d)", len(vs.OpRisk)))
+		out = append(out, fmt.Sprintf("%d Operational Risk", len(vs.OpRisk)))
 	}
 	if len(vs.Secrets) > 0 {
-		out = append(out, fmt.Sprintf("Secrets (%d)", len(vs.Secrets)))
+		out = append(out, fmt.Sprintf("%d Secrets", len(vs.Secrets)))
 	}
 	if len(vs.Iac) > 0 {
-		out = append(out, fmt.Sprintf("IaC (%d)", len(vs.Iac)))
+		out = append(out, fmt.Sprintf("%d IaC", len(vs.Iac)))
 	}
 	if len(vs.Sast) > 0 {
-		out = append(out, fmt.Sprintf("SAST (%d)", len(vs.Sast)))
+		out = append(out, fmt.Sprintf("%d SAST", len(vs.Sast)))
 	}
 	return strings.Join(out, ", ")
 }

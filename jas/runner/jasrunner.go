@@ -44,6 +44,7 @@ type JasRunnerParams struct {
 	// SAST scan flags
 	SignedDescriptions bool
 	// Outputs
+	TargetCount     int
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
@@ -143,7 +144,7 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId, getSourceRunsToCompare(params, jasutils.Secrets)...)
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Secrets)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -160,7 +161,7 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId, getSourceRunsToCompare(params, jasutils.IaC)...)
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.IaC)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -177,7 +178,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -206,6 +207,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 				ScanType:                     params.ApplicableScanType,
 				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
 				ThreadId:                     threadId,
+				TargetCount:                  params.TargetCount,
 				Module:                       params.Module,
 			},
 			params.Scanner,

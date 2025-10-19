@@ -370,6 +370,8 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
+	log.Info("####### Starting jf audit Scan #######")
+	log.Info(getCommandUsedFlagsString(c, flags.GetCommandFlags(flags.Audit)))
 	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
@@ -414,7 +416,9 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	log.Info("####### jf audit Scan Finished #######")
+	return err
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

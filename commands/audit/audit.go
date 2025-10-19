@@ -157,6 +157,21 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 	return includeVulnerabilities || !(len(watches) > 0 || projectKey != "" || artifactoryRepoPath != "" || gitRepoHttpsCloneUrl != "")
 }
 
+func logScanPaths(workingDirs []string, isRecursiveScan bool) {
+	if len(workingDirs) == 0 {
+		return
+	}
+	if len(workingDirs) == 1 {
+		if isRecursiveScan {
+			log.Info("Detecting recursively targets for scan in path:", workingDirs[0])
+		} else {
+			log.Info("Scanning path:", workingDirs[0])
+		}
+		return
+	}
+	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
+}
+
 func (auditCmd *AuditCommand) Run() (err error) {
 	isRecursiveScan := false
 	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
@@ -171,6 +186,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
+	logScanPaths(workingDirs, isRecursiveScan)
 	serverDetails, err := auditCmd.ServerDetails()
 	if err != nil {
 		return
@@ -313,6 +329,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
 		// Xray-Scan-Plugin Bom Generator Options
+		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
@@ -401,7 +418,25 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			},
 		)
 	}
+	logScanTargetsInfo(cmdResults)
+}
+
+func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
 	// Print the scan targets
+	if len(cmdResults.Targets) == 1 {
+		outLog := "Performing scans on "
+		if cmdResults.Targets[0].Technology != techutils.NoTech {
+			outLog += fmt.Sprintf("%s ", cmdResults.Targets[0].Technology.String())
+		}
+		outLog += "project "
+		if cmdResults.Targets[0].Name != "" {
+			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Name)
+		} else {
+			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Target)
+		}
+		log.Info(outLog)
+		return
+	}
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
 	if err != nil {
 		return
@@ -513,6 +548,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
 			ScanResults:         targetResult,
+			TargetCount:         len(scanResults.Targets),
 			ScansToPerform:      auditParams.ScansToPerform(),
 			ConfigProfile:       auditParams.GetConfigProfile(),
 			AllowPartialResults: auditParams.AllowPartialResults(),
@@ -625,6 +661,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				ScanResults:                 targetResult,
+				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 				AllowPartialResults:         auditParams.AllowPartialResults(),
 			}
@@ -652,6 +689,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	var err error
 	uploadPath := ""
 	if params.uploadCdxResults {
+		log.Info("Finished scanning. Uploading scan results to Artifactory")
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}

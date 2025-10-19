@@ -145,3 +145,45 @@ func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, err
 	}
 	return scansOutputDir, nil
 }
+
+func getCommandUsedFlagsString(c *components.Context, Flags []components.Flag) (out string) {
+	out = "Command flags: ["
+	flagSet := 0
+	for _, flag := range Flags {
+		// Only if set and not default value
+		if isFlagSetAndNotDefault(c, flag) {
+			if flagSet != 0 {
+				out += " "
+			}
+			out += fmt.Sprintf("--%s=%s", flag.GetName(), getFlagValueAsString(c, flag))
+			flagSet++
+		}
+	}
+	return out + "]"
+}
+
+func isFlagSetAndNotDefault(c *components.Context, flag components.Flag) bool {
+	if !c.IsFlagSet(flag.GetName()) {
+		return false
+	}
+	if strFlag, ok := flag.(components.StringFlag); ok {
+		return c.GetStringFlagValue(flag.GetName()) != strFlag.DefaultValue
+	}
+	if boolFlag, ok := flag.(components.BoolFlag); ok {
+		return c.GetBoolFlagValue(flag.GetName()) != boolFlag.DefaultValue
+	}
+	return false
+}
+
+func getFlagValueAsString(c *components.Context, flag components.Flag) string {
+	if !isFlagSetAndNotDefault(c, flag) {
+		return ""
+	}
+	if _, ok := flag.(components.StringFlag); ok {
+		return c.GetStringFlagValue(flag.GetName())
+	}
+	if _, ok := flag.(components.BoolFlag); ok {
+		return fmt.Sprintf("%t", c.GetBoolFlagValue(flag.GetName()))
+	}
+	return ""
+}

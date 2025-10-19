@@ -19,7 +19,7 @@ type PolicyHandler interface {
 type PolicyHandlerOption func(sg PolicyHandler)
 
 func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.SecurityCommandResults) (err error) {
-	log.Info("Generating violations...")
+	log.Info("Xray is processing your scan results...")
 	violations, err := generator.GenerateViolations(cmdResults)
 	// We add the results before checking for errors, so we can display the results even if an error occur
 	if filteredScaViolations := filterNotApplicableViolations(violations.Sca); len(filteredScaViolations) != len(violations.Sca) {
@@ -33,7 +33,7 @@ func EnrichWithGeneratedViolations(generator PolicyHandler, cmdResults *results.
 	if violations.Count() == 0 {
 		log.Info("No violations found.")
 	} else {
-		log.Info(fmt.Sprintf("Generated %d violations. [%s]", violations.Count(), violations.String()))
+		log.Info(fmt.Sprintf("Found %d violations: [%s]", violations.Count(), violations.String()))
 	}
 	return
 }

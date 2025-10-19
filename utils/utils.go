@@ -123,28 +123,25 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
-func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+func getScanFindingName(scanType SubScanType) string {
+	if scanType == SecretsScan {
+		return fmt.Sprintf("%s exposures", subScanTypeToText[scanType])
+	}
+	return fmt.Sprintf("%s vulnerabilities", subScanTypeToText[scanType])
+}
 
-	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
+func GetScanStartLog(scanType SubScanType, target string, targetCount int) string {
+	if targetCount > 1 {
+		return fmt.Sprintf("Running %s scan on target '%s'...", subScanTypeToText[scanType], target)
 	}
-	msg := "Found"
-	hasVulnerabilities := vulnerabilitiesCount > 0
-	if hasVulnerabilities {
-		if scanType == SecretsScan {
-			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
-		} else {
-			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
-		}
+	return fmt.Sprintf("Running %s scan...", subScanTypeToText[scanType])
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, startTime time.Time) string {
+	if vulnerabilitiesCount == 0 {
+		return fmt.Sprintf("No %s were found (duration %s)", getScanFindingName(scanType), time.Since(startTime).String())
 	}
-	if violationsCount > 0 {
-		if hasVulnerabilities {
-			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
-		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
-		}
-	}
-	return msg
+	return fmt.Sprintf("Found %d %s (duration %s)", vulnerabilitiesCount, getScanFindingName(scanType), time.Since(startTime).String())
 }
 
 func IsCI() bool {

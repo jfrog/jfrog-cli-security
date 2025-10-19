@@ -516,3 +516,13 @@ func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile
 	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
 	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
 }
+
+func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module jfrogappsconfig.Module, targetCount int) string {
+	outLog := goclientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan", scanType.ToTextString())
+	if targetCount != 1 {
+		outLog += fmt.Sprintf(" on target '%s'...", module.SourceRoot)
+	} else {
+		outLog += "..."
+	}
+	return outLog
+}

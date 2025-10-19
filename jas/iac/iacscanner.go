@@ -1,8 +1,8 @@
 package iac
 
 import (
-	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -33,7 +33,7 @@ type IacScanManager struct {
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), threadId); err != nil {
 		return
@@ -42,11 +42,12 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.IacScan.ToTextString(), module.SourceRoot))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.IacScan, threadId, module, targetCount))
 	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...)))
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime))
 	return
 }
 
