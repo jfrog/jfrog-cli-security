@@ -128,12 +128,12 @@ require (
 )
 
 // attiasas:remediation_api
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251015120240-81270403f2a9
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251019110904-880514d6f3fc
 
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20251015045218-1a38c9e47097
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.7.3-0.20251015052652-84ea3afaf439
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.7.3-0.20251017072454-f83a03ee98d6
 
-// replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go dev
+// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master

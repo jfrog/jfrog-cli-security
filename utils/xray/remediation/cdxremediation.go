@@ -29,7 +29,7 @@ func AttachFixedVersionsToVulnerabilities(xrayManager *xray.XrayServicesManager,
 			continue
 		}
 		if cveRemediationOptions, found := remediationOptions[vulnerability.ID]; found {
-			for _, affect := range *vulnerability.Affects {
+			for i, affect := range *vulnerability.Affects {
 				// Lets find the remediation for this specific component
 				affectComponent := cdxutils.SearchComponentByRef(bom.Components, affect.Ref)
 				if affectComponent == nil {
@@ -48,6 +48,7 @@ func AttachFixedVersionsToVulnerabilities(xrayManager *xray.XrayServicesManager,
 						Status:  cyclonedx.VulnerabilityStatusNotAffected,
 					})
 				}
+				(*vulnerability.Affects)[i] = affect
 			}
 		} else {
 			log.Debug("No remediation options found for vulnerability " + vulnerability.ID)
