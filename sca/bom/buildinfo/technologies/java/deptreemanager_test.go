@@ -50,7 +50,10 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 		"org.slf4j:slf4j-api:1.4.2",
 	}
 
-	manager := &gradleDepTreeManager{DepTreeManager{}}
+	manager := &gradleDepTreeManager{
+		DepTreeManager: DepTreeManager{},
+		isCurationCmd:  false,
+	}
 	outputFileContent, err := manager.runGradleDepTree()
 	assert.NoError(t, err)
 	depTree, uniqueDeps, err := getGraphFromDepTree(outputFileContent)
@@ -63,4 +66,21 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 		assert.True(t, exists)
 		assert.Equal(t, len(depChild), len(dependency.Nodes))
 	}
+}
+
+func TestGetGradleGraphFromDepTreeWithCuration(t *testing.T) {
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
+	defer cleanUp()
+	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+
+	manager := &gradleDepTreeManager{
+		DepTreeManager: DepTreeManager{},
+		isCurationCmd:  true,
+	}
+	outputFileContent, err := manager.runGradleDepTree()
+	assert.NoError(t, err)
+	depTree, uniqueDeps, err := getGraphFromDepTree(outputFileContent)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, depTree)
+	assert.NotEmpty(t, uniqueDeps)
 }
