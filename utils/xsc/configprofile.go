@@ -9,13 +9,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func GetConfigProfileByName(xrayVersion string, serverDetails *config.ServerDetails, profileName string) (*services.ConfigProfile, error) {
+func GetConfigProfileByName(xrayVersion string, serverDetails *config.ServerDetails, profileName, projectKey string) (*services.ConfigProfile, error) {
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileNewSchemaMinXrayVersion); err != nil {
 		log.Info(fmt.Sprintf("Minimal Xray version required to use a configProfile is by name '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileNewSchemaMinXrayVersion))
 		return nil, err
 	}
 
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails, projectKey)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 		log.Info(fmt.Sprintf("Minimal Xray version required to use a configProfile is by url '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileNewSchemaMinXrayVersion))
 		return nil, err
 	}
-	xscService, err := CreateXscService(serverDetails)
+	xscService, err := CreateXscService(serverDetails, "")
 	if err != nil {
 		return nil, err
 	}
