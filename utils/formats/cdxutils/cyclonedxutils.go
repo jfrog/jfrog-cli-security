@@ -290,16 +290,16 @@ func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersi
 	if affected.Range == nil {
 		return nil
 	}
-	affectedVersions := []cyclonedx.AffectedVersions{}
+	notAffectedVersions := []cyclonedx.AffectedVersions{}
 	for _, version := range *affected.Range {
-		if version.Status != cyclonedx.VulnerabilityStatusNotAffected {
-			affectedVersions = append(affectedVersions, version)
+		if version.Status == cyclonedx.VulnerabilityStatusNotAffected {
+			notAffectedVersions = append(notAffectedVersions, version)
 		}
 	}
-	if len(affectedVersions) == 0 {
+	if len(notAffectedVersions) == 0 {
 		return nil
 	}
-	return &affectedVersions
+	return &notAffectedVersions
 }
 
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
