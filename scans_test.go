@@ -100,7 +100,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-policy", "scan-binary-watch", true)
+	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-policy", "scan-binary-watch", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
@@ -169,7 +169,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-progress-policy", "scan-binary-progress-watch", true)
+	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-progress-policy", "scan-binary-progress-watch", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
