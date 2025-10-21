@@ -146,10 +146,10 @@ func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, err
 	return scansOutputDir, nil
 }
 
-func getCommandUsedFlagsString(c *components.Context, Flags []components.Flag) (out string) {
+func getCommandUsedFlagsString(c *components.Context, flags []components.Flag) (out string) {
 	out = "Command flags: ["
 	flagSet := 0
-	for _, flag := range Flags {
+	for _, flag := range flags {
 		// Only if set and not default value
 		if isFlagSetAndNotDefault(c, flag) {
 			if flagSet != 0 {

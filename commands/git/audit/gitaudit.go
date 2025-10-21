@@ -135,6 +135,9 @@ func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	if !cmdResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf git audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secrets Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.XrayInfoURL)}
 	}
+	if cmdResults.ResultsPlatformUrl != "" {
+		messages = append(messages, coreutils.PrintTitle(output.GetCommandResultsPlatformUrlMessage(cmdResults))+":\n"+coreutils.PrintLink(cmdResults.ResultsPlatformUrl))
+	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(gaCmd.outputFormat).
 		SetOutputDir(gaCmd.outputDir).

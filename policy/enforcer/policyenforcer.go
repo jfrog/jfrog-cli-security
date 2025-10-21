@@ -116,9 +116,13 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 				err = errors.Join(err, fmt.Errorf("unknown violation type %s for violation id %s", violation.Type, violation.Id))
 			}
 		case utils.SastScan:
-			convertedViolations.Sast = append(convertedViolations.Sast, convertToJasViolations(cmdResults, jasutils.Sast, violation)...)
+			if sastViolation := convertToJasViolation(cmdResults, jasutils.Sast, violation); sastViolation != nil {
+				convertedViolations.Sast = append(convertedViolations.Sast, *sastViolation)
+			}
 		case utils.SecretsScan:
-			convertedViolations.Secrets = append(convertedViolations.Secrets, convertToJasViolations(cmdResults, jasutils.Secrets, violation)...)
+			if secretsViolation := convertToJasViolation(cmdResults, jasutils.Secrets, violation); secretsViolation != nil {
+				convertedViolations.Secrets = append(convertedViolations.Secrets, *secretsViolation)
+			}
 		default:
 			log.Warn(fmt.Sprintf("Skipping violation with unknown scan type for violation ID %s", violation.Id))
 		}
@@ -210,18 +214,18 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 	return
 }
 
-func convertToJasViolations(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations []violationutils.JasViolation) {
-	matches := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
-	for _, match := range matches {
-		JasViolation := violationutils.JasViolation{
-			Violation: convertToBasicViolation(violation),
-			Rule:      match.rule,
-			Result:    match.result,
-			Location:  match.location,
-		}
-		jasViolations = append(jasViolations, JasViolation)
+func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations *violationutils.JasViolation) {
+	match := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
+	if match.rule == nil || match.result == nil || match.location == nil {
+		log.Warn(fmt.Sprintf("Could not locate all required information for %s violation ID %s", jasType, violation.Id))
+		return nil
 	}
-	return
+	return &violationutils.JasViolation{
+		Violation: convertToBasicViolation(violation),
+		Rule:      match.rule,
+		Result:    match.result,
+		Location:  match.location,
+	}
 }
 
 type matchedJsaVulnerability struct {
@@ -230,12 +234,13 @@ type matchedJsaVulnerability struct {
 	location *sarif.Location
 }
 
-func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (matches []matchedJsaVulnerability) {
+func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (match matchedJsaVulnerability) {
 	id := getJasVulnerabilityId(violation, jasType)
 	if id == "" {
 		log.Debug(fmt.Sprintf("Skipping Jas violation with empty ID for issue ID %s violation ID %s", violation.IssueId, violation.Id))
 		return
 	}
+	found := false
 	for _, target := range cmdResults.Targets {
 		if target.JasResults == nil {
 			log.Debug(fmt.Sprintf("Skipping %s violation search for target %s with no Jas results", jasType, target.ScanTarget))
@@ -243,13 +248,14 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.EntitledForJas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-				if sarifutils.GetRuleId(rule) == id && slices.Contains(violation.PhysicalPaths, sarifutils.GetLocationFileName(location)) {
+				if !found && sarifutils.GetRuleId(rule) == id && isLocationMatchingJasViolation(location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
-					matches = append(matches, matchedJsaVulnerability{
+					match = matchedJsaVulnerability{
 						rule:     rule,
 						result:   result,
 						location: location,
-					})
+					}
+					found = true
 				}
 				return nil
 			},
@@ -258,6 +264,12 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 	}
 	return
+}
+
+func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
+	// Convert location to relative path
+	relative := sarifutils.GetRelativeLocationFileName(location, invocations)
+	return slices.Contains(violation.InfectedFilePaths, relative)
 }
 
 func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.JasScanType) string {

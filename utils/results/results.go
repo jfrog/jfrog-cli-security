@@ -33,7 +33,8 @@ type SecurityCommandResults struct {
 	GitContext       *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
 	StartTime        time.Time                      `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId string `json:"multi_scan_id,omitempty"`
+	MultiScanId        string `json:"multi_scan_id,omitempty"`
+	ResultsPlatformUrl string `json:"results_platform_url,omitempty"`
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
@@ -183,6 +184,11 @@ func (r *SecurityCommandResults) SetResultsContext(context ResultContext) *Secur
 
 func (r *SecurityCommandResults) SetGitContext(gitContext *xscServices.XscGitInfoContext) *SecurityCommandResults {
 	r.GitContext = gitContext
+	return r
+}
+
+func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
+	r.ResultsPlatformUrl = resultsPlatformUrl
 	return r
 }
 

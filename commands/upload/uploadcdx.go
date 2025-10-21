@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
@@ -86,11 +87,9 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 		return fmt.Errorf("failed while waiting for Xray to start scanning the uploaded CycloneDx file: %w", err)
 	}
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
-	if err != nil {
-		return fmt.Errorf("failed to generate scan results URL: %w", err)
+	if err = ucc.outputArtifactScanResultsUrl(ucc.serverDetails, ucc.scanResultsRepository, ucc.fileToUpload); err != nil {
+		log.Error(fmt.Sprintf("Failed to output the CycloneDx scan results URL: %s", err.Error()))
 	}
-	log.Output(fmt.Sprintf("Your CycloneDx file was successfully uploaded. You may view the file content in the JFrog platform, under Xray -> Scans List -> Repositories :\n%s", scanResultsUrl))
 	return
 }
 
@@ -187,6 +186,25 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	return
 }
 
+func (ucc *UploadCycloneDxCommand) outputArtifactScanResultsUrl(serverDetails *config.ServerDetails, repoPath, filePath string) error {
+	link, err := generateURLFromPath(serverDetails.GetUrl(), repoPath, filePath)
+	if err != nil {
+		return err
+	}
+	log.Output(coreutils.PrintTitle(GetScanResultsPlatformUrlMessage(false)) + ":\n" + coreutils.PrintLink(link))
+	return nil
+}
+
+func GetScanResultsPlatformUrlMessage(gitContext bool) string {
+	outputMessage := "You may view the scan results in the JFrog platform, under Xray -> Scans List ->"
+	if gitContext {
+		outputMessage += " Git Repositories"
+	} else {
+		outputMessage += " Repositories"
+	}
+	return outputMessage
+}
+
 func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
 	artifactName := filepath.Base(filePath)
 	// Calculate SHA256
@@ -194,12 +212,15 @@ func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to calculate sha256: %w", err)
 	}
+	return GetCdxScanResultsUrl(baseUrl, repoPath, artifactName, sha256), nil
+}
+
+func GetCdxScanResultsUrl(baseUrl, repoPath, artifactName, sha256 string) string {
 	if sha256 != "" {
 		sha256 = fmt.Sprintf("sha256:%s/", sha256)
 	}
-
 	packageID := fmt.Sprintf("generic://%s%s", sha256, artifactName)
-	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID), nil
+	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID)
 }
 
 func calculateFileSHA256(filePath string) (string, error) {
