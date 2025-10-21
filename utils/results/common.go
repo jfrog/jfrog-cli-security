@@ -1368,21 +1368,21 @@ func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, compone
 		directComponents = append(directComponents, formats.ComponentRow{
 			Name:     parent.Name,
 			Version:  parent.Version,
-			Location: CdxEvidenceToLocation(parent.Evidence),
+			Location: CdxEvidenceToLocation(parent),
 		})
 	}
 	return
 }
 
-func CdxEvidenceToLocation(evidence *cyclonedx.Evidence) (location *formats.Location) {
-	if evidence == nil || evidence.Occurrences == nil || len(*evidence.Occurrences) == 0 {
+func CdxEvidenceToLocation(component cyclonedx.Component) (location *formats.Location) {
+	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil
 	}
 	// We take the first location as the main location
-	if len(*evidence.Occurrences) > 1 {
-		log.Debug("Multiple locations found for component evidence, using the first one as location")
+	if len(*component.Evidence.Occurrences) > 1 {
+		log.Debug(fmt.Sprintf("Multiple locations found for component %s evidence, using the first one as location", component.Name))
 	}
-	loc := (*evidence.Occurrences)[0]
+	loc := (*component.Evidence.Occurrences)[0]
 	location = &formats.Location{
 		File: loc.Location,
 	}
