@@ -187,3 +187,12 @@ func getFlagValueAsString(c *components.Context, flag components.Flag) string {
 	}
 	return ""
 }
+
+func shouldIncludeSbom(c *components.Context, format outputFormat.OutputFormat) bool {
+	// Make sure include SBOM is only set if the output format supports it
+	includeSbom := c.GetBoolFlagValue(flags.Sbom)
+	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
+	}
+	return includeSbom
+}

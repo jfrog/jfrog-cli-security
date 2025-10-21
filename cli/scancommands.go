@@ -287,7 +287,7 @@ func ScanCmd(c *components.Context) error {
 		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
+		SetIncludeSbom(shouldIncludeSbom(c, format)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
@@ -453,16 +453,11 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	auditCmd.SetViolationGenerator(violationGenerator)
 	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
-	// Make sure include SBOM is only set if the output format supports it
-	includeSbom := c.GetBoolFlagValue(flags.Sbom)
-	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
-		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
-	}
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(includeSbom).
+		SetIncludeSbom(shouldIncludeSbom(c, format)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
@@ -709,7 +704,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
+		SetIncludeSbom(shouldIncludeSbom(c, format)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).

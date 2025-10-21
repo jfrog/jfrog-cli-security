@@ -183,7 +183,7 @@ var commandFlags = map[string][]string{
 		scanProjectKey, Watches, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
-		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
+		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation, Sbom,
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params

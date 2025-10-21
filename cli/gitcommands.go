@@ -70,6 +70,7 @@ func GitAuditCmd(c *components.Context) error {
 	} else if len(subScans) > 0 {
 		gitAuditCmd.SetScansToPerform(subScans)
 	}
+	gitAuditCmd.SetIncludeSbom(shouldIncludeSbom(c, format))
 	if threads, err := pluginsCommon.GetThreadsCount(c); err != nil {
 		return err
 	} else {

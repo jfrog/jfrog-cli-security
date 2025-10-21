@@ -23,6 +23,7 @@ type GitAuditParams struct {
 	failBuild      bool
 	// Scan params
 	scansToPerform []utils.SubScanType
+	includeSbom    bool
 	threads        int
 	exclusions     []string
 	// Output params
@@ -162,4 +163,9 @@ func (gap *GitAuditParams) SetRtResultRepository(rtResultRepository string) *Git
 
 func (gap *GitAuditParams) RtResultRepository() string {
 	return gap.rtResultRepository
+}
+
+func (gap *GitAuditParams) SetIncludeSbom(includeSbom bool) *GitAuditParams {
+	gap.includeSbom = includeSbom
+	return gap
 }
