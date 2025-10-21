@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
-	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -12,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
+	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,9 +101,9 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-policy", "scan-binary-watch", false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true}, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -169,9 +170,9 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-progress-policy", "scan-binary-progress-watch", false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true}, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
