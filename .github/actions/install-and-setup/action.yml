@@ -50,7 +50,7 @@ runs:
       with:
         nuget-version: 6.11.0
     - name: Install dotnet
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: '6.x'
 
