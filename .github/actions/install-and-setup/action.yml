@@ -27,7 +27,7 @@ runs:
       run: gem install cocoapods
 
     - name: Install npm
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: "16"
     - name: Setup Pnpm
