@@ -3,6 +3,7 @@ name: JFrog CLI Security Tests
 permissions:
   actions: read
   contents: read
+  pull-requests: write
 
 on:
   push:
@@ -33,17 +34,17 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
       - name: Remove 'safe to test' label
         uses: actions-ecosystem/action-remove-labels@v1
         if: ${{ github.event_name != 'push' }}
         with:
           labels: "safe to test"
           
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Start FastCI Optimization
         uses: jfrog-fastci/fastci@main
         with:
