@@ -132,7 +132,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		return
 	}
 	// Get the defined and active watches from the platform.
-	manager, err := xsc.CreateXscService(serverDetails, projectKey)
+	manager, err := xsc.CreateXscService(serverDetails, xrayutils.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to create Xray services manager: %s", err.Error()))
 		return

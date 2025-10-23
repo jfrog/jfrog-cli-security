@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -18,7 +19,7 @@ func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDet
 		return nil
 	}
 	log.Debug("Sending an error report to JFrog analytics...")
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails, projectKey)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		return fmt.Errorf("failed to create an HTTP client: %s.\nReporting to JFrog analytics is skipped", err.Error())
 	}

@@ -87,7 +87,7 @@ func PrepareXscForTest(t *testing.T) func() {
 func getXrayAndXscTestVersions(t *testing.T) (string, string, error) {
 	xrayVersion, err := testUtils.GetTestsXrayVersion()
 	assert.NoError(t, err)
-	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails, "")
+	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails)
 	assert.NoError(t, err)
 	xscVersion, err := xscService.GetVersion()
 	return xrayVersion.GetVersion(), xscVersion, err
