@@ -98,13 +98,17 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	)
 }
 
+func getDummyGitRepoUrl() string {
+	return fmt.Sprintf("https://github.com/jfrog-%s/dummy-repo-url-%s.git", *securityTests.CiRunId, securityTests.GetUniqueSuffix())
+}
+
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
-	dummyCloneUrl := fmt.Sprintf("https://github.com/jfrog-%s/dummy-repo-url-%s.git", *securityTests.CiRunId, securityTests.GetUniqueSuffix())
+	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
@@ -189,6 +193,8 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
+	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations - This watch DO NOT skip not-applicable results
 	var firstPolicyCleaned, firstWatchCleaned bool
@@ -198,7 +204,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			cleanUpPolicy()
 		}
 	}()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer func() {
 		if !firstWatchCleaned {
 			cleanUpWatch()
@@ -207,7 +213,10 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true}},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
+			CustomRepoCloneUrl:     dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
@@ -227,12 +236,15 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
-	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
+	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true}},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
+			CustomRepoCloneUrl:     dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
