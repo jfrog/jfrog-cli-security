@@ -16,6 +16,8 @@ import (
 	"github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/stretchr/testify/assert"
+
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 )
 
 var testDataDir = filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
@@ -154,6 +156,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 		testDir                     string
 		installCommand              string
 		successfulTreeBuiltExpected bool
+		skipMsg                     string
 	}{
 		{
 			name:                        "nuget single 4.0  - installed | install not required",
@@ -164,6 +167,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			name:                        "nuget single 5.0  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single5.0"),
 			installCommand:              "nuget restore", // todo test in ci with nuget restore
+			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin', pending fix XRAY-128186",
 			successfulTreeBuiltExpected: true,
 		},
 		{
@@ -175,6 +179,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			name:                        "nuget multi  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "multi"),
 			installCommand:              "nuget restore", // todo test in ci with nuget restore
+			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin', pending fix XRAY-128186",
 			successfulTreeBuiltExpected: true,
 		},
 		{
@@ -196,6 +201,9 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.skipMsg != "" {
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, test.skipMsg)
+			}
 			// Create and change directory to test workspace
 			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()

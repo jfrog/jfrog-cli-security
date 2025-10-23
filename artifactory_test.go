@@ -23,7 +23,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
@@ -62,6 +61,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			resolveRepoName: securityTests.NugetRemoteRepo,
 			cacheRepoName:   securityTests.NugetRemoteRepo,
 			projectType:     project.Dotnet,
+			skipMsg:         "Dotnet restore fails, pending fix XRAY-128186",
 		},
 		{
 			testProjectPath: []string{"yarn", "yarn-v2"},
@@ -86,7 +86,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			resolveRepoName: securityTests.MvnVirtualRepo,
 			cacheRepoName:   securityTests.MvnRemoteRepo,
 			projectType:     project.Maven,
-			skipMsg:         "Snapshot repository is blocked by JPD, pending fix",
+			// skipMsg:         "Snapshot repository is blocked by JPD, pending fix XRAY-124910",
 		},
 		{
 			testProjectPath: []string{"go", "simple-project"},
@@ -118,7 +118,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if testCase.skipMsg != "" {
-			securityIntegrationTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, testCase.skipMsg)
+			securityTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, testCase.skipMsg)
 		}
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
@@ -294,7 +294,7 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	}
 	defer securityIntegrationTestUtils.ExecDeleteRepo(repoPath)
 	// Run the upload command
-	assert.NoError(t, integration.GetArtifactoryCli(cli.GetJfrogCliSecurityApp()).Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
+	assert.NoError(t, securityIntegrationTestUtils.GetArtifactoryCli(cli.GetJfrogCliSecurityApp()).Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
 
 	// Validate the file was uploaded successfully
 	searchResults, err := artifactory.SearchArtifactsInRepo(securityTests.RtDetails, filepath.Base(cdxFileToUpload), repoPath)

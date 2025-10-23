@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -37,25 +36,6 @@ import (
 
 func getSkipTestMsg(testName, testFlag string) string {
 	return fmt.Sprintf("Skipping %s tests. To run them, add the '%s=true' option or don't supply any options.", testName, testFlag)
-}
-
-// SkipTestIfDurationNotPassed skips the test if the specified duration in days hasn't passed since the given date.
-// dateStr should be in the format "02-01-2006" (DD-MM-YYYY).
-// durationDays is the number of days that should have passed.
-func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int, msg string) {
-	givenDate, err := time.Parse("02-01-2006", dateStr)
-	if err != nil {
-		t.Fatalf("Invalid date format '%s'. Expected format: DD-MM-YYYY", dateStr)
-	}
-
-	daysSinceDate := int(time.Since(givenDate).Hours() / 24)
-	if daysSinceDate < durationDays {
-		if msg == "" {
-			t.Skipf("Skipping test. Only %d days have passed since %s, but %d days are required.", daysSinceDate, dateStr, durationDays)
-		} else {
-			t.Skipf("Skipping test (%d/%d days have passed since %s, but %d days are required.) Reason: %s", daysSinceDate, durationDays, dateStr, durationDays, msg)
-		}
-	}
 }
 
 func InitUnitTest(t *testing.T) {
@@ -124,7 +104,7 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
-	SkipTestIfDurationNotPassed(t, "22-10-2025", 14, "Catalog API not available yet in test platform.")
+	testUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 14, "Catalog API not available yet in test platform.")
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
