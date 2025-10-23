@@ -32,8 +32,10 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 	// TODO: Update the URL and related consts
-	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	XrayInfoURL                   = "https://jfrog.com/xray/"
+	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	XrayInfoURL          = "https://jfrog.com/xray/"
+	JasInfoURL           = "https://jfrog.com/devops-native-security/"
+
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 
