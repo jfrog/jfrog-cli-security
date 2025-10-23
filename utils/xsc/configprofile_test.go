@@ -36,7 +36,7 @@ func TestGetConfigProfileByName(t *testing.T) {
 			mockServer, serverDetails, _ := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, serverDetails, validations.TestConfigProfileName)
+			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, serverDetails, validations.TestConfigProfileName, "")
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)

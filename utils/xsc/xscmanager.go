@@ -14,15 +14,15 @@ import (
 
 const MinXscVersionForErrorReport = "1.7.7"
 
-func CreateXscServiceBackwardCompatible(xrayVersion string, serviceDetails *config.ServerDetails) (xsc.XscService, error) {
+func CreateXscServiceBackwardCompatible(xrayVersion string, serviceDetails *config.ServerDetails, options ...xray.XrayManagerOption) (xsc.XscService, error) {
 	if xscservicesutils.IsXscXrayInnerService(xrayVersion) {
-		return CreateXscService(serviceDetails)
+		return CreateXscService(serviceDetails, options...)
 	}
 	return createDeprecatedXscServiceManager(serviceDetails)
 }
 
-func CreateXscService(serviceDetails *config.ServerDetails) (*xscservices.XscInnerService, error) {
-	xrayManager, err := xray.CreateXrayServiceManager(serviceDetails)
+func CreateXscService(serviceDetails *config.ServerDetails, options ...xray.XrayManagerOption) (*xscservices.XscInnerService, error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serviceDetails, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +59,7 @@ func GetJfrogServicesVersion(serverDetails *config.ServerDetails) (xrayVersion, 
 		return
 	}
 	log.Debug("Xray version: " + xrayVersion)
+	// We can pass an empty projectKey here as this API call does not require permissions and is not scoped under a specific project
 	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
 	if err != nil {
 		return
