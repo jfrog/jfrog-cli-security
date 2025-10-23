@@ -54,6 +54,8 @@ type binaryScanParams struct {
 	Watches []string
 	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
 	WithVuln bool
+	// --bypass-archive-limits flag value if provided
+	BypassArchiveLimits bool
 }
 
 func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
@@ -71,6 +73,9 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 	}
 	if len(params.Watches) > 0 {
 		args = append(args, "--watches="+strings.Join(params.Watches, ","))
+	}
+	if params.BypassArchiveLimits {
+		args = append(args, "--bypass-archive-limits")
 	}
 	args = append(args, params.BinaryPattern)
 	return args
