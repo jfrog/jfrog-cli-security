@@ -176,21 +176,6 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	})
 }
 
-func testXrayBinaryScanWithWatch(t *testing.T, format format.OutputFormat, policyName, watchName string, errorExpected bool) string {
-	params := binaryScanParams{
-		WithLicense: true,
-		Format:      format,
-	}
-	if policyName != "" && watchName != "" {
-		watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
-		defer deleteWatch()
-		// Include violations and vulnerabilities
-		params.Watches = []string{watchName}
-		params.WithVuln = true
-	}
-	return testXrayMultipleBinariesScan(t, params, errorExpected)
-}
-
 func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	params.BinaryPattern = filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	return testXrayBinaryScan(t, params, errorExpected)
