@@ -178,6 +178,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 
 func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams) string {
 	params.BinaryPattern = filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
+	params.BypassArchiveLimits = true
 	return testXrayBinaryScan(t, params, false)
 }
 
