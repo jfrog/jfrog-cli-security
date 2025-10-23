@@ -93,7 +93,7 @@ func runXrayBinaryScan(t *testing.T, params binaryScanParams) (string, error) {
 // Binary scan tests
 func TestXrayBinaryScanJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true}, false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true})
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -101,7 +101,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true}, false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -160,7 +160,7 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true}, false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true})
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -170,15 +170,15 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true}, false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.SimpleJson, WithLicense: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
-func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
+func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams) string {
 	params.BinaryPattern = filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
-	return testXrayBinaryScan(t, params, errorExpected)
+	return testXrayBinaryScan(t, params, false)
 }
 
 func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string, inTempDir bool) string {
