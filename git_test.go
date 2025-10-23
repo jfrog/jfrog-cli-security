@@ -104,7 +104,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
-	dummyCloneUrl := fmt.Sprintf("https://github.com/jfrog/dummy-repo-url-%s.git", securityTests.GetUniqueSuffix())
+	dummyCloneUrl := fmt.Sprintf("https://github.com/jfrog-%s/dummy-repo-url-%s.git", *securityTests.CiRunId, securityTests.GetUniqueSuffix())
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
