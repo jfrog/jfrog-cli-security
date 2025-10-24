@@ -50,14 +50,23 @@ runs:
       with:
         nuget-version: 6.11.0
     - name: Install dotnet
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5  # Try v5 for better MSBuild handling
       with:
         dotnet-version: '6.x'
+    
 
-    - name: Install Mono on MacOS
-      run: brew install mono
+    - name: Install Mono on MacOS with MSBuild environment setup
       if: runner.os == 'macOS'
-      shell: 'bash'
+      run: |
+        echo "Installing modern Mono with .NET MSBuild integration"
+        brew install mono
+        
+        # Set MSBuild environment variables to use .NET SDK MSBuild instead of Mono's
+        echo "MSBUILD_EXE_PATH=$HOME/.dotnet/sdk/6.0.428/MSBuild.dll" >> $GITHUB_ENV
+        echo "MSBuildSDKsPath=$HOME/.dotnet/sdk/6.0.428/Sdks" >> $GITHUB_ENV
+        
+        echo "Configured to use .NET MSBuild with Mono runtime"
+      shell: bash
 
     - name: Install Mono on Linux
       run: |
