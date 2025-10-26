@@ -99,7 +99,7 @@ func (ucc *UploadCycloneDxCommand) waitForUploadCompletion() error {
 		return err
 	}
 	// Not providing any options means we are waiting for the scan to start (so the UI can show content when pressing the generate scan results link)
-	return artifact.WaitForArtifactScanStatus(xrayManager, ucc.scanResultsRepository, ucc.fileToUpload)
+	return artifact.WaitForArtifactScanStatus(xrayManager, ucc.scanResultsRepository, filepath.Base(ucc.fileToUpload), artifact.OverallCompletion())
 }
 
 func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
