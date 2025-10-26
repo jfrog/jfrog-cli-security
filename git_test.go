@@ -70,7 +70,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
 	defer cleanUpProject()
 	if gitAuditParams.CustomRepoCloneUrl != "" {
-		// Override the git remote url to a dummy one to avoid network calls during tests.
+		// Override the git remote url to a dummy one to avoid flaky tests due to collisions in policy/watch created for the same repo.
 		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.CustomRepoCloneUrl).Run(), "Failed to set dummy git remote url")
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
