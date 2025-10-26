@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -175,7 +176,7 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
 	// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
 	// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
-	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, artifactory.AddSuffixSlashIfNeeded(scanResultsRepository), relatedProjectKey)
+	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, clientUtils.AddTrailingSlashIfNeeded(scanResultsRepository), relatedProjectKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", filePath, scanResultsRepository, err)
 	}

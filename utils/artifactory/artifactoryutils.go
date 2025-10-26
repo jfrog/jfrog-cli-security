@@ -107,13 +107,6 @@ func getArtifactsPaths(repo string, reader *content.ContentReader) (paths []stri
 	return
 }
 
-func AddSuffixSlashIfNeeded(path string) string {
-	if path != "" && !strings.HasSuffix(path, "/") {
-		path += "/"
-	}
-	return path
-}
-
 func IsRepoExists(repoKey string, serverDetails *config.ServerDetails) (exists bool, err error) {
 	if repoKey == "" || serverDetails == nil {
 		return false, errors.New("repository key and server details must be provided")

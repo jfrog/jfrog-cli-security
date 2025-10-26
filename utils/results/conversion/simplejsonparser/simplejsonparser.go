@@ -313,20 +313,6 @@ func (sjc *CmdResultsSimpleJsonConverter) createOpRiskViolationRow(opRiskViolati
 	}
 }
 
-// func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-// 	if sjc.current == nil {
-// 		return results.ErrResetConvertor
-// 	}
-// 	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, descriptors, scaResponse, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
-// 	if err != nil {
-// 		return
-// 	}
-// 	sjc.current.SecurityViolations = append(sjc.current.SecurityViolations, secViolationsSimpleJson...)
-// 	sjc.current.LicensesViolations = append(sjc.current.LicensesViolations, licViolationsSimpleJson...)
-// 	sjc.current.OperationalRiskViolations = append(sjc.current.OperationalRiskViolations, opRiskViolationsSimpleJson...)
-// 	return
-// }
-
 func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
@@ -419,23 +405,6 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(sast ...results.ScanResult[[
 	return
 }
 
-// func PrepareSimpleJsonViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseViolationRow, []formats.OperationalRiskViolationRow, error) {
-// 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
-// 	var licenseViolationsRows []formats.LicenseViolationRow
-// 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
-// 	_, _, err := local.ForEachScanGraphViolation(
-// 		target,
-// 		descriptors,
-// 		scaResponse.Violations,
-// 		jasEntitled,
-// 		applicabilityRuns,
-// 		addSimpleJsonSecurityViolation(target, &securityViolationsRows, pretty),
-// 		addSimpleJsonLicenseViolation(&licenseViolationsRows, pretty),
-// 		addSimpleJsonOperationalRiskViolation(&operationalRiskViolationsRows, pretty),
-// 	)
-// 	return securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err
-// }
-
 func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
 	err := results.ForEachScanGraphVulnerability(
@@ -475,95 +444,6 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 		return nil
 	}
 }
-
-// func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolationsRows *[]formats.VulnerabilityOrViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
-// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-// 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
-// 		*securityViolationsRows = append(*securityViolationsRows,
-// 			formats.VulnerabilityOrViolationRow{
-// 				Summary: violation.Summary,
-// 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-// 					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-// 					ImpactedDependencyName:    impactedPackagesName,
-// 					ImpactedDependencyVersion: impactedPackagesVersion,
-// 					ImpactedDependencyType:    impactedPackagesType,
-// 					Components:                directComponents,
-// 				},
-// 				FixedVersions: fixedVersion,
-// 				Cves:          cves,
-// 				ViolationContext: formats.ViolationContext{
-// 					Watch:    violation.WatchName,
-// 					Policies: results.ConvertPolicesToString(violation.Policies),
-// 					FailPr:   violation.FailPr,
-// 				},
-// 				IssueId:                  violation.IssueId,
-// 				References:               violation.References,
-// 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
-// 				ImpactPaths:              impactPaths,
-// 				Technology:               results.GetIssueTechnology(violation.Technology, target.Technology),
-// 				Applicable:               applicabilityStatus.ToString(pretty),
-// 			},
-// 		)
-// 		return nil
-// 	}
-// }
-
-// func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
-// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-// 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
-// 		*licenseViolationsRows = append(*licenseViolationsRows,
-// 			formats.LicenseViolationRow{
-// 				ViolationContext: formats.ViolationContext{
-// 					Watch:    violation.WatchName,
-// 					Policies: results.ConvertPolicesToString(violation.Policies),
-// 					FailPr:   violation.FailPr,
-// 				},
-// 				LicenseRow: formats.LicenseRow{
-// 					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
-// 					LicenseName: violation.LicenseName,
-// 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-// 						SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-// 						ImpactedDependencyName:    impactedPackagesName,
-// 						ImpactedDependencyVersion: impactedPackagesVersion,
-// 						ImpactedDependencyType:    impactedPackagesType,
-// 						Components:                directComponents,
-// 					},
-// 				},
-// 			},
-// 		)
-// 		return nil
-// 	}
-// }
-
-// func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) local.ParseScanGraphViolationFunc {
-// 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-// 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
-// 		violationOpRiskData := getOperationalRiskViolationReadableData(violation)
-// 		operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
-// 			ViolationContext: formats.ViolationContext{
-// 				Watch:    violation.WatchName,
-// 				Policies: results.ConvertPolicesToString(violation.Policies),
-// 			},
-// 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-// 				SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-// 				ImpactedDependencyName:    impactedPackagesName,
-// 				ImpactedDependencyVersion: impactedPackagesVersion,
-// 				ImpactedDependencyType:    impactedPackagesType,
-// 				Components:                directComponents,
-// 			},
-// 			IsEol:         violationOpRiskData.isEol,
-// 			Cadence:       violationOpRiskData.cadence,
-// 			Commits:       violationOpRiskData.commits,
-// 			Committers:    violationOpRiskData.committers,
-// 			NewerVersions: violationOpRiskData.newerVersions,
-// 			LatestVersion: violationOpRiskData.latestVersion,
-// 			RiskReason:    violationOpRiskData.riskReason,
-// 			EolMessage:    violationOpRiskData.eolMessage,
-// 		}
-// 		*operationalRiskViolationsRows = append(*operationalRiskViolationsRows, *operationalRiskViolationsRow)
-// 		return nil
-// 	}
-// }
 
 func PrepareSimpleJsonLicenses(target results.ScanTarget, licenses []services.License) ([]formats.LicenseRow, error) {
 	var licensesRows []formats.LicenseRow

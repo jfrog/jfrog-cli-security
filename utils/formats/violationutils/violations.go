@@ -189,19 +189,17 @@ type JasViolation struct {
 
 type ScaViolation struct {
 	Violation
-	ImpactedComponent cyclonedx.Component `json:"impacted_component"`
-	// TODO:
-	DirectComponents []formats.ComponentRow   `json:"direct_components,omitempty"`
-	ImpactPaths      [][]formats.ComponentRow `json:"impact_paths,omitempty"`
+	ImpactedComponent cyclonedx.Component      `json:"impacted_component"`
+	DirectComponents  []formats.ComponentRow   `json:"direct_components,omitempty"`
+	ImpactPaths       [][]formats.ComponentRow `json:"impact_paths,omitempty"`
 }
 
 type CveViolation struct {
 	ScaViolation
 	CveVulnerability   cyclonedx.Vulnerability
-	ContextualAnalysis *formats.Applicability `json:"contextual_analysis,omitempty"`
-	// TODO:
-	FixedVersions *[]cyclonedx.AffectedVersions `json:"fixed_versions,omitempty"`
-	// TODO: remove after information displayed in cyclonedx.Vulnerability
+	ContextualAnalysis *formats.Applicability        `json:"contextual_analysis,omitempty"`
+	FixedVersions      *[]cyclonedx.AffectedVersions `json:"fixed_versions,omitempty"`
+	// TODO: remove comment after information displayed in cyclonedx.Vulnerability
 	JfrogResearchInformation *formats.JfrogResearchInformation `json:"jfrogResearchInformation,omitempty"`
 }
 
