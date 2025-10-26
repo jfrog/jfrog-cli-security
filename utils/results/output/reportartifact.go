@@ -42,7 +42,7 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 		return "", fmt.Errorf("failed uploading the scan results: %w", err)
 	}
 	// Set the results platform URL in the command results and log it
-	if resultsUrl := getCommandScanResultsPlatformUrl(cmdResults, cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
+	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
 		cmdResults.SetResultsPlatformUrl(resultsUrl)
 		log.Info(fmt.Sprintf("%s:\n%s", GetCommandResultsPlatformUrlMessage(cmdResults), resultsUrl))
 	}
@@ -53,7 +53,7 @@ func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResu
 	return upload.GetScanResultsPlatformUrlMessage(cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil)
 }
 
-func getCommandScanResultsPlatformUrl(cmdResults *results.SecurityCommandResults, cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
+func getCommandScanResultsPlatformUrl(cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
 	content, err := utils.GetAsJsonBytes(cdxResults, true, true)
 	if err != nil {
 		log.Debug(fmt.Sprintf("Failed to generate CycloneDX content bytes for scan results URL: %s", err.Error()))
