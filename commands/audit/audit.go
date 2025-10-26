@@ -73,6 +73,10 @@ func (auditCmd *AuditCommand) SetProject(project string) *AuditCommand {
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) GetProjectKey() string {
+	return auditCmd.projectKey
+}
+
 func (auditCmd *AuditCommand) SetTargetRepoPath(repoPath string) *AuditCommand {
 	auditCmd.targetRepoPath = repoPath
 	return auditCmd
@@ -128,7 +132,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		return
 	}
 	// Get the defined and active watches from the platform.
-	manager, err := xsc.CreateXscService(serverDetails)
+	manager, err := xsc.CreateXscService(serverDetails, xrayutils.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to create Xray services manager: %s", err.Error()))
 		return
@@ -178,6 +182,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		auditCmd.GetXscVersion(),
 		serverDetails,
 		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+		auditCmd.projectKey,
 	)
 
 	auditParams := NewAuditParams().

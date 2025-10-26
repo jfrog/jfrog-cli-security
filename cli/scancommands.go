@@ -413,7 +413,7 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
@@ -507,7 +507,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
 	// Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
 }
 
 func CurationCmd(c *components.Context) error {
