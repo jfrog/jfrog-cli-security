@@ -87,7 +87,7 @@ func GitAuditCmd(c *components.Context) error {
 	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
 }
 
 func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {
