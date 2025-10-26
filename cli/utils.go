@@ -36,10 +36,19 @@ func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.Serv
 	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
 }
 
-func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails, format outputFormat.OutputFormat) error {
+func validateConnectionInputs(serverDetails *coreConfig.ServerDetails) error {
 	if serverDetails.XrayUrl == "" {
 		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
 	}
+	return nil
+}
+
+func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails, format outputFormat.OutputFormat) error {
+	// Validate connection inputs
+	if err := validateConnectionInputs(serverDetails); err != nil {
+		return err
+	}
+	// Validate violation context inputs
 	contextFlag := 0
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		contextFlag++
