@@ -91,12 +91,12 @@ func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, 
 	if err != nil {
 		return "", err
 	}
-	if gitContext.PullRequest == nil || gitContext.Target == nil {
-		// not a pull request, just return the source commit path
-		return filepath.ToSlash(filepath.Join(artifactPath, "commits")), nil
+	if gitContext.PullRequest != nil && gitContext.Target != nil {
+		// pull request, return the path with source and target commit hashes
+		return filepath.ToSlash(filepath.Join(artifactPath, "PR")), nil
 	}
-	// pull request, return the path with source and target commit hashes
-	return filepath.ToSlash(filepath.Join(artifactPath, "PR")), nil
+	// not a pull request, just return the source commit path
+	return filepath.ToSlash(filepath.Join(artifactPath, "commits")), nil
 }
 
 func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
