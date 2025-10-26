@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func getGitNameSpaceCommands() []components.Command {
@@ -41,6 +42,7 @@ func getGitNameSpaceCommands() []components.Command {
 }
 
 func GitAuditCmd(c *components.Context) error {
+	log.Info("####### Starting jf git audit Scan #######")
 	gitAuditCmd := audit.NewGitAuditCommand()
 	// Set connection params
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
@@ -90,7 +92,9 @@ func GitAuditCmd(c *components.Context) error {
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
+	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
+	log.Info("####### jf git audit Scan Finished #######")
+	return err
 }
 
 func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {
