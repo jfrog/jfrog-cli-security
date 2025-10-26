@@ -34,7 +34,7 @@ type SecurityCommandResults struct {
 	StartTime        time.Time                      `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId        string `json:"multi_scan_id,omitempty"`
-	ResultsPlatformUrl string `json:"results_platform_url,omitempty"`
+	ResultsPlatformUrl string `json:"results_link,omitempty"`
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
