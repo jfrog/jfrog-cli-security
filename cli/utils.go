@@ -106,11 +106,11 @@ func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
-func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) error {
+func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, projectKey string, err error) error {
 	if err == nil || !usage.ShouldReportUsage() {
 		return err
 	}
-	if reportError := xsc.ReportError(xrayVersion, xscVersion, serverDetails, err, "cli"); reportError != nil {
+	if reportError := xsc.ReportError(xrayVersion, xscVersion, serverDetails, err, "cli", projectKey); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
 	return err

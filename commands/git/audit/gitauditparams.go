@@ -63,6 +63,10 @@ func (gap *GitAuditParams) SetProjectKey(project string) *GitAuditParams {
 	return gap
 }
 
+func (gap *GitAuditParams) GetProjectKey() string {
+	return gap.resultsContext.ProjectKey
+}
+
 func (gap *GitAuditParams) SetFailBuild(failBuild bool) *GitAuditParams {
 	gap.failBuild = failBuild
 	return gap

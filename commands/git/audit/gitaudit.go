@@ -120,6 +120,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 		params.xscVersion,
 		params.serverDetails,
 		event,
+		params.GetProjectKey(),
 	)
 	params.multiScanId = multiScanId
 	params.startTime = startTime
