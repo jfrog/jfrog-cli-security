@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -35,12 +36,12 @@ func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices
 	return &event
 }
 
-func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, event *xscservices.XscAnalyticsGeneralEvent) (multiScanId string, startTime time.Time) {
+func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, event *xscservices.XscAnalyticsGeneralEvent, projectKey string) (multiScanId string, startTime time.Time) {
 	if !shouldReportEvents(xscVersion) {
 		log.Debug("Analytics metrics are disabled, skip sending event request to XSC")
 		return
 	}
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, error: %s ", err.Error()))
 		return
@@ -62,7 +63,7 @@ func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.S
 		return
 	}
 	// Generate the finalize event.
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails, xray.WithScopedProjectKey(resultsContext.ProjectKey))
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, skip sending command finalize event, error: %s ", err.Error()))
 		return
@@ -131,12 +132,12 @@ func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservice
 	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
 }
 
-func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails) (*xscservices.XscAnalyticsGeneralEvent, error) {
+func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails, projectKey string) (*xscservices.XscAnalyticsGeneralEvent, error) {
 	if !shouldReportEvents(xscVersion) {
 		log.Debug("Can't get general event from XSC - analytics metrics are disabled.")
 		return nil, nil
 	}
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, skip getting general event, error: %s ", err.Error()))
 		return nil, err
