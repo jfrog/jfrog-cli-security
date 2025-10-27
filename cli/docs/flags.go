@@ -223,7 +223,7 @@ var flagsMap = map[string]components.Flag{
 	url:      components.NewStringFlag(url, "JFrog URL."),
 	xrayUrl:  components.NewStringFlag(xrayUrl, "JFrog Xray URL."),
 	user:     components.NewStringFlag(user, "JFrog username."),
-	// jfrog-ignore: not hardcoded credentials
+	// jfrog-ignore: false positive, not hardcoded credentials
 	password:    components.NewStringFlag(password, "JFrog password."),
 	accessToken: components.NewStringFlag(accessToken, "JFrog access token."),
 	Threads:     components.NewStringFlag(Threads, "The number of parallel threads used to scan the source code project.", components.WithIntDefaultValue(cliutils.Threads)),
@@ -312,7 +312,7 @@ var flagsMap = map[string]components.Flag{
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
 	ScmType:   components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", contributors.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
 	ScmApiUrl: components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
-	// jfrog-ignore: not hardcoded credentials
+	// jfrog-ignore: false positive, not hardcoded credentials
 	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s environment variable, or in the corresponding environment variables '%s'.", contributors.GenericGitTokenEnvVar, contributors.NewScmType().GetOptionalScmTypeTokenEnvVars()), components.SetMandatory()),
 	Owner:           components.NewStringFlag(Owner, "The format of the owner key depends on the Git provider: On GitHub and GitLab, the owner is typically an individual or an organization, On Bitbucket, the owner can also be a project. In the case of a private instance on Bitbucket, the individual or organization name should be prefixed with '~'.", components.SetMandatory()),
 	RepoName:        components.NewStringFlag(RepoName, "List of semicolon-separated(;) repositories names to analyze, If not provided all repositories related to the provided owner will be analyzed."),
