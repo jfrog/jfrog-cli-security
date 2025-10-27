@@ -57,8 +57,8 @@ func TestCountContributorsFlags(t *testing.T) {
 
 type gitAuditCommandTestParams struct {
 	auditCommandTestParams
-	// Override the  repo clone url
-	CustomRepoCloneUrl string
+	// Override the test project repo clone url
+	OverrideRepoCloneUrl string
 }
 
 func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
@@ -69,9 +69,9 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
 	defer cleanUpProject()
-	if gitAuditParams.CustomRepoCloneUrl != "" {
+	if gitAuditParams.OverrideRepoCloneUrl != "" {
 		// Override the git remote url to a dummy one to avoid flaky tests due to collisions in policy/watch created for the same repo.
-		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.CustomRepoCloneUrl).Run(), "Failed to set dummy git remote url")
+		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
@@ -120,7 +120,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true},
-			CustomRepoCloneUrl:     dummyCloneUrl,
+			OverrideRepoCloneUrl:   dummyCloneUrl,
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
@@ -153,7 +153,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson},
-			CustomRepoCloneUrl:     dummyCloneUrl,
+			OverrideRepoCloneUrl:   dummyCloneUrl,
 		},
 		xrayVersion, xscVersion, "",
 		// No Violations should be reported since all violations are ignored.
@@ -215,7 +215,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
-			CustomRepoCloneUrl:     dummyCloneUrl,
+			OverrideRepoCloneUrl:   dummyCloneUrl,
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
@@ -243,7 +243,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
-			CustomRepoCloneUrl:     dummyCloneUrl,
+			OverrideRepoCloneUrl:   dummyCloneUrl,
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{

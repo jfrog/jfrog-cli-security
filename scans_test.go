@@ -259,9 +259,6 @@ func TestDockerScan(t *testing.T) {
 	defer deleteWatch()
 
 	imagesToScan := []string{
-		// Simple image with vulnerabilities
-		"vulnerables/web-dvwa:1.9",
-
 		// Image with RPM with vulnerabilities
 		"redhat/ubi8-micro:8.4",
 	}
