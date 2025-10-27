@@ -115,8 +115,18 @@ func getTestResourcesPath(basePath string) string {
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
-		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
-		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
+		TestArtifactory: {
+			&NpmRemoteRepo,
+			&NugetRemoteRepo,
+			&YarnRemoteRepo,
+			&GradleRemoteRepo,
+			&MvnRemoteRepo,
+			&MvnRemoteSnapshotsRepo,
+			&GoRepo,
+			&GoRemoteRepo,
+			&PypiRemoteRepo,
+		},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -149,14 +159,16 @@ func getNeededRepositories(reposMap map[*bool][]*string) map[*string]string {
 	for needed, testRepos := range reposMap {
 		if *needed {
 			for _, repo := range testRepos {
-				reposToCreate[repo] = reposConfigMap[repo]
+				if reposConfigMap[repo] != "" {
+					reposToCreate[repo] = reposConfigMap[repo]
+				}
 			}
 		}
 	}
 	return reposToCreate
 }
 
-func GetUniqueSuffixForRepo() string {
+func GetUniqueSuffix() string {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
@@ -173,7 +185,7 @@ func AddTimestampToGlobalVars() {
 	if timestampAdded {
 		return
 	}
-	uniqueSuffix := GetUniqueSuffixForRepo()
+	uniqueSuffix := GetUniqueSuffix()
 	// Repositories
 	GoRepo += uniqueSuffix
 	GoRemoteRepo += uniqueSuffix
