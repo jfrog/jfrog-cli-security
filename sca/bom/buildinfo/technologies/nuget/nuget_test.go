@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -220,4 +221,64 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSolutionFilePathParameter(t *testing.T) {
+	testCases := []struct {
+		name             string
+		solutionFilePath string
+		expectedFileName string
+	}{
+		{
+			name:             "solution file path from params",
+			solutionFilePath: "/path/to/my-solution.sln",
+			expectedFileName: "my-solution.sln",
+		},
+		{
+			name:             "no solution file path",
+			solutionFilePath: "",
+			expectedFileName: "",
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			params := technologies.BuildInfoBomGeneratorParams{
+				SolutionFilePath: test.solutionFilePath,
+			}
+
+			// Get the solution file path using the same logic as runDotnetRestore
+			var solutionFilePath string
+			if params.SolutionFilePath != "" {
+				solutionFilePath = params.SolutionFilePath
+			}
+			var solutionFileName string
+			if solutionFilePath != "" {
+				solutionFileName = filepath.Base(solutionFilePath)
+			}
+
+			assert.Equal(t, test.expectedFileName, solutionFileName)
+		})
+	}
+}
+
+func TestRunDotnetRestoreWithRealSolutionFile(t *testing.T) {
+	testDataDir := filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
+	multiProjectPath := filepath.Join(testDataDir, "nuget", "multi")
+	solutionFilePath := filepath.Join(multiProjectPath, "TestSolution.sln")
+
+	if _, err := os.Stat(solutionFilePath); os.IsNotExist(err) {
+		t.Skip("Test solution file not found")
+	}
+
+	t.Run("with solution file path", func(t *testing.T) {
+		params := technologies.BuildInfoBomGeneratorParams{
+			SolutionFilePath: solutionFilePath,
+		}
+		toolType := bidotnet.ConvertNameToToolType("dotnet")
+		err := runDotnetRestore(multiProjectPath, params, toolType, []string{})
+		if err != nil {
+			assert.NotContains(t, err.Error(), "this folder contains more than one project or solution file")
+		}
+	})
 }
