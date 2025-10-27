@@ -450,13 +450,13 @@ func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixe
 		Range: &[]cyclonedx.AffectedVersions{},
 	}
 	// Affected version
-	AppendAffectedVersions(&affect, cyclonedx.AffectedVersions{
+	AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 		Version: impactedPackageVersion,
 		Status:  cyclonedx.VulnerabilityStatusAffected,
 	})
 	// Fixed versions
 	for _, fixedVersion := range fixedVersions {
-		AppendAffectedVersions(&affect, cyclonedx.AffectedVersions{
+		AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 			Version: fixedVersion,
 			Status:  cyclonedx.VulnerabilityStatusNotAffected,
 		})
@@ -464,7 +464,7 @@ func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixe
 	return
 }
 
-func AppendAffectedVersions(affect *cyclonedx.Affects, affectedVersions ...cyclonedx.AffectedVersions) {
+func AppendAffectedVersionsIfNotExists(affect *cyclonedx.Affects, affectedVersions ...cyclonedx.AffectedVersions) {
 	if affect.Range == nil {
 		affect.Range = &[]cyclonedx.AffectedVersions{}
 	}
@@ -473,7 +473,6 @@ func AppendAffectedVersions(affect *cyclonedx.Affects, affectedVersions ...cyclo
 		if newAffectedVersion.Version == "" {
 			continue
 		}
-		// Check if the affected version already exists
 		exists := false
 		for _, existingAffectedVersion := range *affect.Range {
 			if existingAffectedVersion.Version == newAffectedVersion.Version {
