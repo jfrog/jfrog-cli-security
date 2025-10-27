@@ -12,7 +12,7 @@ runs:
   steps:
     # Install dependencies
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: 1.24.x
     # - name: Setup Go with cache
@@ -27,21 +27,21 @@ runs:
       run: gem install cocoapods
 
     - name: Install npm
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: "16"
     - name: Setup Pnpm
-      uses: pnpm/action-setup@v3
+      uses: pnpm/action-setup@v4
       with:
         version: 8
 
     - name: Install Java
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: "11"
         distribution: "adopt"
     - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
+      uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: 7.6
 
@@ -50,7 +50,7 @@ runs:
       with:
         nuget-version: 6.11.0
     - name: Install dotnet
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: '6.x'
 
@@ -72,7 +72,7 @@ runs:
       shell: 'bash'
 
     - name: Setup Python3
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.x"
     - name: Setup Pipenv
@@ -87,21 +87,16 @@ runs:
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
 
-    - name: Install Swift on Linux
-      uses: swift-actions/setup-swift@v2
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Linux'}}
-
-    - name: Install Swift on MacOS
-      run: brew install swift
-      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'macOS'}}
+    - name: Install Swift on Linux and macOS
+      uses: SwiftyLab/setup-swift@latest
+      if: ${{ inputs.install-swift == 'true' && (runner.os == 'Linux' || runner.os == 'macOS') }}
 
     - name: Install Swift on Windows
       uses: compnerd/gha-setup-swift@v0.3.0
       with:
         branch: swift-6.1-release
         tag: 6.1-RELEASE
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows'}}
+      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows' }}
 
     # Ensure Java 11 remains active after all installations (Swift setup might override it)
     - name: Force Java 11 on Windows

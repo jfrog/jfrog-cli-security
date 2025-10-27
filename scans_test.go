@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
-	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -12,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
+	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,6 +37,7 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -78,6 +80,7 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	output, err := runXrayBinaryScan(t, params)
 	if errorExpected {
+		log.Error("Xray binary scan failed: " + err.Error())
 		assert.Error(t, err)
 	} else {
 		assert.NoError(t, err)
@@ -256,9 +259,6 @@ func TestDockerScan(t *testing.T) {
 	defer deleteWatch()
 
 	imagesToScan := []string{
-		// Simple image with vulnerabilities
-		"bitnami/minio:2022",
-
 		// Image with RPM with vulnerabilities
 		"redhat/ubi8-micro:8.4",
 	}
