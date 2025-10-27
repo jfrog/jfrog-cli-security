@@ -156,7 +156,7 @@ func getNeededRepositories(reposMap map[*bool][]*string) map[*string]string {
 	return reposToCreate
 }
 
-func GetUniqueSuffixForRepo() string {
+func GetUniqueSuffix() string {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
@@ -173,7 +173,7 @@ func AddTimestampToGlobalVars() {
 	if timestampAdded {
 		return
 	}
-	uniqueSuffix := GetUniqueSuffixForRepo()
+	uniqueSuffix := GetUniqueSuffix()
 	// Repositories
 	GoRepo += uniqueSuffix
 	GoRemoteRepo += uniqueSuffix
