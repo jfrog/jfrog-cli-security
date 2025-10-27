@@ -983,7 +983,10 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 	}
 	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
 		if exists, err := fileutils.IsFileExists(filepath.Join(workspace, "Dockerfile"), false); err == nil && exists {
-			return filepath.Join(workspace, "Dockerfile")
+			// Validate file path to prevent directory traversal
+			if !strings.Contains(workspace, "..") {
+				return filepath.Join(workspace, "Dockerfile")
+			}
 		}
 	}
 	return ""
