@@ -964,7 +964,7 @@ func TestDepTreeToSbom(t *testing.T) {
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
 					Ref:          "pkg:npm/root@1.0.0",
-					Dependencies: &[]string{"pkg:npm/A@1.0.1", "pkg:npm/D@2.0.0", "pkg:npm/B@1.0.0"},
+					Dependencies: &[]string{"pkg:npm/A@1.0.1", "pkg:npm/B@1.0.0", "pkg:npm/D@2.0.0"},
 				},
 				{
 					Ref:          "pkg:npm/A@1.0.1",
