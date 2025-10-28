@@ -593,18 +593,10 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId, watch))).
 			WithLevel(level.String())
 		// Add properties
-		resultsProperties := sarif.NewPropertyBag()
-		if params.ApplicabilityStatus != jasutils.NotScanned {
-			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, params.ApplicabilityStatus.String())
-		}
+		issueResult = appendScaVulnerabilityPropertiesToSarifResult(issueResult, params.ApplicabilityStatus, params.FixedVersions, params.AddFixedVersionProperty)
 		if isViolation {
 			issueResult = appendViolationContextToSarifResult(issueResult, *params.Violation)
 		}
-		if params.AddFixedVersionProperty {
-			// Add fixed versions property
-			resultsProperties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(params.FixedVersions))
-		}
-		issueResult.WithProperties(resultsProperties)
 		// Add location
 		issueLocation := getComponentSarifLocation(params.CmdType, directDependency)
 		if issueLocation != nil {
@@ -615,12 +607,29 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	return
 }
 
+func appendScaVulnerabilityPropertiesToSarifResult(sarifResult *sarif.Result, applicabilityStatus jasutils.ApplicabilityStatus, fixedVersions []string, addFixedVersionProperty bool) *sarif.Result {
+	if sarifResult.Properties == nil {
+		sarifResult.Properties = sarif.NewPropertyBag()
+	}
+	if applicabilityStatus != jasutils.NotScanned {
+		sarifResult.Properties.Add(jasutils.ApplicabilitySarifPropertyKey, applicabilityStatus.String())
+	}
+	if addFixedVersionProperty {
+		// Add fixed versions property
+		sarifResult.Properties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(fixedVersions))
+	}
+	return sarifResult
+}
+
 func appendViolationContextToSarifResult(sarifResult *sarif.Result, violation violationutils.Violation) *sarif.Result {
 	if sarifResult.Properties == nil {
 		sarifResult.Properties = sarif.NewPropertyBag()
 	}
 	if violation.Watch != "" {
 		sarifResult.Properties.Add(sarifutils.WatchSarifPropertyKey, violation.Watch)
+	}
+	if violation.ViolationType != "" {
+		sarifResult.Properties.Add(sarifutils.ViolationTypeSarifPropertyKey, violation.ViolationType.String())
 	}
 	if len(violation.Policies) > 0 {
 		policies := []string{}
@@ -882,7 +891,25 @@ func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) 
 	if result == nil {
 		return subScanType
 	}
+	// Try to get from properties first
+	if violationType := sarifutils.GetResultViolationType(result); violationType != "" {
+		return getResultViolationType(violationType)
+	}
+	// Fallback to rule id
 	return getScanType(subScanType, sarifutils.GetResultRuleId(result))
+}
+
+func getResultViolationType(violationType string) utils.SubScanType {
+	switch violationutils.ViolationIssueType(violationType) {
+		case violationutils.SecretsViolationType:
+			return utils.SecretsScan
+		case violationutils.IacViolationType:
+			return utils.IacScan
+		case violationutils.SastViolationType:
+			return utils.SastScan
+		default:
+			return utils.ScaScan
+	}
 }
 
 func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
@@ -893,7 +920,7 @@ func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanTy
 	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
 		return utils.ScaScan
 	}
-	if strings.HasPrefix(scanType, "EXP") {
+	if strings.HasPrefix(scanType, "EXP") || strings.Contains(scanType, "SECRET") {
 		return utils.SecretsScan
 	}
 	// TODO: Add more rules to identify IAC

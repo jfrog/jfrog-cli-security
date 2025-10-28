@@ -13,6 +13,22 @@ import (
 )
 
 const (
+	LicenseViolationType ViolationIssueType = "license"
+	OperationalRiskType  ViolationIssueType = "operational_risk"
+	// Security types
+	CveViolationType     ViolationIssueType = "cve"
+	SecretsViolationType ViolationIssueType = "secrets"
+	IacViolationType     ViolationIssueType = "iac"
+	SastViolationType    ViolationIssueType = "sast"
+)
+
+type ViolationIssueType string
+
+func (v ViolationIssueType) String() string {
+	return string(v)
+}
+
+const (
 	ScaViolationTypeSecurity        ScaViolationIssueType = "security"
 	ScaViolationTypeOperationalRisk ScaViolationIssueType = "operational_risk"
 	ScaViolationTypeLicense         ScaViolationIssueType = "license"
@@ -138,10 +154,11 @@ func (vs *Violations) ShouldFailPR() bool {
 }
 
 type Violation struct {
-	ViolationId string                 `json:"violation_id"`
-	Severity    severityutils.Severity `json:"severity"`
-	Watch       string                 `json:"watch_name"`
-	Policies    []Policy               `json:"matched_policies,omitempty"`
+	ViolationId   string                 `json:"violation_id"`
+	ViolationType ViolationIssueType     `json:"violation_type"`
+	Severity      severityutils.Severity `json:"severity"`
+	Watch         string                 `json:"watch_name"`
+	Policies      []Policy               `json:"matched_policies,omitempty"`
 }
 
 func (v *Violation) ShouldSkipNotApplicable() bool {

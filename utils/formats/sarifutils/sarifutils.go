@@ -15,6 +15,7 @@ import (
 const (
 	OriginSarifPropertyKey                  = "origin"
 	WatchSarifPropertyKey                   = "watch"
+	ViolationTypeSarifPropertyKey           = "type"
 	PoliciesSarifPropertyKey                = "policies"
 	JasIssueIdSarifPropertyKey              = "issueId"
 	JasScannerIdSarifPropertyKey            = "scanner_id"
@@ -41,6 +42,10 @@ func GetRuleOrigin(rule *sarif.ReportingDescriptor) (origin string) {
 		return originValue
 	}
 	return
+}
+
+func GetResultViolationType(result *sarif.Result) (violationType string) {
+	return GetResultProperty(ViolationTypeSarifPropertyKey, result)
 }
 
 func GetResultPropertyTokenValidation(result *sarif.Result) string {

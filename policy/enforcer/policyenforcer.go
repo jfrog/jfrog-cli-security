@@ -145,7 +145,7 @@ func getViolationType(violation services.XrayViolation) utils.SubScanType {
 
 func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (affectedComponent *cyclonedx.Component, scaViolation violationutils.ScaViolation) {
 	scaViolation = violationutils.ScaViolation{
-		Violation: convertToBasicViolation(violation),
+		Violation: convertToBasicViolation(getScaViolationType(violation), violation),
 	}
 	affectedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
 	if affectedComponent == nil {
@@ -153,6 +153,32 @@ func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedC
 	}
 	scaViolation.ImpactedComponent = *affectedComponent
 	return
+}
+
+func getJasViolationType(jasType jasutils.JasScanType) violationutils.ViolationIssueType {
+	switch jasType {
+	case jasutils.Sast:
+		return violationutils.SastViolationType
+	case jasutils.Secrets:
+		return violationutils.SecretsViolationType
+	case jasutils.IaC:
+		return violationutils.IacViolationType
+	default:
+		return ""
+	}
+}
+
+func getScaViolationType(violation services.XrayViolation) violationutils.ViolationIssueType {
+	switch violation.Type {
+	case xrayUtils.SecurityViolation:
+		return violationutils.CveViolationType
+	case xrayUtils.LicenseViolation:
+		return violationutils.LicenseViolationType
+	case xrayUtils.OperationalRiskViolation:
+		return violationutils.OperationalRiskType
+	default:
+		return ""
+	}
 }
 
 func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (impactedComponent *cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) {
@@ -221,7 +247,7 @@ func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType j
 		return nil
 	}
 	return &violationutils.JasViolation{
-		Violation: convertToBasicViolation(violation),
+		Violation: convertToBasicViolation(getJasViolationType(jasType), violation),
 		Rule:      match.rule,
 		Result:    match.result,
 		Location:  match.location,
@@ -290,11 +316,12 @@ func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.Ja
 	return ""
 }
 
-func convertToBasicViolation(violation services.XrayViolation) violationutils.Violation {
+func convertToBasicViolation(violationType violationutils.ViolationIssueType, violation services.XrayViolation) violationutils.Violation {
 	cmdViolation := violationutils.Violation{
-		ViolationId: violation.Id,
-		Watch:       violation.Watch,
-		Severity:    severityutils.XraySeverityToSeverity(violation.Severity),
+		ViolationId:   violation.Id,
+		ViolationType: violationType,
+		Watch:        violation.Watch,
+		Severity:     severityutils.XraySeverityToSeverity(violation.Severity),
 	}
 	for _, policy := range violation.Policies {
 		cmdViolation.Policies = append(cmdViolation.Policies, violationutils.Policy{

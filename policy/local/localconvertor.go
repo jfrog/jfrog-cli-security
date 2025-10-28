@@ -141,11 +141,12 @@ func getAllowedLicensesViolations(allowedLicenses []string, licenses []services.
 	return
 }
 
-func convertToBasicJasViolation(result *sarif.Result, severity severityutils.Severity) violationutils.Violation {
+func convertToBasicJasViolation(violationType violationutils.ViolationIssueType, result *sarif.Result, severity severityutils.Severity) violationutils.Violation {
 	violation := violationutils.Violation{
-		ViolationId: sarifutils.GetResultIssueId(result),
-		Severity:    severity,
-		Watch:       sarifutils.GetResultWatches(result),
+		ViolationId:   sarifutils.GetResultIssueId(result),
+		ViolationType: violationType,
+		Severity:      severity,
+		Watch:         sarifutils.GetResultWatches(result),
 	}
 	for _, policy := range sarifutils.GetResultPolicies(result) {
 		violation.Policies = append(violation.Policies, violationutils.Policy{
@@ -161,21 +162,21 @@ func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.
 		switch jasType {
 		case jasutils.Secrets:
 			convertedViolations.Secrets = append(convertedViolations.Secrets, violationutils.JasViolation{
-				Violation: convertToBasicJasViolation(result, severity),
+				Violation: convertToBasicJasViolation(violationutils.SecretsViolationType, result, severity),
 				Rule:      rule,
 				Result:    result,
 				Location:  location,
 			})
 		case jasutils.IaC:
 			convertedViolations.Iac = append(convertedViolations.Iac, violationutils.JasViolation{
-				Violation: convertToBasicJasViolation(result, severity),
+				Violation: convertToBasicJasViolation(violationutils.IacViolationType, result, severity),
 				Rule:      rule,
 				Result:    result,
 				Location:  location,
 			})
 		case jasutils.Sast:
 			convertedViolations.Sast = append(convertedViolations.Sast, violationutils.JasViolation{
-				Violation: convertToBasicJasViolation(result, severity),
+				Violation: convertToBasicJasViolation(violationutils.SastViolationType, result, severity),
 				Rule:      rule,
 				Result:    result,
 				Location:  location,

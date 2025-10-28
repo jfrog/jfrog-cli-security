@@ -286,23 +286,28 @@ func CreateDummyJasRule(id string, cwe ...string) *sarif.ReportingDescriptor {
 	return descriptor
 }
 
-func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, metadata string, location formats.Location) *sarif.Result {
+func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, metadata string, locations ...formats.Location) *sarif.Result {
 	properties := sarif.NewPropertyBag()
 	properties.Add("tokenValidation", status.String())
 	properties.Add("metadata", metadata)
-	return &sarif.Result{
-		Message: sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
-		RuleID:  utils.NewStrPtr(id),
-		Level:   severityutils.LevelInfo.String(),
-		Locations: []*sarif.Location{
-			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
-		},
+	result := &sarif.Result{
+		Message:    sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
+		RuleID:     utils.NewStrPtr(id),
+		Level:      severityutils.LevelInfo.String(),
 		Properties: properties,
 	}
+	for _, location := range locations {
+		result.Locations = append(result.Locations, CreateDummyLocation(location))
+	}
+	return result
 }
 
-func CreateDummySecretViolationResult(id string, status jasutils.TokenValidationStatus, metadata, watch, issueId string, policies []string, location formats.Location) *sarif.Result {
-	result := CreateDummySecretResult(id, status, metadata, location)
+func CreateDummyLocation(location formats.Location) *sarif.Location {
+	return sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet)
+}
+
+func CreateDummySecretViolationResult(id string, status jasutils.TokenValidationStatus, metadata, watch, issueId string, policies []string, locations ...formats.Location) *sarif.Result {
+	result := CreateDummySecretResult(id, status, metadata, locations...)
 	result.Properties.Add(sarifutils.WatchSarifPropertyKey, watch)
 	result.Properties.Add(sarifutils.JasIssueIdSarifPropertyKey, issueId)
 	result.Properties.Add(sarifutils.PoliciesSarifPropertyKey, policies)
