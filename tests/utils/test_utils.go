@@ -34,6 +34,25 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
+// SkipTestIfDurationNotPassed skips the test if the specified duration in days hasn't passed since the given date.
+// dateStr should be in the format "02-01-2006" (DD-MM-YYYY).
+// durationDays is the number of days that should have passed.
+func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int, msg string) {
+	givenDate, err := time.Parse("02-01-2006", dateStr)
+	if err != nil {
+		t.Fatalf("Invalid date format '%s'. Expected format: DD-MM-YYYY", dateStr)
+	}
+
+	daysSinceDate := int(time.Since(givenDate).Hours() / 24)
+	if daysSinceDate < durationDays {
+		if msg == "" {
+			t.Skipf("Skipping test. Only %d days have passed since %s, but %d days are required.", daysSinceDate, dateStr, durationDays)
+		} else {
+			t.Skipf("Skipping test (%d/%d days have passed since %s, but %d days are required.) Reason: %s", daysSinceDate, durationDays, dateStr, durationDays, msg)
+		}
+	}
+}
+
 func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {
 	var jsonMap formats.EnrichJson
 	err := json.Unmarshal([]byte(output), &jsonMap)

@@ -26,7 +26,7 @@ func TestReportError(t *testing.T) {
 	securityTestUtils.ValidateXscVersion(t, xscVersion, xsc.MinXscVersionForErrorReport)
 	defer cleanUp()
 	errorToReport := errors.New("THIS IS NOT A REAL ERROR! This Error is posted as part of TestReportError test")
-	assert.NoError(t, xsc.ReportError(xrayVersion, xscVersion, tests.XscDetails, errorToReport, "cli"))
+	assert.NoError(t, xsc.ReportError(xrayVersion, xscVersion, tests.XscDetails, errorToReport, "cli", ""))
 }
 
 // In the npm tests we use a watch flag, so we would get only violations
@@ -90,7 +90,7 @@ func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output s
 	require.NoError(t, err)
 
 	// Verify analytics metrics.
-	event, err := xsc.GetScanEvent(xrayVersion, xscVersion, results.MultiScanId, tests.XscDetails)
+	event, err := xsc.GetScanEvent(xrayVersion, xscVersion, results.MultiScanId, tests.XscDetails, "")
 	require.NoError(t, err)
 	assert.NotNil(t, event)
 	assert.NotEmpty(t, results.MultiScanId)
