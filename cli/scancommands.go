@@ -467,8 +467,10 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
 		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
+	if watches, err := getWatches(c); err != nil {
+		return "", "", nil, nil, err
+	} else {
+		auditCmd.SetWatches(watches)
 	}
 
 	if c.GetStringFlagValue(flags.WorkingDirs) != "" {

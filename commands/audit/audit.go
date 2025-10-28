@@ -743,6 +743,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
 		enforcer.WithParams(auditParams.rtResultRepository, uploadPath),
+		enforcer.WithWatches(auditParams.resultsContext.Watches),
 	)
 	// Fetch violations from Xray
 	if err = policy.EnrichWithGeneratedViolations(generator, cmdResults); err != nil {

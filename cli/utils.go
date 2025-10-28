@@ -43,6 +43,17 @@ func validateConnectionInputs(serverDetails *coreConfig.ServerDetails) error {
 	return nil
 }
 
+func getWatches(c *components.Context) (watches []string, err error) {
+	if !c.IsFlagSet(flags.Watches) {
+		return []string{}, nil
+	}
+	watches = splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches))
+	if c.GetBoolFlagValue(flags.StaticSca) && len(watches) > 1 {
+		return nil, errorutils.CheckErrorf("the --%s option supports a single watch when used with the --%s option", flags.Watches, flags.StaticSca)
+	}
+	return watches, nil
+}
+
 func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails, format outputFormat.OutputFormat) error {
 	// Validate connection inputs
 	if err := validateConnectionInputs(serverDetails); err != nil {

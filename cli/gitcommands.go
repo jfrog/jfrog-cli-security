@@ -62,8 +62,10 @@ func GitAuditCmd(c *components.Context) error {
 	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
-	if c.IsFlagSet(flags.Watches) {
-		gitAuditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
+	if watches, err := getWatches(c); err != nil {
+		return err
+	} else {
+		gitAuditCmd.SetWatches(watches)
 	}
 	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	// Set Scan params

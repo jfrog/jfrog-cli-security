@@ -31,10 +31,12 @@ import (
 
 type PolicyEnforcerViolationGenerator struct {
 	serverDetails *config.ServerDetails
-	projectKey    string
-
-	rtRepository string
+	// Results Artifact
 	artifactPath string
+	rtRepository string
+	// Filters
+	projectKey    string
+	watches       []string
 }
 
 func NewPolicyEnforcerViolationGenerator() *PolicyEnforcerViolationGenerator {
@@ -66,6 +68,14 @@ func WithParams(repo, path string) policy.PolicyHandlerOption {
 	}
 }
 
+func WithWatches(watches []string) policy.PolicyHandlerOption {
+	return func(generator policy.PolicyHandler) {
+		if p, ok := generator.(*PolicyEnforcerViolationGenerator); ok {
+			p.watches = watches
+		}
+	}
+}
+
 func (p *PolicyEnforcerViolationGenerator) WithOptions(options ...policy.PolicyHandlerOption) policy.PolicyHandler {
 	for _, option := range options {
 		option(p)
@@ -88,6 +98,12 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	// Get with API
 	log.Info("Fetching violations from Xray...")
 	params := xrayUtils.NewViolationsRequest().IncludeDetails(true).FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: p.rtRepository, Path: p.artifactPath})
+	if len(p.watches) > 0 {
+		if len(p.watches) > 1 {
+			return convertedViolations, errors.New("the policy enforcer violation generator supports a single watch")
+		}
+		params.FilterByWatchName(p.watches[0])
+	}
 	generatedViolations, err := xrayManager.GetViolations(params)
 	if err != nil {
 		return
