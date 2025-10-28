@@ -394,6 +394,7 @@ func ValidateCommandOutput(t *testing.T, output string, outFormat format.OutputF
 	case format.CycloneDx:
 		VerifyCycloneDxResults(t, output, params)
 	default:
+		// SARIF format is not supported for validations (not implemented)
 		t.Fatalf("Unsupported output format: %s", outFormat)
 	}
 }

@@ -47,6 +47,7 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 			format:   format.SimpleJson,
 			withVuln: true,
 		},
+		// SARIF format is not supported for validations (not implemented)
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

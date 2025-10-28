@@ -613,7 +613,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetXscVersion(services.ConfigProfileMinXscVersion).
 				SetOutputFormat(format.Table).
 				SetUseJas(true).
-				SetIsRecursiveScan(true).
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().

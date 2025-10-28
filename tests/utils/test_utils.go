@@ -432,12 +432,10 @@ func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string,
 // Make sure to call this function before running any tests that require the analyzer manager binary.
 func PrepareAnalyzerManagerResource() (err error) {
 	if localPath := os.Getenv(configTests.TestJfrogLocalAnalyzerManagerDirEnvVar); localPath != "" {
-		// Copy the analyzer manager binary to the current JFrog Home.
 		amLocalPath, err := jas.GetAnalyzerManagerDirAbsolutePath()
 		if err != nil {
 			return fmt.Errorf("failed to get analyzer manager local path: %w", err)
 		}
-		// if exists, no need to copy
 		if exist, err := fileutils.IsDirExists(amLocalPath, false); err != nil || exist {
 			return err
 		}
@@ -445,11 +443,10 @@ func PrepareAnalyzerManagerResource() (err error) {
 			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
 		}
 	}
-	// Download the analyzer manager binary if it doesn't exist to current JFrog Home.
 	return jas.DownloadAnalyzerManagerIfNeeded(0)
 }
 
-func PrepareIndexerResource(details *config.ServerDetails) (err error) {
+func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
 	manager, version, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(details)
 	if err != nil {
 		return fmt.Errorf("failed to create Xray service manager: %w", err)

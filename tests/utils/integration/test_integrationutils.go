@@ -521,12 +521,10 @@ func InitTestHomeResources() (cleanUp func()) {
 }
 
 func PrepareJfrogHomeResources(details *config.ServerDetails) (err error) {
-	// Prepare the Analyzer Manager resource.
 	if err = testUtils.PrepareAnalyzerManagerResource(); err != nil {
 		return fmt.Errorf("failed to prepare analyzer manager resource: %w", err)
 	}
-	// Prepare the Xray Indexer resource.
-	if err = testUtils.PrepareIndexerResource(details); err != nil {
+	if err = testUtils.PrepareIndexerAppResource(details); err != nil {
 		return fmt.Errorf("failed to prepare Xray Indexer resource: %w", err)
 	}
 	return
