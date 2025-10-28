@@ -1310,7 +1310,7 @@ func TestDepTreeToSbom(t *testing.T) {
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
 					Ref:          "npm:root:1.0.0",
-					Dependencies: &[]string{"npm:A:1.0.1", "npm:D:2.0.0", "npm:B:1.0.0"},
+					Dependencies: &[]string{"npm:A:1.0.1", "npm:B:1.0.0", "npm:D:2.0.0"},
 				},
 				{
 					Ref:          "npm:A:1.0.1",
@@ -1456,6 +1456,13 @@ func TestDepTreeToSbom(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			components, dependencies := DepsTreeToSbom(test.depTrees...)
+			if dependencies != nil {
+				for i := range *dependencies {
+					if (*dependencies)[i].Dependencies != nil {
+						sort.Strings(*(*dependencies)[i].Dependencies)
+					}
+				}
+			}
 			assert.Equal(t, test.expectedComponents, components)
 			assert.Equal(t, test.expectedDependencies, dependencies)
 		})

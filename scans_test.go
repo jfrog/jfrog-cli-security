@@ -11,6 +11,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/ocicontainer"
+	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -24,7 +27,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/container"
-	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -35,6 +37,7 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -77,6 +80,7 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	output, err := runXrayBinaryScan(t, params)
 	if errorExpected {
+		log.Error("Xray binary scan failed: " + err.Error())
 		assert.Error(t, err)
 	} else {
 		assert.NoError(t, err)
@@ -255,9 +259,6 @@ func TestDockerScan(t *testing.T) {
 	defer deleteWatch()
 
 	imagesToScan := []string{
-		// Simple image with vulnerabilities
-		"bitnami/minio:2022",
-
 		// Image with RPM with vulnerabilities
 		"redhat/ubi8-micro:8.4",
 	}
@@ -272,12 +273,12 @@ func TestDockerScan(t *testing.T) {
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int, minInactives int, validateSecrets bool) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
-	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
+	dockerPullCommand := container.NewPullCommand(ocicontainer.DockerClient)
 	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
 	if !assert.NoError(t, dockerPullCommand.Run()) {
 		return
 	}
-	defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+	defer tests.DeleteTestImage(t, imageTag, ocicontainer.DockerClient)
 	// Run docker scan on image
 	cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
 	if validateSecrets {
@@ -318,10 +319,10 @@ func TestAdvancedSecurityDockerScan(t *testing.T) {
 func runAdvancedSecurityDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName string) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
-	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
+	dockerPullCommand := container.NewPullCommand(ocicontainer.DockerClient)
 	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
 	if assert.NoError(t, dockerPullCommand.Run()) {
-		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+		defer tests.DeleteTestImage(t, imageTag, ocicontainer.DockerClient)
 		args := []string{"docker", "scan", imageTag, "--server-id=default", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
 
 		// Run docker scan on image

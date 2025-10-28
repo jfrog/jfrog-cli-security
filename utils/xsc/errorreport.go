@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -12,13 +13,13 @@ import (
 
 // Sends an error report when the Xsc service is enabled.
 // Errors returned by this function typically do not disrupt the flow, as reporting errors is optional.
-func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDetails, errorToReport error, source string) error {
+func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDetails, errorToReport error, source, projectKey string) error {
 	if xscVersion == "" {
 		log.Debug("Xsc service is not available. Reporting to JFrog analytics is skipped...")
 		return nil
 	}
 	log.Debug("Sending an error report to JFrog analytics...")
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		return fmt.Errorf("failed to create an HTTP client: %s.\nReporting to JFrog analytics is skipped", err.Error())
 	}

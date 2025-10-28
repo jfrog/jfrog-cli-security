@@ -376,11 +376,16 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 		return nil
 	}
 	for _, license := range licenses {
+		if license.Key == "Unknown" && len(license.Components) == 0 {
+			// Skip licenses with key "Unknown" and no components
+			log.Debug("Skipping license with key 'Unknown' and no components")
+			continue
+		}
 		impactedPackagesIds, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+		for compIndex := range impactedPackagesIds {
 			if err := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
@@ -408,7 +413,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
-		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
+		err = errorutils.CheckErrorf("failed while parsing the response from Xray: components map is empty")
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
@@ -1107,10 +1112,12 @@ func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[strin
 }
 
 func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
-	dependencies = &[]string{}
+	depSet := datastructures.MakeSet[string]()
 	for _, dep := range node.Nodes {
-		*dependencies = append(*dependencies, techutils.XrayComponentIdToCdxComponentRef(dep.Id))
+		depSet.Add(techutils.XrayComponentIdToCdxComponentRef(dep.Id))
 	}
+	dependencies = &[]string{}
+	*dependencies = depSet.ToSlice()
 	return
 }
 

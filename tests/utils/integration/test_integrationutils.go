@@ -104,6 +104,7 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
+	testUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 14, "Catalog API not available yet in test platform.")
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 

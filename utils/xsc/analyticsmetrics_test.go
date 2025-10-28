@@ -139,7 +139,7 @@ func TestSendStartScanEvent(t *testing.T) {
 			mockServer, serverDetails, _ := validations.XscServer(t, testCase.mockParams)
 			defer mockServer.Close()
 
-			msi, startTime := SendNewScanEvent(testCase.mockParams.XrayVersion, testCase.mockParams.XscVersion, serverDetails, CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails))
+			msi, startTime := SendNewScanEvent(testCase.mockParams.XrayVersion, testCase.mockParams.XscVersion, serverDetails, CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails), "")
 			if testCase.reportUsage {
 				assert.NotEmpty(t, startTime)
 			}
