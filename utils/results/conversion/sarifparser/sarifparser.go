@@ -901,14 +901,14 @@ func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) 
 
 func getResultViolationType(violationType string) utils.SubScanType {
 	switch violationutils.ViolationIssueType(violationType) {
-		case violationutils.SecretsViolationType:
-			return utils.SecretsScan
-		case violationutils.IacViolationType:
-			return utils.IacScan
-		case violationutils.SastViolationType:
-			return utils.SastScan
-		default:
-			return utils.ScaScan
+	case violationutils.SecretsViolationType:
+		return utils.SecretsScan
+	case violationutils.IacViolationType:
+		return utils.IacScan
+	case violationutils.SastViolationType:
+		return utils.SastScan
+	default:
+		return utils.ScaScan
 	}
 }
 

@@ -35,8 +35,8 @@ type PolicyEnforcerViolationGenerator struct {
 	artifactPath string
 	rtRepository string
 	// Filters
-	projectKey    string
-	watches       []string
+	projectKey string
+	watches    []string
 }
 
 func NewPolicyEnforcerViolationGenerator() *PolicyEnforcerViolationGenerator {
@@ -336,8 +336,8 @@ func convertToBasicViolation(violationType violationutils.ViolationIssueType, vi
 	cmdViolation := violationutils.Violation{
 		ViolationId:   violation.Id,
 		ViolationType: violationType,
-		Watch:        violation.Watch,
-		Severity:     severityutils.XraySeverityToSeverity(violation.Severity),
+		Watch:         violation.Watch,
+		Severity:      severityutils.XraySeverityToSeverity(violation.Severity),
 	}
 	for _, policy := range violation.Policies {
 		cmdViolation.Policies = append(cmdViolation.Policies, violationutils.Policy{

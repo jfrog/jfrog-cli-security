@@ -114,7 +114,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			ExactResultsMatch: true,
-			Total: &validations.TotalCount{Vulnerabilities: 3},
+			Total:             &validations.TotalCount{Vulnerabilities: 3},
 			Vulnerabilities: &validations.VulnerabilityCount{
 				ValidateScan: &validations.ScanCount{Sca: 3},
 			},
@@ -135,12 +135,12 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{
-				Format: format.CycloneDx,
+				Format:        format.CycloneDx,
 				WithStaticSca: true,
-				WithSbom: true,
-				WithLicense: true,
-				WithVuln: true,
-				Watches: []string{watchName},
+				WithSbom:      true,
+				WithLicense:   true,
+				WithVuln:      true,
+				Watches:       []string{watchName},
 			},
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",

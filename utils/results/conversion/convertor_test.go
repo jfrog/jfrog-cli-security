@@ -420,14 +420,14 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			{
 				ScaViolation: violationutils.ScaViolation{
 					Violation: violationutils.Violation{
-						Watch:       "security-watch",
+						Watch:         "security-watch",
 						ViolationType: violationutils.CveViolationType,
-						Policies:    []violationutils.Policy{{PolicyName: "npm-security"}},
-						ViolationId: "12e1234edqwe234qwe",
-						Severity:    severityutils.Unknown,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-security"}},
+						ViolationId:   "12e1234edqwe234qwe",
+						Severity:      severityutils.Unknown,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef: "pkg:npm://async@3.2.4",
+						BOMRef:     "pkg:npm://async@3.2.4",
 						PackageURL: "pkg:npm/async@3.2.4",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -459,14 +459,14 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			{
 				ScaViolation: violationutils.ScaViolation{
 					Violation: violationutils.Violation{
-						Watch:       "security-watch",
+						Watch:         "security-watch",
 						ViolationType: violationutils.CveViolationType,
-						Policies:    []violationutils.Policy{{PolicyName: "npm-security"}},
-						ViolationId: "98yhnmju7654rfvbnj",
-						Severity:    severityutils.Medium,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-security"}},
+						ViolationId:   "98yhnmju7654rfvbnj",
+						Severity:      severityutils.Medium,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef: "pkg:npm://lodash@4.17.0",
+						BOMRef:     "pkg:npm://lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -496,14 +496,14 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				LicenseName: "MIT full name",
 				ScaViolation: violationutils.ScaViolation{
 					Violation: violationutils.Violation{
-						Watch:       "license-watch",
+						Watch:         "license-watch",
 						ViolationType: violationutils.LicenseViolationType,
-						Policies:    []violationutils.Policy{{PolicyName: "npm-license"}},
-						ViolationId: "12ee2e134edqwe234",
-						Severity:    severityutils.High,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-license"}},
+						ViolationId:   "12ee2e134edqwe234",
+						Severity:      severityutils.High,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef: "pkg:npm://lodash@4.17.0",
+						BOMRef:     "pkg:npm://lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -519,11 +519,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		Secrets: []violationutils.JasViolation{
 			{
 				Violation: violationutils.Violation{
-					Watch:       "watch",
+					Watch:         "watch",
 					ViolationType: violationutils.SecretsViolationType,
-					Policies:    []violationutils.Policy{{PolicyName: "policy"}},
-					ViolationId: "sec-violation-1",
-					Severity:    severityutils.High,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-1",
+					Severity:      severityutils.High,
 				},
 				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
 				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
@@ -531,11 +531,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 			{
 				Violation: violationutils.Violation{
-					Watch:       "watch",
+					Watch:         "watch",
 					ViolationType: violationutils.SecretsViolationType,
-					Policies:    []violationutils.Policy{{PolicyName: "policy"}},
-					ViolationId: "sec-violation-2",
-					Severity:    severityutils.Medium,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-2",
+					Severity:      severityutils.Medium,
 				},
 				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
 				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
@@ -545,11 +545,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		Sast: []violationutils.JasViolation{
 			{
 				Violation: violationutils.Violation{
-					Watch:       "watch",
+					Watch:         "watch",
 					ViolationType: violationutils.SastViolationType,
-					Policies:    []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
-					ViolationId: "sast-violation-1",
-					Severity:    severityutils.Low,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
+					ViolationId:   "sast-violation-1",
+					Severity:      severityutils.Low,
 				},
 				Rule:     validations.CreateDummyJasRule("js-insecure-random", "338"),
 				Result:   validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
@@ -557,11 +557,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 			{
 				Violation: violationutils.Violation{
-					Watch:       "watch",
+					Watch:         "watch",
 					ViolationType: violationutils.SastViolationType,
-					Policies:    []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
-					ViolationId: "sast-violation-2",
-					Severity:    severityutils.High,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
+					ViolationId:   "sast-violation-2",
+					Severity:      severityutils.High,
 				},
 				Rule: validations.CreateDummyJasRule("js-template-injection", "73"),
 				Result: validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
@@ -744,14 +744,14 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 			{
 				ScaViolation: violationutils.ScaViolation{
 					Violation: violationutils.Violation{
-						Watch:       "security-watch",
+						Watch:         "security-watch",
 						ViolationType: violationutils.CveViolationType,
-						Policies:    []violationutils.Policy{{PolicyName: "debian-security"}},
-						ViolationId: "34rfvbnj8765tyhngf",
-						Severity:    severityutils.Unknown,
+						Policies:      []violationutils.Policy{{PolicyName: "debian-security"}},
+						ViolationId:   "34rfvbnj8765tyhngf",
+						Severity:      severityutils.Unknown,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef: "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
+						BOMRef:     "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 						PackageURL: "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -783,11 +783,11 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		Secrets: []violationutils.JasViolation{
 			{
 				Violation: violationutils.Violation{
-					Watch:       "watch",
+					Watch:         "watch",
 					ViolationType: violationutils.SecretsViolationType,
-					Policies:    []violationutils.Policy{{PolicyName: "policy"}},
-					ViolationId: "sec-violation-1",
-					Severity:    severityutils.Low,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-1",
+					Severity:      severityutils.Low,
 				},
 				Rule:     validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"),
 				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
