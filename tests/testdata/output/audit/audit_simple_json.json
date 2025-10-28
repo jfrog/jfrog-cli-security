@@ -1,6 +1,133 @@
 {
   "vulnerabilities": [
     {
+      "severity": "Medium",
+      "impactedPackageName": "lodash",
+      "impactedPackageVersion": "4.17.0",
+      "impactedPackageType": "npm",
+      "components": [
+        {
+          "name": "lodash",
+          "version": "4.17.0",
+          "location": {
+            "file": "Users/user/project-with-issues/package.json"
+          }
+        }
+      ],
+      "summary": "Improperly Controlled Modification of Object",
+      "applicable": "Not Covered",
+      "fixedVersions": [
+        "[4.17.5]"
+      ],
+      "cves": [
+        {
+          "id": "CVE-2018-3721",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Not Covered",
+            "scannerDescription": "The Scanner checks for CVE-2018-3721"
+          }
+        }
+      ],
+      "issueId": "XRAY-72918",
+      "references": null,
+      "impactPaths": [
+        [
+          {
+            "name": "froghome",
+            "version": "1.0.0"
+          },
+          {
+            "name": "lodash",
+            "version": "4.17.0"
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Unknown",
+      "impactedPackageName": "async",
+      "impactedPackageVersion": "3.2.4",
+      "impactedPackageType": "npm",
+      "components": [
+        {
+          "name": "jake",
+          "version": "10.8.7",
+          "location": {
+            "file": "Users/user/project-with-issues/package.json"
+          }
+        }
+      ],
+      "summary": "Async vulnerable to ReDoS",
+      "applicable": "Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-39249",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The Scanner checks for CVE-2024-39249",
+            "evidence": [
+              {
+                "file": "file-A",
+                "startLine": 1,
+                "startColumn": 2,
+                "endLine": 3,
+                "endColumn": 4,
+                "snippet": "snippet",
+                "reason": "ca msg"
+              },
+              {
+                "file": "file-B",
+                "startLine": 1,
+                "startColumn": 2,
+                "endLine": 3,
+                "endColumn": 4,
+                "snippet": "snippet2",
+                "reason": "ca msg"
+              }
+            ]
+          }
+        }
+      ],
+      "issueId": "XRAY-609848",
+      "references": [
+        "https://github.com/zunak/CVE-2024-39249",
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-39249"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "froghome",
+            "version": "1.0.0"
+          },
+          {
+            "name": "jake",
+            "version": "10.8.7"
+          },
+          {
+            "name": "async",
+            "version": "3.2.4"
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "Low",
+        "summary": "ReDoS in Async may lead to denial of service while parsing",
+        "severityReasons": [
+          {
+            "name": "The reported CVSS was either wrongly calculated",
+            "description": "The reported CVSS does not reflect the severity of the vulnerability",
+            "isPositive": true
+          }
+        ]
+      }
+    },
+    {
       "severity": "High",
       "impactedPackageName": "lodash",
       "impactedPackageVersion": "4.17.0",
@@ -158,133 +285,6 @@
       "jfrogResearchInformation": {
         "severity": "",
         "remediation": "Some remediation"
-      }
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "lodash",
-      "impactedPackageVersion": "4.17.0",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "lodash",
-          "version": "4.17.0",
-          "location": {
-            "file": "Users/user/project-with-issues/package.json"
-          }
-        }
-      ],
-      "summary": "Improperly Controlled Modification of Object",
-      "applicable": "Not Covered",
-      "fixedVersions": [
-        "[4.17.5]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2018-3721",
-          "cvssV2": "",
-          "cvssV3": "",
-          "applicability": {
-            "status": "Not Covered",
-            "scannerDescription": "The Scanner checks for CVE-2018-3721"
-          }
-        }
-      ],
-      "issueId": "XRAY-72918",
-      "references": null,
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "lodash",
-            "version": "4.17.0"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": null
-    },
-    {
-      "severity": "Unknown",
-      "impactedPackageName": "async",
-      "impactedPackageVersion": "3.2.4",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "jake",
-          "version": "10.8.7",
-          "location": {
-            "file": "Users/user/project-with-issues/package.json"
-          }
-        }
-      ],
-      "summary": "Async vulnerable to ReDoS",
-      "applicable": "Applicable",
-      "fixedVersions": null,
-      "cves": [
-        {
-          "id": "CVE-2024-39249",
-          "cvssV2": "",
-          "cvssV3": "",
-          "applicability": {
-            "status": "Applicable",
-            "scannerDescription": "The Scanner checks for CVE-2024-39249",
-            "evidence": [
-              {
-                "file": "file-A",
-                "startLine": 1,
-                "startColumn": 2,
-                "endLine": 3,
-                "endColumn": 4,
-                "snippet": "snippet",
-                "reason": "ca msg"
-              },
-              {
-                "file": "file-B",
-                "startLine": 1,
-                "startColumn": 2,
-                "endLine": 3,
-                "endColumn": 4,
-                "snippet": "snippet2",
-                "reason": "ca msg"
-              }
-            ]
-          }
-        }
-      ],
-      "issueId": "XRAY-609848",
-      "references": [
-        "https://github.com/zunak/CVE-2024-39249",
-        "https://nvd.nist.gov/vuln/detail/CVE-2024-39249"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "jake",
-            "version": "10.8.7"
-          },
-          {
-            "name": "async",
-            "version": "3.2.4"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": {
-        "severity": "Low",
-        "summary": "ReDoS in Async may lead to denial of service while parsing",
-        "severityReasons": [
-          {
-            "name": "The reported CVSS was either wrongly calculated",
-            "description": "The reported CVSS does not reflect the severity of the vulnerability",
-            "isPositive": true
-          }
-        ]
       }
     }
   ],
@@ -522,9 +522,12 @@
   "sast": null,
   "secretsViolations": [
     {
-      "severity": "Medium",
+      "severity": "High",
       "watch": "watch",
       "issueId": "sec-violation-1",
+      "policies": [
+        "policy"
+      ],
       "ruleId": "REQ.SECRET.KEYS",
       "scannerShortDescription": "Scanner for REQ.SECRET.KEYS",
       "scannerDescription": "The Scanner checks for REQ.SECRET.KEYS",
@@ -544,6 +547,9 @@
       "severity": "Medium",
       "watch": "watch",
       "issueId": "sec-violation-2",
+      "policies": [
+        "policy"
+      ],
       "ruleId": "REQ.SECRET.KEYS",
       "scannerShortDescription": "Scanner for REQ.SECRET.KEYS",
       "scannerDescription": "The Scanner checks for REQ.SECRET.KEYS",
@@ -565,6 +571,10 @@
       "severity": "High",
       "watch": "watch",
       "issueId": "sast-violation-2",
+      "policies": [
+        "policy",
+        "policy2"
+      ],
       "ruleId": "js-template-injection",
       "cwe": [
         "73"
@@ -603,6 +613,10 @@
       "severity": "Low",
       "watch": "watch",
       "issueId": "sast-violation-1",
+      "policies": [
+        "policy",
+        "policy2"
+      ],
       "ruleId": "js-insecure-random",
       "cwe": [
         "338"
