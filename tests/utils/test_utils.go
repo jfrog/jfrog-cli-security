@@ -360,26 +360,34 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	}
 }
 
-// If gitResources is empty, the watch will be created with all builds.
-func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+func CreateWatchOnProjectBuilds(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		watchParams.ProjectKey = projectKey
+		watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		return watchParams
+	})
+}
+
+func CreateWatchOnGitResources(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		watchParams.GitRepositories.Resources = gitResources
+		return watchParams
+	})
+}
+
+func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, repos ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		watchParams.Repositories.Type = xrayUtils.WatchRepositoriesByName
+		for _, repo := range repos {
+			watchParams.Repositories.Repositories[repo] = xrayUtils.NewWatchRepositoryByName(repo)
 		}
 		return watchParams
 	})
 }
 
-func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
+func CreateWatchOnAllBuilds(t *testing.T, policyName, watchName string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
-		watchParams.ProjectKey = projectKey
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
-		}
+		watchParams.Builds.Type = xrayUtils.WatchBuildAll
 		return watchParams
 	})
 }
@@ -404,7 +412,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateWatchOnAllBuilds(t, policyParams.Name, watchName)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
