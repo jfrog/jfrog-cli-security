@@ -949,10 +949,10 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
-		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min:1.1.4c"},
-		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
-		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish:v0.1.2"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3/xpp3_min@1.1.4c"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
+		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
