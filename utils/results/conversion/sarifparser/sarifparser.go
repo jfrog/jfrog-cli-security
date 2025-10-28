@@ -837,7 +837,8 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 			return location
 		}
 	}
-	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
+	// Validate file path to prevent directory traversal
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" && !strings.Contains(workspace, "..") {
 		if exists, err := fileutils.IsFileExists(filepath.Join(workspace, "Dockerfile"), false); err == nil && exists {
 			return filepath.Join(workspace, "Dockerfile")
 		}
@@ -849,7 +850,8 @@ func getGithubWorkflowsDirIfExists() string {
 	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err == nil && exists {
 		return GithubBaseWorkflowDir
 	}
-	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
+	// Validate file path to prevent directory traversal
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" && !strings.Contains(workspace, "..") {
 		if exists, err := fileutils.IsDirExists(filepath.Join(workspace, GithubBaseWorkflowDir), false); err == nil && exists {
 			return filepath.Join(workspace, GithubBaseWorkflowDir)
 		}
