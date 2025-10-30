@@ -615,7 +615,7 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filePath)))
+	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(utils.ToURI(filePath))))
 	if len(logicalLocations) > 0 {
 		location.WithLogicalLocations(logicalLocations)
 	}
