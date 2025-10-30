@@ -11,7 +11,7 @@ require (
 	github.com/gookit/color v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.12.0
+	github.com/jfrog/build-info-go v1.12.1
 	github.com/jfrog/froggit-go v1.20.4
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
@@ -125,7 +125,7 @@ require (
 )
 
 // attiasas:retry_build_scan
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251030091848-b10b402ed7c9
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251030094108-376296f968cc
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
