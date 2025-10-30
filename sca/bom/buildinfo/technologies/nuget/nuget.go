@@ -268,9 +268,8 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	}
 
 	// Check for solution file path from JF CA arguments for specific solution when we have more than one solution file
-	solutionFilePath := params.SolutionFilePath
-	if solutionFilePath != "" {
-		solutionFileName := filepath.Base(solutionFilePath)
+	if params.SolutionFilePath != "" {
+		solutionFileName := filepath.Base(params.SolutionFilePath)
 		completeCommandArgs = append(completeCommandArgs, solutionFileName)
 		log.Info(fmt.Sprintf("Using solution file: %s", solutionFileName))
 	}
