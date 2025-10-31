@@ -44,7 +44,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				Location: &formats.Location{File: filepath.Join("dir", "file.txt")},
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filepath.Join("dir", "file.txt"))),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("dir/file.txt")),
 			),
 		},
 		{
