@@ -597,7 +597,7 @@ func TestGetResultsToCompare(t *testing.T) {
 }
 
 func TestProcessSarifRuns(t *testing.T) {
-	wd , err := os.Getwd()
+	wd, err := os.Getwd()
 	assert.NoError(t, err)
 
 	// Create dummy SARIF report.
@@ -610,7 +610,7 @@ func TestProcessSarifRuns(t *testing.T) {
 		// Valid result.
 		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file2")), 0, 0, 0, 0, "snippet", "rule1", "error"),
 	))
-	
+
 	processSarifRuns(dummyReport.Runs, wd, "docs URL", severityutils.High)
 	run := dummyReport.Runs[0]
 
