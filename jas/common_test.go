@@ -8,6 +8,7 @@ import (
 
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 
 	jfrogAppsConfig "github.com/jfrog/jfrog-apps-config/go"
@@ -19,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
@@ -592,4 +594,49 @@ func TestGetResultsToCompare(t *testing.T) {
 			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target))
 		})
 	}
+}
+
+func TestProcessSarifRuns(t *testing.T) {
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	// Create dummy SARIF report.
+	dummyReport := sarif.NewReport()
+	dummyReport.AddRun(sarifutils.CreateRunWithDummyResults(
+		// Result below the minimum severity.
+		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "file1")), 0, 1, 2, 3, "snippet", "rule1", "note"),
+		// Suppressed result.
+		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "file3")), 0, 0, 0, 0, "snippet", "rule1", "warning").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
+		// Valid result.
+		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file2")), 0, 0, 0, 0, "snippet", "rule1", "error"),
+	))
+
+	processSarifRuns(dummyReport.Runs, wd, "docs URL", severityutils.High)
+	run := dummyReport.Runs[0]
+
+	// Check Invocation added.
+	require.NotNil(t, run.Invocations)
+	require.Len(t, run.Invocations, 1)
+	require.NotNil(t, run.Invocations[0].WorkingDirectory)
+	require.NotNil(t, run.Invocations[0].WorkingDirectory.URI)
+	require.Equal(t, *run.Invocations[0].WorkingDirectory.URI, utils.ToURI(wd))
+
+	// Check driver info.
+	driver := run.Tool.Driver
+	require.NotNil(t, driver)
+	require.NotNil(t, driver.Version)
+	require.NotEmpty(t, *driver.Version)
+	require.NotNil(t, driver.InformationURI)
+	require.NotEmpty(t, *driver.InformationURI)
+
+	// Check severity level mapping.
+	require.Len(t, driver.Rules, 1)
+	rule := driver.Rules[0]
+	require.Equal(t, "8.9", sarifutils.GetRuleProperty(severityutils.SarifSeverityRuleProperty, rule))
+
+	// Check minimum severity and suppression filtering.
+	require.Len(t, run.Results, 1)
+	// Check file paths are relative and with / separators.
+	result := run.Results[0]
+	require.Equal(t, "dir/file2", sarifutils.GetLocationFileName(result.Locations[0]))
 }

@@ -676,7 +676,7 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://" + filePath)))
+	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filepath.ToSlash(filePath))))
 	if len(logicalLocations) > 0 {
 		location.WithLogicalLocations(logicalLocations)
 	}
@@ -937,6 +937,10 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 			// Patch by removing results without locations.
 			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", scanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 			continue
+		}
+		if commandType == utils.DockerImage && subScanType == utils.SecretsScan {
+			// For Docker secret scan, patch the logical location if not exists
+			patchDockerSecretLocations(result)
 		}
 		patchResultMsg(result, target, commandType, scanType, isJasViolations)
 		if commandType.IsTargetBinary() {
