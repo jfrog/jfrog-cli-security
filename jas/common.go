@@ -236,6 +236,7 @@ func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix st
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
 		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
 	}
+	sarifutils.ConvertRunsPathsToRelative(sarifRuns...)
 }
 
 func fillMissingRequiredDriverInformation(defaultJasInformationUri, defaultVersion string, run *sarif.Run) {
