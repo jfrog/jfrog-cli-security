@@ -33,7 +33,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				Version: "1.0.0",
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://Package-Descriptor")),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("Package-Descriptor")),
 			),
 		},
 		{
@@ -44,7 +44,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				Location: &formats.Location{File: filepath.Join("dir", "file.txt")},
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithURI(fmt.Sprintf("file://%s", filepath.Join("dir", "file.txt")))),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("dir/file.txt")),
 			),
 		},
 		{
@@ -52,7 +52,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 			cmdType:   utils.DockerImage,
 			component: formats.ComponentRow{Name: "sha256__3a8bca98bcad879bca98b9acd.tar"},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://Package-Descriptor")),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("Package-Descriptor")),
 			).WithLogicalLocations([]*sarif.LogicalLocation{sarifutils.CreateLogicalLocationWithProperty("3a8bca98bcad879bca98b9acd", "layer", "algorithm", "sha256")}),
 		},
 	}
@@ -425,10 +425,10 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cmdType: utils.Build,
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath("dir/file")),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(filepath.ToSlash(filepath.Join("dir", "file")))),
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath("dir/file")),
 			},
 		},
 		{
@@ -510,15 +510,15 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.SecretsScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunNameWithResults("some tool name",
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "unpacked", "filesystem", "blobs", "sha1", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"))),
+					sarifutils.CreateDummyResultInPath("unpacked/filesystem/blobs/sha1/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js"),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
 				}),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js"))), "result-msg", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
-						sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js")), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1").WithLogicalLocations([]*sarif.LogicalLocation{
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", "usr/src/app/server/index.js"), "result-msg", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("usr/src/app/server/index.js", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1").WithLogicalLocations([]*sarif.LogicalLocation{
 							sarifutils.NewLogicalLocation("9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer").WithProperties(sarif.NewPropertyBag().Add("algorithm", "sha1")),
 						}),
 					),
@@ -533,14 +533,14 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			withEnvVars: true,
 			input: []*sarif.Run{
 				sarifutils.CreateRunNameWithResults("some tool name",
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "unpacked", "filesystem", "blobs", "sha1", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"))),
+					sarifutils.CreateDummyResultInPath("unpacked/filesystem/blobs/sha1/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js"),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
 				}),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)\nrule-markdown", "rule-msg", "![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)\nrule-markdown", wd,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"), filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js"))), "result-msg", jfrogFingerprintAlgorithmName, "e721eacf317da6090eca3522308abd28",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"), "usr/src/app/server/index.js"), "result-msg", jfrogFingerprintAlgorithmName, "e721eacf317da6090eca3522308abd28",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
 						),
@@ -555,12 +555,12 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "binary"))),
+					sarifutils.CreateDummyResultInPath("dir/binary"),
 				),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultWithFingerprint("result-msg", "result-msg", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.ToSlash(filepath.Join("dir", "binary")))),
+					sarifutils.CreateDummyResultWithFingerprint("result-msg", "result-msg", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath("dir/binary")),
 				),
 			},
 		},
@@ -571,7 +571,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultInPath(filepath.Join(wd, "Package-Descriptor")),
+					sarifutils.CreateDummyResultInPath("Package-Descriptor"),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
@@ -589,14 +589,14 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.SecretsScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPathWithPartialFingerprint(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
+					sarifutils.CreateDummyResultInPathWithPartialFingerprint("dir/file", map[string]string{"jfrog-algo": "jfrog-algo-value"}),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPathWithPartialFingerprint(filepath.ToSlash(filepath.Join("dir", "file")), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
+					sarifutils.CreateDummyResultInPathWithPartialFingerprint("dir/file", map[string]string{"jfrog-algo": "jfrog-algo-value"}),
 				),
 			},
 		},
@@ -608,12 +608,12 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			isJasViolations: true,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+					sarifutils.CreateDummyResultInPath("dir/file"),
 				),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "[Security Violation] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResult("Security Violation result-markdown", "result-msg", "rule", "level", sarifutils.CreateDummyLocationInPath(filepath.ToSlash(filepath.Join("dir", "file")))),
+					sarifutils.CreateDummyResult("Security Violation result-markdown", "result-msg", "rule", "level", sarifutils.CreateDummyLocationInPath("dir/file")),
 				),
 			},
 		},
