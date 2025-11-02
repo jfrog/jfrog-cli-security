@@ -353,6 +353,10 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	fetchRetries, err := c.GetIntFlagValue(flags.TriggerScanRetries)
+	if err != nil {
+		return err
+	}
 	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
@@ -361,6 +365,7 @@ func BuildScan(c *components.Context) error {
 		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
 		SetIncludeVulnerabilities(getProject(c) == "" || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
+		SetTriggerScanRetries(fetchRetries).
 		SetBuildConfiguration(buildConfiguration).
 		SetOutputFormat(format).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
