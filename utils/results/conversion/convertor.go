@@ -113,7 +113,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
-		if params.IncludeSbom {
+		if params.IncludeSbom && targetScansResults.ScaResults != nil {
 			if err = parser.ParseSbom(targetScansResults.ScaResults.Sbom); err != nil {
 				return
 			}
