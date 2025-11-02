@@ -661,9 +661,10 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
 						return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology), true))
-					} else {
+					} else if targetResult.ScaResults != nil && targetResult.ScaResults.Sbom != nil {
 						return results.ExtractCdxDependenciesCves(targetResult.ScaResults.Sbom)
 					}
+					return
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
