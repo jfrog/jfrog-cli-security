@@ -12,7 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
-var expectedUniqueDeps = []string{"rubygems://puma:5.6.9", "rubygems://nio4r:2.7.4"}
+var expectedUniqueDeps = []string{"rubygems://puma:5.6.9", "rubygems://nio4r:2.7.5"}
 
 var expectedResult = &xrayUtils.GraphNode{
 	Id: "root",
@@ -21,7 +21,7 @@ var expectedResult = &xrayUtils.GraphNode{
 			Id: "rubygems://puma:5.6.9",
 			Nodes: []*xrayUtils.GraphNode{
 				{
-					Id:    "rubygems://nio4r:2.7.4",
+					Id:    "rubygems://nio4r:2.7.5",
 					Nodes: []*xrayUtils.GraphNode{},
 				},
 			},
@@ -52,7 +52,7 @@ func TestBuildDependencyTree(t *testing.T) {
 }
 
 // expectedUniqueDeps should be defined
-// expectedUniqueDeps := []string{"rubygems://puma:5.6.9", "rubygems://nio4r:2.7.4"}
+// expectedUniqueDeps := []string{"rubygems://puma:5.6.9", "rubygems://nio4r:2.7.5"}
 func TestCalculateUniqueDeps(t *testing.T) {
 	var input = &xrayUtils.GraphNode{
 		Nodes: []*xrayUtils.GraphNode{
@@ -60,7 +60,7 @@ func TestCalculateUniqueDeps(t *testing.T) {
 				Id: "rubygems://puma:5.6.9",
 				Nodes: []*xrayUtils.GraphNode{
 					{
-						Id:    "rubygems://nio4r:2.7.4",
+						Id:    "rubygems://nio4r:2.7.5",
 						Nodes: []*xrayUtils.GraphNode{},
 					},
 				},
