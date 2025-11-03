@@ -274,16 +274,14 @@ func TestRunDotnetRestoreWithRealSolutionFile(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
 	multiProjectPath := filepath.Join(testDataDir, "nuget", "multi")
 	solutionFilePath := filepath.Join(multiProjectPath, "TestSolution.sln")
-
-	if _, err := os.Stat(solutionFilePath); os.IsNotExist(err) {
-		t.Skip("Test solution file not found")
-	}
+	_, err := os.Stat(solutionFilePath)
+	assert.NoError(t, err, "Test solution file should exist")
 
 	params := technologies.BuildInfoBomGeneratorParams{
 		SolutionFilePath: solutionFilePath,
 	}
 	toolType := bidotnet.ConvertNameToToolType("dotnet")
-	err := runDotnetRestore(multiProjectPath, params, toolType, []string{})
+	err = runDotnetRestore(multiProjectPath, params, toolType, []string{})
 	if err != nil {
 		assert.NotContains(t, err.Error(), "this folder contains more than one project or solution file")
 	}
