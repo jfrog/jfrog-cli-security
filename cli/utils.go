@@ -146,7 +146,7 @@ func getScanDynamicLogic(c *components.Context, xrayVersion string) (bomGenerato
 	if c.GetBoolFlagValue(flags.StaticSca) {
 		// Validate minimum Xray version for static SCA scan (require for getViolations + remediation APIs)
 		if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.StaticScanMinVersion); err != nil {
-			log.Debug("Static SCA scan is not supported on the current Xray version. " + err.Error())
+			log.Warn("Static SCA scan is not supported on the current Xray version. " + err.Error())
 			// return
 		}
 		bomGenerator = xrayplugin.NewXrayLibBomGenerator()

@@ -44,13 +44,18 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	// Set the results platform URL in the command results and log it
 	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
 		cmdResults.SetResultsPlatformUrl(resultsUrl)
-		log.Info(fmt.Sprintf("%s:\n%s", GetCommandResultsPlatformUrlMessage(cmdResults), resultsUrl))
+		log.Info(GetCommandResultsPlatformUrlMessage(cmdResults))
 	}
 	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
 }
 
 func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults) string {
-	return upload.GetScanResultsPlatformUrlMessage(cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil)
+	isGitContext := cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil
+	uploadMsg := upload.GetScanResultsPlatformUrlMessage(isGitContext)
+	if isGitContext {
+		return uploadMsg
+	}
+	return fmt.Sprintf("%s:\n%s", uploadMsg, cmdResults.ResultsPlatformUrl)
 }
 
 func getCommandScanResultsPlatformUrl(cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
