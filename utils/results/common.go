@@ -231,6 +231,10 @@ func getBestMatch(target ScanTarget, descriptors []string) string {
 			bestMatch = descriptor
 		}
 	}
+	if bestMatch != "" {
+		// convert to relative path
+		bestMatch = utils.GetRelativePath(bestMatch, target.Target)
+	}
 	return bestMatch
 }
 
