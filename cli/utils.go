@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -137,12 +138,16 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 }
 
 // Get the dynamic logic for the scan based on the provided flags to support backward compatibility
-func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.PolicyHandler, uploadResults bool) {
+func getScanDynamicLogic(c *components.Context, xrayVersion string) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.PolicyHandler, uploadResults bool, err error) {
 	bomGenerator = buildinfo.NewBuildInfoBomGenerator()
 	scanStrategy = scangraph.NewScanGraphStrategy()
 	violationGenerator = local.NewDeprecatedViolationGenerator()
 	// New flow - static SCA scan
 	if c.GetBoolFlagValue(flags.StaticSca) {
+		// Validate minimum Xray version for static SCA scan (require for getViolations + remediation APIs)
+		if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.StaticScanMinVersion); err != nil {
+			return
+		}
 		bomGenerator = xrayplugin.NewXrayLibBomGenerator()
 		scanStrategy = enrich.NewEnrichScanStrategy()
 		violationGenerator = enforcer.NewPolicyEnforcerViolationGenerator()

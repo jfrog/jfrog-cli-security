@@ -398,16 +398,7 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetTechnologies(technologiesToScan)
 
-	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
-		// No CA flag provided but sca flag is not provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
-	}
-
-	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
-		// No secrets flag but secret validation is provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
-	}
-
+	// Check sub-scans to perform
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
 	} else if len(subScans) > 0 {
@@ -452,7 +443,10 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		return "", "", nil, nil, err
 	}
 	// Set dynamic command logic based on flags
-	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, err := getScanDynamicLogic(c, xrayVersion)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	auditCmd.SetViolationGenerator(violationGenerator)

@@ -89,7 +89,10 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetOutputDir(scansOutputDir).SetExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable))
 	// Set the dynamic logic for SBOM generation and SCA scan strategy
-	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, err := getScanDynamicLogic(c, xrayVersion)
+	if err != nil {
+		return err
+	}
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
