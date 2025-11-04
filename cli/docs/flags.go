@@ -61,8 +61,8 @@ const (
 const (
 	// Base flags keys
 	ServerId    = "server-id"
-	url         = "url"
-	xrayUrl     = "xray-url"
+	Url         = "url"
+	XrayUrl     = "xray-url"
 	user        = "user"
 	password    = "password"
 	accessToken = "access-token"
@@ -155,20 +155,20 @@ var commandFlags = map[string][]string{
 	XrCurl:        {ServerId},
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
-		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
+		Url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
 	},
 	Enrich: {
-		url, user, password, accessToken, ServerId, Threads, InsecureTls,
+		Url, user, password, accessToken, ServerId, Threads, InsecureTls,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
+		Url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
 	DockerScan: {
-		url, xrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, InsecureTls,
 	},
 	Audit: {
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
@@ -179,7 +179,7 @@ var commandFlags = map[string][]string{
 	},
 	GitAudit: {
 		// Connection params
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
 		scanProjectKey, Watches, ScanVuln, Fail,
 		// Scan params
@@ -198,33 +198,32 @@ var commandFlags = map[string][]string{
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
-		url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
+		Url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
 	},
 	AuditGradle: {
-		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, scanProjectKey, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, scanProjectKey, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditNpm: {
-		url, user, password, accessToken, ServerId, DepType, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, DepType, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditGo: {
-		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPip: {
-		url, user, password, accessToken, ServerId, RequirementsFile, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, RequirementsFile, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPipenv: {
-		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
+		Url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
 }
 
 // Security Flag keys mapped to their corresponding components.Flag definition.
 var flagsMap = map[string]components.Flag{
 	// Common commands flags
-	ServerId: components.NewStringFlag(ServerId, "Server ID configured using the config command."),
-	url:      components.NewStringFlag(url, "JFrog URL."),
-	xrayUrl:  components.NewStringFlag(xrayUrl, "JFrog Xray URL."),
-	user:     components.NewStringFlag(user, "JFrog username."),
-	// jfrog-ignore: false positive, not hardcoded credentials
+	ServerId:    components.NewStringFlag(ServerId, "Server ID configured using the config command."),
+	Url:         components.NewStringFlag(Url, "JFrog URL."),
+	XrayUrl:     components.NewStringFlag(XrayUrl, "JFrog Xray URL."),
+	user:        components.NewStringFlag(user, "JFrog username."),
 	password:    components.NewStringFlag(password, "JFrog password."),
 	accessToken: components.NewStringFlag(accessToken, "JFrog access token."),
 	Threads:     components.NewStringFlag(Threads, "The number of parallel threads used to scan the source code project.", components.WithIntDefaultValue(cliutils.Threads)),

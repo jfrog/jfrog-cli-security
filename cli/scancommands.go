@@ -189,7 +189,7 @@ func getAuditAndScansCommands() []components.Command {
 
 func SourceMcpCmd(c *components.Context) error {
 
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func EnrichCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 {
 		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func BuildScan(c *components.Context) error {
 	if err := buildConfiguration.ValidateBuildParams(); err != nil {
 		return err
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -418,7 +418,7 @@ func AuditCmd(c *components.Context) error {
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
@@ -673,7 +673,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -722,7 +722,7 @@ func UploadCdxCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 {
 		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}

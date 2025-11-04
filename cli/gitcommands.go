@@ -45,7 +45,7 @@ func GitAuditCmd(c *components.Context) error {
 	log.Info("####### Starting jf git audit Scan #######")
 	gitAuditCmd := audit.NewGitAuditCommand()
 	// Set connection params
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}

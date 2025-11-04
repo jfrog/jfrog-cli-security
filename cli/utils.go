@@ -12,6 +12,7 @@ import (
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -33,8 +34,28 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
-func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.ServerDetails, error) {
-	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
+func CreateServerDetailsFromFlags(c *components.Context) (details *coreConfig.ServerDetails, err error) {
+	details, err = cliutils.CreateServerDetailsWithConfigOffer(func() (*coreConfig.ServerDetails, error) { return pluginsCommon.CreateServerDetailsFromFlags(c) }, true)
+	if err != nil {
+			return nil, err
+	}
+	// Make sure URL and Xray URL are set. (at least one must be set, but both can be set as well)
+	if details.Url == "" && details.XrayUrl == "" {
+		return nil, errorutils.CheckErrorf("At least one of the following must be set: --%s or --%s", flags.Url, flags.XrayUrl)
+	}
+	// If only URL is set, set Xray URL based on it.
+	if details.XrayUrl == "" {
+		details.XrayUrl = clientUtils.AddTrailingSlashIfNeeded(details.Url) + "xray/"
+	}
+	// If only Xray URL is set, set URL based on it.
+	if details.Url == "" {
+		details.Url = strings.TrimSuffix(clientUtils.AddTrailingSlashIfNeeded(details.XrayUrl), "xray/")
+	}
+	// Set Catalog URL if not set.
+	if details.CatalogUrl == "" {
+		details.CatalogUrl = clientUtils.AddTrailingSlashIfNeeded(details.Url) + "catalog/"
+	}
+	return details, nil
 }
 
 func validateConnectionInputs(serverDetails *coreConfig.ServerDetails) error {
