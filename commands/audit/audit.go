@@ -552,7 +552,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	
+
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{

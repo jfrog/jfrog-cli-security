@@ -37,7 +37,7 @@ import (
 func CreateServerDetailsFromFlags(c *components.Context) (details *coreConfig.ServerDetails, err error) {
 	details, err = cliutils.CreateServerDetailsWithConfigOffer(func() (*coreConfig.ServerDetails, error) { return pluginsCommon.CreateServerDetailsFromFlags(c) }, true)
 	if err != nil {
-			return nil, err
+		return nil, err
 	}
 	// Make sure URL and Xray URL are set. (at least one must be set, but both can be set as well)
 	if details.Url == "" && details.XrayUrl == "" {
