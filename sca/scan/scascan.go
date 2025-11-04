@@ -51,7 +51,7 @@ type ScaScanParams struct {
 	Runner      *utils.SecurityParallelRunner
 	ThreadId    int
 	TargetCount int
-	// TODO: remove this field once the new flow is fully implemented.
+	// TODO: remove this field once the new flow is fully implemented. (in all commands)
 	IsNewFlow bool
 }
 

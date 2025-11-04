@@ -522,11 +522,16 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
+	// TODO: remove "isNewFlow" once the old flow is fully deprecated.
+	isNewFlow := true
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
+		isNewFlow = false
+	}
 	// Add the scans to the parallel runner
-	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
+	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
 	}
-	if generalScaScanError := addScaScansToRunner(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
+	if generalScaScanError := addScaScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalScaScanError != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}
 	// Start the parallel runner to run the scans.
@@ -541,17 +546,13 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	}).Start()
 }
 
-func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (generalError error) {
+func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, isNewFlow bool) (generalError error) {
 	if auditParams.DiffMode() && auditParams.ResultsToCompare() == nil {
 		// First call to audit scan on target branch, no diff to compare - no need to run the scan.
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	// TODO: remove "isNewFlow" once the new flow is fully implemented.
-	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
-		isNewFlow = false
-	}
+	
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
@@ -571,7 +572,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	return
 }
 
-func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {
+func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, isNewFlow bool) (jasScanner *jas.JasScanner, generalError error) {
 	if !scanResults.EntitledForJas {
 		log.Info("Not entitled for JAS, skipping advance security scans...")
 		return
@@ -586,13 +587,18 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
+	repoKey := utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl)
+	if isNewFlow {
+		// Violations by git repo key In JAS by AM not needed in the new flow.
+		repoKey = ""
+	}
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
 			scanResults.SecretValidation,
 			jas.GetDiffScanTypeValue(auditParams.diffMode, auditParams.resultsToCompare),
 			jas.GetAnalyzerManagerXscEnvVars(
 				auditParams.GetMultiScanId(),
-				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
+				repoKey,
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,
 				scanResults.GetTechnologies()...,
