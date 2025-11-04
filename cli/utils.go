@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -16,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
@@ -83,6 +85,14 @@ func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, 
 		}
 	}
 	return
+}
+
+func validateAnalyzerManagerRequirements(subScans []utils.SubScanType) error {
+	if len(subScans) != 0 && (!slices.Contains(subScans, utils.SecretsScan) && !slices.Contains(subScans, utils.ContextualAnalysisScan) && !slices.Contains(subScans, utils.IacScan) && !slices.Contains(subScans, utils.SastScan)) {
+		// No analyzer manager related sub-scan is requested
+		return nil
+	}
+	return jas.ValidateRequiredInstalledSoftware()
 }
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
