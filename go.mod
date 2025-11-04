@@ -4,7 +4,7 @@ go 1.24.6
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.3
-	github.com/beevik/etree v1.4.0
+	github.com/beevik/etree v1.6.0
 	github.com/go-git/go-git/v5 v5.16.3
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
@@ -127,7 +127,8 @@ require (
 // attiasas:retry_build_scan
 replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251030094108-376296f968cc
 
-// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
+// attiasas:usage_command_name
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20251104113958-abd9de5958c4
 
 //replace github.com/jfrog/jfrog-cli-artifactory => github.com/fluxxBot/jfrog-cli-artifactory v0.0.0-20251017061455-6a03988302bf
 
