@@ -12,7 +12,6 @@ import (
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -45,15 +44,19 @@ func CreateServerDetailsFromFlags(c *components.Context) (details *coreConfig.Se
 	}
 	// If only URL is set, set Xray URL based on it.
 	if details.XrayUrl == "" {
-		details.XrayUrl = clientUtils.AddTrailingSlashIfNeeded(details.Url) + "xray/"
+		details.XrayUrl = clientutils.AddTrailingSlashIfNeeded(details.Url) + "xray/"
 	}
 	// If only Xray URL is set, set URL based on it.
 	if details.Url == "" {
-		details.Url = strings.TrimSuffix(clientUtils.AddTrailingSlashIfNeeded(details.XrayUrl), "xray/")
+		details.Url = strings.TrimSuffix(clientutils.AddTrailingSlashIfNeeded(details.XrayUrl), "xray/")
 	}
 	// Set Catalog URL if not set.
 	if details.CatalogUrl == "" {
-		details.CatalogUrl = clientUtils.AddTrailingSlashIfNeeded(details.Url) + "catalog/"
+		details.CatalogUrl = clientutils.AddTrailingSlashIfNeeded(details.Url) + "catalog/"
+	}
+	// Set Artifactory URL if not set.
+	if details.ArtifactoryUrl == "" {
+		details.ArtifactoryUrl = clientutils.AddTrailingSlashIfNeeded(details.Url) + "artifactory/"
 	}
 	return details, nil
 }
