@@ -43,6 +43,7 @@ func getGitNameSpaceCommands() []components.Command {
 
 func GitAuditCmd(c *components.Context) error {
 	log.Info("####### Starting jf git audit Scan #######")
+	log.Info(getCommandUsedFlagsString(c, flags.GetCommandFlags(flags.GitAudit)))
 	gitAuditCmd := audit.NewGitAuditCommand()
 	// Set connection params
 	serverDetails, err := CreateServerDetailsFromFlags(c)
