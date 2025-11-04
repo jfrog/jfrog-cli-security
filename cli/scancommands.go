@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
@@ -27,11 +28,13 @@ import (
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
+	"github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -403,6 +406,21 @@ func AuditCmd(c *components.Context) error {
 		return err
 	} else if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
+	}
+
+	// Validate that there is a sast scan before setting the sast rules
+	if sastRulesFile := c.GetStringFlagValue(flags.AddSastRules); sastRulesFile != "" {
+		// Check if file exists
+		if exists, err := fileutils.IsFileExists(sastRulesFile, false); err != nil || !exists {
+			return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("file '%s' does not exist: %s", sastRulesFile, err.Error()), c)
+		}
+
+		// Validate scan is performed
+		if len(auditCmd.ScansToPerform()) > 0 && !slices.Contains(auditCmd.ScansToPerform(), utils.SastScan) {
+			return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' can only be used with '--%s'", flags.AddSastRules, flags.Sast), c)
+		}
+
+		auditCmd.SetSastRules(sastRulesFile)
 	}
 
 	threads, err := pluginsCommon.GetThreadsCount(c)

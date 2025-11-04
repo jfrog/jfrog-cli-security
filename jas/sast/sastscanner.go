@@ -25,18 +25,19 @@ const (
 type SastScanManager struct {
 	scanner            *jas.JasScanner
 	signedDescriptions bool
+	sastRules          string
 
 	resultsToCompareFileName string
 	configFileName           string
 	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, sastRules string, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), threadId); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, resultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, sastRules, resultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -49,10 +50,11 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, sastRules string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
+		sastRules:          sastRules,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
 	}
@@ -96,6 +98,7 @@ type scanConfiguration struct {
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
 	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
 	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
+	UserRules              string         `yaml:"user_rules,omitempty"`
 }
 
 type sastParameters struct {
@@ -124,6 +127,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 					SignedDescriptions: signedDescriptions,
 				},
 				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, exclusions...),
+				UserRules:       ssm.sastRules,
 			},
 		},
 	}
