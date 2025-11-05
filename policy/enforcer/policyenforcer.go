@@ -202,11 +202,11 @@ func getScaViolationType(violation services.XrayViolation) violationutils.Violat
 }
 
 func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (impactedComponent *cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) {
+	ref := techutils.XrayComponentIdToCdxComponentRef(impactedComponentXrayId)
 	for _, target := range cmdResults.Targets {
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Components == nil {
 			continue
 		}
-		ref := techutils.XrayComponentIdToCdxComponentRef(impactedComponentXrayId)
 		for _, component := range *target.ScaResults.Sbom.Components {
 			if strings.HasPrefix(component.BOMRef, ref) {
 				// Found the relevant component
