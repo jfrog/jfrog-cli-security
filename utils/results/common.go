@@ -231,6 +231,10 @@ func getBestMatch(target ScanTarget, descriptors []string) string {
 			bestMatch = descriptor
 		}
 	}
+	if bestMatch != "" {
+		// convert to relative path
+		bestMatch = utils.GetRelativePath(bestMatch, target.Target)
+	}
 	return bestMatch
 }
 
@@ -705,7 +709,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	}
 	switch {
 	case len(applicabilityStatuses) > 0:
-		applicability.Status = string(getFinalApplicabilityStatus(applicabilityStatuses))
+		applicability.Status = string(GetFinalApplicabilityStatus(applicabilityStatuses))
 	case !resultFound:
 		applicability.Status = string(jasutils.ApplicabilityUndetermined)
 	case len(applicability.Evidence) == 0:
@@ -762,7 +766,7 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 			applicableStatuses = append(applicableStatuses, jasutils.ApplicabilityStatus(cve.Applicability.Status))
 		}
 	}
-	return getFinalApplicabilityStatus(applicableStatuses)
+	return GetFinalApplicabilityStatus(applicableStatuses)
 }
 
 // We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
@@ -848,7 +852,7 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 // Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
-func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
+func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
 	if len(applicabilityStatuses) == 0 {
 		return jasutils.NotScanned
 	}

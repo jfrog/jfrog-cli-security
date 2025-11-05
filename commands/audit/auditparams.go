@@ -35,6 +35,7 @@ type AuditParams struct {
 	bomGenerator                    bom.SbomGenerator
 	customBomGenBinaryPath          string
 	scaScanStrategy                 scan.SbomScanStrategy
+	sastRules                       string
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -98,6 +99,15 @@ func (params *AuditParams) SetCustomAnalyzerManagerBinaryPath(customAnalyzerMana
 
 func (params *AuditParams) CustomAnalyzerManagerBinaryPath() string {
 	return params.customAnalyzerManagerBinaryPath
+}
+
+func (params *AuditParams) SetSastRules(sastRules string) *AuditParams {
+	params.sastRules = sastRules
+	return params
+}
+
+func (params *AuditParams) SastRules() string {
+	return params.sastRules
 }
 
 func (params *AuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *AuditParams {
