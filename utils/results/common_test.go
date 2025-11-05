@@ -688,7 +688,7 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedOutput, getFinalApplicabilityStatus(tc.input))
+			assert.Equal(t, tc.expectedOutput, GetFinalApplicabilityStatus(tc.input))
 		})
 	}
 }

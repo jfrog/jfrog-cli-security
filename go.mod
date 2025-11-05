@@ -2,7 +2,7 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.24.6
 
-// TODO: remove after Xray-Lib new version is released
+// TODO: update xray-scan lib to latest version that supports CycloneDX v0.9.3 (not yet released)
 replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.9.2
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.7.3-0.20251021143342-49bab7f38cec
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20251023084247-a56afca52451
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20251030113529-d87ecf28ffb6
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20251103081126-15edfe03d6e5
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -132,7 +132,7 @@ replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go 
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
-//replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.0.0-20251017061455-6a03988302bf
+//replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 

@@ -470,18 +470,40 @@ func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixe
 		Range: &[]cyclonedx.AffectedVersions{},
 	}
 	// Affected version
-	*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+	AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 		Version: impactedPackageVersion,
 		Status:  cyclonedx.VulnerabilityStatusAffected,
 	})
 	// Fixed versions
 	for _, fixedVersion := range fixedVersions {
-		*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+		AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 			Version: fixedVersion,
 			Status:  cyclonedx.VulnerabilityStatusNotAffected,
 		})
 	}
 	return
+}
+
+func AppendAffectedVersionsIfNotExists(affect *cyclonedx.Affects, affectedVersions ...cyclonedx.AffectedVersions) {
+	if affect.Range == nil {
+		affect.Range = &[]cyclonedx.AffectedVersions{}
+	}
+	// Validate that the affected version does not already exist in the affected versions
+	for _, newAffectedVersion := range affectedVersions {
+		if newAffectedVersion.Version == "" {
+			continue
+		}
+		exists := false
+		for _, existingAffectedVersion := range *affect.Range {
+			if existingAffectedVersion.Version == newAffectedVersion.Version {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			*affect.Range = append(*affect.Range, newAffectedVersion)
+		}
+	}
 }
 
 type CdxVulnerabilityParams struct {
