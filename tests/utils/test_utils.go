@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -453,4 +454,8 @@ func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
 	}
 	_, err = indexer.DownloadIndexerIfNeeded(manager, version)
 	return err
+}
+
+func PrepareXrayScanLibResource() (err error) {
+	return plugin.DownloadXrayLibPluginIfNeeded()
 }

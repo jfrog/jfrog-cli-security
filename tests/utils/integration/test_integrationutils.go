@@ -527,6 +527,9 @@ func PrepareJfrogHomeResources(details *config.ServerDetails) (err error) {
 	if err = testUtils.PrepareIndexerAppResource(details); err != nil {
 		return fmt.Errorf("failed to prepare Xray Indexer resource: %w", err)
 	}
+	if err = testUtils.PrepareXrayScanLibResource(); err != nil {
+		return fmt.Errorf("failed to prepare Xray Scan Lib resource: %w", err)
+	}
 	return
 }
 
