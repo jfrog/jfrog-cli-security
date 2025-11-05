@@ -84,6 +84,10 @@ func (p *PolicyEnforcerViolationGenerator) WithOptions(options ...policy.PolicyH
 }
 
 func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *results.SecurityCommandResults) (convertedViolations violationutils.Violations, err error) {
+	if p.rtRepository == "" || p.artifactPath == "" {
+		log.Debug("Repository or artifact path not provided, skipping violation generation from Xray")
+		return
+	}
 	xrayManager, err := xray.CreateXrayServiceManager(p.serverDetails, xray.WithScopedProjectKey(p.projectKey))
 	if err != nil {
 		return
