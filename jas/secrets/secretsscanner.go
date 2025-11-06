@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -54,7 +52,7 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime))
+	log.Info(utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
 	return
 }
 

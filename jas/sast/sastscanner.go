@@ -10,7 +10,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"golang.org/x/exp/maps"
@@ -46,7 +45,7 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime))
+	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
 	return
 }
 

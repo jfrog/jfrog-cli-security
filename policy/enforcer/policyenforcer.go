@@ -37,6 +37,8 @@ type PolicyEnforcerViolationGenerator struct {
 	// Filters
 	projectKey string
 	watches    []string
+	// Run options
+	threadId int
 }
 
 func NewPolicyEnforcerViolationGenerator() *PolicyEnforcerViolationGenerator {

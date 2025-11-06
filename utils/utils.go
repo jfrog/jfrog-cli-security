@@ -133,18 +133,26 @@ func getScanFindingName(scanType SubScanType) string {
 	return fmt.Sprintf("%s vulnerabilities", subScanTypeToText[scanType])
 }
 
-func GetScanStartLog(scanType SubScanType, target string, targetCount int) string {
-	if targetCount > 1 {
-		return fmt.Sprintf("Running %s scan on target '%s'...", subScanTypeToText[scanType], target)
+func GetScanStartLog(scanType SubScanType, target string, targetCount, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	return fmt.Sprintf("Running %s scan...", subScanTypeToText[scanType])
+	if targetCount > 1 {
+		return logPrefix + fmt.Sprintf("Running %s scan on target '%s'...", subScanTypeToText[scanType], target)
+	}
+	return logPrefix + fmt.Sprintf("Running %s scan...", subScanTypeToText[scanType])
 }
 
-func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, startTime time.Time) string {
-	if vulnerabilitiesCount == 0 {
-		return fmt.Sprintf("No %s were found (duration %s)", getScanFindingName(scanType), time.Since(startTime).String())
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, startTime time.Time, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	return fmt.Sprintf("Found %d %s (duration %s)", vulnerabilitiesCount, getScanFindingName(scanType), time.Since(startTime).String())
+	if vulnerabilitiesCount == 0 {
+		return logPrefix + fmt.Sprintf("No %s were found (duration %s)", getScanFindingName(scanType), time.Since(startTime).String())
+	}
+	return logPrefix + fmt.Sprintf("Found %d %s (duration %s)", vulnerabilitiesCount, getScanFindingName(scanType), time.Since(startTime).String())
 }
 
 func IsCI() bool {

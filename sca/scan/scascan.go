@@ -149,11 +149,7 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 }
 
 func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
-	logPrefix := ""
-	if params.ThreadId >= 0 {
-		logPrefix = clientUtils.GetLogMsgPrefix(params.ThreadId, false)
-	}
-	log.Info(logPrefix + utils.GetScanStartLog(utils.ScaScan, params.ScanResults.Target, params.TargetCount))
+	log.Info(utils.GetScanStartLog(utils.ScaScan, params.ScanResults.Target, params.TargetCount, params.ThreadId))
 	// Start the scan
 	startTime := time.Now()
 	if !params.IsNewFlow {
@@ -163,7 +159,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 		if err != nil {
 			return err
 		}
-		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), startTime))
+		log.Info(utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), startTime, params.ThreadId))
 		return dumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 	}
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
@@ -177,7 +173,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if params.ScanResults.ScaResults != nil && params.ScanResults.ScaResults.Sbom != nil && params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
 		vulnerabilityCount = len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities)
 	}
-	log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, vulnerabilityCount, startTime))
+	log.Info(utils.GetScanFindingsLog(utils.ScaScan, vulnerabilityCount, startTime, params.ThreadId))
 	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 }
 
