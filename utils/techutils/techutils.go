@@ -898,6 +898,8 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 	if packageType == "" {
 		packageType = "generic"
 	}
+	// Replace ':' in compName and namespace with '/' to support groupId:artifactId format in Maven
+	compName = strings.ReplaceAll(compName, ":", "/")
 	// Check if compName contains a namespace
 	namespace := ""
 	if lastIndex := strings.LastIndex(compName, "/"); lastIndex != -1 {
