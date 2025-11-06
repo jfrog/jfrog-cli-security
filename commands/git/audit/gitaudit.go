@@ -137,7 +137,7 @@ func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityComman
 		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf git audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" {
-		messages = append(messages, coreutils.PrintTitle(output.GetCommandResultsPlatformUrlMessage(cmdResults))+":\n"+coreutils.PrintLink(cmdResults.ResultsPlatformUrl))
+		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(gaCmd.outputFormat).

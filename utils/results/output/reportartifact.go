@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
@@ -44,18 +45,25 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	// Set the results platform URL in the command results and log it
 	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
 		cmdResults.SetResultsPlatformUrl(resultsUrl)
-		log.Info(GetCommandResultsPlatformUrlMessage(cmdResults))
+		log.Info(GetCommandResultsPlatformUrlMessage(cmdResults, false))
 	}
 	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
 }
 
-func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults) string {
+func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults, pretty bool) string {
 	isGitContext := cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil
 	uploadMsg := upload.GetScanResultsPlatformUrlMessage(isGitContext)
+	if pretty {
+		uploadMsg = coreutils.PrintTitle(uploadMsg)
+	}
 	if isGitContext {
 		return uploadMsg
 	}
-	return fmt.Sprintf("%s:\n%s", uploadMsg, cmdResults.ResultsPlatformUrl)
+	link := cmdResults.ResultsPlatformUrl
+	if pretty {
+		link = coreutils.PrintLink(link)
+	}
+	return fmt.Sprintf("%s:\n%s", uploadMsg, link)
 }
 
 func getCommandScanResultsPlatformUrl(cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
