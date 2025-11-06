@@ -314,8 +314,11 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 
 func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
 	// Convert location to relative path
-	relative := sarifutils.GetRelativeLocationFileName(location, invocations)
-	return slices.Contains(violation.InfectedFilePaths, relative)
+	if relative := sarifutils.GetRelativeLocationFileName(location, invocations); !slices.Contains(violation.InfectedFilePaths, relative) {
+		return false
+	}
+	// TODO: Improve matching logic when more data is available in Xray violations (Line + Column)
+	return true
 }
 
 func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.JasScanType) string {
