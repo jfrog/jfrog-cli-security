@@ -574,11 +574,11 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 
 func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, isNewFlow bool) (jasScanner *jas.JasScanner, generalError error) {
 	if !scanResults.EntitledForJas {
-		log.Info("Not entitled for JAS, skipping advance security scans...")
+		log.Info("Advanced Security is not enabled on this system, so Advanced Security scans were skipped...")
 		return
 	}
 	if !utils.IsJASRequested(scanResults.CmdType, auditParams.ScansToPerform()...) {
-		log.Debug("JAS scans were not requested, skipping advance security scans...")
+		log.Debug("Advanced Security scans were not initiated, so Advanced Security scans were skipped...")
 		return
 	}
 	serverDetails, err := auditParams.ServerDetails()
@@ -750,8 +750,9 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		local.WithAllowedLicenses(auditParams.allowedLicenses),
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
-		enforcer.WithParams(auditParams.rtResultRepository, uploadPath),
+		enforcer.WithArtifactParams(auditParams.rtResultRepository, uploadPath),
 		enforcer.WithWatches(auditParams.resultsContext.Watches),
+		enforcer.WithResultsOutputDir(auditParams.scanResultsOutputDir),
 	)
 	// Fetch violations from Xray
 	if err = policy.EnrichWithGeneratedViolations(generator, cmdResults); err != nil {

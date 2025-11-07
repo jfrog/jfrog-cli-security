@@ -1,6 +1,7 @@
 package enforcer
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -38,7 +39,7 @@ type PolicyEnforcerViolationGenerator struct {
 	projectKey string
 	watches    []string
 	// Run options
-	threadId int
+	resultsOutputDir string
 }
 
 func NewPolicyEnforcerViolationGenerator() *PolicyEnforcerViolationGenerator {
@@ -61,7 +62,15 @@ func WithProjectKey(projectKey string) policy.PolicyHandlerOption {
 	}
 }
 
-func WithParams(repo, path string) policy.PolicyHandlerOption {
+func WithResultsOutputDir(resultsOutputDir string) policy.PolicyHandlerOption {
+	return func(generator policy.PolicyHandler) {
+		if p, ok := generator.(*PolicyEnforcerViolationGenerator); ok {
+			p.resultsOutputDir = resultsOutputDir
+		}
+	}
+}
+
+func WithArtifactParams(repo, path string) policy.PolicyHandlerOption {
 	return func(generator policy.PolicyHandler) {
 		if p, ok := generator.(*PolicyEnforcerViolationGenerator); ok {
 			p.rtRepository = repo
@@ -119,7 +128,21 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	} else {
 		log.Debug(fmt.Sprintf("Xray scans completed with %d violations", generatedViolations.Total))
 	}
+	if err = dumpViolationsResponseToFileIfNeeded(generatedViolations, p.resultsOutputDir); err != nil {
+		return
+	}
 	return convertToViolations(cmdResults, generatedViolations.Violations)
+}
+
+func dumpViolationsResponseToFileIfNeeded(generatedViolations *services.ViolationsResponse, resultsOutputDir string) (err error) {
+	if resultsOutputDir == "" {
+		return
+	}
+	fileContent, err := json.Marshal(generatedViolations)
+	if err != nil {
+		return fmt.Errorf("failed to write fetched violations to file: %s", err.Error())
+	}
+	return utils.DumpJsonContentToFile(fileContent, resultsOutputDir, "violations", -1)
 }
 
 func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {

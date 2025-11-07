@@ -21,6 +21,7 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	// Convert the scan results to CycloneDX format
 	cdxResults, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeSbom:            true,
+		IncludeLicenses: 		true,
 		IncludeVulnerabilities: true,
 	}).ConvertToCycloneDx(cmdResults)
 	if err != nil {
