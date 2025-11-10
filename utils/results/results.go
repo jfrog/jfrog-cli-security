@@ -185,8 +185,7 @@ type ScaScanResults struct {
 	// Sca scan results
 	DeprecatedXrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
-	Sbom           *cyclonedx.BOM `json:"sbom,omitempty"`
-	ScanStatusCode *int           `json:"status_code,omitempty"`
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 }
 
 type JasScansResults struct {
@@ -610,7 +609,7 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM, optionalStatusCodes ...int
 
 func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
 	sr.SetSbom(enrichedSbom)
-	sr.ScaResults.ScanStatusCode = &errorCode
+	sr.ResultsStatus.UpdateStatus(CmdStepSca, &errorCode)
 	return sr.ScaResults
 }
 
