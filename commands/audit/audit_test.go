@@ -753,7 +753,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			serverMock, serverDetails := validations.CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 				if r.RequestURI == "/xray/api/v1/system/version" {
-					_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, utils.EntitlementsMinVersion)))
+					_, err := fmt.Fprintf(w, `{"version":"%s", "xray_revision": "xxx"}`, utils.EntitlementsMinVersion)
 					if !assert.NoError(t, err) {
 						return
 					}

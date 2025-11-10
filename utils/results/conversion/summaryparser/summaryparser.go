@@ -133,7 +133,7 @@ func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *dat
 			}
 			parsed.Add(key)
 			// Count the violation
-			scaSecurityHandler(sc.currentScan.Violations.ScanResultSummary.ScaResults, severity, applicabilityStatus)
+			scaSecurityHandler(sc.currentScan.Violations.ScaResults, severity, applicabilityStatus)
 		}
 		return
 	}

@@ -155,7 +155,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 
 // If the user requested to include vulnerabilities, or if the user didn't provide any watches, project key, artifactory repo path or git repo key, we should include vulnerabilities.
 func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string) bool {
-	return includeVulnerabilities || len(watches) <= 0 && projectKey == "" && artifactoryRepoPath == "" && gitRepoHttpsCloneUrl == ""
+	return includeVulnerabilities || len(watches) == 0 && projectKey == "" && artifactoryRepoPath == "" && gitRepoHttpsCloneUrl == ""
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {

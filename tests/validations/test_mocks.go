@@ -174,7 +174,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 			if r.Method == http.MethodPost {
 				apiCallCounts[GraphScanPostAPI]++
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
+				_, err := fmt.Fprintf(w, `{"scan_id" : "%s"}`, TestScaScanId)
 				if !assert.NoError(t, err) {
 					return
 				}

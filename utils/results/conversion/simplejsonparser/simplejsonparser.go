@@ -831,6 +831,6 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 		if rows[i].Applicability != nil && rows[j].Applicability != nil {
 			return jasutils.TokenValidationOrder[rows[i].Applicability.Status] < jasutils.TokenValidationOrder[rows[j].Applicability.Status]
 		}
-		return rows[i].Location.File > rows[j].Location.File
+		return rows[i].File > rows[j].File
 	})
 }
