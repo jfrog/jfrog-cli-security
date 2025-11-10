@@ -28,7 +28,11 @@ type McpCommand struct {
 }
 
 func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
-	defer dst.Close()
+	defer func() {
+		if err := dst.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing pipe: %v", err))
+		}
+	}()
 	_, err := io.Copy(dst, src)
 	if err != nil {
 		log.Error("Error establishing pipe")
@@ -36,7 +40,11 @@ func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
 }
 
 func establishPipeFromFile(dst io.Writer, src io.ReadCloser) {
-	defer src.Close()
+	defer func() {
+		if err := src.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing pipe: %v", err))
+		}
+	}()
 	_, err := io.Copy(dst, src)
 	if err != nil {
 		log.Error("Error establishing pipe")
@@ -59,21 +67,33 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 		log.Error(fmt.Sprintf("Error creating MCPService stdin pipe: %v", _error))
 		return _error
 	}
-	defer stdin.Close()
+	defer func() {
+		if err := stdin.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stdin pipe: %v", err))
+		}
+	}()
 
 	stdout, _error := command.StdoutPipe()
 	if _error != nil {
 		log.Error(fmt.Sprintf("Error creating MCPService stdout pipe: %v", _error))
 		return _error
 	}
-	defer stdout.Close()
+	defer func() {
+		if err := stdout.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stdout pipe: %v", err))
+		}
+	}()
 
 	stderr, _error := command.StderrPipe()
 	if _error != nil {
 		log.Error(fmt.Sprintf("Error creating MCPService stderr pipe: %v", _error))
 		return _error
 	}
-	defer stderr.Close()
+	defer func() {
+		if err := stderr.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stderr pipe: %v", err))
+		}
+	}()
 
 	go establishPipeToFile(stdin, input_pipe)
 	go establishPipeFromFile(error_pipe, stderr)
