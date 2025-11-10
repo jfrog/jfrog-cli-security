@@ -83,15 +83,15 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
 		return
 	}
-	if sc.currentScan.Violations.ScanResultSummary.ScaResults == nil {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults = &formats.ScaScanResultSummary{}
+	if sc.currentScan.Violations.ScaResults == nil {
+		sc.currentScan.Violations.ScaResults = &formats.ScaScanResultSummary{}
 	}
 	// Parse general SCA results
 	if scaResponse.Scan.ScanId != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds, scaResponse.Scan.ScanId)
+		sc.currentScan.Violations.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScaResults.ScanIds, scaResponse.Scan.ScanId)
 	}
 	if scaResponse.Scan.XrayDataUrl != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
+		sc.currentScan.Violations.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
 	}
 	if scaResponse.IsScanFailed() {
 		return

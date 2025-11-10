@@ -368,7 +368,9 @@ func getTestCdxFile(t *testing.T, tempDir string) string {
 	cdxFilePath := filepath.Join(tempDir, fmt.Sprintf("upload-integration-test-%s.cdx.json", utils.GetCurrentTimeUnix()))
 	file, err := os.Create(cdxFilePath)
 	assert.NoError(t, err)
-	defer file.Close()
+	defer func() {
+		assert.NoError(t, file.Close())
+	}()
 	// Write the BOM to the file
 	assert.NoError(t, cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom))
 	return cdxFilePath

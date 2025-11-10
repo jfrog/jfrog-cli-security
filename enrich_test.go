@@ -7,13 +7,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestXrayEnrichSbomOutput(t *testing.T) {
-	integration.InitEnrichTest(t, enrichgraph.EnrichMinimumVersionXray)
+	securityIntegrationTestUtils.InitEnrichTest(t, enrichgraph.EnrichMinimumVersionXray)
 	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
 	testCases := []struct {

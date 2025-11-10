@@ -54,10 +54,7 @@ type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) error {
 	// For docker scan we support only secrets and contextual scans.
-	runAllScanners := false
-	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
-		runAllScanners = true
-	}
+	runAllScanners := params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType
 
 	var errorsCollection error
 	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {

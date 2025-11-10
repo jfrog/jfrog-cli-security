@@ -155,7 +155,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 
 // If the user requested to include vulnerabilities, or if the user didn't provide any watches, project key, artifactory repo path or git repo key, we should include vulnerabilities.
 func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string) bool {
-	return includeVulnerabilities || !(len(watches) > 0 || projectKey != "" || artifactoryRepoPath != "" || gitRepoHttpsCloneUrl != "")
+	return includeVulnerabilities || len(watches) <= 0 && projectKey == "" && artifactoryRepoPath == "" && gitRepoHttpsCloneUrl == ""
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
@@ -363,7 +363,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForJas(entitledForJas)
 	}
 	if entitledForJas {
-		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan)))
+		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
 	return
 }
@@ -560,7 +560,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		jas.WithResultsToCompare(auditParams.resultsToCompare),
 	}
 	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
-	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.AuditBasicParams.GetConfigProfile())
+	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.GetConfigProfile())
 
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
@@ -610,7 +610,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ServerDetails:          serverDetails,
 				Scanner:                scanner,
 				Module:                 appsConfigModule,
-				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
+				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:        secrets.SecretsScannerType,

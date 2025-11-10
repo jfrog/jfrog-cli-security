@@ -197,10 +197,10 @@ func TestDetectScansToPerform(t *testing.T) {
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				sort.Slice(results.Targets, func(i, j int) bool {
-					return results.Targets[i].ScanTarget.Target < results.Targets[j].ScanTarget.Target
+					return results.Targets[i].Target < results.Targets[j].Target
 				})
 				sort.Slice(test.expected, func(i, j int) bool {
-					return test.expected[i].ScanTarget.Target < test.expected[j].ScanTarget.Target
+					return test.expected[i].Target < test.expected[j].Target
 				})
 				for i := range results.Targets {
 					if results.Targets[i].ScaResults != nil {

@@ -66,7 +66,7 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 		} else {
 			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
 			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
-				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
+				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.Target, err)
 			}
 		}
 		if shouldFailBuild {

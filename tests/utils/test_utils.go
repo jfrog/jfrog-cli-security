@@ -172,10 +172,10 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 	if jas == nil {
 		return
 	}
-	jas.Location.File = getJasConvertedPath(jas.Location.File)
+	jas.File = getJasConvertedPath(jas.File)
 	if jas.Applicability != nil {
 		for i := range jas.Applicability.Evidence {
-			jas.Applicability.Evidence[i].Location.File = getJasConvertedPath(jas.Applicability.Evidence[i].Location.File)
+			jas.Applicability.Evidence[i].File = getJasConvertedPath(jas.Applicability.Evidence[i].File)
 		}
 	}
 	for i := range jas.CodeFlow {
@@ -217,7 +217,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		for i := range cves {
 			if cves[i].Applicability != nil {
 				for j := range cves[i].Applicability.Evidence {
-					cves[i].Applicability.Evidence[j].Location.File = filepath.ToSlash(cves[i].Applicability.Evidence[j].Location.File)
+					cves[i].Applicability.Evidence[j].File = filepath.ToSlash(cves[i].Applicability.Evidence[j].File)
 				}
 			}
 		}

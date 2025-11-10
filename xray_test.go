@@ -6,13 +6,12 @@ import (
 
 	securityDocs "github.com/jfrog/jfrog-cli-security/cli/docs"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestXrayCurl(t *testing.T) {
-	integration.InitXrayTest(t, "")
+	securityIntegrationTestUtils.InitXrayTest(t, "")
 	// Configure a new server named "default".
 	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
@@ -28,7 +27,7 @@ func TestXrayCurl(t *testing.T) {
 }
 
 func TestXrayOfflineDBSyncV3(t *testing.T) {
-	integration.InitXrayTest(t, "")
+	securityIntegrationTestUtils.InitXrayTest(t, "")
 	// Validate license-id
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou")
 	assert.EqualError(t, err, "Mandatory flag 'license-id' is missing")

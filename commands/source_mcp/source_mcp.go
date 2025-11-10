@@ -1,6 +1,7 @@
 package source_mcp
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -28,7 +29,12 @@ type McpCommand struct {
 }
 
 func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
-	defer dst.Close()
+	defer func() {
+		err := dst.Close()
+		if err != nil {
+			log.Error("Error closing destination pipe")
+		}
+	}()
 	_, err := io.Copy(dst, src)
 	if err != nil {
 		log.Error("Error establishing pipe")
@@ -36,17 +42,22 @@ func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
 }
 
 func establishPipeFromFile(dst io.Writer, src io.ReadCloser) {
-	defer src.Close()
+	defer func() {
+		err := src.Close()
+		if err != nil {
+			log.Error("Error closing source pipe")
+		}
+	}()
 	_, err := io.Copy(dst, src)
 	if err != nil {
 		log.Error("Error establishing pipe")
 	}
 }
 
-func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, output_pipe io.Writer, error_pipe io.Writer, timeout int, args ...string) error {
+func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, output_pipe io.Writer, error_pipe io.Writer, timeout int, args ...string) (err error) {
 	am_path, err := jas.GetAnalyzerManagerExecutable()
 	if err != nil {
-		return err
+		return
 	}
 
 	allArgs := append([]string{cmd}, args...)
@@ -59,21 +70,33 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 		log.Error(fmt.Sprintf("Error creating MCPService stdin pipe: %v", _error))
 		return _error
 	}
-	defer stdin.Close()
+	defer func() {
+		if _error := stdin.Close(); _error != nil {
+			err = errors.Join(err, fmt.Errorf("error closing MCPService stdin pipe: %v", _error))
+		}
+	}()
 
 	stdout, _error := command.StdoutPipe()
 	if _error != nil {
 		log.Error(fmt.Sprintf("Error creating MCPService stdout pipe: %v", _error))
 		return _error
 	}
-	defer stdout.Close()
+	defer func() {
+		if _error := stdout.Close(); _error != nil {
+			err = errors.Join(err, fmt.Errorf("error closing MCPService stdout pipe: %v", _error))
+		}
+	}()
 
 	stderr, _error := command.StderrPipe()
 	if _error != nil {
 		log.Error(fmt.Sprintf("Error creating MCPService stderr pipe: %v", _error))
 		return _error
 	}
-	defer stderr.Close()
+	defer func() {
+		if _error := stderr.Close(); _error != nil {
+			err = errors.Join(err, fmt.Errorf("error closing MCPService stderr pipe: %v", _error))
+		}
+	}()
 
 	go establishPipeToFile(stdin, input_pipe)
 	go establishPipeFromFile(error_pipe, stderr)

@@ -33,7 +33,6 @@ import (
 	scangraphstrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -116,7 +115,7 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 }
 
 func TestXrayAuditNpm(t *testing.T) {
-	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name     string
 		format   format.OutputFormat
@@ -171,7 +170,7 @@ func testAuditNpm(t *testing.T, format format.OutputFormat, violationContextPref
 }
 
 func TestXrayAuditConan(t *testing.T) {
-	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name     string
 		format   format.OutputFormat
@@ -225,7 +224,7 @@ func testAuditConan(t *testing.T, format format.OutputFormat, withVuln bool) str
 }
 
 func TestXrayAuditPnpmJson(t *testing.T) {
-	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	for _, format := range []format.OutputFormat{format.Json, format.SimpleJson} {
 		t.Run(string(format), func(t *testing.T) {
 			validations.ValidateCommandOutput(t, testXrayAuditPnpm(t, format), format, validations.ValidationParams{
@@ -248,7 +247,7 @@ func testXrayAuditPnpm(t *testing.T, format format.OutputFormat) string {
 }
 
 func TestXrayAuditYarn(t *testing.T) {
-	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name              string
 		project           string
@@ -304,7 +303,7 @@ func runXrayAuditYarnWithOutput(t *testing.T, projectDirName string, format form
 }
 
 func TestXrayAuditNugetDotNet(t *testing.T) {
-	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
 	var testdata = []struct {
 		projectName        string
 		format             format.OutputFormat
@@ -396,7 +395,7 @@ func testXrayAuditNuget(t *testing.T, projectName string, format format.OutputFo
 }
 
 func TestXrayAuditGradle(t *testing.T) {
-	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	for _, format := range []format.OutputFormat{format.Json, format.SimpleJson} {
 		t.Run(string(format), func(t *testing.T) {
 			validations.ValidateCommandOutput(t, testXrayAuditGradle(t, format), format, validations.ValidationParams{
@@ -417,7 +416,7 @@ func testXrayAuditGradle(t *testing.T, format format.OutputFormat) string {
 }
 
 func TestXrayAuditMaven(t *testing.T) {
-	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	for _, format := range []format.OutputFormat{format.Json, format.SimpleJson} {
 		t.Run(string(format), func(t *testing.T) {
 			validations.ValidateCommandOutput(t, testAuditMaven(t, format), format, validations.ValidationParams{
@@ -438,7 +437,7 @@ func testAuditMaven(t *testing.T, format format.OutputFormat) string {
 }
 
 func TestXrayAuditGo(t *testing.T) {
-	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	for _, outFormat := range []format.OutputFormat{format.Json, format.SimpleJson} {
 		t.Run(string(outFormat), func(t *testing.T) {
 			validationParams := validations.ValidationParams{
@@ -465,7 +464,7 @@ func testXrayAuditGo(t *testing.T, format format.OutputFormat, project string) s
 }
 
 func TestXrayAuditNoTech(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -477,7 +476,7 @@ func TestXrayAuditNoTech(t *testing.T) {
 }
 
 func TestXrayAuditMultiProjects(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects"))
 	defer cleanUp()
 	// Configure a new server named "default"
@@ -504,7 +503,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 }
 
 func TestXrayAuditPip(t *testing.T) {
-	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name             string
 		outFormat        format.OutputFormat
@@ -560,7 +559,7 @@ func testXrayAuditPip(t *testing.T, outFormat format.OutputFormat, requirementsF
 }
 
 func TestXrayAuditCocoapods(t *testing.T) {
-	integration.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
 	output := testXrayAuditCocoapods(t, format.Json)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
@@ -581,7 +580,7 @@ func TestXrayAuditSwift(t *testing.T) {
 }
 
 func testXrayAuditSwift(t *testing.T, format format.OutputFormat) string {
-	integration.InitAuditSwiftTest(t, scangraph.SwiftScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditSwiftTest(t, scangraph.SwiftScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "swift"))
 	defer cleanUp()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
@@ -590,7 +589,7 @@ func testXrayAuditSwift(t *testing.T, format format.OutputFormat) string {
 }
 
 func TestXrayAuditPipenv(t *testing.T) {
-	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name   string
 		format format.OutputFormat
@@ -624,7 +623,7 @@ func testXrayAuditPipenv(t *testing.T, format format.OutputFormat) string {
 }
 
 func TestXrayAuditPoetry(t *testing.T) {
-	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	testCases := []struct {
 		name   string
 		format format.OutputFormat
@@ -670,7 +669,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestAuditJasCycloneDx(t *testing.T) {
-	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -687,7 +686,7 @@ func TestAuditJasCycloneDx(t *testing.T) {
 }
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
-	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), auditCommandTestParams{
 		Threads:         3,
 		CustomExclusion: []string{"*out*"},
@@ -699,7 +698,7 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	})
 }
 func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
-	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -711,7 +710,7 @@ func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
-	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -722,8 +721,8 @@ func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	cliToRun, cleanUp := securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
 		Threads: 3,
@@ -750,7 +749,7 @@ func getNoJasAuditMockCommand() components.Command {
 }
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -765,7 +764,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
-	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		ValidateSecrets: true,
 		Threads:         3,
@@ -780,7 +779,7 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		Threads: 1,
 		Format:  format.SimpleJson,
@@ -795,7 +794,7 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -810,7 +809,7 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -831,7 +830,7 @@ func testXrayAuditWithCleanHome(t *testing.T, testCli *coreTests.JfrogCli, proje
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven"))
 	defer cleanUp()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
@@ -846,7 +845,7 @@ func TestXrayAuditDetectTech(t *testing.T) {
 }
 
 func TestXrayRecursiveScan(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers")
 	// Creating an inner NPM project
 	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(projectDir, "npm", "npm"))
@@ -870,7 +869,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 }
 
 func TestAuditNoDependencyProject(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps")))
 	defer cleanUp()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
@@ -883,8 +882,8 @@ func TestAuditNoDependencyProject(t *testing.T) {
 // xray-url only - the following tests check the case of adding "xray-url", instead of "url", which is the more common one
 
 func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	cliToRun, cleanUp := securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
 		Threads: 3,
@@ -900,8 +899,8 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	cliToRun := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	cliToRun := securityIntegrationTestUtils.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
 		Threads: 3,
 		Format:  format.SimpleJson,
@@ -918,7 +917,7 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 // custom excluded folders
 
 func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
-	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		CustomExclusion: []string{"non_existing_folder"},
 		Threads:         3,
@@ -934,7 +933,7 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 }
 
 func TestXrayAuditGemJson(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGem(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 1},
@@ -942,7 +941,7 @@ func TestXrayAuditGemJson(t *testing.T) {
 }
 
 func TestXrayAuditGemCycloneDx(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGem(t, string(format.CycloneDx))
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 1},
@@ -971,7 +970,7 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 }
 
 func TestAuditNewScaCycloneDxNpm(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -989,7 +988,7 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxMaven(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1006,7 +1005,7 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGradle(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1023,7 +1022,7 @@ func TestAuditNewScaCycloneDxGradle(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGo(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "go", "simple-project"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1037,7 +1036,7 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxYarn(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1054,7 +1053,7 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPip(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1070,7 +1069,7 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "poetry", "poetry-project"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1087,7 +1086,7 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxNuget(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
@@ -1104,7 +1103,7 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
-	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
