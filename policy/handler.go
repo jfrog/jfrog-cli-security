@@ -56,20 +56,20 @@ func getStatusCodeFromErr(err error) int {
 }
 
 func CheckPolicyFailBuildError(cmdResults *results.SecurityCommandResults) (err error) {
-	if cmdResults == nil || cmdResults.Violations.IsScanFailed() {
+	if cmdResults == nil || (cmdResults.ViolationsStatusCode != nil && *cmdResults.ViolationsStatusCode != 0) {
 		return
 	}
-	if cmdResults.Violations.Scan.ShouldFailBuild() {
+	if cmdResults.Violations.ShouldFailBuild() {
 		err = NewFailBuildError()
 	}
 	return
 }
 
 func CheckPolicyFailPrError(cmdResults *results.SecurityCommandResults) (err error) {
-	if cmdResults == nil || cmdResults.Violations.IsScanFailed() {
+	if cmdResults == nil || (cmdResults.ViolationsStatusCode != nil && *cmdResults.ViolationsStatusCode != 0) {
 		return
 	}
-	if cmdResults.Violations.Scan.ShouldFailPR() {
+	if cmdResults.Violations.ShouldFailPR() {
 		err = NewFailPrError()
 	}
 	return

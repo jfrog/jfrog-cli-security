@@ -563,14 +563,6 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 	return GetFinalApplicabilityStatus(applicableStatuses)
 }
 
-// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
-func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
-	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
-		return true
-	}
-	return false
-}
-
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
 	if rule != nil && rule.Properties != nil && rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
 		status, ok := rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
@@ -698,11 +690,12 @@ func ConvertPolicesToString(policies []services.Policy) []string {
 	return policiesStr
 }
 
-func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
-	for _, result := range results {
-		runs = append(runs, result.Scan...)
+func CollectRuns(runs ...[]*sarif.Run) []*sarif.Run {
+	flat := []*sarif.Run{}
+	for _, runSlice := range runs {
+		flat = append(flat, runSlice...)
 	}
-	return
+	return flat
 }
 
 // Resolve the actual technology from multiple sources:

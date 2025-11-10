@@ -17,6 +17,7 @@ const (
 	XrayScanStepSecrets            = "Secret Detection Scan"
 	XrayScanStepServices           = "Services Scan"
 	XrayScanStepApplication        = "Application Scan"
+	XrayScanStepSast               = "Static Application Security Testing (SAST)"
 	XrayScanStepViolations         = "Violations Reporting"
 )
 

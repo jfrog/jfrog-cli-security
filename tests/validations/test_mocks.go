@@ -14,10 +14,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
@@ -229,21 +227,6 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		getXscServerApiHandler(t, params)(w, r)
 	})
 	return serverMock, serverDetails, &apiCallCounts
-}
-
-func NewMockJasRuns(runs ...*sarif.Run) []results.ScanResult[[]*sarif.Run] {
-	return []results.ScanResult[[]*sarif.Run]{{Scan: runs}}
-}
-
-func NewMockScaResults(responses ...services.ScanResponse) (converted []results.ScanResult[services.ScanResponse]) {
-	for _, response := range responses {
-		status := 0
-		if response.ScannedStatus == "failed" {
-			status = 1
-		}
-		converted = append(converted, results.ScanResult[services.ScanResponse]{Scan: response, StatusCode: status})
-	}
-	return
 }
 
 func CreateDummyApplicabilityRule(cve string, applicableStatus jasutils.ApplicabilityStatus) *sarif.ReportingDescriptor {

@@ -13,7 +13,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -25,6 +24,8 @@ type CmdResultsSummaryConverter struct {
 	current       *formats.ResultsSummary
 	currentTarget results.ScanTarget
 	currentScan   *formats.ScanSummary
+
+	status results.ResultsStatus
 }
 
 func NewCmdResultsSummaryConverter(includeVulnerabilities, hasViolationContext bool) *CmdResultsSummaryConverter {
@@ -42,9 +43,10 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	return *sc.current, nil
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(metadata results.ResultsMetaData, statusCodes results.ResultsStatus, multipleTargets bool) (err error) {
 	sc.current = &formats.ResultsSummary{}
-	sc.entitledForJas = entitledForJas
+	sc.entitledForJas = metadata.EntitledForJas
+	sc.status = statusCodes
 	return
 }
 
@@ -77,11 +79,11 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse services.ScanResponse, applicableScan ...[]*sarif.Run) (err error) {
 	return sc.parseScaVulnerabilities(descriptors, scaResponse, applicableScan...)
 }
 
-func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []string, scaResponse services.ScanResponse, applicableScan ...[]*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -89,30 +91,23 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []stri
 		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 	}
 	// Parse general SCA results
-	if scaResponse.Scan.ScanId != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.Scan.ScanId)
+	if scaResponse.ScanId != "" {
+		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.ScanId)
 	}
-	if scaResponse.Scan.XrayDataUrl != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
+	if scaResponse.XrayDataUrl != "" {
+		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
 	}
-	if scaResponse.IsScanFailed() {
+	if sc.status.IsScanFailed(results.CmdStepSca) {
 		return
-	}
-	applicabilityRuns := []*sarif.Run{}
-	for _, scan := range applicableScan {
-		if scan.IsScanFailed() {
-			continue
-		}
-		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
 	}
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
 	err = results.ForEachScanGraphVulnerability(
 		sc.currentTarget,
 		descriptors,
-		scaResponse.Scan.Vulnerabilities,
+		scaResponse.Vulnerabilities,
 		sc.entitledForJas,
-		applicabilityRuns,
+		results.CollectRuns(applicableScan...),
 		sc.getScaVulnerabilityHandler(parsed),
 	)
 	return
@@ -171,7 +166,7 @@ func getCveIds(cves []formats.CveRow, issueId string) []string {
 	return ids
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseLicenses(_ results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSummaryConverter) DeprecatedParseLicenses(_ services.ScanResponse) (err error) {
 	// Not supported in the summary
 	return
 }
@@ -186,7 +181,7 @@ func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(components []cyclonedx.C
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -194,18 +189,11 @@ func (sc *CmdResultsSummaryConverter) ParseCVEs(enrichedSbom results.ScanResult[
 		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 	}
 	// Parse general SCA results
-	if enrichedSbom.IsScanFailed() {
+	if sc.status.IsScanFailed(results.CmdStepSca) {
 		return
 	}
-	applicabilityRuns := []*sarif.Run{}
-	for _, scan := range applicableScan {
-		if scan.IsScanFailed() {
-			continue
-		}
-		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
-	}
 	// Parse vulnerabilities
-	return results.ForEachScaBomVulnerability(sc.currentTarget, enrichedSbom.Scan, sc.entitledForJas, applicabilityRuns, sc.getBomScaVulnerabilityHandler())
+	return results.ForEachScaBomVulnerability(sc.currentTarget, enrichedSbom, sc.entitledForJas, results.CollectRuns(applicableScan...), sc.getBomScaVulnerabilityHandler())
 }
 
 func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.ParseBomScaVulnerabilityFunc {
@@ -225,22 +213,22 @@ func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.Pa
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.Violations) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
 		return
 	}
-	if violations.IsScanFailed() {
+	if sc.status.IsScanFailed(results.CmdStepViolations) {
 		return
 	}
 	return errors.Join(err,
-		sc.parseScaViolations(violations.Scan),
-		sc.parseSecretsViolations(violations.Scan.Secrets),
-		sc.parseIacViolations(violations.Scan.Iac),
-		sc.parseSastViolations(violations.Scan.Sast),
+		sc.parseScaViolations(violations),
+		sc.parseSecretsViolations(violations.Secrets),
+		sc.parseIacViolations(violations.Iac),
+		sc.parseSastViolations(violations.Sast),
 	)
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -252,10 +240,10 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...results.ScanResult
 	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, false))
+	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, false))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -267,10 +255,10 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...results.ScanResult[[]*sa
 	if sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false))
+	return results.ForEachJasIssue(results.CollectRuns(iacs...), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSast(sast ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -278,11 +266,10 @@ func (sc *CmdResultsSummaryConverter) ParseSast(sast ...results.ScanResult[[]*sa
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-
 	if sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false))
+	return results.ForEachJasIssue(results.CollectRuns(sast...), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false))
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles

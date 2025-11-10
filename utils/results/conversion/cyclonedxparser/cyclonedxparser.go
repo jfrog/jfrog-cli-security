@@ -69,13 +69,13 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
-	cdc.entitledForJas = entitledForJas
-	cdc.gitContext = gitContext
-	cdc.xrayVersion = xrayVersion
+func (cdc *CmdResultsCycloneDxConverter) Reset(metadata results.ResultsMetaData, statusCodes results.ResultsStatus, multipleTargets bool) (err error) {
+	cdc.entitledForJas = metadata.EntitledForJas
+	cdc.gitContext = metadata.GitContext
+	cdc.xrayVersion = metadata.XrayVersion
 	// Reset the BOM
 	cdc.bom = &cdxutils.FullBOM{BOM: *cyclonedx.NewBOM()}
-	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(multiScanId)
+	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(metadata.MultiScanId)
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Authors:   &[]cyclonedx.OrganizationalContact{{Name: "JFrog"}},
@@ -93,21 +93,21 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse services.ScanResponse, applicableScan ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
-	return results.ForEachScanGraphVulnerability(cdc.currentTarget, descriptors, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(&cdc.bom.BOM))
+	return results.ForEachScanGraphVulnerability(cdc.currentTarget, descriptors, scaResponse.Vulnerabilities, cdc.entitledForJas, results.CollectRuns(applicableScan...), results.ParseScanGraphVulnerabilityToSbom(&cdc.bom.BOM))
 }
 
-func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(scaResponse services.ScanResponse) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	cdc.addXrayToolIfMissing()
-	return results.ForEachLicense(cdc.currentTarget, scaResponse.Scan.Licenses, results.ParseScanGraphLicenseToSbom(&cdc.bom.BOM))
+	return results.ForEachLicense(cdc.currentTarget, scaResponse.Licenses, results.ParseScanGraphLicenseToSbom(&cdc.bom.BOM))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
@@ -129,16 +129,16 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(components []cycloned
 	return nil
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	if enrichedSbom.Scan == nil || enrichedSbom.Scan.Vulnerabilities == nil || len(*enrichedSbom.Scan.Vulnerabilities) == 0 {
+	if enrichedSbom == nil || enrichedSbom.Vulnerabilities == nil || len(*enrichedSbom.Vulnerabilities) == 0 {
 		// No vulnerabilities to parse
 		return
 	}
 	cdc.addJasService(applicableScan)
-	return results.ForEachScaBomVulnerability(cdc.currentTarget, enrichedSbom.Scan, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
+	return results.ForEachScaBomVulnerability(cdc.currentTarget, enrichedSbom, cdc.entitledForJas, results.CollectRuns(applicableScan...),
 		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
 			// Add the vulnerability related component if it is not already existing
 			cdc.getOrCreateScaComponent(compToParse)
@@ -151,12 +151,12 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom results.ScanResu
 	)
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	source := cdc.addJasService(secrets)
-	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+	return results.ForEachJasIssue(results.CollectRuns(secrets...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		startLine := sarifutils.GetLocationStartLine(location)
 		startColumn := sarifutils.GetLocationStartColumn(location)
 		endLine := sarifutils.GetLocationEndLine(location)
@@ -200,13 +200,13 @@ func getSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
 	return fmt.Sprintf("EXP-%s", ruleId)
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	// return
 	source := cdc.addJasService(iacs)
-	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+	return results.ForEachJasIssue(results.CollectRuns(iacs...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, cdc.currentTarget))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
@@ -223,17 +223,17 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...results.ScanResult[[]
 	})
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseSast(sast ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	source := cdc.addJasService(sast)
 	if !cdc.parseSastResultDirectlyIntoCDX {
 		// SAST parsing is disabled, add the runs without parsing the issues
-		cdc.bom.Sast = append(cdc.bom.Sast, results.ScanResultsToRuns(sast)...)
+		cdc.bom.Sast = append(cdc.bom.Sast, results.CollectRuns(sast...)...)
 		return
 	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+	return results.ForEachJasIssue(results.CollectRuns(sast...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, cdc.currentTarget))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
@@ -250,7 +250,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(sast ...results.ScanResult[[]
 	})
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseViolations(violations results.ScanResult[violationutils.Violations]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseViolations(violations violationutils.Violations) (err error) {
 	// Violations are not supported in CycloneDX
 	return
 }
@@ -306,9 +306,9 @@ func (cdc *CmdResultsCycloneDxConverter) setTargetComponent(target string, compo
 	cdc.targetsComponent[target] = component
 }
 
-func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult[[]*sarif.Run]) (service *cyclonedx.Service) {
+func (cdc *CmdResultsCycloneDxConverter) addJasService(runs [][]*sarif.Run) (service *cyclonedx.Service) {
 	for _, runInfo := range runs {
-		for _, run := range runInfo.Scan {
+		for _, run := range runInfo {
 			// Add tool if missing
 			if run == nil || run.Tool.Driver == nil {
 				continue

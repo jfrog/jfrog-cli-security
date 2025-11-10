@@ -257,10 +257,6 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Vulnerabilities == nil {
 			continue
 		}
-		var applicabilityRuns []*sarif.Run
-		if cmdResults.EntitledForJas && target.JasResults != nil {
-			applicabilityRuns = results.ScanResultsToRuns(target.JasResults.ApplicabilityScanResults)
-		}
 		for _, vulnerability := range *target.ScaResults.Sbom.Vulnerabilities {
 			if vulnerability.ID != issueId || vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
 				continue
@@ -269,7 +265,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 				if affected.Ref == impactedComponent.BOMRef {
 					// Found the relevant component in a vulnerability
 					relevantVulnerability = &vulnerability
-					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, applicabilityRuns)
+					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, target.JasResults.ApplicabilityScanResults)
 					break
 				}
 			}

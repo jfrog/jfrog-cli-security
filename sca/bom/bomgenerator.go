@@ -39,6 +39,7 @@ func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) 
 	// Generate the SBOM for the target
 	sbom, err := generator.GenerateSbom(params.Target.ScanTarget)
 	if err != nil {
+		params.Target.ResultsStatus.UpdateStatus(results.CmdStepSbom, utils.NewIntPtr(1))
 		_ = params.Target.AddTargetError(fmt.Errorf("failed to generate SBOM for %s: %s", params.Target.Target, err.Error()), params.AllowPartialResults)
 		return
 	}
@@ -73,6 +74,7 @@ func getDiffSbom(sbom *cyclonedx.BOM, params SbomGeneratorParams) *cyclonedx.BOM
 
 func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 	target.SetSbom(sbom)
+	target.ResultsStatus.UpdateStatus(results.CmdStepSbom, utils.NewIntPtr(0))
 	if err := logLibComponents(sbom.Components); err != nil {
 		log.Warn(fmt.Sprintf("Failed to log library components in SBOM for %s: %s", target.Target, err.Error()))
 	}

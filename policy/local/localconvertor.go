@@ -57,17 +57,17 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
 			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
-				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SecretsScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SecretsScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.ScanTarget.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
-				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.IacScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.IacScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.ScanTarget.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
-				if e := results.ForEachJasIssue(results.ScanResultsToRuns(target.JasResults.JasViolations.SastScanResults), cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SastScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.ScanTarget.Target, e))
 				}
 			}
@@ -87,7 +87,7 @@ func (d *DeprecatedViolationGenerator) generateScaViolations(target *results.Tar
 		_, _, e := ForEachScanGraphViolation(
 			target.ScanTarget,
 			target.ScaResults.Descriptors,
-			deprecatedXrayResult.Scan.Violations,
+			deprecatedXrayResult.Violations,
 			entitledForJas,
 			applicableRuns,
 			convertScaSecurityViolationToPolicyViolation(convertedViolations),
@@ -95,11 +95,11 @@ func (d *DeprecatedViolationGenerator) generateScaViolations(target *results.Tar
 			convertOperationalRiskViolationToPolicyViolation(convertedViolations),
 		)
 		if e != nil {
-			err = errors.Join(err, fmt.Errorf("failed to convert scan graph results (scanId: %s): %w", deprecatedXrayResult.Scan.ScanId, e))
+			err = errors.Join(err, fmt.Errorf("failed to convert scan graph results (scanId: %s): %w", deprecatedXrayResult.ScanId, e))
 			continue
 		}
 		// Collect licenses for local license violation generation
-		licenses = append(licenses, deprecatedXrayResult.Scan.Licenses...)
+		licenses = append(licenses, deprecatedXrayResult.Licenses...)
 	}
 	if len(convertedViolations.License) > 0 || len(d.AllowedLicenses) == 0 {
 		// Deprecated option to provide allowed-licenses to generate local violations (only if no violations were found)
