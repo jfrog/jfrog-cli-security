@@ -811,7 +811,7 @@ func patchPaths(params PatchSarifParams, runs ...*sarif.Run) {
 		// Convert base on the given working directory
 		sarifutils.ConvertRunsPathsToRelativeFromWd(params.WorkingDirectory, runs...)
 	}
-	if !(params.CmdType == utils.DockerImage && params.SubScanType == utils.SecretsScan) {
+	if params.CmdType != utils.DockerImage || params.SubScanType != utils.SecretsScan {
 		return
 	}
 	for _, run := range runs {
