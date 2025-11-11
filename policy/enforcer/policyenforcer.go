@@ -339,8 +339,7 @@ func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sar
 	if relative := sarifutils.GetRelativeLocationFileName(location, invocations); !slices.Contains(violation.InfectedFilePaths, relative) {
 		return false
 	}
-	// TODO: Improve matching logic when more data is available in Xray violations (Line + Column)
-	return true
+	return sarifutils.GetLocationStartLine(location) == violation.LineNumber
 }
 
 func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.JasScanType) string {
