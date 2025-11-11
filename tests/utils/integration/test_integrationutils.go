@@ -259,7 +259,7 @@ func authenticateXray(xrayUrlOnly bool) string {
 		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
 	} else {
 		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
-		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.Url)
 	}
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken
