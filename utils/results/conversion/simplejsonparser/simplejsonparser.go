@@ -2,6 +2,7 @@ package simplejsonparser
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -108,7 +109,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclone
 				LicenseKey:  license.License.ID,
 				LicenseName: license.License.Name,
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-					ImpactedDependencyName:    compName,
+					ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 					ImpactedDependencyVersion: compVersion,
 					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
 					Components:                results.GetDirectDependenciesAsComponentRows(component, components, dependencies),
@@ -231,7 +232,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createVulnerabilityOrViolationRowFromC
 		Summary: summary,
 		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 			SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
-			ImpactedDependencyName:    compName,
+			ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 			ImpactedDependencyVersion: compVersion,
 			ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
 			Components:                directComponents,
@@ -269,7 +270,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createLicenseViolationRow(licenseKey, 
 			LicenseName: licenseName,
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 				SeverityDetails:           severityutils.GetAsDetails(severity, jasutils.NotScanned, sjc.pretty),
-				ImpactedDependencyName:    compName,
+				ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 				ImpactedDependencyVersion: compVersion,
 				ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
 				Components:                directComponents,
@@ -285,7 +286,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createOpRiskViolationRow(opRiskViolati
 		ViolationContext: convertToViolationContext(opRiskViolation.Violation),
 		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 			SeverityDetails:           severityutils.GetAsDetails(opRiskViolation.Severity, jasutils.NotScanned, sjc.pretty),
-			ImpactedDependencyName:    compName,
+			ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 			ImpactedDependencyVersion: compVersion,
 			ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
 			Components:                opRiskViolation.DirectComponents,
