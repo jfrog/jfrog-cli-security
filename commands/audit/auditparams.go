@@ -204,7 +204,7 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 }
 
 func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.BuildInfoBomGeneratorParams, err error) {
-	serverDetails, err := params.AuditBasicParams.ServerDetails()
+	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return
 	}

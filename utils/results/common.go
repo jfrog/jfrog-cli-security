@@ -522,7 +522,7 @@ func GetCveApplicabilityFieldAndFilterDisqualify(cveId string, applicabilityScan
 	// Filter out evidences that are disqualified
 	filteredEvidence := make([]formats.Evidence, 0, len(applicability.Evidence))
 	for _, evidence := range applicability.Evidence {
-		fileName := evidence.Location.File
+		fileName := evidence.File
 		if fileName == "" || !shouldDisqualifyEvidence(components, filepath.Clean(fileName)) {
 			// If the file name is empty, we cannot determine if it should be disqualified
 			// If the evidence is not disqualified, keep it

@@ -85,11 +85,7 @@ func TestConvertResults(t *testing.T) {
 			default:
 				t.Fatalf("Unsupported command type: %s", testCase.cmdType)
 			}
-			pretty := false
-			if testCase.contentFormat == Sarif {
-				pretty = true
-			}
-			convertor := NewCommandResultsConvertor(ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true, IncludeLicenses: true, Pretty: pretty})
+			convertor := NewCommandResultsConvertor(ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true, IncludeLicenses: true, Pretty: testCase.contentFormat == Sarif})
 
 			switch testCase.contentFormat {
 			case SimpleJson:

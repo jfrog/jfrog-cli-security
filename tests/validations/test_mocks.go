@@ -112,7 +112,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 		}
 
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, apiUrlPart, "xsc") {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, params.XscVersion)))
+			_, err := fmt.Fprintf(w, `{"xsc_version": "%s"}`, params.XscVersion)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -123,7 +123,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 				if params.ReturnMsi == "" {
 					params.ReturnMsi = TestMsi
 				}
-				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, params.ReturnMsi)))
+				_, err := fmt.Fprintf(w, `{"multi_scan_id": "%s"}`, params.ReturnMsi)
 				if !assert.NoError(t, err) {
 					return
 				}
@@ -152,7 +152,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
 			apiCallCounts[VersionApi]++
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)))
+			_, err := fmt.Fprintf(w, `{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -172,7 +172,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 			if r.Method == http.MethodPost {
 				apiCallCounts[GraphScanPostAPI]++
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
+				_, err := fmt.Fprintf(w, `{"scan_id" : "%s"}`, TestScaScanId)
 				if !assert.NoError(t, err) {
 					return
 				}

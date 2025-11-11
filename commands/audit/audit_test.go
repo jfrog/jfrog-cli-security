@@ -27,8 +27,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
-	biutils "github.com/jfrog/build-info-go/utils"
-
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
@@ -200,10 +198,10 @@ func TestDetectScansToPerform(t *testing.T) {
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				sort.Slice(results.Targets, func(i, j int) bool {
-					return results.Targets[i].ScanTarget.Target < results.Targets[j].ScanTarget.Target
+					return results.Targets[i].Target < results.Targets[j].Target
 				})
 				sort.Slice(test.expected, func(i, j int) bool {
-					return test.expected[i].ScanTarget.Target < test.expected[j].ScanTarget.Target
+					return test.expected[i].Target < test.expected[j].Target
 				})
 				for i := range results.Targets {
 					if results.Targets[i].ScaResults != nil {
@@ -600,15 +598,14 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			expectedCaNotApplicable: 2,
 		},
 	}
-
+	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
-			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-			defer createTempDirCallback()
-			assert.NoError(t, biutils.CopyDir(testcase.testDirPath, tempDirPath, true, nil))
+			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testcase.testDirPath)
+			defer cleanUp()
 
 			configProfile := testcase.configProfile
 			auditBasicParams := (&AuditBasicParams{}).
@@ -623,12 +620,11 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
-				SetWorkingDirs([]string{tempDirPath}).
+				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
 
-			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
 
@@ -657,25 +653,25 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
+	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer removeOutputDirCallback()
 
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
-	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
+	tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"))
+	defer cleanUp()
 
 	auditBasicParams := (&AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
 		SetXrayVersion(utils.EntitlementsMinVersion).
-		SetUseJas(true)
+		SetUseJas(true).
+		SetIsRecursiveScan(true)
 
 	auditParams := NewAuditParams().
-		SetWorkingDirs([]string{tempDirPath}).
+		SetWorkingDirs([]string{tempProjectPath}).
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
@@ -683,7 +679,6 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
-	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
@@ -761,7 +756,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			serverMock, serverDetails := validations.CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 				if r.RequestURI == "/xray/api/v1/system/version" {
-					_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, utils.EntitlementsMinVersion)))
+					_, err := fmt.Fprintf(w, `{"version":"%s", "xray_revision": "xxx"}`, utils.EntitlementsMinVersion)
 					if !assert.NoError(t, err) {
 						return
 					}
@@ -790,21 +785,19 @@ func TestAuditWithPartialResults(t *testing.T) {
 			})
 			defer serverMock.Close()
 
-			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-			defer createTempDirCallback()
+			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testcase.testDirPath)
+			defer cleanUp()
 
 			if testcase.useJas {
 				// In order to simulate failure in Jas process we fail the AM download by using the mock server for the download and failing the endpoint call there
-				clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(tempDirPath, configTests.Out, "jfroghome"))
+				homeCallbackEnv := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(tempProjectPath, configTests.Out, "jfroghome"))
 				err := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, "testServer").SetDetails(serverDetails).SetInteractive(false).SetEncPassword(false).Run()
 				assert.NoError(t, err)
-				defer securityTestUtils.CleanTestsHomeEnv()
+				defer homeCallbackEnv()
 
-				callbackEnv := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReleasesRemoteEnv, "testServer/testRemoteRepo")
-				defer callbackEnv()
+				remoteCallbackEnv := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReleasesRemoteEnv, "testServer/testRemoteRepo")
+				defer remoteCallbackEnv()
 			}
-
-			assert.NoError(t, biutils.CopyDir(testcase.testDirPath, tempDirPath, false, nil))
 
 			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
@@ -812,17 +805,17 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetXrayVersion("3.108.0").
 				SetUseJas(testcase.useJas).
 				SetAllowPartialResults(testcase.allowPartialResults).
-				SetPipRequirementsFile(testcase.pipRequirementsFile)
+				SetPipRequirementsFile(testcase.pipRequirementsFile).
+				SetIsRecursiveScan(true)
 
 			auditParams := NewAuditParams().
-				SetWorkingDirs([]string{tempDirPath}).
+				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 				SetViolationGenerator(local.NewDeprecatedViolationGenerator())
-			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
 			if testcase.allowPartialResults {
@@ -950,10 +943,9 @@ func TestCreateResultsContext(t *testing.T) {
 }
 
 func TestAudit_DiffScanFlow(t *testing.T) {
-	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
+	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
+	tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"))
+	defer cleanUp()
 
 	testCases := []struct {
 		name                  string
@@ -970,7 +962,7 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				Targets: []*results.TargetResults{
 					{
 						ScanTarget: results.ScanTarget{
-							Target:     tempDirPath,
+							Target:     tempProjectPath,
 							Technology: techutils.Pip,
 						},
 						ScaResults: &results.ScaScanResults{
@@ -1026,7 +1018,7 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetUseJas(false)
 
 			auditParams := NewAuditParams().
-				SetWorkingDirs([]string{tempDirPath}).
+				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
