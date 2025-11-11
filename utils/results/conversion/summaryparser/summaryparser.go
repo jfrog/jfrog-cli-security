@@ -381,7 +381,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(violations violationuti
 			applicabilityStatus = jasutils.ApplicabilityStatus(cveViolation.ContextualAnalysis.Status)
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, cveViolation.Watch)
-		scaSecurityHandler(sc.currentScan.Violations.ScanResultSummary.ScaResults, cveViolation.Severity, applicabilityStatus)
+		scaSecurityHandler(sc.currentScan.Violations.ScaResults, cveViolation.Severity, applicabilityStatus)
 	}
 	// License violations
 	for _, licenseViolation := range violations.License {

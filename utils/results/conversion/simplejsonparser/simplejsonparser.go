@@ -170,9 +170,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violationsScanResults 
 	// SCA Violations
 	for _, cveViolation := range violationsScanResults.Sca {
 		violation := sjc.createVulnerabilityOrViolationRowFromCdx(
-			cveViolation.Violation.ViolationId,
+			cveViolation.ViolationId,
 			cveViolation.CveVulnerability.Description,
-			cveViolation.Violation.Severity,
+			cveViolation.Severity,
 			cveViolation.ContextualAnalysis,
 			cveViolation.CveVulnerability,
 			cveViolation.ImpactedComponent,
@@ -189,7 +189,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violationsScanResults 
 		sjc.current.LicensesViolations = append(sjc.current.LicensesViolations, sjc.createLicenseViolationRow(
 			licenseViolation.LicenseKey,
 			licenseViolation.LicenseName,
-			licenseViolation.Violation.Severity,
+			licenseViolation.Severity,
 			licenseViolation.ImpactedComponent,
 			licenseViolation.DirectComponents,
 			licenseViolation.ImpactPaths,

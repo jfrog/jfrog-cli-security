@@ -55,12 +55,12 @@ func getStatusCodeFromErr(err error) int {
 	return 1
 }
 
-func CheckPolicyFailBuildError(cmdResults *results.SecurityCommandResults) (FailBuildError error) {
+func CheckPolicyFailBuildError(cmdResults *results.SecurityCommandResults) (failBuildError error) {
 	if cmdResults == nil || cmdResults.Violations == nil || (cmdResults.ViolationsStatusCode != nil && *cmdResults.ViolationsStatusCode != 0) {
 		return
 	}
 	if cmdResults.Violations.ShouldFailBuild() {
-		FailBuildError = NewFailBuildError()
+		failBuildError = NewFailBuildError()
 	}
 	return
 }

@@ -111,7 +111,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
-		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults, cmdResults.EntitledForJas); err != nil {
+		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults); err != nil {
 			return
 		}
 		if !cmdResults.EntitledForJas {
@@ -129,7 +129,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 	return parser.Get()
 }
 
-func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdType utils.CommandType, targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
+func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdType utils.CommandType, targetScansResults *results.TargetResults) (err error) {
 	// Parse SBOM content first to prepare for parsing SCA results
 	if params.IncludeSbom && targetScansResults.ScaResults != nil {
 		if err = parser.ParseSbom(targetScansResults.ScaResults.Sbom); err != nil {
@@ -141,7 +141,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// If no enriched SBOM was provided, we can't parse new flow
-	if err = parseDeprecatedScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
+	if err = parseDeprecatedScaResults(params, parser, targetScansResults); err != nil {
 		return
 	}
 	if targetScansResults.ScaResults.Sbom == nil {
@@ -167,7 +167,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	return
 }
 
-func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
+func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults) (err error) {
 	if targetScansResults.ScaResults == nil {
 		// Nothing to parse, no SCA results
 		return

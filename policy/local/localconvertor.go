@@ -51,24 +51,24 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 		// SCA violations (from DeprecatedXrayResults)
 		if target.ScaResults != nil {
 			if e := d.generateScaViolations(target, &convertedViolations, cmdResults.EntitledForJas); e != nil {
-				err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.ScanTarget.Target, e))
+				err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.Target, e))
 			}
 		}
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
 			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
 				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SecretsScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
-					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.ScanTarget.Target, e))
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
 				if e := results.ForEachJasIssue(target.JasResults.JasViolations.IacScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
-					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.ScanTarget.Target, e))
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
 				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SastScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
-					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.ScanTarget.Target, e))
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.Target, e))
 				}
 			}
 		}

@@ -19,8 +19,6 @@ import (
 type EnrichScanStrategy struct {
 	serverDetails *config.ServerDetails
 	projectKey    string
-	// Run Options
-	threadId int
 }
 
 func NewEnrichScanStrategy() *EnrichScanStrategy {
