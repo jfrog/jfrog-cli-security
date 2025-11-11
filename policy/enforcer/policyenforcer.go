@@ -285,7 +285,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations *violationutils.JasViolation) {
 	match := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
 	if match.rule == nil || match.result == nil || match.location == nil {
-		log.Warn(fmt.Sprintf("Could not locate all required information for %s violation ID %s", jasType, violation.Id))
+		log.Debug(fmt.Sprintf("Could not locate all required information for %s violation ID %s (%s#%d)", jasType, violation.Id, strings.Join(violation.InfectedFilePaths, ","), violation.LineNumber))
 		return nil
 	}
 	return &violationutils.JasViolation{
