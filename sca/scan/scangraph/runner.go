@@ -60,8 +60,8 @@ func (sg *ScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cy
 }
 
 func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResults services.ScanResponse, err error) {
-	if sg.ScanGraphParams.XrayGraphScanParams().ScanType != services.Dependency {
-		return services.ScanResponse{}, fmt.Errorf("scanning %s components is not supported", sg.ScanGraphParams.XrayGraphScanParams().ScanType)
+	if sg.XrayGraphScanParams().ScanType != services.Dependency {
+		return services.ScanResponse{}, fmt.Errorf("scanning %s components is not supported", sg.XrayGraphScanParams().ScanType)
 	}
 	// Transform the target BOM to the information needed for the scan graph.
 	flatTree, fullTree := results.BomToTree(target)
@@ -69,11 +69,11 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 		// If there is no tree, or a tree without any non-root dependencies - we don't need to scan it
 		return services.ScanResponse{}, nil
 	}
-	sg.ScanGraphParams.XrayGraphScanParams().DependenciesGraph = flatTree
+	sg.XrayGraphScanParams().DependenciesGraph = flatTree
 	if targetTechnology := resolveTechnologyFromBOM(target); targetTechnology != techutils.NoTech {
 		// Report the technology to Xray.
-		sg.ScanGraphParams.SetTechnology(targetTechnology)
-		sg.ScanGraphParams.XrayGraphScanParams().Technology = targetTechnology.String()
+		sg.SetTechnology(targetTechnology)
+		sg.XrayGraphScanParams().Technology = targetTechnology.String()
 	}
 	// Send the scan graph params to run the scan.
 	return runXrayDependenciesTreeScanGraph(&sg.ScanGraphParams, fullTree)
