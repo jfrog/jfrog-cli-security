@@ -108,21 +108,6 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, scangraph.GraphScanMinXrayVersion)
 	defer testCleanUp()
 
-	createTestProjectRunGitAuditAndValidate(t,
-		filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues"),
-		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.CycloneDx, WithSbom: true, WithStaticSca: true},
-		},
-		xrayVersion, xscVersion, "",
-		validations.ValidationParams{
-			ExactResultsMatch: true,
-			Total:             &validations.TotalCount{Vulnerabilities: 3},
-			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 3},
-			},
-		},
-	)
-
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
 	dummyCloneUrl := getDummyGitRepoUrl()
@@ -137,7 +122,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{
-				Format:        format.CycloneDx,
+				Format:        format.SimpleJson,
 				WithStaticSca: true,
 				WithSbom:      true,
 				WithLicense:   true,
@@ -147,7 +132,11 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
+			ExactResultsMatch: true,
+			Total:             &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
+			Vulnerabilities: &validations.VulnerabilityCount{
+				ValidateScan: &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},

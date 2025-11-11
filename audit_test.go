@@ -961,6 +961,9 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 	params.CustomExclusion = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "dist"}
 	// Configure a new server named "default"
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+	if params.Threads <= 0 {
+		params.Threads = 5
+	}
 	defer cleanUpHome()
 	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, append([]string{"audit"}, getAuditCmdArgs(params)...)...)
 }
@@ -969,7 +972,6 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -986,6 +988,7 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 
+	// TODO:
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.High, false, false)
 	defer cleanUpPolicy()
 	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "static-sca-watch", "cli-scan-results")
@@ -995,7 +998,6 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 		WithSbom:    true,
 		WithVuln:    true,
 		WithLicense: true,
-		Threads:     5,
 		Format:      format.SimpleJson,
 		Watches:     []string{watchName},
 	})
@@ -1006,8 +1008,9 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
 		},
+		// SAST violations require git-repo watch to be created, so only SCA and Secrets violations are expected here
 		Violations: &validations.ViolationCount{
-			ValidateScan: &validations.ScanCount{Sca: 3, Sast: 1, Secrets: 1}, ValidateType: &validations.ScaViolationCount{Security: 3},
+			ValidateScan: &validations.ScanCount{Sca: 3, Secrets: 1}, ValidateType: &validations.ScaViolationCount{Security: 3},
 		},
 	})
 }
@@ -1034,7 +1037,6 @@ func TestAuditNewScaCycloneDxGradle(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1052,7 +1054,6 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "go", "simple-project"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1068,7 +1069,6 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1086,7 +1086,6 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1103,7 +1102,6 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "poetry", "poetry-project"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1121,7 +1119,6 @@ func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -1139,7 +1136,6 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
