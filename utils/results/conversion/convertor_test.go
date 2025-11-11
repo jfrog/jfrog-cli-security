@@ -401,8 +401,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
 				validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					[]formats.Location{
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+						{File: "server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
+						{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					},
 				),
 			},
@@ -567,8 +567,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				Result: validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					// Code flow locations
 					[]formats.Location{
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+						{File: "server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
+						{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					},
 				),
 				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"}),

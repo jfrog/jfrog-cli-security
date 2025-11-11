@@ -18,7 +18,6 @@ import (
 )
 
 func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults) (artifactPath string, err error) {
-	// Convert the scan results to CycloneDX format
 	cdxResults, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeSbom:            true,
 		IncludeLicenses:        true,
@@ -32,7 +31,6 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	if err != nil {
 		return "", fmt.Errorf("failed calculating the artifact path: %w", err)
 	}
-	// Upload the CycloneDX results to Artifactory
 	uploadCmd := upload.NewUploadCycloneDxCommand().
 		SetContentToUpload(cdxResults).
 		SetFilePrefix(string(cmdResults.CmdType)).

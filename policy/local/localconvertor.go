@@ -298,10 +298,8 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 	}
 	watchesSet := datastructures.MakeSet[string]()
 	for _, violation := range violations {
-		// Handle duplicates and general attributes
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
-		// Prepare violation information
 		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := results.SplitComponents(results.GetBestScaEvidenceMatch(target, descriptors), violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)

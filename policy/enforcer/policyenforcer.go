@@ -183,6 +183,7 @@ func getViolationType(violation services.XrayViolation) utils.SubScanType {
 		if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
 			return utils.SecretsScan
 		}
+		// TODO: add IaC support when Xray adds IaC details to violations
 		return ""
 	}
 	return utils.ScaScan

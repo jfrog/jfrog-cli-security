@@ -894,6 +894,7 @@ func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
 	return
 }
 
+// scheme:type/namespace/name@version?qualifiers#subpath -> pkg:type/namespace/name@version?properties
 func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
 	if packageType == "" {
 		packageType = "generic"

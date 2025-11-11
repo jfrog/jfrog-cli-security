@@ -13,9 +13,11 @@ import (
 )
 
 const (
+	// Generated from Xray license policy
 	LicenseViolationType ViolationIssueType = "license"
-	OperationalRiskType  ViolationIssueType = "operational_risk"
-	// Security types
+	// Generated from Xray operational risk policy
+	OperationalRiskType ViolationIssueType = "operational_risk"
+	// Generated from SCA security policy
 	CveViolationType     ViolationIssueType = "cve"
 	SecretsViolationType ViolationIssueType = "secrets"
 	IacViolationType     ViolationIssueType = "iac"

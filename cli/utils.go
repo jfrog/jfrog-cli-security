@@ -81,11 +81,9 @@ func getWatches(c *components.Context) (watches []string, err error) {
 }
 
 func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails, format outputFormat.OutputFormat) error {
-	// Validate connection inputs
 	if err := validateConnectionInputs(serverDetails); err != nil {
 		return err
 	}
-	// Validate violation context inputs
 	contextFlag := 0
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		contextFlag++
@@ -100,6 +98,7 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
 	}
 	if contextFlag > 0 && format == outputFormat.CycloneDx {
+		// CDX format does not support displaying violations so we cannot allow context flags that are relevant only when violations are displayed.
 		return errorutils.CheckErrorf("Violations are not supported in CycloneDX format.")
 	}
 	return nil

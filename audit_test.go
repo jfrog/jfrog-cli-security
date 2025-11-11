@@ -630,7 +630,6 @@ func TestAuditJasCycloneDx(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
@@ -646,7 +645,6 @@ func TestAuditJasCycloneDx(t *testing.T) {
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), auditCommandTestParams{
-		Threads:         5,
 		CustomExclusion: []string{"*out*"},
 		Format:          format.SimpleJson,
 	})
@@ -658,8 +656,7 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
@@ -670,8 +667,7 @@ func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{MissingContext: 1}},
@@ -711,8 +707,7 @@ func getNoJasAuditMockCommand() components.Command {
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 23},
@@ -727,7 +722,6 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		ValidateSecrets: true,
-		Threads:         5,
 		Format:          format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -756,8 +750,7 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 8},
@@ -771,8 +764,7 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
@@ -781,6 +773,9 @@ func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditWithCleanHome(t *testing.T, testCli *coreTests.JfrogCli, project string, params auditCommandTestParams) string {
+	if params.Threads <= 0 {
+		params.Threads = 5
+	}
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
 	// Configure a new server named "default"
@@ -863,8 +858,7 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},
@@ -881,7 +875,6 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		CustomExclusion: []string{"non_existing_folder"},
-		Threads:         5,
 		Format:          format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -950,9 +943,6 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 
 func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
-
-	// TODO: issue, when gen watch dynamic, SAST vio are not generated, SCA are not generated
-	// TODO: issue in upload, SBOM and SCA not found in platform
 
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.High, false, false)
 	defer cleanUpPolicy()

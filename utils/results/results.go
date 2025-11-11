@@ -405,9 +405,9 @@ func (r *SecurityCommandResults) HasFindings() bool {
 	return false
 }
 
-func (r *SecurityCommandResults) SetViolations(errorCode int, violations violationutils.Violations) *SecurityCommandResults {
+func (r *SecurityCommandResults) SetViolations(statusCode int, violations violationutils.Violations) *SecurityCommandResults {
 	r.Violations = &violations
-	r.ViolationsStatusCode = &errorCode
+	r.ViolationsStatusCode = &statusCode
 	return r
 }
 
@@ -607,18 +607,18 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM, optionalStatusCodes ...int
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
+func (sr *TargetResults) EnrichedSbomScanResults(statusCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
 	sr.SetSbom(enrichedSbom)
-	sr.ResultsStatus.UpdateStatus(CmdStepSca, &errorCode)
+	sr.ResultsStatus.UpdateStatus(CmdStepSca, &statusCode)
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) ScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) ScaScanResults(statusCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.DeprecatedXrayResults = append(sr.ScaResults.DeprecatedXrayResults, responses...)
-	sr.ResultsStatus.UpdateStatus(CmdStepSca, &errorCode)
+	sr.ResultsStatus.UpdateStatus(CmdStepSca, &statusCode)
 	return sr.ScaResults
 }
 
