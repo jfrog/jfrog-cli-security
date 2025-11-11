@@ -267,6 +267,13 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 		completeCommandArgs = append(completeCommandArgs, toolType.String(), installCommandName)
 	}
 
+	// Check for solution file path from JF CA arguments for specific solution when we have more than one solution file
+	if params.SolutionFilePath != "" {
+		solutionFileName := filepath.Base(params.SolutionFilePath)
+		completeCommandArgs = append(completeCommandArgs, solutionFileName)
+		log.Info(fmt.Sprintf("Using solution file: %s", solutionFileName))
+	}
+
 	// We include the flag that allows resolution from an Artifactory server, if it exists.
 	completeCommandArgs = append(completeCommandArgs, commandExtraArgs...)
 	command := exec.Command(completeCommandArgs[0], completeCommandArgs[1:]...)

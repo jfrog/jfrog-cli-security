@@ -58,6 +58,8 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	// Pnpm params
 	MaxTreeDepth string
+	// NuGet params
+	SolutionFilePath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {
