@@ -183,6 +183,30 @@ func TestViolationFailBuild(t *testing.T) {
 			},
 			expectedResult: false,
 		},
+		{
+			name: "nil JasResults with violations - should fallback to check without applicability",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						ScanTarget: ScanTarget{Target: "test-target"},
+						ScaResults: &ScaScanResults{
+							Violations: []services.Violation{
+								{
+									Components:    map[string]services.Component{"gav://antparent:ant:1.6.5": {}},
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     true,
+									Cves:          []services.Cve{{Id: "CVE-2024-1234"}},
+									Severity:      "High",
+								},
+							},
+						},
+						JasResults: nil,
+					},
+				},
+			},
+			expectedResult: true, // Should fail because violation has FailBuild=true
+		},
 	}
 
 	for _, test := range tests {

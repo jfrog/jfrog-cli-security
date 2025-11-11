@@ -78,6 +78,16 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 }
 
 func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
+	if target == nil {
+		log.Debug("checkIfFailBuildConsideringApplicability: target is nil, returning early")
+		return nil
+	}
+	if target.JasResults == nil {
+		log.Debug(fmt.Sprintf("checkIfFailBuildConsideringApplicability: JasResults is nil for target %s, falling back to check without applicability", target.ScanTarget.Target))
+		*shouldFailBuild = checkIfFailBuildWithoutConsideringApplicability(target)
+		return nil
+	}
+
 	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
 
 	if target.ScaResults == nil {
