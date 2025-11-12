@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -30,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
@@ -396,13 +399,65 @@ func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogap
 	return nil
 }
 
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
+func ShouldSkipScanner(root string, module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
 	lowerScanType := strings.ToLower(string(scanType))
 	if slices.Contains(module.ExcludeScanners, lowerScanType) {
 		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
 		return true
 	}
+	exclusions := []string{}
+	switch scanType {
+	case jasutils.Sast:
+		if module.Scanners.Sast == nil {
+			return true
+		}
+		exclusions = append(module.ExcludePatterns, module.Scanners.Sast.ExcludePatterns...)
+	case jasutils.Secrets:
+		if module.Scanners.Secrets == nil {
+			return true
+		}
+		exclusions = append(module.ExcludePatterns, module.Scanners.Secrets.ExcludePatterns...)
+	case jasutils.IaC:
+		if module.Scanners.Iac == nil {
+			return true
+		}
+		exclusions = append(module.ExcludePatterns, module.Scanners.Iac.ExcludePatterns...)
+	}
+	// Check if target (root) is excluded in the module exclude patterns
+	if isPathExcluded(root, exclusions) {
+		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+		return true
+	}
 	return false
+}
+
+func ShouldSkipScannerByRemoteConfig(root string, module xscServices.Module, scanType jasutils.JasScanType) bool {
+	exclusions := []string{}
+	switch scanType {
+	case jasutils.Sast:
+		exclusions = append(module.ExcludePatterns, module.ScanConfig.SastScannerConfig.ExcludePatterns...)
+	case jasutils.Secrets:
+		exclusions = append(module.ExcludePatterns, module.ScanConfig.SecretsScannerConfig.ExcludePatterns...)
+	case jasutils.IaC:
+		exclusions = append(module.ExcludePatterns, module.ScanConfig.IacScannerConfig.ExcludePatterns...)
+	case jasutils.Applicability:
+		exclusions = append(module.ExcludePatterns, module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
+	}
+	// Check if target (root) is excluded in the module exclude patterns
+	if isPathExcluded(root, exclusions) {
+		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+		return true
+	}
+	return false
+}
+
+func isPathExcluded(root string, exclusions []string) bool {
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(exclusions, goclientutils.WildCardPattern, true), root)
+	if err != nil {
+		log.Warn("Failed to check if path is excluded:", err.Error())
+		return false
+	}
+	return match
 }
 
 func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) ([]string, error) {
