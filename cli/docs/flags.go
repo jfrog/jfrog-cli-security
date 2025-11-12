@@ -260,7 +260,7 @@ var flagsMap = map[string]components.Flag{
 	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values: Low, Medium, High, or Critical."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fix version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
-	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Number of retries for triggering the build scan in Xray in case of failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
+	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Defines how many times Xray retries triggering the build scan after a failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
 	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
 	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
