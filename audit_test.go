@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/policy/local"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
@@ -969,7 +970,7 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 }
 
 func TestAuditNewScaCycloneDxNpm(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -986,7 +987,7 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 }
 
 func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 
 	// TODO:
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.High, false, false)
@@ -1016,7 +1017,7 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxMaven(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  5,
@@ -1034,7 +1035,7 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGradle(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1051,7 +1052,7 @@ func TestAuditNewScaCycloneDxGradle(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGo(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "go", "simple-project"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1066,7 +1067,7 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 
 func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 	// TODO: yarn not working....
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1083,7 +1084,7 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPip(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1099,7 +1100,7 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "poetry", "poetry-project"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1116,7 +1117,7 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
@@ -1133,7 +1134,7 @@ func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxNuget(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,

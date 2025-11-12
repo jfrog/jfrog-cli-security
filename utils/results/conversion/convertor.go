@@ -172,10 +172,14 @@ func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser
 		// Nothing to parse, no SCA results
 		return
 	}
+	applicableRuns := []*sarif.Run{}
+	if targetScansResults.JasResults != nil {
+		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+	}
 	// Parse deprecated SCA results
 	for _, scaResults := range targetScansResults.ScaResults.DeprecatedXrayResults {
 		if params.IncludeVulnerabilities {
-			if err = parser.DeprecatedParseScaVulnerabilities(targetScansResults.ScaResults.Descriptors, scaResults, targetScansResults.JasResults.ApplicabilityScanResults); err != nil {
+			if err = parser.DeprecatedParseScaVulnerabilities(targetScansResults.ScaResults.Descriptors, scaResults, applicableRuns); err != nil {
 				return
 			}
 		}

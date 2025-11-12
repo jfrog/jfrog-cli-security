@@ -93,6 +93,17 @@ func getXrayAndXscTestVersions(t *testing.T) (string, string, error) {
 	return xrayVersion.GetVersion(), xscVersion, err
 }
 
+func GetAndValidateXrayVersion(t *testing.T, minVersion string) string {
+	xrayVersion, err := testUtils.GetTestsXrayVersion()
+	if err != nil {
+		assert.NoError(t, err)
+		return ""
+	}
+	ver := xrayVersion.GetVersion()
+	testUtils.ValidateXrayVersion(t, ver, minVersion)
+	return ver
+}
+
 func InitAuditGeneralTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditGeneral {
 		t.Skip(getSkipTestMsg("Audit command general integration", "--test.audit"))

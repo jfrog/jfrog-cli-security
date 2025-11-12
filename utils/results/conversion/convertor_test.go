@@ -423,7 +423,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						Severity:      severityutils.Unknown,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef:     "pkg:npm://async@3.2.4",
+						BOMRef:     "pkg:npm/async@3.2.4",
 						PackageURL: "pkg:npm/async@3.2.4",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -438,8 +438,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				ContextualAnalysis: &formats.Applicability{
 					Status: jasutils.Applicable.String(),
 					Evidence: []formats.Evidence{
-						{Location: formats.Location{File: "Users/user/project-with-issues/file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}},
-						{Location: formats.Location{File: "Users/user/project-with-issues/file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}},
+						{Location: formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}},
+						{Location: formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}},
 					},
 				},
 				CveVulnerability: cyclonedx.Vulnerability{
@@ -462,7 +462,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						Severity:      severityutils.Medium,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef:     "pkg:npm://lodash@4.17.0",
+						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -499,7 +499,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						Severity:      severityutils.High,
 					},
 					ImpactedComponent: cyclonedx.Component{
-						BOMRef:     "pkg:npm://lodash@4.17.0",
+						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
@@ -522,8 +522,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					Severity:      severityutils.High,
 				},
 				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
-				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
-				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: "fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: "fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
 			},
 			{
 				Violation: violationutils.Violation{
@@ -534,8 +534,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					Severity:      severityutils.Medium,
 				},
 				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
-				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
-				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: "server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: "server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
 			},
 		},
 		Sast: []violationutils.JasViolation{
@@ -548,8 +548,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					Severity:      severityutils.Low,
 				},
 				Rule:     validations.CreateDummyJasRule("js-insecure-random", "338"),
-				Result:   validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
-				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
+				Result:   validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
 			},
 			{
 				Violation: violationutils.Violation{
@@ -560,14 +560,14 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					Severity:      severityutils.High,
 				},
 				Rule: validations.CreateDummyJasRule("js-template-injection", "73"),
-				Result: validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+				Result: validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					// Code flow locations
 					[]formats.Location{
 						{File: "server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
 						{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					},
 				),
-				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"}),
 			},
 		},
 	})

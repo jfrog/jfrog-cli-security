@@ -87,7 +87,9 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		assert.NoError(t, err)
 	}
 	validations.VerifySimpleJsonResults(t, output, validationParams)
-	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
+	if gitAuditParams.WithStaticSca {
+		validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
+	}
 }
 
 func TestGitAuditSimpleJson(t *testing.T) {
@@ -105,8 +107,8 @@ func TestGitAuditSimpleJson(t *testing.T) {
 }
 
 func TestGitAuditStaticScaCycloneDx(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, scangraph.GraphScanMinXrayVersion)
-	defer testCleanUp()
+	integration.InitAuditNewScaTests(t, securityUtils.StaticScanMinVersion)
+	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
@@ -130,7 +132,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 				Watches:       []string{watchName},
 			},
 		},
-		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
+		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
 			ExactResultsMatch: true,
 			Total:             &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
