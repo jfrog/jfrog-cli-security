@@ -868,9 +868,9 @@ func TestToPackageUrl(t *testing.T) {
 		packageType string
 		expected    string
 	}{
-		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/@scope/package@1.0.0"},
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/%40scope/package@1.0.0"},
 		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
-		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3:xpp3_min@1.1.4c"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3/xpp3_min@1.1.4c"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
