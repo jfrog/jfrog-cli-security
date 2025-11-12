@@ -101,7 +101,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclone
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 		for _, license := range *component.Licenses {
-			if license.License == nil && license.License.Name == "" {
+			if license.License == nil || license.License.Name == "" {
 				// No license name found, continue to the next one
 				continue
 			}
