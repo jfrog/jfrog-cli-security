@@ -18,7 +18,7 @@ import (
 
 const (
 	applicabilityScanCommand   = "ca"
-	applicabilityDocsUrlSuffix = "contextual-analysis"
+	applicabilityDocsUrlSuffix = "advanced-security/features-and-capabilities/contextual-analysis-of-cves"
 
 	ApplicabilityScannerType         ApplicabilityScanType = "analyze-applicability"
 	ApplicabilityDockerScanScanType  ApplicabilityScanType = "analyze-applicability-docker-scan"

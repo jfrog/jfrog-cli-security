@@ -17,7 +17,7 @@ import (
 const (
 	iacScannerType   = "iac-scan-modules"
 	iacScanCommand   = "iac"
-	iacDocsUrlSuffix = "infrastructure-as-code-iac"
+	iacDocsUrlSuffix = "advanced-security/features-and-capabilities/misconfigurations-scans"
 )
 
 type IacScanManager struct {

@@ -31,8 +31,8 @@ import (
 const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
-	// TODO: Update the URL and related consts
-	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+
+	BaseDocumentationURL = "https://jfrog.com/help/r/jfrog-security-user-guide/products/"
 	XrayInfoURL          = "https://jfrog.com/xray/"
 	JasInfoURL           = "https://jfrog.com/devops-native-security/"
 
