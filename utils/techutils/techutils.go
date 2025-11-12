@@ -830,6 +830,9 @@ func ConvertXrayPackageType(xrayPackageType string) string {
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	if packageType == "gav" {
+		componentName = strings.ReplaceAll(componentName, "/", ":")
+	}
 	if componentVersion == "" {
 		// If the component version is empty, we return the component name only
 		return fmt.Sprintf("%s://%s", packageType, componentName)

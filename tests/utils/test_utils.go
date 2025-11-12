@@ -453,6 +453,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
 			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
 		}
+		return nil
 	}
 	return jas.DownloadAnalyzerManagerIfNeeded(0)
 }
