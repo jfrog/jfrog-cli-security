@@ -7,7 +7,6 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/gookit/color"
-	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -113,43 +112,49 @@ func (sd SeverityDetails) ToDetails(severity Severity, pretty bool) formats.Seve
 
 var Severities = map[Severity]map[jasutils.ApplicabilityStatus]*SeverityDetails{
 	Critical: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 30, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 29, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 28, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 27, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 36, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 35, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 34, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 33, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 32, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 6, Score: MaxCveScore, Emoji: "💀", style: color.New(color.Gray)},
 	},
 	High: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 26, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 25, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 24, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 23, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 31, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 30, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 29, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 28, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 27, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 5, Score: 8.9, Emoji: "🔥", style: color.New(color.Gray)},
 	},
 	Medium: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 22, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 21, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 20, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 19, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 26, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 25, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 24, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 23, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 22, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 4, Score: 6.9, Emoji: "🎃", style: color.New(color.Gray)},
 	},
 	Low: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 18, Score: 3.9, Emoji: "👻"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 17, Score: 3.9, Emoji: "👻"},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 16, Score: 3.9, Emoji: "👻"},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 15, Score: 3.9, Emoji: "👻"},
+		jasutils.Applicable:                &SeverityDetails{Priority: 21, Score: 3.9, Emoji: "👻"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 20, Score: 3.9, Emoji: "👻"},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 19, Score: 3.9, Emoji: "👻"},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 18, Score: 3.9, Emoji: "👻"},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 17, Score: 3.9, Emoji: "👻"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 3, Score: 3.9, Emoji: "👻", style: color.New(color.Gray)},
 	},
 	Information: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 14, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 13, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 12, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 11, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 16, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 15, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 14, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 13, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 12, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 2, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Gray)},
 	},
 	Unknown: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 10, Score: MinCveScore, Emoji: "😐"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 9, Score: MinCveScore, Emoji: "😐"},
+		jasutils.Applicable:                &SeverityDetails{Priority: 11, Score: MinCveScore, Emoji: "😐"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 10, Score: MinCveScore, Emoji: "😐"},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 9, Score: MinCveScore, Emoji: "😐"},
 		jasutils.MissingContext:            &SeverityDetails{Priority: 8, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotCovered:                &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 1, Score: MinCveScore, Emoji: "😐", style: color.New(color.Gray)},
@@ -161,14 +166,6 @@ func supportedSeverities() (severities []string) {
 		severities = append(severities, severity.String())
 	}
 	return
-}
-
-func supportedApplicabilityStatuses() []string {
-	set := datastructures.MakeSet[string]()
-	for status := range Severities[Critical] {
-		set.Add(status.String())
-	}
-	return set.ToSlice()
 }
 
 // -- Parsing functions, only for supported values --
@@ -230,10 +227,6 @@ func ParseSeverity(severity string, sarifSeverity bool) (parsed Severity, err er
 }
 
 func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus jasutils.ApplicabilityStatus) (details *SeverityDetails, err error) {
-	if applicabilityStatus == jasutils.NotScanned {
-		err = errorutils.CheckErrorf("only the following severities are supported: %s", coreutils.ListToText(supportedApplicabilityStatuses()))
-		return
-	}
 	parsed, err := ParseSeverity(severity, sarifSeverity)
 	if err != nil {
 		return
@@ -253,9 +246,6 @@ func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityS
 }
 
 func GetSeverityDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) *SeverityDetails {
-	if applicabilityStatus == jasutils.NotScanned {
-		applicabilityStatus = jasutils.Applicable
-	}
 	details, err := ParseForDetails(severity.String(), false, applicabilityStatus)
 	if err != nil {
 		return &SeverityDetails{Priority: 0, Score: 0}
@@ -296,14 +286,6 @@ func GetSeverity(severity string) Severity {
 		return Unknown
 	}
 	return parsed
-}
-
-func GetSarifSeverityLevel(severity string) SarifSeverityLevel {
-	sarifLevel, err := ParseToSarifSeverityLevel(severity)
-	if err != nil {
-		return LevelNone
-	}
-	return sarifLevel
 }
 
 // -- Conversion functions --
