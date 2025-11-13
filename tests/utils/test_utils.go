@@ -362,6 +362,9 @@ func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, r
 		for _, repo := range repos {
 			watchParams.Repositories.Repositories[repo] = xrayApi.NewWatchRepositoryByName(repo)
 		}
+		if len(repos) == 0 {
+			watchParams.Repositories.Type = xrayApi.WatchRepositoriesAll
+		}
 		return watchParams
 	})
 }

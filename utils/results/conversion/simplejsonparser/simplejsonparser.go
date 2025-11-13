@@ -101,13 +101,17 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclone
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 		for _, license := range *component.Licenses {
-			if license.License == nil || license.License.Name == "" {
+			if license.License == nil || (license.License.Name == "" && license.License.ID == "") {
 				// No license name found, continue to the next one
 				continue
 			}
+			name := license.License.Name
+			if name == "" {
+				name = license.License.ID
+			}
 			sjc.current.Licenses = append(sjc.current.Licenses, formats.LicenseRow{
 				LicenseKey:  license.License.ID,
-				LicenseName: license.License.Name,
+				LicenseName: name,
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 					ImpactedDependencyVersion: compVersion,
