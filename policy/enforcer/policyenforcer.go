@@ -277,7 +277,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 		}
 	}
 	if relevantVulnerability == nil {
-		log.Debug(fmt.Sprintf("Could not locate vulnerability with ID %s in the scan results", issueId))
+		log.Warn(fmt.Sprintf("Could not locate vulnerability with ID %s in the scan results", issueId))
 	}
 	return
 }
