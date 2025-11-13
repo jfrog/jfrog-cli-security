@@ -71,7 +71,9 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	output, err := runXrayBinaryScan(t, params)
 	if errorExpected {
-		log.Error("Xray binary scan failed: " + err.Error())
+		if err != nil {
+			log.Error("Xray binary scan failed with err: " + err.Error())
+		}
 		assert.Error(t, err)
 	} else {
 		assert.NoError(t, err)

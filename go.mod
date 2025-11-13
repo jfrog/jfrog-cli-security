@@ -1,9 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.24.6
-
-// TODO: update xray-scan lib to latest version that supports CycloneDX v0.9.3 (not yet released)
-replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.9.2
+go 1.25.4
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.3
@@ -127,7 +124,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go master
+// attiasas:xray_get_violations_api
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251111105711-982ae021799b
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
