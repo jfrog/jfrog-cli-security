@@ -419,7 +419,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						Watch:         "security-watch",
 						ViolationType: violationutils.CveViolationType,
 						Policies:      []violationutils.Policy{{PolicyName: "npm-security"}},
-						ViolationId:   "12e1234edqwe234qwe",
+						ViolationId:   "XRAY-609848",
 						Severity:      severityutils.Unknown,
 					},
 					ImpactedComponent: cyclonedx.Component{
@@ -428,18 +428,19 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "jake", Version: "10.8.7"},
+						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
 						{Name: "async", Version: "3.2.4"},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "jake", Version: "10.8.7"},
+						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
-					Status: jasutils.Applicable.String(),
+					Status:             jasutils.Applicable.String(),
+					ScannerDescription: "The Scanner checks for CVE-2024-39249",
 					Evidence: []formats.Evidence{
-						{Location: formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}},
-						{Location: formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}},
+						{Location: formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}, Reason: "ca msg"},
+						{Location: formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}, Reason: "ca msg"},
 					},
 				},
 				CveVulnerability: cyclonedx.Vulnerability{
@@ -467,14 +468,18 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "lodash", Version: "4.17.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "froghome", Version: "1.0.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
-					Status: jasutils.NotCovered.String(),
+					Status:             jasutils.NotCovered.String(),
+					ScannerDescription: "The Scanner checks for CVE-2018-3721",
+				},
+				FixedVersions: &[]cyclonedx.AffectedVersions{
+					{Version: "[4.17.5]", Status: cyclonedx.VulnerabilityStatusNotAffected},
 				},
 				CveVulnerability: cyclonedx.Vulnerability{
 					BOMRef:      "CVE-2018-3721",
@@ -504,10 +509,10 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "lodash", Version: "4.17.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "froghome", Version: "1.0.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
 					},
 				},
 			},
@@ -743,7 +748,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						Watch:         "security-watch",
 						ViolationType: violationutils.CveViolationType,
 						Policies:      []violationutils.Policy{{PolicyName: "debian-security"}},
-						ViolationId:   "34rfvbnj8765tyhngf",
+						ViolationId:   "XRAY-632747",
 						Severity:      severityutils.Unknown,
 					},
 					ImpactedComponent: cyclonedx.Component{
@@ -752,17 +757,18 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "platform.jfrog.io/swamp-docker/swamp", Version: "latest"},
-						{Name: "sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", Version: ""},
-						{Name: "libssl3", Version: "3.0.13-1~deb12u1"},
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
+						{Name: "debian:bookworm:libssl3", Version: "3.0.13-1~deb12u1", Location: &formats.Location{File: "libssl3:3.0.13-1~deb12u1"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", Version: ""},
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
-					Status: jasutils.Applicable.String(),
+					Status:             jasutils.Applicable.String(),
+					ScannerDescription: "The Scanner checks for CVE-2024-6119",
 					Evidence: []formats.Evidence{
-						{Location: formats.Location{File: "file://usr/local/bin/node", StartLine: 1, StartColumn: 1}},
+						{Location: formats.Location{File: "file://usr/local/bin/node", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1}, Reason: "ca msg"},
 					},
 				},
 				CveVulnerability: cyclonedx.Vulnerability{
