@@ -360,6 +360,10 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
+		if scanCmd.spec == nil || len(scanCmd.spec.Files) == 0 {
+			log.Warn("No files were specified.")
+			return
+		}
 		specFiles := scanCmd.spec.Files
 		for i := range specFiles {
 			artifactHandlerFunc := scanCmd.createIndexerHandlerFunc(&specFiles[i], cmdResults, indexedFileProducer, jasFileProducerConsumer)
