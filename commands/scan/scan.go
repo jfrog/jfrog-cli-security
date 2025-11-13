@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
@@ -226,6 +227,13 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	cmdResults := scanCmd.RunScan(cmdType)
 
+	// Violations
+	if cmdResults.HasViolationContext() {
+		if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
+			return fmt.Errorf("failed to enrich with violations: %s", err.Error())
+		}
+	}
+
 	if scanCmd.progress != nil {
 		if err = scanCmd.progress.Quit(); err != nil {
 			return errors.Join(err, cmdResults.GetErrors())
@@ -247,12 +255,12 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	if err = cmdResults.GetErrors(); err != nil {
 		return
 	}
+	log.Info("Scan completed successfully.")
 	if scanCmd.fail {
 		// We consider failing the build only when --fail=true. If a user had provided --fail=false, we don't fail the build even when fail-build rules are applied.
 		err = policy.CheckPolicyFailBuildError(cmdResults)
 	}
-	log.Info("Scan completed successfully.")
-	return nil
+	return
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
