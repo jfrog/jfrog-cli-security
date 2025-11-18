@@ -710,7 +710,8 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	containerScanCommand := scan.NewDockerScanCommand().
+	containerScanCommand := scan.NewDockerScanCommand()
+	containerScanCommand.
 		SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
