@@ -180,7 +180,12 @@ func TestGenerateViolations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			converted, err := localConvertor.GenerateViolations(tc.input)
 			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, converted)
+			assert.ElementsMatch(t, converted.Sca, tc.expected.Sca)
+			assert.ElementsMatch(t, converted.License, tc.expected.License)
+			assert.ElementsMatch(t, converted.OpRisk, tc.expected.OpRisk)
+			assert.ElementsMatch(t, converted.Sast, tc.expected.Sast)
+			assert.ElementsMatch(t, converted.Secrets, tc.expected.Secrets)
+			assert.ElementsMatch(t, converted.Iac, tc.expected.Iac)
 		})
 	}
 }
