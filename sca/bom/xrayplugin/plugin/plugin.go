@@ -77,6 +77,8 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	var logStdErr io.Writer
 	if jfrogLog, ok := log.GetLogger().(log.JfrogLogger); ok {
 		logStdErr = jfrogLog.ErrorLog.Writer()
+	} else {
+		logStdErr = os.Stderr
 	}
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,

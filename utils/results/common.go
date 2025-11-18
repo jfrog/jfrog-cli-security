@@ -288,17 +288,37 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
 	impactPathsRows = [][]formats.ComponentRow{}
 	componentAppearances := map[string]int8{}
-	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
-		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
-		// Add the affected component at the end of the impact path
-		impactedPath = append(impactedPath, formats.ComponentRow{
-			Id:        affectedComponent.BOMRef,
-			Name:      affectedComponent.Name,
-			Version:   affectedComponent.Version,
-			Evidences: CdxEvidencesToLocations(affectedComponent),
-		})
-		// Add the impact path to the list of impact paths
-		impactPathsRows = append(impactPathsRows, impactedPath)
+
+	log.Info("Building impact paths for component:", affectedComponent.Name, affectedComponent.Version)
+	if affectedComponent.Version == "snippet" && affectedComponent.Components != nil {
+		log.Info("Component is a snippet with sub-components, building impact paths for sub-components")
+		for _, subComp := range *affectedComponent.Components {
+			impactedPath := buildImpactPathForSubComponent(subComp, componentAppearances, components, dependencies...)
+			// Add the affected component at the end of the impact path
+			impactedPath = append(impactedPath, formats.ComponentRow{
+				Id:        affectedComponent.BOMRef,
+				Name:      affectedComponent.Name,
+				Version:   affectedComponent.Version,
+				Evidences: CdxEvidencesToLocations(affectedComponent),
+			})
+			// Add the impact path to the list of impact paths
+			impactPathsRows = append(impactPathsRows, impactedPath)
+
+		}
+	} else {
+		log.Info("Component is a regular component, building impact paths for parent components")
+		for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
+			impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
+			// Add the affected component at the end of the impact path
+			impactedPath = append(impactedPath, formats.ComponentRow{
+				Id:        affectedComponent.BOMRef,
+				Name:      affectedComponent.Name,
+				Version:   affectedComponent.Version,
+				Evidences: CdxEvidencesToLocations(affectedComponent),
+			})
+			// Add the impact path to the list of impact paths
+			impactPathsRows = append(impactPathsRows, impactedPath)
+		}
 	}
 	return
 }
@@ -325,6 +345,20 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 		if len(parentImpactPath) > 0 {
 			impactPath = append(parentImpactPath, impactPath...)
 		}
+	}
+	return
+}
+
+func buildImpactPathForSubComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	componentAppearances[component.BOMRef]++
+	// Build the impact path for the component
+	impactPath = []formats.ComponentRow{
+		{
+			Id:        component.BOMRef,
+			Name:      component.Name,
+			Version:   component.Version,
+			Evidences: CdxEvidencesToLocations(component),
+		},
 	}
 	return
 }
@@ -1431,8 +1465,18 @@ func CdxEvidencesToLocations(component cyclonedx.Component) (evidences []formats
 	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil
 	}
+
+	externalReference := ""
+	if component.ExternalReferences != nil && len(*component.ExternalReferences) > 0 {
+		externalReference = (*component.ExternalReferences)[0].URL
+	}
+
 	for _, occurrence := range *component.Evidence.Occurrences {
-		evidences = append(evidences, formats.Location{File: occurrence.Location})
+		evidences = append(evidences, formats.Location{
+			File:              occurrence.Location,
+			StartLine:         *occurrence.Line,
+			ExternalReference: externalReference,
+		})
 	}
 	return
 }
