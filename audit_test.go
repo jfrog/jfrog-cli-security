@@ -681,7 +681,7 @@ func TestAuditJasCycloneDx(t *testing.T) {
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2, Transitive: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 	})
 }
