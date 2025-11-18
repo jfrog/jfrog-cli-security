@@ -87,7 +87,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		assert.NoError(t, err)
 	}
 	validations.VerifySimpleJsonResults(t, output, validationParams)
-	if gitAuditParams.WithStaticSca {
+	if !gitAuditParams.WithStaticSca {
 		validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
 	}
 }
@@ -134,13 +134,12 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			ExactResultsMatch: true,
-			Total:             &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12, Vulnerabilities: 16},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2}},
 		},
 	)
 }

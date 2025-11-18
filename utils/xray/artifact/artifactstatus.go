@@ -25,7 +25,7 @@ type XrayScanStep string
 
 const (
 	ArtifactStatusFetchingIntervalNano = 10 * 1e9      // nanoseconds converted to 10 seconds
-	ArtifactStatusFetchTimeout         = 20 * 60 * 1e9 // nanoseconds converted to 20 minutes
+	ArtifactStatusFetchTimeoutNano     = 20 * 60 * 1e9 // nanoseconds converted to 20 minutes
 )
 
 func GetArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path string) (*services.ArtifactStatusResponse, error) {
@@ -68,7 +68,7 @@ func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path
 	log.Debug(fmt.Sprintf("Waiting for artifact scan completion. Overall: %t, Steps: %v", params.Overall, params.Steps))
 	pollingExecutor := &httputils.PollingExecutor{
 		PollingInterval: ArtifactStatusFetchingIntervalNano,
-		Timeout:         ArtifactStatusFetchTimeout,
+		Timeout:         ArtifactStatusFetchTimeoutNano,
 		MsgPrefix:       "Getting artifact scans status...",
 		PollingAction: func() (shouldStop bool, responseBody []byte, err error) {
 			status, err := GetArtifactScanStatus(xrayManager, repo, path)

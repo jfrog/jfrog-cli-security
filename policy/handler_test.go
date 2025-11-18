@@ -1,361 +1,270 @@
 package policy
 
 import (
-// "testing"
+	"testing"
 
-// "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 
-// "github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-
-// "github.com/jfrog/jfrog-cli-security/utils"
-// "github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
-// "github.com/jfrog/jfrog-cli-security/utils/jasutils"
-// "github.com/jfrog/jfrog-cli-security/utils/results"
-// "github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 )
 
-// func TestViolationFailErrors(t *testing.T) {
-// 	// components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
+func TestCheckPolicyFailBuildError(t *testing.T) {
+	tests := []struct {
+		name         string
+		resultToTest *results.SecurityCommandResults
+		expectedErr  error
+	}{
+		{
+			name: "nil results",
+		},
+		{
+			name:         "no violations",
+			resultToTest: results.NewCommandResults(utils.SourceCode),
+		},
+		{
+			name: "some SCA violations",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotApplicable, createPolicy(true, false, false), createPolicy(false, false, false)),
+					createCveViolation("CVE-5678", jasutils.Applicable, createPolicy(false, false, false)),
+				},
+			}),
+			expectedErr: NewFailBuildError(),
+		},
+		{
+			name: "skip not applicable with fail",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotApplicable, createPolicy(true, false, true)),
+				},
+			}),
+		},
+		{
+			name: "violations",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, false, false)),
+				},
+				Secrets: []violationutils.JasViolation{
+					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(true, false, false)),
+				},
+				License: []violationutils.LicenseViolation{
+					createLicenseViolation("LIC-1234", createPolicy(false, false, false)),
+				},
+			}),
+			expectedErr: NewFailBuildError(),
+		},
+		{
+			name: "violations with no fail build",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, false, false)),
+				},
+				Secrets: []violationutils.JasViolation{
+					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, false, false)),
+				},
+				OpRisk: []violationutils.OperationalRiskViolation{
+					createOpRiskViolation("OPRISK-1234", createPolicy(false, true, false)),
+				},
+			}),
+		},
+	}
 
-// 	tests := []struct {
-// 		name           string
-// 		auditResults   *results.SecurityCommandResults
-// 		expectedResult bool
-// 	}{
-// 		{
-// 			name:           "non-applicable violations with FailBuild & no skip-non-applicable in ScaResults.Violations - build should fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(false)),
-// 			expectedResult: true,
-// 		},
-// 		{
-// 			name:           "non-applicable violations with FailBuild & skip-non-applicable in ScaResults.Violations - build should not fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(true)),
-// 			expectedResult: false,
-// 		},
-// 		{
-// 			name:           "non-applicable violations with FailBuild & no skip-non-applicable in DeprecatedXrayResults - build should fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(false)),
-// 			expectedResult: true,
-// 		},
-// 		{
-// 			name:           "non-applicable violations with FailBuild & skip-non-applicable in DeprecatedXrayResults - build should not fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(true)),
-// 			expectedResult: false,
-// 		},
-// 		{
-// 			name:           "no applicability results, violations with FailBuild in DeprecatedXrayResults - build should fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(false, false, nil),
-// 			expectedResult: true,
-// 		},
-// 		{
-// 			name:           "no applicability results, violations with FailBuild in ScaResults.Violations - build should fail",
-// 			auditResults:   createSecurityCommandResultsForFailBuildTest(true, false, nil),
-// 			expectedResult: true,
-// 		},
-// 		{
-// 			name: "multiple targets - first target should not fail, second target should fail",
-// 			auditResults: &results.SecurityCommandResults{
-// 				EntitledForJas: true,
-// 				Targets: []*results.TargetResults{
-// 					{
-// 						// First target - should not fail
-// 						ScanTarget: results.ScanTarget{Target: "test-target-1"},
-// 						ScaResults: &results.ScaScanResults{
-// 							// Violations: []services.Violation{
-// 							// 	{
-// 							// 		// Violation 1: FailBuild & FailPr set to false - should not fail
-// 							// 		Components:    components,
-// 							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
-// 							// 		FailBuild:     false,
-// 							// 		FailPr:        false,
-// 							// 		Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
-// 							// 		Severity:      "High",
-// 							// 	},
-// 							// 	{
-// 							// 		// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
-// 							// 		Components:    components,
-// 							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
-// 							// 		FailBuild:     true,
-// 							// 		Policies:      []services.Policy{{SkipNotApplicable: true}},
-// 							// 		Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
-// 							// 		Severity:      "High",
-// 							// 	},
-// 							// },
-// 						},
-// 						JasResults: &results.JasScansResults{
-// 							ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
-// 								{
-// 									Scan: []*sarif.Run{
-// 										{
-// 											Tool: &sarif.Tool{
-// 												Driver: &sarif.ToolComponent{
-// 													Rules: []*sarif.ReportingDescriptor{
-// 														{
-// 															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-2222")),
-// 															Properties: &sarif.PropertyBag{
-// 																Properties: map[string]interface{}{
-// 																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-// 																},
-// 															},
-// 														},
-// 													},
-// 												},
-// 											},
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 					{
-// 						// Second target - should fail
-// 						ScanTarget: results.ScanTarget{Target: "test-target-2"},
-// 						ScaResults: &results.ScaScanResults{
-// 							// Violations: []services.Violation{
-// 							// 	{
-// 							// 		// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
-// 							// 		Components:    components,
-// 							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
-// 							// 		FailBuild:     true,
-// 							// 		Policies:      []services.Policy{{SkipNotApplicable: false}},
-// 							// 		Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
-// 							// 		Severity:      "High",
-// 							// 	},
-// 							// 	{
-// 							// 		// Violation 2: FailBuild & FailPr set to false - should not fail
-// 							// 		Components:    components,
-// 							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
-// 							// 		FailBuild:     false,
-// 							// 		FailPr:        false,
-// 							// 		Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
-// 							// 		Severity:      "High",
-// 							// 	},
-// 							// },
-// 						},
-// 						JasResults: &results.JasScansResults{
-// 							ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
-// 								{
-// 									Scan: []*sarif.Run{
-// 										{
-// 											Tool: &sarif.Tool{
-// 												Driver: &sarif.ToolComponent{
-// 													Rules: []*sarif.ReportingDescriptor{
-// 														{
-// 															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-3333")),
-// 															Properties: &sarif.PropertyBag{
-// 																Properties: map[string]interface{}{
-// 																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-// 																},
-// 															},
-// 														},
-// 													},
-// 												},
-// 											},
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			expectedResult: true, // Should fail because second target has a violation that should fail
-// 		},
-// 		{
-// 			name: "no sca results - build should not fail",
-// 			auditResults: &results.SecurityCommandResults{
-// 				EntitledForJas: true,
-// 				Targets: []*results.TargetResults{
-// 					{
-// 						ScanTarget: results.ScanTarget{Target: "test-target"},
-// 						ScaResults: nil,
-// 						JasResults: &results.JasScansResults{},
-// 					},
-// 				},
-// 			},
-// 			expectedResult: false,
-// 		},
-// 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedErr, CheckPolicyFailBuildError(test.resultToTest))
+		})
+	}
+}
 
-// 	for _, test := range tests {
-// 		t.Run(test.name, func(t *testing.T) {
-// 			shouldFailBuild, err := CheckIfFailBuild(test.auditResults)
-// 			assert.NoError(t, err)
-// 			assert.Equal(t, test.expectedResult, shouldFailBuild)
-// 		})
-// 	}
-// }
+func TestCheckPolicyFailPrError(t *testing.T) {
+	tests := []struct {
+		name         string
+		resultToTest *results.SecurityCommandResults
+		expectedErr  error
+	}{
+		{
+			name: "nil results",
+		},
+		{
+			name:         "no violations",
+			resultToTest: results.NewCommandResults(utils.SourceCode),
+		},
+		{
+			name: "some SCA violations",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotApplicable, createPolicy(false, true, false)),
+					createCveViolation("CVE-5678", jasutils.Applicable, createPolicy(false, true, false)),
+				},
+			}),
+			expectedErr: NewFailPrError(),
+		},
+		{
+			name: "skip not applicable with fail PR",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotApplicable, createPolicy(false, true, true)),
+				},
+			}),
+		},
+		{
+			name: "some violations",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, true, false)),
+				},
+				Secrets: []violationutils.JasViolation{
+					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, true, false)),
+				},
+			}),
+			expectedErr: NewFailPrError(),
+		},
+		{
+			name: "violations with no fail PR",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Sca: []violationutils.CveViolation{
+					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, false, false)),
+				},
+				Secrets: []violationutils.JasViolation{
+					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, false, false)),
+				},
+				OpRisk: []violationutils.OperationalRiskViolation{
+					createOpRiskViolation("OPRISK-1234", createPolicy(true, false, false)),
+				},
+			}),
+		},
+	}
 
-// func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, skipNotApplicable *bool) *results.SecurityCommandResults {
-// 	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
-// 	cveId := "CVE-2024-1234"
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedErr, CheckPolicyFailPrError(test.resultToTest))
+		})
+	}
+}
 
-// 	target := &results.TargetResults{
-// 		ScanTarget: results.ScanTarget{Target: "test-target"},
-// 		ScaResults: &results.ScaScanResults{},
-// 	}
+// TestFilterNotApplicableViolations tests the filterNotApplicableViolations function to ensure it
+// correctly filters violations based on their ShouldSkipNotApplicable policy setting and
+// contextual analysis status. It covers all combinations of policy settings and applicability statuses.
+func TestFilterNotApplicableViolations(t *testing.T) {
+	tests := []struct {
+		name                 string
+		violations           []violationutils.CveViolation
+		expectedViolationIds []string
+	}{
+		{
+			name:                 "no violations",
+			violations:           []violationutils.CveViolation{},
+			expectedViolationIds: []string{},
+		},
+		{
+			name: "violation without skip not applicable policy",
+			violations: []violationutils.CveViolation{
+				createCveViolation("CVE-1234", jasutils.NotApplicable, createPolicy(false, false, false)),
+			},
+			expectedViolationIds: []string{"CVE-1234"},
+		},
+		{
+			name: "violation with skip not applicable policy and Not Applicable status",
+			violations: []violationutils.CveViolation{
+				createCveViolation("CVE-5678", jasutils.NotApplicable, createPolicy(true, false, true)),
+			},
+			expectedViolationIds: []string{},
+		},
+		{
+			name: "violation with skip not applicable policy and Applicable status",
+			violations: []violationutils.CveViolation{
+				createCveViolation("CVE-9101", jasutils.Applicable, createPolicy(true, false, true)),
+			},
+			expectedViolationIds: []string{"CVE-9101"},
+		},
+		{
+			name: "violation with skip not applicable policy and Not Scanned status",
+			violations: []violationutils.CveViolation{
+				createCveViolation("CVE-1121", jasutils.NotScanned, createPolicy(true, false, true)),
+			},
+			expectedViolationIds: []string{"CVE-1121"},
+		},
+	}
 
-// 	violation := services.Violation{
-// 		Components:    components,
-// 		ViolationType: violationutils.ScaViolationTypeSecurity.String(),
-// 		FailBuild:     true,
-// 		Cves:          []services.Cve{{Id: cveId}},
-// 		Severity:      "High",
-// 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := filterNotApplicableViolations(test.violations)
+			assert.Len(t, result, len(test.expectedViolationIds))
 
-// 	if skipNotApplicable != nil {
-// 		violation.Policies = []services.Policy{{SkipNotApplicable: *skipNotApplicable}}
-// 	}
+			// Verify specific violation IDs if provided
+			if len(test.expectedViolationIds) > 0 {
+				actualIds := make([]string, len(result))
+				for i, violation := range result {
+					actualIds[i] = violation.ViolationId
+				}
+				assert.ElementsMatch(t, test.expectedViolationIds, actualIds)
+			}
+		})
+	}
+}
 
-// 	if useNewViolations {
-// 		// target.ScaResults.Violations = []services.Violation{violation}
-// 	} else {
-// 		target.ScaResults.DeprecatedXrayResults = []results.ScanResult[services.ScanResponse]{
-// 			{
-// 				Scan: services.ScanResponse{
-// 					Violations: []services.Violation{violation},
-// 				},
-// 			},
-// 		}
-// 	}
+func createResultsWithViolations(Violations violationutils.Violations) *results.SecurityCommandResults {
+	return results.NewCommandResults(utils.SourceCode).SetViolations(0, Violations)
+}
 
-// 	if hasJasResults {
-// 		target.JasResults = &results.JasScansResults{
-// 			ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
-// 				{
-// 					Scan: []*sarif.Run{
-// 						{
-// 							Tool: &sarif.Tool{
-// 								Driver: &sarif.ToolComponent{
-// 									Rules: []*sarif.ReportingDescriptor{
-// 										{
-// 											ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId(cveId)),
-// 											Properties: &sarif.PropertyBag{
-// 												Properties: map[string]interface{}{
-// 													jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-// 												},
-// 											},
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 		}
-// 	} else {
-// 		target.JasResults = nil
-// 	}
+func createJasViolation(violationId string, violationType violationutils.ViolationIssueType, policies ...violationutils.Policy) violationutils.JasViolation {
+	return violationutils.JasViolation{
+		Violation: createViolation(violationId, violationType, policies...),
+	}
+}
 
-// 	return &results.SecurityCommandResults{
-// 		EntitledForJas: true,
-// 		Targets:        []*results.TargetResults{target},
-// 	}
-// }
+func createOpRiskViolation(violationId string, policies ...violationutils.Policy) violationutils.OperationalRiskViolation {
+	return violationutils.OperationalRiskViolation{
+		ScaViolation: violationutils.ScaViolation{
+			Violation: createViolation(violationId, violationutils.OperationalRiskType, policies...),
+		},
+	}
+}
 
-// func TestShouldSkipNotApplicable(t *testing.T) {
-// 	testCases := []struct {
-// 		name                string
-// 		violation           services.Violation
-// 		applicabilityStatus jasutils.ApplicabilityStatus
-// 		shouldSkip          bool
-// 		errorExpected       bool
-// 	}{
-// 		{
-// 			name:                "Applicable CVE - should NOT skip",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.Applicable,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name:                "Undetermined CVE - should NOT skip",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.ApplicabilityUndetermined,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name:                "Not covered CVE - should NOT skip",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.NotCovered,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name:                "Missing Context CVE - should NOT skip",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.MissingContext,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name:                "Not scanned CVE - should NOT skip",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.NotScanned,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name: "Non applicable CVE with skip-non-applicable in ALL policies - SHOULD skip",
-// 			violation: services.Violation{
-// 				Policies: []services.Policy{
-// 					{
-// 						Policy:            "policy-1",
-// 						SkipNotApplicable: true,
-// 					},
-// 					{
-// 						Policy:            "policy-2",
-// 						SkipNotApplicable: true,
-// 					},
-// 				},
-// 			},
-// 			applicabilityStatus: jasutils.NotApplicable,
-// 			shouldSkip:          true,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name: "Non applicable CVE with skip-non-applicable in SOME policies - should NOT skip",
-// 			violation: services.Violation{
-// 				Policies: []services.Policy{
-// 					{
-// 						Policy:            "policy-1",
-// 						SkipNotApplicable: true,
-// 					},
-// 					{
-// 						Policy:            "policy-2",
-// 						SkipNotApplicable: false,
-// 					},
-// 				},
-// 			},
-// 			applicabilityStatus: jasutils.NotApplicable,
-// 			shouldSkip:          false,
-// 			errorExpected:       false,
-// 		},
-// 		{
-// 			name:                "Violation without policy - error expected",
-// 			violation:           services.Violation{},
-// 			applicabilityStatus: jasutils.NotApplicable,
-// 			shouldSkip:          false,
-// 			errorExpected:       true,
-// 		},
-// 	}
+func createLicenseViolation(violationId string, policies ...violationutils.Policy) violationutils.LicenseViolation {
+	return violationutils.LicenseViolation{
+		ScaViolation: violationutils.ScaViolation{
+			Violation: createViolation(violationId, violationutils.LicenseViolationType, policies...),
+		},
+	}
+}
 
-// 	for _, tc := range testCases {
-// 		t.Run(tc.name, func(t *testing.T) {
-// 			shouldSkip, err := shouldSkipNotApplicable(tc.violation, tc.applicabilityStatus)
-// 			if tc.errorExpected {
-// 				assert.Error(t, err)
-// 			} else {
-// 				assert.NoError(t, err)
-// 			}
+func createCveViolation(violationId string, contextualAnalysis jasutils.ApplicabilityStatus, policies ...violationutils.Policy) violationutils.CveViolation {
+	violation := violationutils.CveViolation{
+		ScaViolation: violationutils.ScaViolation{
+			Violation: createViolation(violationId, violationutils.CveViolationType, policies...),
+		},
+	}
+	if contextualAnalysis != jasutils.NotScanned {
+		violation.ContextualAnalysis = &formats.Applicability{
+			Status: contextualAnalysis.String(),
+		}
+	}
+	return violation
+}
 
-// 			if tc.shouldSkip {
-// 				assert.True(t, shouldSkip)
-// 			} else {
-// 				assert.False(t, shouldSkip)
-// 			}
-// 		})
-// 	}
-// }
+func createViolation(violationId string, violationType violationutils.ViolationIssueType, policies ...violationutils.Policy) violationutils.Violation {
+	return violationutils.Violation{
+		ViolationId:   violationId,
+		ViolationType: violationType,
+		Severity:      severityutils.High,
+		Watch:         "test-watch",
+		Policies:      policies,
+	}
+}
+
+func createPolicy(failBuild, failPR, skipNotApplicable bool) violationutils.Policy {
+	return violationutils.Policy{
+		PolicyName:        "test-policy",
+		Rule:              "test-rule",
+		FailBuild:         failBuild,
+		FailPullRequest:   failPR,
+		SkipNotApplicable: skipNotApplicable,
+	}
+}

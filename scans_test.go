@@ -257,7 +257,7 @@ func TestDockerScan(t *testing.T) {
 
 	imagesToScan := []string{
 		// Image with RPM with vulnerabilities
-		"redhat/ubi8-micro:8.4",
+		"alpine:3.17",
 	}
 	for _, imageName := range imagesToScan {
 		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3, 0, false)

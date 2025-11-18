@@ -301,12 +301,12 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 				count = sc.currentScan.Vulnerabilities.SastResults
 			}
 		}
-		jasHandler(count, location, severity, resultStatus)
+		countJasIssues(count, location, severity, resultStatus)
 		return
 	}
 }
 
-func jasHandler(count *formats.ResultSummary, location *sarif.Location, severity severityutils.Severity, resultStatus string) {
+func countJasIssues(count *formats.ResultSummary, location *sarif.Location, severity severityutils.Severity, resultStatus string) {
 	if count == nil || location == nil {
 		// Only count the issue if it has a location
 		return
@@ -331,7 +331,7 @@ func (sc *CmdResultsSummaryConverter) parseSecretsViolations(secretsViolations [
 			status = tokenStatus
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, secretViolation.Watch)
-		jasHandler(sc.currentScan.Violations.SecretsResults, secretViolation.Location, secretViolation.Severity, status)
+		countJasIssues(sc.currentScan.Violations.SecretsResults, secretViolation.Location, secretViolation.Severity, status)
 	}
 	return
 }
@@ -345,7 +345,7 @@ func (sc *CmdResultsSummaryConverter) parseIacViolations(iacViolations []violati
 	}
 	for _, iacViolation := range iacViolations {
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, iacViolation.Watch)
-		jasHandler(sc.currentScan.Violations.IacResults, iacViolation.Location, iacViolation.Severity, formats.NoStatus)
+		countJasIssues(sc.currentScan.Violations.IacResults, iacViolation.Location, iacViolation.Severity, formats.NoStatus)
 	}
 	return
 }
@@ -359,7 +359,7 @@ func (sc *CmdResultsSummaryConverter) parseSastViolations(sastViolations []viola
 	}
 	for _, sastViolation := range sastViolations {
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, sastViolation.Watch)
-		jasHandler(sc.currentScan.Violations.SastResults, sastViolation.Location, sastViolation.Severity, formats.NoStatus)
+		countJasIssues(sc.currentScan.Violations.SastResults, sastViolation.Location, sastViolation.Severity, formats.NoStatus)
 	}
 	return
 }

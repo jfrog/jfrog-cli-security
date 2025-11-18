@@ -9,15 +9,13 @@ import (
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 )
 
 const (
-	// Generated from Xray license policy
 	LicenseViolationType ViolationIssueType = "license"
-	// Generated from Xray operational risk policy
-	OperationalRiskType ViolationIssueType = "operational_risk"
-	// Generated from SCA security policy
+	OperationalRiskType  ViolationIssueType = "operational_risk"
 	CveViolationType     ViolationIssueType = "cve"
 	SecretsViolationType ViolationIssueType = "secrets"
 	IacViolationType     ViolationIssueType = "iac"
@@ -220,6 +218,30 @@ type CveViolation struct {
 	FixedVersions      *[]cyclonedx.AffectedVersions `json:"fixed_versions,omitempty"`
 	// TODO: remove comment after information displayed in cyclonedx.Vulnerability
 	JfrogResearchInformation *formats.JfrogResearchInformation `json:"jfrogResearchInformation,omitempty"`
+}
+
+func (cv *CveViolation) ShouldFailBuild() bool {
+	for _, p := range cv.Policies {
+		if p.SkipNotApplicable && cv.ContextualAnalysis != nil && jasutils.ConvertToApplicabilityStatus(cv.ContextualAnalysis.Status) == jasutils.NotApplicable {
+			continue
+		}
+		if p.FailBuild {
+			return true
+		}
+	}
+	return false
+}
+
+func (cv *CveViolation) ShouldFailPR() bool {
+	for _, p := range cv.Policies {
+		if p.SkipNotApplicable && cv.ContextualAnalysis != nil && jasutils.ConvertToApplicabilityStatus(cv.ContextualAnalysis.Status) == jasutils.NotApplicable {
+			continue
+		}
+		if p.FailPullRequest {
+			return true
+		}
+	}
+	return false
 }
 
 type LicenseViolation struct {

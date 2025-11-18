@@ -60,17 +60,17 @@ func CheckPolicyFailBuildError(cmdResults *results.SecurityCommandResults) (fail
 		return
 	}
 	if cmdResults.Violations.ShouldFailBuild() {
-		failBuildError = NewFailBuildError()
+		return NewFailBuildError()
 	}
 	return
 }
 
-func CheckPolicyFailPrError(cmdResults *results.SecurityCommandResults) (err error) {
-	if cmdResults == nil || (cmdResults.ViolationsStatusCode != nil && *cmdResults.ViolationsStatusCode != 0) {
+func CheckPolicyFailPrError(cmdResults *results.SecurityCommandResults) (failPrError error) {
+	if cmdResults == nil || cmdResults.Violations == nil || (cmdResults.ViolationsStatusCode != nil && *cmdResults.ViolationsStatusCode != 0) {
 		return
 	}
 	if cmdResults.Violations.ShouldFailPR() {
-		err = NewFailPrError()
+		return NewFailPrError()
 	}
 	return
 }

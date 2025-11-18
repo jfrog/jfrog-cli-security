@@ -190,9 +190,10 @@ func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.
 
 func convertToBasicViolation(violation services.Violation, severity severityutils.Severity) violationutils.Violation {
 	cmdViolation := violationutils.Violation{
-		ViolationId: violation.IssueId,
-		Watch:       violation.WatchName,
-		Severity:    severity,
+		ViolationId:   violation.IssueId,
+		ViolationType: getScaViolationType(violation),
+		Watch:         violation.WatchName,
+		Severity:      severity,
 	}
 	for _, policy := range violation.Policies {
 		cmdViolation.Policies = append(cmdViolation.Policies, violationutils.Policy{
@@ -204,6 +205,18 @@ func convertToBasicViolation(violation services.Violation, severity severityutil
 		})
 	}
 	return cmdViolation
+}
+
+func getScaViolationType(violation services.Violation) violationutils.ViolationIssueType {
+	switch violation.ViolationType {
+	case violationutils.ScaViolationTypeSecurity.String():
+		return violationutils.CveViolationType
+	case violationutils.ScaViolationTypeLicense.String():
+		return violationutils.LicenseViolationType
+	case violationutils.ScaViolationTypeOperationalRisk.String():
+		return violationutils.OperationalRiskType
+	}
+	return ""
 }
 
 func convertToScaViolation(violation services.Violation, severity severityutils.Severity, affectedComponent cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) violationutils.ScaViolation {
