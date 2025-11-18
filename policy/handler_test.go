@@ -119,8 +119,8 @@ func TestCheckPolicyFailPrError(t *testing.T) {
 				Sca: []violationutils.CveViolation{
 					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, true, false)),
 				},
-				Secrets: []violationutils.JasViolation{
-					createJasViolation("JAS-1236", violationutils.SecretsViolationType, createPolicy(false, true, false)),
+				Iac: []violationutils.JasViolation{
+					createJasViolation("JAS-1236", violationutils.IacViolationType, createPolicy(false, true, false)),
 				},
 			}),
 			expectedErr: NewFailPrError(),
@@ -131,8 +131,8 @@ func TestCheckPolicyFailPrError(t *testing.T) {
 				Sca: []violationutils.CveViolation{
 					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, false, false)),
 				},
-				Secrets: []violationutils.JasViolation{
-					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, false, false)),
+				Sast: []violationutils.JasViolation{
+					createJasViolation("JAS-1234", violationutils.SastViolationType, createPolicy(false, false, false)),
 				},
 				OpRisk: []violationutils.OperationalRiskViolation{
 					createOpRiskViolation("OPRISK-1234", createPolicy(true, false, false)),
