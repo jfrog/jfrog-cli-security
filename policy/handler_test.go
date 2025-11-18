@@ -66,7 +66,7 @@ func TestCheckPolicyFailBuildError(t *testing.T) {
 					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, false, false)),
 				},
 				Secrets: []violationutils.JasViolation{
-					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, false, false)),
+					createJasViolation("JAS-1235", violationutils.SecretsViolationType, createPolicy(false, false, false)),
 				},
 				OpRisk: []violationutils.OperationalRiskViolation{
 					createOpRiskViolation("OPRISK-1234", createPolicy(false, true, false)),
@@ -120,7 +120,7 @@ func TestCheckPolicyFailPrError(t *testing.T) {
 					createCveViolation("CVE-1234", jasutils.NotScanned, createPolicy(false, true, false)),
 				},
 				Secrets: []violationutils.JasViolation{
-					createJasViolation("JAS-1234", violationutils.SecretsViolationType, createPolicy(false, true, false)),
+					createJasViolation("JAS-1236", violationutils.SecretsViolationType, createPolicy(false, true, false)),
 				},
 			}),
 			expectedErr: NewFailPrError(),
@@ -209,8 +209,8 @@ func TestFilterNotApplicableViolations(t *testing.T) {
 	}
 }
 
-func createResultsWithViolations(Violations violationutils.Violations) *results.SecurityCommandResults {
-	return results.NewCommandResults(utils.SourceCode).SetViolations(0, Violations)
+func createResultsWithViolations(violations violationutils.Violations) *results.SecurityCommandResults {
+	return results.NewCommandResults(utils.SourceCode).SetViolations(0, violations)
 }
 
 func createJasViolation(violationId string, violationType violationutils.ViolationIssueType, policies ...violationutils.Policy) violationutils.JasViolation {
