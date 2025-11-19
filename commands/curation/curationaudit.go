@@ -957,7 +957,20 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 		if dl, ok := downloadUrlsMap[id]; ok {
 			downloadUrls = []string{dl}
 		} else {
-			log.Warn(fmt.Sprintf("couldn't find download url for node id %s", id))
+			idWithoutPrefix := strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
+			allParts := strings.Split(idWithoutPrefix, ":")
+			if len(allParts) >= 2 {
+				normalizedName := strings.ToLower(strings.TrimSpace(allParts[0]))
+				normalizedName = strings.ReplaceAll(normalizedName, "-", "_")
+				normalizedId := python.PythonPackageTypeIdentifier + normalizedName + ":" + strings.TrimSpace(allParts[1])
+				if dl, ok := downloadUrlsMap[normalizedId]; ok {
+					downloadUrls = []string{dl}
+				} else {
+					log.Debug(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
+				}
+			} else {
+				log.Debug(fmt.Sprintf("Package %s has unexpected format", id))
+			}
 		}
 	}
 	id = strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
