@@ -646,7 +646,8 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	return curationAuditCommand, nil
 }
 
