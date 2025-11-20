@@ -114,7 +114,10 @@ func TestBuildDependencyTree_MultiArch(t *testing.T) {
 			if strings.Contains(r.RequestURI, "/api/docker/") && strings.Contains(r.RequestURI, "/manifests/") {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(manifestListResponse))
+				_, err := w.Write([]byte(manifestListResponse))
+				if err != nil {
+					t.Errorf("failed to write response: %v", err)
+				}
 			}
 		}
 	})
