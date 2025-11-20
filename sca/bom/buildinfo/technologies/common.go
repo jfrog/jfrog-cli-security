@@ -58,6 +58,8 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	// Pnpm params
 	MaxTreeDepth string
+	// Docker params
+	DockerImageName string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {
