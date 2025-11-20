@@ -104,7 +104,7 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
 	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.DockerImageName() != "", nil
+		return ca.checkDockerSupport()
 	},
 }
 
@@ -128,6 +128,17 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
+	}
+	return true, nil
+}
+
+func (ca *CurationAuditCommand) checkDockerSupport() (bool, error) {
+	dockerImageName := ca.DockerImageName()
+	if dockerImageName == "" {
+		return false, nil
+	}
+	if !strings.Contains(dockerImageName, "/") {
+		return false, errorutils.CheckErrorf("invalid docker image format: '%s'. Expected format: 'repo/image:tag' or 'repo/path/image:tag'", dockerImageName)
 	}
 	return true, nil
 }
