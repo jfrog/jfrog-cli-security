@@ -51,6 +51,8 @@ type AuditParamsInterface interface {
 	GetConfigProfile() *xscservices.ConfigProfile
 	DockerImageName() string
 	SetDockerImageName(dockerImageName string) *AuditBasicParams
+	SolutionFilePath() string
+	SetSolutionFilePath(solutionFilePath string) *AuditBasicParams
 }
 
 type AuditBasicParams struct {
@@ -82,6 +84,7 @@ type AuditBasicParams struct {
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
 	dockerImageName                  string
+	solutionFilePath                 string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -340,5 +343,11 @@ func (abp *AuditBasicParams) DockerImageName() string {
 
 func (abp *AuditBasicParams) SetDockerImageName(dockerImageName string) *AuditBasicParams {
 	abp.dockerImageName = dockerImageName
+func (abp *AuditBasicParams) SolutionFilePath() string {
+	return abp.solutionFilePath
+}
+
+func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
+	abp.solutionFilePath = solutionFilePath
 	return abp
 }

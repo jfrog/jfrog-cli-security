@@ -53,7 +53,7 @@ func getConanExecPath() (conanExecPath string, err error) {
 		return
 	}
 	if version.NewVersion(string(conanVersion)).Compare(conanV2) < 0 {
-		err = fmt.Errorf("Conan dependency tree building is currently supported for Conan V2. The current Conan version is: %s", conanVersion)
+		err = fmt.Errorf("conan dependency tree building is currently supported for Conan V2. The current Conan version is: %s", conanVersion)
 		return
 	}
 	log.Debug("Conan version: ", string(conanVersion))

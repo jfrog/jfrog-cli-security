@@ -60,6 +60,8 @@ type BuildInfoBomGeneratorParams struct {
 	MaxTreeDepth string
 	// Docker params
 	DockerImageName string
+	// NuGet params
+	SolutionFilePath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {

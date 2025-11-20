@@ -458,6 +458,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
 		DockerImageName: ca.DockerImageName(),
+		// NuGet params
+		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
 }
 

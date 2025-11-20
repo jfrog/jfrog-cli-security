@@ -33,44 +33,54 @@ func TestReportError(t *testing.T) {
 func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testAuditNpm(t, string(format.Json), "xsc-json", false)
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Violations: 1},
-	})
+	testCases := []struct {
+		name     string
+		format   format.OutputFormat
+		withVuln bool
+	}{
+		{
+			name:   "No violations (JSON)",
+			format: format.Json,
+		},
+		{
+			name:     "No violations (Simple JSON)",
+			format:   format.SimpleJson,
+			withVuln: true,
+		},
+		// SARIF format is not supported for validations (not implemented)
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validationsParams := validations.ValidationParams{
+				Total:      &validations.TotalCount{Licenses: 1, Violations: 1},
+				Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
+			}
+			if tc.withVuln {
+				validationsParams.Total.Vulnerabilities = 1
+				validationsParams.Vulnerabilities = &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1}}
+			}
+			validations.ValidateCommandOutput(t, testAuditNpm(t, tc.format, "xsc-", tc.withVuln), tc.format, validationsParams)
+		})
+	}
 }
 
-func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
+func TestXscAuditMaven(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testAuditNpm(t, string(format.SimpleJson), "xsc-simple-json", true)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Violations: 1, Vulnerabilities: 1},
-	})
-}
-
-func TestXscAuditMavenJson(t *testing.T) {
-	_, _, cleanUp := integration.InitXscTest(t)
-	defer cleanUp()
-	output := testAuditMaven(t, string(format.Json))
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
-	})
-}
-
-func TestXscAuditMavenSimpleJson(t *testing.T) {
-	_, _, cleanUp := integration.InitXscTest(t)
-	defer cleanUp()
-	output := testAuditMaven(t, string(format.SimpleJson))
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
-	})
+	for _, format := range []format.OutputFormat{format.Json, format.SimpleJson} {
+		t.Run(string(format), func(t *testing.T) {
+			validations.ValidateCommandOutput(t, testAuditMaven(t, format), format, validations.ValidationParams{
+				Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
+			})
+		})
+	}
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {
 	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	// Scan npm project and verify that analytics general event were sent to XSC.
-	output := testAuditNpm(t, string(format.SimpleJson), "xsc-analytics", false)
+	output := testAuditNpm(t, format.SimpleJson, "xsc-analytics", false)
 	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
 }
 
