@@ -343,6 +343,9 @@ func (abp *AuditBasicParams) DockerImageName() string {
 
 func (abp *AuditBasicParams) SetDockerImageName(dockerImageName string) *AuditBasicParams {
 	abp.dockerImageName = dockerImageName
+	return abp
+}
+
 func (abp *AuditBasicParams) SolutionFilePath() string {
 	return abp.solutionFilePath
 }
