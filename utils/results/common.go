@@ -66,7 +66,7 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 		} else {
 			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
 			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
-				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
+				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.Target, err)
 			}
 		}
 		if shouldFailBuild {
@@ -728,7 +728,7 @@ func GetCveApplicabilityFieldAndFilterDisqualify(cveId string, applicabilityScan
 	// Filter out evidences that are disqualified
 	filteredEvidence := make([]formats.Evidence, 0, len(applicability.Evidence))
 	for _, evidence := range applicability.Evidence {
-		fileName := evidence.Location.File
+		fileName := evidence.File
 		if fileName == "" || !shouldDisqualifyEvidence(components, filepath.Clean(fileName)) {
 			// If the file name is empty, we cannot determine if it should be disqualified
 			// If the evidence is not disqualified, keep it

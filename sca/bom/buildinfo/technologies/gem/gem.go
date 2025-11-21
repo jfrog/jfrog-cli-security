@@ -2,6 +2,7 @@ package gem
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -195,7 +196,11 @@ func parseLockfileToInternalData(lockFilePath string) (
 	if ioErr != nil {
 		return nil, nil, fmt.Errorf("opening lockfile %s: %w", lockFilePath, ioErr)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("closing lockfile %s: %w", lockFilePath, cerr))
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 

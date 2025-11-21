@@ -6,7 +6,6 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	goartifactoryutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/golang"
 	goutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/golang"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -39,14 +38,14 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 			err = errCacheFolder
 			return
 		}
-		if err = goartifactoryutils.SetGoModCache(projCacheDir); err != nil {
+		if err = goutils.SetGoModCache(projCacheDir); err != nil {
 			return
 		}
 	}
 
 	remoteGoRepo := params.DependenciesRepository
 	if remoteGoRepo != "" {
-		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(params.ServerDetails, remoteGoRepo, goProxyParams); err != nil {
+		if err = goutils.SetArtifactoryAsResolutionServer(params.ServerDetails, remoteGoRepo, goProxyParams); err != nil {
 			return
 		}
 	}

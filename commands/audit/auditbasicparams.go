@@ -49,6 +49,8 @@ type AuditParamsInterface interface {
 	AllowPartialResults() bool
 	GetXrayVersion() string
 	GetConfigProfile() *xscservices.ConfigProfile
+	SolutionFilePath() string
+	SetSolutionFilePath(solutionFilePath string) *AuditBasicParams
 }
 
 type AuditBasicParams struct {
@@ -79,6 +81,7 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
+	solutionFilePath                 string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -329,4 +332,13 @@ func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile
 
 func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
 	return abp.configProfile
+}
+
+func (abp *AuditBasicParams) SolutionFilePath() string {
+	return abp.solutionFilePath
+}
+
+func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
+	abp.solutionFilePath = solutionFilePath
+	return abp
 }
