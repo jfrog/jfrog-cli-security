@@ -1,10 +1,11 @@
 package scangraph
 
 import (
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFilterResultIfNeeded(t *testing.T) {
@@ -84,7 +85,7 @@ func TestFilterResultIfNeeded(t *testing.T) {
 				},
 			},
 			params: ScanGraphParams{
-				severityLevel: 23,
+				severityLevel: 30,
 			},
 			expected: services.ScanResponse{
 				Violations: []services.Violation{
