@@ -66,7 +66,7 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 		} else {
 			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
 			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
-				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
+				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.Target, err)
 			}
 		}
 		if shouldFailBuild {
@@ -709,7 +709,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	}
 	switch {
 	case len(applicabilityStatuses) > 0:
-		applicability.Status = string(getFinalApplicabilityStatus(applicabilityStatuses))
+		applicability.Status = string(GetFinalApplicabilityStatus(applicabilityStatuses))
 	case !resultFound:
 		applicability.Status = string(jasutils.ApplicabilityUndetermined)
 	case len(applicability.Evidence) == 0:
@@ -728,7 +728,7 @@ func GetCveApplicabilityFieldAndFilterDisqualify(cveId string, applicabilityScan
 	// Filter out evidences that are disqualified
 	filteredEvidence := make([]formats.Evidence, 0, len(applicability.Evidence))
 	for _, evidence := range applicability.Evidence {
-		fileName := evidence.Location.File
+		fileName := evidence.File
 		if fileName == "" || !shouldDisqualifyEvidence(components, filepath.Clean(fileName)) {
 			// If the file name is empty, we cannot determine if it should be disqualified
 			// If the evidence is not disqualified, keep it
@@ -766,7 +766,7 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 			applicableStatuses = append(applicableStatuses, jasutils.ApplicabilityStatus(cve.Applicability.Status))
 		}
 	}
-	return getFinalApplicabilityStatus(applicableStatuses)
+	return GetFinalApplicabilityStatus(applicableStatuses)
 }
 
 // We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
@@ -852,7 +852,7 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 // Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
-func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
+func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
 	if len(applicabilityStatuses) == 0 {
 		return jasutils.NotScanned
 	}

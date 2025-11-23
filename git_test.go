@@ -62,13 +62,15 @@ type gitAuditCommandTestParams struct {
 }
 
 func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git", "audit"}, getAuditCmdArgs(params)...)...)
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
 }
 
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
 	defer cleanUpProject()
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
 	if gitAuditParams.OverrideRepoCloneUrl != "" {
 		// Override the git remote url to a dummy one to avoid flaky tests due to collisions in policy/watch created for the same repo.
 		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")

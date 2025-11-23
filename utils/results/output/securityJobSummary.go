@@ -137,10 +137,11 @@ func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...strin
 }
 
 func (rsa ResultSummaryArgs) ToArgs(index commandsummary.Index) (args []string) {
-	if index == commandsummary.BuildScan {
+	switch index {
+	case commandsummary.BuildScan:
 		args = append(args, rsa.BuildName)
 		args = append(args, rsa.BuildNumbers...)
-	} else if index == commandsummary.DockerScan {
+	case commandsummary.DockerScan:
 		image := rsa.DockerImage
 		// if user did not provide image tag, add latest
 		if !strings.Contains(image, ":") {
