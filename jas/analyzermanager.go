@@ -57,7 +57,7 @@ const (
 
 type JasDiffScanEnvValue string
 
-var scannersRequiredInstalledSoftwares = []string{
+var scannersRequiredInstalledSoftware = []string{
 	"git", "unzip", "curl",
 }
 
@@ -218,7 +218,7 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 }
 
 func ValidateRequiredInstalledSoftware() (err error) {
-	for _, software := range scannersRequiredInstalledSoftwares {
+	for _, software := range scannersRequiredInstalledSoftware {
 		if softwarePath, e := exec.LookPath(software); e != nil || softwarePath == "" {
 			err = errors.Join(err, fmt.Errorf("could not find the required '%s' executable in the system PATH to run the Advanced Security Scans", software))
 		}
