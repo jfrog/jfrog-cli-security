@@ -2,9 +2,6 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.24.6
 
-// TODO: update xray-scan lib to latest version that supports CycloneDX v0.9.3 (not yet released)
-replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.9.2
-
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.3
 	github.com/beevik/etree v1.4.0
