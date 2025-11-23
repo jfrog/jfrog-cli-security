@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/content"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -85,19 +86,25 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 	return
 }
 
-func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (err error) {
-	if strings.Contains(repo, "/") && !strings.HasSuffix(repo, "/") {
-		// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
-		// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
-		repo = fmt.Sprintf("%s/", repo)
-	}
+func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (uploaded []string, err error) {
 	uploadCmd := generic.NewUploadCommand()
 	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Project(relatedProjectKey).Target(repo).Flat(true).BuildSpec())
-	uploadCmd.SetDetailedSummary(true)
+	uploadCmd.SetDetailedSummary(true).SetQuiet(true)
 	err = uploadCmd.Run()
 	result := uploadCmd.Result()
 	defer common.CleanupResult(result, &err)
-	return common.PrintDeploymentView(result.Reader())
+	return getArtifactsPaths(repo, result.Reader()), common.PrintDeploymentView(result.Reader())
+}
+
+func getArtifactsPaths(repo string, reader *content.ContentReader) (paths []string) {
+	for transferDetails := new(clientUtils.FileTransferDetails); reader.NextRecord(transferDetails) == nil; transferDetails = new(clientUtils.FileTransferDetails) {
+		paths = append(paths, strings.TrimPrefix(transferDetails.TargetPath, repo))
+	}
+	if err := reader.GetError(); err != nil {
+		return nil
+	}
+	reader.Reset()
+	return
 }
 
 func IsRepoExists(repoKey string, serverDetails *config.ServerDetails) (exists bool, err error) {

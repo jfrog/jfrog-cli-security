@@ -45,6 +45,7 @@ type JasRunnerParams struct {
 	SignedDescriptions bool
 	SastRules          string
 	// Outputs
+	TargetCount     int
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
@@ -141,11 +142,11 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId, getSourceRunsToCompare(params, jasutils.Secrets)...)
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Secrets)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
-		params.ScanResults.JasResults.AddJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		params.ScanResults.AddJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -158,11 +159,11 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId, getSourceRunsToCompare(params, jasutils.IaC)...)
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.IaC)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
-		params.ScanResults.JasResults.AddJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		params.ScanResults.AddJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -175,11 +176,11 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.SastRules, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.SastRules, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
-		params.ScanResults.JasResults.AddJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		params.ScanResults.AddJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -204,6 +205,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 				ScanType:                     params.ApplicableScanType,
 				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
 				ThreadId:                     threadId,
+				TargetCount:                  params.TargetCount,
 				Module:                       params.Module,
 			},
 			params.Scanner,
@@ -211,7 +213,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
-		params.ScanResults.JasResults.AddApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
+		params.ScanResults.AddApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}

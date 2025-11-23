@@ -5,9 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -256,7 +258,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-39249",
 				}},
@@ -277,7 +279,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
 			},
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2018-3721",
 				}},
@@ -297,7 +299,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				IssueId:   "XRAY-72918",
 			},
 			{
-				ViolationType: utils.ViolationTypeLicense.String(),
+				ViolationType: violationutils.ScaViolationTypeLicense.String(),
 				LicenseKey:    "MIT",
 				LicenseName:   "MIT full name",
 				Severity:      severityutils.High.String(),
@@ -331,7 +333,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		ScannedStatus: "completed",
 	})
 	// Contextual analysis scan results
-	npmTargetResults.JasResults.AddApplicabilityScanResults(0,
+	npmTargetResults.AddApplicabilityScanResults(0,
 		&sarif.Run{
 			Tool: &sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
@@ -351,7 +353,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 	)
 	// Iac scan results
-	npmTargetResults.JasResults.AddJasScanResults(jasutils.IaC,
+	npmTargetResults.AddJasScanResults(jasutils.IaC,
 		[]*sarif.Run{{
 			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.IacToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
@@ -363,7 +365,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		[]*sarif.Run{}, 0,
 	)
 	// Secrets scan results
-	npmTargetResults.JasResults.AddJasScanResults(jasutils.Secrets,
+	npmTargetResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
@@ -382,7 +384,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		}}, 0,
 	)
 	// Sast scan results
-	npmTargetResults.JasResults.AddJasScanResults(jasutils.Sast,
+	npmTargetResults.AddJasScanResults(jasutils.Sast,
 		// No Vulnerabilities
 		[]*sarif.Run{{
 			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
@@ -395,14 +397,185 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
 				validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					[]formats.Location{
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
-						{File: "/Users/user/project-with-issues/server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+						{File: "server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
+						{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					},
 				),
 			},
 		}},
 		0,
 	)
+	// Violations
+	cmdResults.ResultContext = results.ResultContext{
+		IncludeVulnerabilities: true,
+		IncludeLicenses:        true,
+		Watches:                []string{"security-watch", "license-watch"},
+	}
+	cmdResults.SetViolations(0, violationutils.Violations{
+		Sca: []violationutils.CveViolation{
+			{
+				ScaViolation: violationutils.ScaViolation{
+					Violation: violationutils.Violation{
+						Watch:         "security-watch",
+						ViolationType: violationutils.CveViolationType,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-security"}},
+						ViolationId:   "XRAY-609848",
+						Severity:      severityutils.Unknown,
+					},
+					ImpactedComponent: cyclonedx.Component{
+						BOMRef:     "pkg:npm/async@3.2.4",
+						PackageURL: "pkg:npm/async@3.2.4",
+					},
+					ImpactPaths: [][]formats.ComponentRow{{
+						{Name: "froghome", Version: "1.0.0"},
+						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
+						{Name: "async", Version: "3.2.4"},
+					}},
+					DirectComponents: []formats.ComponentRow{
+						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
+					},
+				},
+				ContextualAnalysis: &formats.Applicability{
+					Status:             jasutils.Applicable.String(),
+					ScannerDescription: "The Scanner checks for CVE-2024-39249",
+					Evidence: []formats.Evidence{
+						{Location: formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}, Reason: "ca msg"},
+						{Location: formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}, Reason: "ca msg"},
+					},
+				},
+				CveVulnerability: cyclonedx.Vulnerability{
+					BOMRef:      "CVE-2024-39249",
+					ID:          "XRAY-609848",
+					Description: "Async vulnerable to ReDoS",
+					Ratings: &[]cyclonedx.VulnerabilityRating{
+						{Source: &cyclonedx.Source{Name: "Xray"}, Severity: cyclonedx.SeverityUnknown},
+					},
+				},
+				JfrogResearchInformation: &formats.JfrogResearchInformation{SeverityDetails: formats.SeverityDetails{Severity: "Low"}},
+			},
+			{
+				ScaViolation: violationutils.ScaViolation{
+					Violation: violationutils.Violation{
+						Watch:         "security-watch",
+						ViolationType: violationutils.CveViolationType,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-security"}},
+						ViolationId:   "98yhnmju7654rfvbnj",
+						Severity:      severityutils.Medium,
+					},
+					ImpactedComponent: cyclonedx.Component{
+						BOMRef:     "pkg:npm/lodash@4.17.0",
+						PackageURL: "pkg:npm/lodash@4.17.0",
+					},
+					ImpactPaths: [][]formats.ComponentRow{{
+						{Name: "froghome", Version: "1.0.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+					}},
+					DirectComponents: []formats.ComponentRow{
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+					},
+				},
+				ContextualAnalysis: &formats.Applicability{
+					Status:             jasutils.NotCovered.String(),
+					ScannerDescription: "The Scanner checks for CVE-2018-3721",
+				},
+				FixedVersions: &[]cyclonedx.AffectedVersions{
+					{Version: "[4.17.5]", Status: cyclonedx.VulnerabilityStatusNotAffected},
+				},
+				CveVulnerability: cyclonedx.Vulnerability{
+					BOMRef:      "CVE-2018-3721",
+					ID:          "XRAY-72918",
+					Description: "Improperly Controlled Modification of Object",
+					Ratings: &[]cyclonedx.VulnerabilityRating{
+						{Source: &cyclonedx.Source{Name: "Xray"}, Severity: cyclonedx.SeverityMedium},
+					},
+				},
+			},
+		},
+		License: []violationutils.LicenseViolation{
+			{
+				LicenseKey:  "MIT",
+				LicenseName: "MIT full name",
+				ScaViolation: violationutils.ScaViolation{
+					Violation: violationutils.Violation{
+						Watch:         "license-watch",
+						ViolationType: violationutils.LicenseViolationType,
+						Policies:      []violationutils.Policy{{PolicyName: "npm-license"}},
+						ViolationId:   "12ee2e134edqwe234",
+						Severity:      severityutils.High,
+					},
+					ImpactedComponent: cyclonedx.Component{
+						BOMRef:     "pkg:npm/lodash@4.17.0",
+						PackageURL: "pkg:npm/lodash@4.17.0",
+					},
+					ImpactPaths: [][]formats.ComponentRow{{
+						{Name: "froghome", Version: "1.0.0"},
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+					}},
+					DirectComponents: []formats.ComponentRow{
+						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+					},
+				},
+			},
+		},
+		Secrets: []violationutils.JasViolation{
+			{
+				Violation: violationutils.Violation{
+					Watch:         "watch",
+					ViolationType: violationutils.SecretsViolationType,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-1",
+					Severity:      severityutils.High,
+				},
+				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
+				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: "fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: "fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+			},
+			{
+				Violation: violationutils.Violation{
+					Watch:         "watch",
+					ViolationType: violationutils.SecretsViolationType,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-2",
+					Severity:      severityutils.Medium,
+				},
+				Rule:     validations.CreateDummyJasRule("REQ.SECRET.KEYS"),
+				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: "server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: "server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+			},
+		},
+		Sast: []violationutils.JasViolation{
+			{
+				Violation: violationutils.Violation{
+					Watch:         "watch",
+					ViolationType: violationutils.SastViolationType,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
+					ViolationId:   "sast-violation-1",
+					Severity:      severityutils.Low,
+				},
+				Rule:     validations.CreateDummyJasRule("js-insecure-random", "338"),
+				Result:   validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
+			},
+			{
+				Violation: violationutils.Violation{
+					Watch:         "watch",
+					ViolationType: violationutils.SastViolationType,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}, {PolicyName: "policy2"}},
+					ViolationId:   "sast-violation-2",
+					Severity:      severityutils.High,
+				},
+				Rule: validations.CreateDummyJasRule("js-template-injection", "73"),
+				Result: validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+					// Code flow locations
+					[]formats.Location{
+						{File: "server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
+						{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+					},
+				),
+				Location: validations.CreateDummyLocation(formats.Location{File: "server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"}),
+			},
+		},
+	})
 	return cmdResults, expected
 }
 
@@ -503,7 +676,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-6119",
 				}},
@@ -533,7 +706,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		ScannedStatus: "completed",
 	})
 	// Contextual analysis scan results
-	dockerImageTarget.JasResults.AddApplicabilityScanResults(0,
+	dockerImageTarget.AddApplicabilityScanResults(0,
 		&sarif.Run{
 			Tool: &sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
@@ -546,7 +719,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 	)
 	// Secrets scan results
-	dockerImageTarget.JasResults.AddJasScanResults(jasutils.Secrets,
+	dockerImageTarget.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
@@ -562,6 +735,67 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 			},
 		}}, 0,
 	)
-
+	// Violations
+	cmdResults.ResultContext = results.ResultContext{
+		IncludeVulnerabilities: true,
+		Watches:                []string{"security-watch"},
+	}
+	cmdResults.SetViolations(0, violationutils.Violations{
+		Sca: []violationutils.CveViolation{
+			{
+				ScaViolation: violationutils.ScaViolation{
+					Violation: violationutils.Violation{
+						Watch:         "security-watch",
+						ViolationType: violationutils.CveViolationType,
+						Policies:      []violationutils.Policy{{PolicyName: "debian-security"}},
+						ViolationId:   "XRAY-632747",
+						Severity:      severityutils.Unknown,
+					},
+					ImpactedComponent: cyclonedx.Component{
+						BOMRef:     "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
+						PackageURL: "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
+					},
+					ImpactPaths: [][]formats.ComponentRow{{
+						{Name: "platform.jfrog.io/swamp-docker/swamp", Version: "latest"},
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
+						{Name: "debian:bookworm:libssl3", Version: "3.0.13-1~deb12u1", Location: &formats.Location{File: "libssl3:3.0.13-1~deb12u1"}},
+					}},
+					DirectComponents: []formats.ComponentRow{
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
+					},
+				},
+				ContextualAnalysis: &formats.Applicability{
+					Status:             jasutils.Applicable.String(),
+					ScannerDescription: "The Scanner checks for CVE-2024-6119",
+					Evidence: []formats.Evidence{
+						{Location: formats.Location{File: "file://usr/local/bin/node", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1}, Reason: "ca msg"},
+					},
+				},
+				CveVulnerability: cyclonedx.Vulnerability{
+					BOMRef:      "CVE-2024-6119",
+					ID:          "XRAY-632747",
+					Description: "Issue summary",
+					Ratings: &[]cyclonedx.VulnerabilityRating{
+						{Source: &cyclonedx.Source{Name: "Xray"}, Severity: cyclonedx.SeverityUnknown},
+					},
+				},
+				JfrogResearchInformation: &formats.JfrogResearchInformation{SeverityDetails: formats.SeverityDetails{Severity: "Medium"}},
+			},
+		},
+		Secrets: []violationutils.JasViolation{
+			{
+				Violation: violationutils.Violation{
+					Watch:         "watch",
+					ViolationType: violationutils.SecretsViolationType,
+					Policies:      []violationutils.Policy{{PolicyName: "policy"}},
+					ViolationId:   "sec-violation-1",
+					Severity:      severityutils.Low,
+				},
+				Rule:     validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"),
+				Result:   validations.CreateDummySecretViolationResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
+				Location: validations.CreateDummyLocation(formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
+			},
+		},
+	})
 	return cmdResults, expected
 }

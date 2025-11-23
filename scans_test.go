@@ -71,7 +71,9 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	output, err := runXrayBinaryScan(t, params)
 	if errorExpected {
-		log.Error("Xray binary scan failed: " + err.Error())
+		if err != nil {
+			log.Error("Xray binary scan failed with err: " + err.Error())
+		}
 		assert.Error(t, err)
 	} else {
 		assert.NoError(t, err)
@@ -255,7 +257,7 @@ func TestDockerScan(t *testing.T) {
 
 	imagesToScan := []string{
 		// Image with RPM with vulnerabilities
-		"redhat/ubi8-micro:8.4",
+		"alpine:3.17",
 	}
 	for _, imageName := range imagesToScan {
 		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3, 0, false)
