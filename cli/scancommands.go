@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
@@ -27,11 +28,13 @@ import (
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
+	"github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -356,11 +359,16 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	fetchRetries, err := c.GetIntFlagValue(flags.TriggerScanRetries)
+	if err != nil {
+		return err
+	}
 	buildScanCmd := scan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
 		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
 		SetIncludeVulnerabilities(getProject(c) == "" || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
+		SetTriggerScanRetries(fetchRetries).
 		SetBuildConfiguration(buildConfiguration).
 		SetOutputFormat(format).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
@@ -407,13 +415,28 @@ func AuditCmd(c *components.Context) error {
 		auditCmd.SetScansToPerform(subScans)
 	}
 
+	// Validate that there is a sast scan before setting the sast rules
+	if sastRulesFile := c.GetStringFlagValue(flags.AddSastRules); sastRulesFile != "" {
+		// Check if file exists
+		if exists, err := fileutils.IsFileExists(sastRulesFile, false); err != nil || !exists {
+			return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("file '%s' does not exist: %s", sastRulesFile, err.Error()), c)
+		}
+
+		// Validate scan is performed
+		if len(auditCmd.ScansToPerform()) > 0 && !slices.Contains(auditCmd.ScansToPerform(), utils.SastScan) {
+			return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' can only be used with '--%s'", flags.AddSastRules, flags.Sast), c)
+		}
+
+		auditCmd.SetSastRules(sastRulesFile)
+	}
+
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
@@ -507,7 +530,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
 	// Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
 }
 
 func CurationCmd(c *components.Context) error {
@@ -623,7 +646,8 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	return curationAuditCommand, nil
 }
 

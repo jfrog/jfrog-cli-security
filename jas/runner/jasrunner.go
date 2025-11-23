@@ -43,6 +43,7 @@ type JasRunnerParams struct {
 	ThirdPartyApplicabilityScan bool
 	// SAST scan flags
 	SignedDescriptions bool
+	SastRules          string
 	// Outputs
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
@@ -53,10 +54,7 @@ type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) error {
 	// For docker scan we support only secrets and contextual scans.
-	runAllScanners := false
-	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
-		runAllScanners = true
-	}
+	runAllScanners := params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType
 
 	var errorsCollection error
 	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
@@ -177,7 +175,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.SastRules, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end

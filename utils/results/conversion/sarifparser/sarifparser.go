@@ -615,7 +615,7 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://" + filePath)))
+	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filepath.ToSlash(filePath))))
 	if len(logicalLocations) > 0 {
 		location.WithLogicalLocations(logicalLocations)
 	}
@@ -696,9 +696,6 @@ func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandTyp
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
 		patched := sarifutils.CopyRun(run)
-		// Since we run in temp directories files should be relative
-		// Patch by converting the file paths to relative paths according to the invocations
-		convertPaths(cmdType, subScanType, patched)
 		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the tool name in case of binary scan
 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
@@ -710,20 +707,6 @@ func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandTyp
 		patchedRuns = append(patchedRuns, patched)
 	}
 	return patchedRuns
-}
-
-func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
-	// Convert base on invocation for source code
-	sarifutils.ConvertRunsPathsToRelative(runs...)
-	if !(commandType == utils.DockerImage && subScanType == utils.SecretsScan) {
-		return
-	}
-	for _, run := range runs {
-		for _, result := range run.Results {
-			// For Docker secret scan, patch the logical location if not exists
-			patchDockerSecretLocations(result)
-		}
-	}
 }
 
 // Patch the URI to be the file path from sha<number>/<hash>/
@@ -779,6 +762,10 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 			// Patch by removing results without locations.
 			log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", subScanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 			continue
+		}
+		if commandType == utils.DockerImage && subScanType == utils.SecretsScan {
+			// For Docker secret scan, patch the logical location if not exists
+			patchDockerSecretLocations(result)
 		}
 		patchResultMsg(result, target, commandType, subScanType, isJasViolations)
 		if commandType.IsTargetBinary() {
@@ -850,7 +837,8 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 			return location
 		}
 	}
-	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
+	// Validate file path to prevent directory traversal
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" && !strings.Contains(workspace, "..") {
 		if exists, err := fileutils.IsFileExists(filepath.Join(workspace, "Dockerfile"), false); err == nil && exists {
 			return filepath.Join(workspace, "Dockerfile")
 		}
@@ -862,7 +850,8 @@ func getGithubWorkflowsDirIfExists() string {
 	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err == nil && exists {
 		return GithubBaseWorkflowDir
 	}
-	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
+	// Validate file path to prevent directory traversal
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" && !strings.Contains(workspace, "..") {
 		if exists, err := fileutils.IsDirExists(filepath.Join(workspace, GithubBaseWorkflowDir), false); err == nil && exists {
 			return filepath.Join(workspace, GithubBaseWorkflowDir)
 		}

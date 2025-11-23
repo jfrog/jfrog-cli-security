@@ -13,12 +13,13 @@ const (
 	GoCacheEnvVar   = "GOMODCACHE"
 	PipCacheEnvVar  = "PIP_CACHE_DIR"
 
-	TestJfrogUrlEnvVar                = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
-	TestJfrogTokenEnvVar              = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
-	TestJfrogUserEnvVar               = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
-	TestJfrogPasswordEnvVar           = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
-	TestJfrogContainerEnvVar          = "JFROG_SECURITY_CLI_TESTS_JFROG_CONTAINER"
-	TestJfrogPlatformProjectKeyEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY"
+	TestJfrogUrlEnvVar                     = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
+	TestJfrogTokenEnvVar                   = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
+	TestJfrogUserEnvVar                    = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
+	TestJfrogPasswordEnvVar                = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
+	TestJfrogContainerEnvVar               = "JFROG_SECURITY_CLI_TESTS_JFROG_CONTAINER"
+	TestJfrogPlatformProjectKeyEnvVar      = "JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY"
+	TestJfrogLocalAnalyzerManagerDirEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_LOCAL_ANALYZER_MANAGER_DIR"
 
 	MavenCacheRedirectionVal = "-Dmaven.repo.local="
 )
@@ -37,6 +38,8 @@ const (
 // Integration tests - Artifactory information
 var (
 	ServerId = "testServerId"
+
+	TestJfrogHomeResourcesPath = GetTestResourcesPathFromPath("resources", "jfrog_home")
 
 	// Repositories
 	RtRepo1       = "cli-rt1"
@@ -115,8 +118,18 @@ func getTestResourcesPath(basePath string) string {
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
-		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
-		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
+		TestArtifactory: {
+			&NpmRemoteRepo,
+			&NugetRemoteRepo,
+			&YarnRemoteRepo,
+			&GradleRemoteRepo,
+			&MvnRemoteRepo,
+			&MvnRemoteSnapshotsRepo,
+			&GoRepo,
+			&GoRemoteRepo,
+			&PypiRemoteRepo,
+		},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -149,14 +162,16 @@ func getNeededRepositories(reposMap map[*bool][]*string) map[*string]string {
 	for needed, testRepos := range reposMap {
 		if *needed {
 			for _, repo := range testRepos {
-				reposToCreate[repo] = reposConfigMap[repo]
+				if reposConfigMap[repo] != "" {
+					reposToCreate[repo] = reposConfigMap[repo]
+				}
 			}
 		}
 	}
 	return reposToCreate
 }
 
-func GetUniqueSuffixForRepo() string {
+func GetUniqueSuffix() string {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
@@ -173,7 +188,7 @@ func AddTimestampToGlobalVars() {
 	if timestampAdded {
 		return
 	}
-	uniqueSuffix := GetUniqueSuffixForRepo()
+	uniqueSuffix := GetUniqueSuffix()
 	// Repositories
 	GoRepo += uniqueSuffix
 	GoRemoteRepo += uniqueSuffix

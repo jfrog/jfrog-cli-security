@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,25 +11,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/jas"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
+
+// SkipTestIfDurationNotPassed skips the test if the specified duration in days hasn't passed since the given date.
+// dateStr should be in the format "02-01-2006" (DD-MM-YYYY).
+// durationDays is the number of days that should have passed.
+func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int, msg string) {
+	givenDate, err := time.Parse("02-01-2006", dateStr)
+	if err != nil {
+		t.Fatalf("Invalid date format '%s'. Expected format: DD-MM-YYYY", dateStr)
+	}
+
+	daysSinceDate := int(time.Since(givenDate).Hours() / 24)
+	if daysSinceDate < durationDays {
+		if msg == "" {
+			t.Skipf("Skipping test. Only %d days have passed since %s, but %d days are required.", daysSinceDate, dateStr, durationDays)
+		} else {
+			t.Skipf("Skipping test (%d/%d days have passed since %s, but %d days are required.) Reason: %s", daysSinceDate, durationDays, dateStr, durationDays, msg)
+		}
+	} else if daysSinceDate > durationDays {
+		t.Log("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call.")
+	}
+}
 
 func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {
 	var jsonMap formats.EnrichJson
@@ -64,30 +88,6 @@ func ValidateXrayVersion(t *testing.T, xrayVersion, minVersion string) {
 func ValidateXscVersion(t *testing.T, xscVersion, minVersion string) {
 	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion, minVersion); err != nil {
 		t.Skip(err)
-	}
-}
-
-func CleanTestsHomeEnv() {
-	os.Unsetenv(coreutils.HomeDir)
-	CleanFileSystem()
-}
-
-func CleanFileSystem() {
-	removeDirs(configTests.Out, configTests.Temp)
-}
-
-func removeDirs(dirs ...string) {
-	for _, dir := range dirs {
-		isExist, err := fileutils.IsDirExists(dir, false)
-		if err != nil {
-			log.Error(err)
-		}
-		if isExist {
-			err = fileutils.RemoveTempDir(dir)
-			if err != nil {
-				log.Error(errors.New("Cannot remove path: " + dir + " due to: " + err.Error()))
-			}
-		}
 	}
 }
 
@@ -172,10 +172,10 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 	if jas == nil {
 		return
 	}
-	jas.Location.File = getJasConvertedPath(jas.Location.File)
+	jas.File = getJasConvertedPath(jas.File)
 	if jas.Applicability != nil {
 		for i := range jas.Applicability.Evidence {
-			jas.Applicability.Evidence[i].Location.File = getJasConvertedPath(jas.Applicability.Evidence[i].Location.File)
+			jas.Applicability.Evidence[i].File = getJasConvertedPath(jas.Applicability.Evidence[i].File)
 		}
 	}
 	for i := range jas.CodeFlow {
@@ -217,7 +217,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		for i := range cves {
 			if cves[i].Applicability != nil {
 				for j := range cves[i].Applicability.Evidence {
-					cves[i].Applicability.Evidence[j].Location.File = filepath.ToSlash(cves[i].Applicability.Evidence[j].Location.File)
+					cves[i].Applicability.Evidence[j].File = filepath.ToSlash(cves[i].Applicability.Evidence[j].File)
 				}
 			}
 		}
@@ -257,10 +257,10 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
-func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.IgnoreFilters) func() {
+func CreateTestIgnoreRules(t *testing.T, description string, filters xrayApi.IgnoreFilters) func() {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
-	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayUtils.IgnoreRuleParams{
+	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayApi.IgnoreRuleParams{
 		// expired in one day
 		Notes:         description,
 		ExpiresAt:     time.Now().AddDate(0, 0, 1),
@@ -272,13 +272,13 @@ func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.I
 	}
 }
 
-func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.PolicyRule) (string, func()) {
+func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayApi.PolicyRule) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default security policy.
-	policyParams := xrayUtils.PolicyParams{
+	policyParams := xrayApi.PolicyParams{
 		Name:  fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
-		Type:  xrayUtils.Security,
+		Type:  xrayApi.Security,
 		Rules: rules,
 	}
 	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
@@ -289,50 +289,50 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 	}
 }
 
-func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayApi.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
 	return CreateSecurityPolicy(t, policyName,
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "sca_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
+			Criteria: *xrayApi.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 1,
 		},
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "exposers_rule",
-			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true),
+			Criteria: *xrayApi.CreateExposuresPolicyCriteria(severity, true, true, true, true),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 2,
 		},
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "sast_rule",
-			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity),
+			Criteria: *xrayApi.CreateSastPolicyCriteria(severity),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 3,
 		},
 	)
 }
 
-func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
+func getBuildFailAction(failBuild bool) *xrayApi.PolicyAction {
 	if failBuild {
-		return &xrayUtils.PolicyAction{
+		return &xrayApi.PolicyAction{
 			FailBuild: clientUtils.Pointer(true),
 		}
 	}
 	return nil
 }
 
-func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams) (string, func()) {
+func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayApi.WatchParams) xrayApi.WatchParams) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default watch.
-	watchParams := assignParams(xrayUtils.NewWatchParams())
+	watchParams := assignParams(xrayApi.NewWatchParams())
 	watchParams.Name = fmt.Sprintf("%s-%s-%s", watchName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10))
 	watchParams.Active = true
 	// Assign the policy to the watch.
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
+	watchParams.Policies = []xrayApi.AssignedPolicy{
 		{
 			Name: policyName,
-			Type: string(xrayUtils.Security),
+			Type: string(xrayApi.Security),
 		},
 	}
 	assert.NoError(t, xrayManager.CreateWatch(watchParams))
@@ -343,40 +343,40 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 
 // If gitResources is empty, the watch will be created with all builds.
 func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		if len(gitResources) > 0 {
 			watchParams.GitRepositories.Resources = gitResources
 		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+			watchParams.Builds.Type = xrayApi.WatchBuildAll
 		}
 		return watchParams
 	})
 }
 
 func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.ProjectKey = projectKey
 		if len(gitResources) > 0 {
 			watchParams.GitRepositories.Resources = gitResources
 		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+			watchParams.Builds.Type = xrayApi.WatchBuildAll
 		}
 		return watchParams
 	})
 }
 
-func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
+func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayApi.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
-	policyParams := xrayUtils.PolicyParams{
+	policyParams := xrayApi.PolicyParams{
 		Name: fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
-		Type: xrayUtils.Security,
-		Rules: []xrayUtils.PolicyRule{{
+		Type: xrayApi.Security,
+		Rules: []xrayApi.PolicyRule{{
 			Name:     "sec_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, false),
+			Criteria: *xrayApi.CreateSeverityPolicyCriteria(severity, false),
 			Priority: 1,
-			Actions: &xrayUtils.PolicyAction{
+			Actions: &xrayApi.PolicyAction{
 				FailBuild: clientUtils.Pointer(true),
 			},
 		}},
@@ -430,4 +430,34 @@ func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string,
 		cleanCwd()
 		createTempDirCallback()
 	}
+}
+
+// Make sure to call this function before running any tests that require the analyzer manager binary.
+func PrepareAnalyzerManagerResource() (err error) {
+	if localPath := os.Getenv(configTests.TestJfrogLocalAnalyzerManagerDirEnvVar); localPath != "" {
+		amLocalPath, err := jas.GetAnalyzerManagerDirAbsolutePath()
+		if err != nil {
+			return fmt.Errorf("failed to get analyzer manager local path: %w", err)
+		}
+		if exist, err := fileutils.IsDirExists(amLocalPath, false); err != nil || exist {
+			return err
+		}
+		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
+			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
+		}
+	}
+	return jas.DownloadAnalyzerManagerIfNeeded(0)
+}
+
+func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
+	manager, version, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(details)
+	if err != nil {
+		return fmt.Errorf("failed to create Xray service manager: %w", err)
+	}
+	_, err = indexer.DownloadIndexerIfNeeded(manager, version)
+	return err
+}
+
+func PrepareXrayScanLibResource() (err error) {
+	return plugin.DownloadXrayLibPluginIfNeeded()
 }

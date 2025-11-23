@@ -56,6 +56,9 @@ const (
 	Sast      = "sast"
 	Secrets   = "secrets"
 	WithoutCA = "without-contextual-analysis"
+
+	// Sast related flags
+	AddSastRules = "add-sast-rules"
 )
 
 const (
@@ -109,6 +112,7 @@ const (
 	MinSeverity         = "min-severity"
 	FixableOnly         = "fixable-only"
 	Rescan              = "rescan"
+	TriggerScanRetries  = "trigger-scan-retries"
 	Vuln                = "vuln"
 	buildPrefix         = "build-"
 	BuildVuln           = buildPrefix + Vuln
@@ -136,6 +140,7 @@ const (
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
+	SolutionPath   = "solution-path"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -160,17 +165,17 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Threads, InsecureTls,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls,
+		url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
 	DockerScan: {
-		ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, InsecureTls,
+		url, xrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, InsecureTls,
 	},
 	Audit: {
 		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -186,10 +191,10 @@ var commandFlags = map[string][]string{
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir,
 		// Scan Logic params
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -255,6 +260,7 @@ var flagsMap = map[string]components.Flag{
 	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values: Low, Medium, High, or Critical."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fix version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
+	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Number of retries for triggering the build scan in Xray in case of failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
 	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
 	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
@@ -298,12 +304,15 @@ var flagsMap = map[string]components.Flag{
 	XrayLibPluginBinaryCustomPath: components.NewStringFlag(XrayLibPluginBinaryCustomPath, "Defines the custom path to the xray-lib-plugin binary.", components.SetHiddenStrFlag()),
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
 	Sca:                           components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
 	Iac:                           components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
 	Sast:                          components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
 	Secrets:                       components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
 	WithoutCA:                     components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
+
+	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
 
 	// Git flags
 	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

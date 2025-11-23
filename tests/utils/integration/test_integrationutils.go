@@ -104,6 +104,7 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
+	testUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, "Catalog API not available yet in test platform.")
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
@@ -206,23 +207,31 @@ func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	}
 }
 
-func CreateJfrogHomeConfig(t *testing.T, home string, encryptPassword bool) {
+func CreateJfrogHomeConfig(t *testing.T, home string, details *config.ServerDetails, encryptPassword bool) (cleanUp func()) {
 	if home == "" {
 		wd, err := os.Getwd()
 		assert.NoError(t, err, "Failed to get current dir")
 		home = wd
 	}
 	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(home, configTests.Out, "jfroghome"))
+	assert.NoError(t, OverrideDefaultConfig(details, encryptPassword))
+	cleanUp = func() {
+		assert.NoError(t, os.Unsetenv(coreutils.HomeDir), "Failed to unset env: "+coreutils.HomeDir)
+	}
+	return
+}
 
+func OverrideDefaultConfig(details *config.ServerDetails, encryptPassword bool) error {
 	// Delete the default server if exist
 	config, err := commonCommands.GetConfig("default", false)
 	if err == nil && config.ServerId != "" {
 		err = commonCommands.NewConfigCommand(commonCommands.Delete, "default").Run()
-		assert.NoError(t, err)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing 'default' config: %w", err)
+		}
 	}
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
-	err = commonCommands.NewConfigCommand(commonCommands.AddOrEdit, "default").SetDetails(configTests.XrDetails).SetInteractive(false).SetEncPassword(encryptPassword).Run()
-	assert.NoError(t, err)
+	return commonCommands.NewConfigCommand(commonCommands.AddOrEdit, "default").SetDetails(details).SetInteractive(false).SetEncPassword(encryptPassword).Run()
 }
 
 func InitTestCliDetails(testApplication components.App) {
@@ -455,15 +464,90 @@ func CreateRepos(repos map[*string]string) {
 }
 
 func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	oldHomeDir := os.Getenv(coreutils.HomeDir)
+	cleanUp = UseTestHomeWithDefaultXrayConfig(t)
 	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, "", true)
+	CreateJfrogHomeConfig(t, "", configTests.XrDetails, true)
 	// Create mock cli with the mock commands.
 	commands := []components.Command{}
 	for _, mockCommand := range mockCommands {
 		commands = append(commands, mockCommand())
 	}
-	return GetXrayTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
-		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
+	mockCli = GetXrayTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli)
+	return
+}
+
+func UseTestHomeWithDefaultXrayConfig(t *testing.T) func() {
+	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, configTests.TestJfrogHomeResourcesPath)
+	return func() {
+		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
+	}
+}
+
+func InitTestHomeResources() (cleanUp func()) {
+	tempDirPath, err := fileutils.CreateTempDir()
+	if err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
+	log.Info("Using JFrog Home resources path:", tempDirPath)
+	// Can be referenced by the tests to get the JFrog Home that defines 'default' config
+	configTests.TestJfrogHomeResourcesPath = tempDirPath
+	// Set the JFrog Home environment variable to the temp dir and prepare the JFrog Home.
+	if err = os.Setenv(coreutils.HomeDir, configTests.TestJfrogHomeResourcesPath); err != nil {
+		log.Error(fmt.Sprintf("Couldn't set env: %s. Error: %s", coreutils.HomeDir, err.Error()))
+		os.Exit(1)
+	}
+	// Create a default Xray server config to use with the commands. (most commands require Xray server config)
+	if err = OverrideDefaultConfig(configTests.XrDetails, true); err != nil {
+		log.Error(fmt.Sprintf("Failed to create default Xray server config: %s", err.Error()))
+		os.Exit(1)
+	}
+	// Prepare resources for commands in JFrog Home.
+	// If TestJfrogHomeResourcesPath is used, it will have all the resources needed for the tests. and nothing will be downloaded.
+	if err = PrepareJfrogHomeResources(configTests.XrDetails); err != nil {
+		log.Error(fmt.Sprintf("Failed to prepare JFrog Home resources: %s", err.Error()))
+		os.Exit(1)
+	}
+	// Unset the JFROG_HOME environment variable to avoid affecting other tests.
+	if err = os.Unsetenv(coreutils.HomeDir); err != nil {
+		log.Error(fmt.Sprintf("Couldn't unset env: %s. Error: %s", coreutils.HomeDir, err.Error()))
+		os.Exit(1)
+	}
+	return func() {
+		if err := fileutils.RemoveTempDir(tempDirPath); err != nil {
+			log.Error(err)
+		}
+	}
+}
+
+func PrepareJfrogHomeResources(details *config.ServerDetails) (err error) {
+	if err = testUtils.PrepareAnalyzerManagerResource(); err != nil {
+		return fmt.Errorf("failed to prepare analyzer manager resource: %w", err)
+	}
+	if err = testUtils.PrepareIndexerAppResource(details); err != nil {
+		return fmt.Errorf("failed to prepare Xray Indexer resource: %w", err)
+	}
+	if err = testUtils.PrepareXrayScanLibResource(); err != nil {
+		return fmt.Errorf("failed to prepare Xray Scan Lib resource: %w", err)
+	}
+	return
+}
+
+func CleanFileSystem() {
+	removeDirs(configTests.Out, configTests.Temp)
+}
+
+func removeDirs(dirs ...string) {
+	for _, dir := range dirs {
+		isExist, err := fileutils.IsDirExists(dir, false)
+		if err != nil {
+			log.Error(err)
+		}
+		if isExist {
+			err = fileutils.RemoveTempDir(dir)
+			if err != nil {
+				log.Error(errors.New("Cannot remove path: " + dir + " due to: " + err.Error()))
+			}
+		}
 	}
 }

@@ -624,12 +624,12 @@ func getOperationalRiskViolationReadableData(violation services.Violation) *oper
 func removeScaDuplications(issues []formats.VulnerabilityOrViolationRow, multipleRoots bool) []formats.VulnerabilityOrViolationRow {
 	var uniqueIssues = make(map[string]*formats.VulnerabilityOrViolationRow)
 	for i := range issues {
-		packageKey := results.GetUniqueKey(issues[i].ImpactedDependencyDetails.ImpactedDependencyName, issues[i].ImpactedDependencyDetails.ImpactedDependencyVersion, issues[i].IssueId, len(issues[i].FixedVersions) > 0)
+		packageKey := results.GetUniqueKey(issues[i].ImpactedDependencyName, issues[i].ImpactedDependencyVersion, issues[i].IssueId, len(issues[i].FixedVersions) > 0)
 		if uniqueIssue, exist := uniqueIssues[packageKey]; exist {
 			// combine attributes from the same issue
 			uniqueIssue.FixedVersions = utils.UniqueIntersection(uniqueIssue.FixedVersions, issues[i].FixedVersions...)
 			uniqueIssue.ImpactPaths = AppendImpactPathsIfUnique(uniqueIssue.ImpactPaths, issues[i].ImpactPaths, multipleRoots)
-			uniqueIssue.ImpactedDependencyDetails.Components = AppendComponentIfUnique(uniqueIssue.ImpactedDependencyDetails.Components, issues[i].ImpactedDependencyDetails.Components)
+			uniqueIssue.Components = AppendComponentIfUnique(uniqueIssue.Components, issues[i].Components)
 			continue
 		}
 		uniqueIssues[packageKey] = &issues[i]
@@ -831,6 +831,6 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 		if rows[i].Applicability != nil && rows[j].Applicability != nil {
 			return jasutils.TokenValidationOrder[rows[i].Applicability.Status] < jasutils.TokenValidationOrder[rows[j].Applicability.Status]
 		}
-		return rows[i].Location.File > rows[j].Location.File
+		return rows[i].File > rows[j].File
 	})
 }
