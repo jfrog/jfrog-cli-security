@@ -341,26 +341,37 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	}
 }
 
-// If gitResources is empty, the watch will be created with all builds.
-func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+func CreateWatchOnProjectBuilds(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayApi.WatchBuildAll
+		watchParams.ProjectKey = projectKey
+		watchParams.Builds.Type = xrayApi.WatchBuildAll
+		return watchParams
+	})
+}
+
+func CreateWatchOnGitResources(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+		watchParams.GitRepositories.Resources = gitResources
+		return watchParams
+	})
+}
+
+func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, repos ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+		watchParams.Repositories.Type = xrayApi.WatchRepositoriesByName
+		for _, repo := range repos {
+			watchParams.Repositories.Repositories[repo] = xrayApi.NewWatchRepositoryByName(repo)
+		}
+		if len(repos) == 0 {
+			watchParams.Repositories.Type = xrayApi.WatchRepositoriesAll
 		}
 		return watchParams
 	})
 }
 
-func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
+func CreateWatchOnAllBuilds(t *testing.T, policyName, watchName string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
-		watchParams.ProjectKey = projectKey
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayApi.WatchBuildAll
-		}
+		watchParams.Builds.Type = xrayApi.WatchBuildAll
 		return watchParams
 	})
 }
@@ -385,7 +396,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateWatchOnAllBuilds(t, policyParams.Name, watchName)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
@@ -445,6 +456,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
 			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
 		}
+		return nil
 	}
 	return jas.DownloadAnalyzerManagerIfNeeded(0)
 }

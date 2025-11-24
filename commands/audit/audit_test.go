@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -618,6 +619,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			auditParams := NewAuditParams().
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
 				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -675,7 +677,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
 		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
@@ -811,7 +814,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 			auditResults := RunAudit(auditParams)
 			if testcase.allowPartialResults {
@@ -1021,7 +1025,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetDiffMode(true).
 				SetResultsToCompare(tc.resultsToCompare).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())

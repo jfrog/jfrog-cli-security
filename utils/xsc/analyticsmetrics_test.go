@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -159,7 +160,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 	}{
 		{
 			name:         "No audit results",
-			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time},
+			auditResults: &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{MultiScanId: "msi", StartTime: time}},
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
 			},
@@ -188,7 +189,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 		},
 		{
 			name:         "Scan failed no findings.",
-			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
+			auditResults: &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{MultiScanId: "msi", StartTime: time}, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
 			},
@@ -220,20 +221,20 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 	scanResults.ScaScanResults(0, services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
-		scanResults.JasResults.ApplicabilityScanResults = validations.NewMockJasRuns(sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123")))
+		scanResults.JasResults.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
 
-		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = validations.NewMockJasRuns(
+		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		)
-		scanResults.JasResults.JasVulnerabilities.IacScanResults = validations.NewMockJasRuns(
+		}
+		scanResults.JasResults.JasVulnerabilities.IacScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		)
-		scanResults.JasResults.JasVulnerabilities.SastScanResults = validations.NewMockJasRuns(
+		}
+		scanResults.JasResults.JasVulnerabilities.SastScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		)
+		}
 	}
 
 	if withErr {

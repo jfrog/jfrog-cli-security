@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
@@ -30,8 +31,8 @@ type SbomScanStrategy interface {
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
 	// - Binary (Docker) indexer attributes (needed for Scan Graph)
 	DeprecatedScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
-	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations. (Violations will be moved at the future to the end of command)
-	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
+	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations.
+	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, error)
 }
 
 type SbomScanOption func(sss SbomScanStrategy)
@@ -47,9 +48,10 @@ type ScaScanParams struct {
 	// If provided, the raw scan results will be saved to this directory.
 	ResultsOutputDir string
 	// For Source-Code (Audit), scans are performed in parallel, thus we need to pass the security parallel runner.
-	Runner   *utils.SecurityParallelRunner
-	ThreadId int
-	// TODO: remove this field once the new flow is fully implemented.
+	Runner      *utils.SecurityParallelRunner
+	ThreadId    int
+	TargetCount int
+	// TODO: remove this field once the new flow is fully implemented. (in all commands)
 	IsNewFlow bool
 }
 
@@ -147,11 +149,9 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 }
 
 func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
-	logPrefix := ""
-	if params.ThreadId >= 0 {
-		logPrefix = clientUtils.GetLogMsgPrefix(params.ThreadId, false)
-	}
-	log.Info(logPrefix + fmt.Sprintf("Running SCA for %d components at %s", len(*params.ScanResults.ScaResults.Sbom.Components), params.ScanResults.String()))
+	log.Info(utils.GetScanStartLog(utils.ScaScan, params.ScanResults.Target, params.TargetCount, params.ThreadId))
+	// Start the scan
+	startTime := time.Now()
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
@@ -159,19 +159,21 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 		if err != nil {
 			return err
 		}
-		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), len(scanResults.Violations)))
+		log.Info(utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), startTime, params.ThreadId))
 		return dumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 	}
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
-	bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
+	bomWithVulnerabilities, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}
-	if params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
-		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities), len(violations)))
+	vulnerabilityCount := 0
+	if params.ScanResults.ScaResults != nil && params.ScanResults.ScaResults.Sbom != nil && params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
+		vulnerabilityCount = len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities)
 	}
+	log.Info(utils.GetScanFindingsLog(utils.ScaScan, vulnerabilityCount, startTime, params.ThreadId))
 	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 }
 
@@ -206,5 +208,6 @@ func dumpEnrichedCdxToFileIfNeeded(content *cyclonedx.BOM, scanResultsOutputDir 
 	if scanResultsOutputDir == "" {
 		return
 	}
-	return utils.DumpCdxContentToFile(content, scanResultsOutputDir, scanType.String(), threadId)
+	_, err = utils.DumpCdxContentToFile(content, scanResultsOutputDir, scanType.String(), threadId)
+	return
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/policy/local"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
@@ -672,15 +674,14 @@ func TestAuditJasCycloneDx(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 6, BomComponents: 6},
-		SbomComponents: &validations.SbomCount{Direct: 2, Transitive: 4},
+		Total:          &validations.TotalCount{Vulnerabilities: 6, BomComponents: 6 + 1 /* root */ + 1 /* files */},
+		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2, Transitive: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 	})
 }
@@ -688,7 +689,6 @@ func TestAuditJasCycloneDx(t *testing.T) {
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), auditCommandTestParams{
-		Threads:         3,
 		CustomExclusion: []string{"*out*"},
 		Format:          format.SimpleJson,
 	})
@@ -700,8 +700,7 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
@@ -712,8 +711,7 @@ func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{MissingContext: 1}},
@@ -742,7 +740,9 @@ func getNoJasAuditMockCommand() components.Command {
 			}
 			// Disable Jas for this test
 			auditCmd.SetUseJas(false)
-			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
+			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+			auditCmd.SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
+			auditCmd.SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}
@@ -751,8 +751,7 @@ func getNoJasAuditMockCommand() components.Command {
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 23},
@@ -767,7 +766,6 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		ValidateSecrets: true,
-		Threads:         3,
 		Format:          format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -796,8 +794,7 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 8},
@@ -811,8 +808,7 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
@@ -821,6 +817,9 @@ func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditWithCleanHome(t *testing.T, testCli *coreTests.JfrogCli, project string, params auditCommandTestParams) string {
+	if params.Threads <= 0 {
+		params.Threads = 5
+	}
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
 	// Configure a new server named "default"
@@ -902,8 +901,7 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun := securityIntegrationTestUtils.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
-		Threads: 3,
-		Format:  format.SimpleJson,
+		Format: format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},
@@ -920,7 +918,6 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
 		CustomExclusion: []string{"non_existing_folder"},
-		Threads:         3,
 		Format:          format.SimpleJson,
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -965,21 +962,23 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 	params.CustomExclusion = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "dist"}
 	// Configure a new server named "default"
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+	if params.Threads <= 0 {
+		params.Threads = 5
+	}
 	defer cleanUpHome()
 	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, append([]string{"audit"}, getAuditCmdArgs(params)...)...)
 }
 
 func TestAuditNewScaCycloneDxNpm(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 6, BomComponents: 6 /*Direct*/ + 1 /*root*/ + 2 /*files*/, Licenses: 4},
-		SbomComponents:    &validations.SbomCount{Direct: 6, Root: 1},
+		Total:             &validations.TotalCount{Vulnerabilities: 6, BomComponents: 2 /*Direct*/ + 4 /*Transitive*/ + 1 /*root*/ + 1 /*file (secret)*/, Licenses: 4},
+		SbomComponents:    &validations.SbomCount{Direct: 2, Root: 1, Transitive: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
@@ -987,16 +986,46 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 	})
 }
 
+func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.Medium, false, false)
+	defer cleanUpPolicy()
+	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "static-sca-watch")
+	defer deleteWatch()
+
+	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
+		WithSbom:    true,
+		WithVuln:    true,
+		WithLicense: true,
+		Format:      format.SimpleJson,
+		Watches:     []string{watchName},
+	})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 6, Licenses: 8},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
+		},
+		// SAST violations require git-repo watch to be created, so only SCA and Secrets violations are expected here
+		Violations: &validations.ViolationCount{
+			ValidateScan: &validations.ScanCount{Sca: 3, Secrets: 1}, ValidateType: &validations.ScaViolationCount{Security: 3},
+		},
+	})
+}
+
 func TestAuditNewScaCycloneDxMaven(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
+		Threads:  5,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 3, BomComponents: 6 /*components*/ + 3 /*modules*/ + 1 /*roots*/, Licenses: 2},
-		SbomComponents: &validations.SbomCount{Direct: 6, Root: 4 /*issue in bom generation*/},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 3, BomComponents: 6 /*components*/ + 3 /*modules*/, Licenses: 2},
+		SbomComponents:    &validations.SbomCount{Direct: 6, Root: 3 /*issue in bom generation*/},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
@@ -1005,46 +1034,47 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGradle(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 9, BomComponents: 6 + 1, Licenses: 5},
-		SbomComponents: &validations.SbomCount{Direct: 6, Root: 1},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 10, BomComponents: 6 + 1, Licenses: 5},
+		SbomComponents:    &validations.SbomCount{Direct: 6, Root: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 9},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3, NotApplicable: 1, MissingContext: 5},
+			ValidateScan:                &validations.ScanCount{Sca: 10},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 1, MissingContext: 5},
 		},
 	})
 }
 
 func TestAuditNewScaCycloneDxGo(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "go", "simple-project"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:           &validations.TotalCount{BomComponents: 1 /*root*/ + 1 /*direct*/ + 3 /*transitive*/},
-		SbomComponents:  &validations.SbomCount{Direct: 4 /** issue in sbom generation, are not discovered as transitive **/, Root: 1},
-		Vulnerabilities: &validations.VulnerabilityCount{},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{BomComponents: 1 /*root*/ + 1 /*direct*/ + 3 /*transitive*/},
+		SbomComponents:    &validations.SbomCount{Direct: 4 /** issue in sbom generation, are not discovered as transitive **/, Root: 1},
+		Vulnerabilities:   &validations.VulnerabilityCount{},
 	})
 }
 
 func TestAuditNewScaCycloneDxYarn(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	// TODO: yarn not working....
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
-		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1},
@@ -1053,15 +1083,15 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPip(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 28, BomComponents: 1 /*root*/ + 2 /*components*/ + 7 /*files*/},
-		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 28, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan: &validations.ScanCount{Sast: 4, Iac: 9, Secrets: 15},
 		},
@@ -1069,15 +1099,15 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "poetry", "poetry-project"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 9, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
-		SbomComponents: &validations.SbomCount{Root: 1, Direct: 4},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 9, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 9},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 5},
@@ -1085,36 +1115,36 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 	})
 }
 
-func TestAuditNewScaCycloneDxNuget(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
+func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
-		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 8, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 8},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 4},
 		},
 	})
 }
 
-func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
+func TestAuditNewScaCycloneDxNuget(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
 		WithSbom: true,
-		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 8, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
-		SbomComponents: &validations.SbomCount{Root: 1, Direct: 4},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 8},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 4},
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
 		},
 	})
 }

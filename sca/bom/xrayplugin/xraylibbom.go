@@ -3,6 +3,7 @@ package xrayplugin
 import (
 	"fmt"
 	"os/exec"
+	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
@@ -17,10 +18,19 @@ import (
 type XrayLibBomGenerator struct {
 	binaryPath     string
 	ignorePatterns []string
+	totalTargets   int
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
 	return &XrayLibBomGenerator{}
+}
+
+func WithTotalTargets(totalTargets int) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.totalTargets = totalTargets
+		}
+	}
 }
 
 func WithBinaryPath(binaryPath string) bom.SbomGeneratorOption {
@@ -65,17 +75,22 @@ func (sbg *XrayLibBomGenerator) PrepareGenerator() (err error) {
 }
 
 func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
-	log.Info(fmt.Sprintf("Generating SBOM for target: %s", target.Target))
+	startLog := "Generating SBOM"
+	if sbg.totalTargets > 1 {
+		startLog += fmt.Sprintf(" for target: %s", target.Target)
+	}
+	log.Info(startLog + "...")
 	binaryPath, err := sbg.getXrayLibExecutablePath()
 	if err != nil || binaryPath == "" {
 		return nil, fmt.Errorf("failed to get local Xray-Lib executable path: %w", err)
 	}
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
+	startTime := time.Now()
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(binaryPath, target); err != nil {
 		return nil, fmt.Errorf("failed to execute Xray-Lib command: %w", err)
 	}
-	sbg.logScannerOutput(sbom, target.Target)
+	sbg.logScannerOutput(sbom, target.Target, startTime)
 	return
 }
 
@@ -106,7 +121,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target resu
 	return scanner.Scan(target.Target, scanConfig)
 }
 
-func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string) {
+func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string, startTime time.Time) {
 	libComponents := []string{}
 	if output != nil && output.Components != nil {
 		for _, component := range *output.Components {
@@ -115,11 +130,17 @@ func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target s
 			}
 		}
 	}
-	if len(libComponents) == 0 {
-		log.Info(fmt.Sprintf("No library components found in SBOM for target '%s'.", target))
-	} else {
-		log.Info(fmt.Sprintf("SBOM generated for target '%s': (%d lib Components)", target, len(libComponents)))
+	outLog := "SBOM generated"
+	if sbg.totalTargets > 1 {
+		outLog += fmt.Sprintf(" for target '%s'", target)
 	}
+	outLog += ";"
+	if len(libComponents) == 0 {
+		outLog += " no library components were found"
+	} else {
+		outLog += fmt.Sprintf(" found %d library components", len(libComponents))
+	}
+	log.Info(fmt.Sprintf("%s (duration %s)", outLog, time.Since(startTime).String()))
 }
 
 func (sbg *XrayLibBomGenerator) CleanUp() (err error) {

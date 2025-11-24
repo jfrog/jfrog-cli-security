@@ -12,9 +12,9 @@ runs:
   steps:
     # Install dependencies
     - name: Setup Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.24.x
+        go-version: 1.25
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
 
@@ -39,7 +39,7 @@ runs:
       uses: actions/setup-java@v5
       with:
         java-version: "11"
-        distribution: "adopt"
+        distribution: "corretto"
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
