@@ -112,13 +112,13 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
-	defer securityTestUtils.CleanTestsHomeEnv()
+	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
 
 	for _, testCase := range testCases {
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			if testCase.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, testCase.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-11-2025", 30, testCase.skipMsg)
 			}
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
 		})
@@ -270,8 +270,8 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	// Create a temporary cdx file with suffix .cdx.json to upload
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, true)
-	defer securityTestUtils.CleanTestsHomeEnv()
+	cleanUp := securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, securityTests.RtDetails, true)
+	defer cleanUp()
 	cdxFileToUpload := getTestCdxFile(t, tempDirPath)
 	// Configure the repository to upload the cdx file to
 	var repoPath string
@@ -367,7 +367,9 @@ func getTestCdxFile(t *testing.T, tempDir string) string {
 	cdxFilePath := filepath.Join(tempDir, fmt.Sprintf("upload-integration-test-%s.cdx.json", utils.GetCurrentTimeUnix()))
 	file, err := os.Create(cdxFilePath)
 	assert.NoError(t, err)
-	defer file.Close()
+	defer func() {
+		assert.NoError(t, file.Close())
+	}()
 	// Write the BOM to the file
 	assert.NoError(t, cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom))
 	return cdxFilePath

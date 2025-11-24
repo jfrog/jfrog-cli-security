@@ -187,17 +187,21 @@ func (rw *ResultsWriter) printSarif() (err error) {
 	return utils.DumpSarifContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 }
 
-func (rw *ResultsWriter) printCycloneDx() error {
+func (rw *ResultsWriter) printCycloneDx() (err error) {
 	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {
-		return err
+		return
 	}
 	outputBytes, err := utils.GetAsJsonBytes(bom, true, true)
 	if err != nil {
-		return err
+		return
 	}
 	log.Output(string(outputBytes))
-	return utils.DumpFullBOMContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+	if rw.outputDir == "" {
+		return
+	}
+	_, err = utils.DumpCdxJsonContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+	return
 }
 
 func (rw *ResultsWriter) getOutputFileName() string {

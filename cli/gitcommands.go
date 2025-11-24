@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func getGitNameSpaceCommands() []components.Command {
@@ -41,9 +42,11 @@ func getGitNameSpaceCommands() []components.Command {
 }
 
 func GitAuditCmd(c *components.Context) error {
+	log.Info("####### Starting jf git audit Scan #######")
+	log.Info(getCommandUsedFlagsString(c, flags.GetCommandFlags(flags.GitAudit)))
 	gitAuditCmd := audit.NewGitAuditCommand()
 	// Set connection params
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
@@ -53,11 +56,17 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
 	// Set violations params
-	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
 		return err
 	}
-	if c.IsFlagSet(flags.Watches) {
-		gitAuditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
+		return err
+	}
+	if watches, err := getWatches(c); err != nil {
+		return err
+	} else {
+		gitAuditCmd.SetWatches(watches)
 	}
 	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	// Set Scan params
@@ -66,6 +75,7 @@ func GitAuditCmd(c *components.Context) error {
 	} else if len(subScans) > 0 {
 		gitAuditCmd.SetScansToPerform(subScans)
 	}
+	gitAuditCmd.SetIncludeSbom(shouldIncludeSbom(c, format))
 	if threads, err := pluginsCommon.GetThreadsCount(c); err != nil {
 		return err
 	} else {
@@ -73,10 +83,6 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
 	// Set output params
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
 	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
 	if err != nil {
@@ -84,10 +90,17 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetOutputDir(scansOutputDir).SetExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable))
 	// Set the dynamic logic for SBOM generation and SCA scan strategy
-	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, err := getScanDynamicLogic(c, xrayVersion)
+	if err != nil {
+		return err
+	}
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
+	gitAuditCmd.SetViolationGenerator(violationGenerator)
+	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
-	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
+	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
+	log.Info("####### jf git audit Scan Finished #######")
+	return err
 }
 
 func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {

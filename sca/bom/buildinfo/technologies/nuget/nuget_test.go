@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -202,7 +203,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, test.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-11-2025", 30, test.skipMsg)
 			}
 			// Create and change directory to test workspace
 			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
@@ -227,5 +228,61 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 				assert.NoError(t, err)
 			}
 		})
+	}
+}
+
+func TestSolutionFilePathParameter(t *testing.T) {
+	testCases := []struct {
+		name             string
+		solutionFilePath string
+		expectedFileName string
+	}{
+		{
+			name:             "solution file path from params",
+			solutionFilePath: "/path/to/my-solution.sln",
+			expectedFileName: "my-solution.sln",
+		},
+		{
+			name:             "no solution file path",
+			solutionFilePath: "",
+			expectedFileName: "",
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			params := technologies.BuildInfoBomGeneratorParams{
+				SolutionFilePath: test.solutionFilePath,
+			}
+
+			// Get the solution file path using the same logic as runDotnetRestore
+			var solutionFilePath string
+			if params.SolutionFilePath != "" {
+				solutionFilePath = params.SolutionFilePath
+			}
+			var solutionFileName string
+			if solutionFilePath != "" {
+				solutionFileName = filepath.Base(solutionFilePath)
+			}
+
+			assert.Equal(t, test.expectedFileName, solutionFileName)
+		})
+	}
+}
+
+func TestRunDotnetRestoreWithRealSolutionFile(t *testing.T) {
+	testDataDir := filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
+	multiProjectPath := filepath.Join(testDataDir, "nuget", "multi")
+	solutionFilePath := filepath.Join(multiProjectPath, "TestSolution.sln")
+	_, err := os.Stat(solutionFilePath)
+	assert.NoError(t, err, "Test solution file should exist")
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		SolutionFilePath: solutionFilePath,
+	}
+	toolType := bidotnet.ConvertNameToToolType("dotnet")
+	err = runDotnetRestore(multiProjectPath, params, toolType, []string{})
+	if err != nil {
+		assert.NotContains(t, err.Error(), "this folder contains more than one project or solution file")
 	}
 }

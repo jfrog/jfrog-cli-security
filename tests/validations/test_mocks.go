@@ -14,10 +14,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
@@ -114,7 +112,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 		}
 
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, apiUrlPart, "xsc") {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, params.XscVersion)))
+			_, err := fmt.Fprintf(w, `{"xsc_version": "%s"}`, params.XscVersion)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -125,7 +123,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 				if params.ReturnMsi == "" {
 					params.ReturnMsi = TestMsi
 				}
-				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, params.ReturnMsi)))
+				_, err := fmt.Fprintf(w, `{"multi_scan_id": "%s"}`, params.ReturnMsi)
 				if !assert.NoError(t, err) {
 					return
 				}
@@ -154,7 +152,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
 			apiCallCounts[VersionApi]++
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)))
+			_, err := fmt.Fprintf(w, `{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -174,7 +172,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 			if r.Method == http.MethodPost {
 				apiCallCounts[GraphScanPostAPI]++
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
+				_, err := fmt.Fprintf(w, `{"scan_id" : "%s"}`, TestScaScanId)
 				if !assert.NoError(t, err) {
 					return
 				}
@@ -231,21 +229,6 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 	return serverMock, serverDetails, &apiCallCounts
 }
 
-func NewMockJasRuns(runs ...*sarif.Run) []results.ScanResult[[]*sarif.Run] {
-	return []results.ScanResult[[]*sarif.Run]{{Scan: runs}}
-}
-
-func NewMockScaResults(responses ...services.ScanResponse) (converted []results.ScanResult[services.ScanResponse]) {
-	for _, response := range responses {
-		status := 0
-		if response.ScannedStatus == "failed" {
-			status = 1
-		}
-		converted = append(converted, results.ScanResult[services.ScanResponse]{Scan: response, StatusCode: status})
-	}
-	return
-}
-
 func CreateDummyApplicabilityRule(cve string, applicableStatus jasutils.ApplicabilityStatus) *sarif.ReportingDescriptor {
 	id := fmt.Sprintf("applic_%s", cve)
 	properties := sarif.NewPropertyBag()
@@ -286,23 +269,28 @@ func CreateDummyJasRule(id string, cwe ...string) *sarif.ReportingDescriptor {
 	return descriptor
 }
 
-func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, metadata string, location formats.Location) *sarif.Result {
+func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, metadata string, locations ...formats.Location) *sarif.Result {
 	properties := sarif.NewPropertyBag()
 	properties.Add("tokenValidation", status.String())
 	properties.Add("metadata", metadata)
-	return &sarif.Result{
-		Message: sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
-		RuleID:  utils.NewStrPtr(id),
-		Level:   severityutils.LevelInfo.String(),
-		Locations: []*sarif.Location{
-			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
-		},
+	result := &sarif.Result{
+		Message:    sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
+		RuleID:     utils.NewStrPtr(id),
+		Level:      severityutils.LevelInfo.String(),
 		Properties: properties,
 	}
+	for _, location := range locations {
+		result.Locations = append(result.Locations, CreateDummyLocation(location))
+	}
+	return result
 }
 
-func CreateDummySecretViolationResult(id string, status jasutils.TokenValidationStatus, metadata, watch, issueId string, policies []string, location formats.Location) *sarif.Result {
-	result := CreateDummySecretResult(id, status, metadata, location)
+func CreateDummyLocation(location formats.Location) *sarif.Location {
+	return sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet)
+}
+
+func CreateDummySecretViolationResult(id string, status jasutils.TokenValidationStatus, metadata, watch, issueId string, policies []string, locations ...formats.Location) *sarif.Result {
+	result := CreateDummySecretResult(id, status, metadata, locations...)
 	result.Properties.Add(sarifutils.WatchSarifPropertyKey, watch)
 	result.Properties.Add(sarifutils.JasIssueIdSarifPropertyKey, issueId)
 	result.Properties.Add(sarifutils.PoliciesSarifPropertyKey, policies)
