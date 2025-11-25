@@ -78,13 +78,14 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		dsc.xscVersion,
 		dsc.serverDetails,
 		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, dsc.serverDetails),
+		dsc.resultsContext.ProjectKey,
 	)
 
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
 		Target(dsc.resultsContext.RepoPath).
 		BuildSpec()).SetThreads(1)
-	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag)
+	dsc.SetTargetNameOverride(dsc.imageTag)
 	err = dsc.setCredentialEnvsForIndexerApp()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -95,7 +96,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *results.SecurityCommandResults) (err error) {
+	return dsc.RunAndRecordResults(utils.DockerImage, func(scanResults *results.SecurityCommandResults) (err error) {
 		if scanResults == nil {
 			return
 		}
@@ -105,12 +106,12 @@ func (dsc *DockerScanCommand) Run() (err error) {
 }
 
 func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
-	hasViolationContext := dsc.ScanCommand.resultsContext.HasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
+	hasViolationContext := dsc.resultsContext.HasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, dsc.serverDetails, dsc.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
-	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
+	if summary, err = output.NewDockerScanSummary(scanResults, dsc.serverDetails, dsc.resultsContext.IncludeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
 		return
 	}
 	return output.RecordSecurityCommandSummary(summary)

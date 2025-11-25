@@ -53,7 +53,7 @@ func getConanExecPath() (conanExecPath string, err error) {
 		return
 	}
 	if version.NewVersion(string(conanVersion)).Compare(conanV2) < 0 {
-		err = fmt.Errorf("Conan dependency tree building is currently supported for Conan V2. The current Conan version is: %s", conanVersion)
+		err = fmt.Errorf("conan dependency tree building is currently supported for Conan V2. The current Conan version is: %s", conanVersion)
 		return
 	}
 	log.Debug("Conan version: ", string(conanVersion))
@@ -114,7 +114,7 @@ func calculateDependencies(executablePath, workingDir string, params technologie
 		return
 	}
 
-	log.Debug("Conan 'graph info' command output:\n", string(conanGraphInfoContent))
+	log.Verbose("Conan 'graph info' command output:\n", string(conanGraphInfoContent))
 	var output conanGraphOutput
 	if err = json.Unmarshal(conanGraphInfoContent, &output); err != nil {
 		return

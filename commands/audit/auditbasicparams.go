@@ -1,13 +1,14 @@
-package utils
+package audit
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-type AuditParams interface {
+type AuditParamsInterface interface {
 	DirectDependencies() *[]string
 	AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
 	ServerDetails() (*config.ServerDetails, error)
@@ -48,6 +49,8 @@ type AuditParams interface {
 	AllowPartialResults() bool
 	GetXrayVersion() string
 	GetConfigProfile() *xscservices.ConfigProfile
+	SolutionFilePath() string
+	SetSolutionFilePath(solutionFilePath string) *AuditBasicParams
 }
 
 type AuditBasicParams struct {
@@ -67,7 +70,7 @@ type AuditBasicParams struct {
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
-	scansToPerform                   []SubScanType
+	scansToPerform                   []utils.SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -78,6 +81,7 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
+	solutionFilePath                 string
 	useIncludedBuilds                bool
 }
 
@@ -137,13 +141,6 @@ func (abp *AuditBasicParams) SetMaxTreeDepth(maxTreeDepth string) *AuditBasicPar
 	return abp
 }
 
-func (abp *AuditBasicParams) UseIncludedBuilds() bool { return abp.useIncludedBuilds }
-
-func (abp *AuditBasicParams) SetUseIncludedBuilds(useIncludedBuilds bool) *AuditBasicParams {
-	abp.useIncludedBuilds = useIncludedBuilds
-	return abp
-}
-
 func (abp *AuditBasicParams) PipRequirementsFile() string {
 	return abp.pipRequirementsFile
 }
@@ -189,12 +186,12 @@ func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicP
 	return abp
 }
 
-func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
+func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []utils.SubScanType) *AuditBasicParams {
 	abp.scansToPerform = scansToPerform
 	return abp
 }
 
-func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
+func (abp *AuditBasicParams) ScansToPerform() []utils.SubScanType {
 	return abp.scansToPerform
 }
 
@@ -336,4 +333,20 @@ func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile
 
 func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
 	return abp.configProfile
+}
+
+func (abp *AuditBasicParams) SolutionFilePath() string {
+	return abp.solutionFilePath
+}
+
+func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
+	abp.solutionFilePath = solutionFilePath
+	return abp
+}
+
+func (abp *AuditBasicParams) UseIncludedBuilds() bool { return abp.useIncludedBuilds }
+
+func (abp *AuditBasicParams) SetUseIncludedBuilds(useIncludedBuilds bool) *AuditBasicParams {
+	abp.useIncludedBuilds = useIncludedBuilds
+	return abp
 }

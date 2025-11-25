@@ -1,15 +1,14 @@
 package iac
 
 import (
-	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -18,7 +17,7 @@ import (
 const (
 	iacScannerType   = "iac-scan-modules"
 	iacScanCommand   = "iac"
-	iacDocsUrlSuffix = "infrastructure-as-code-iac"
+	iacDocsUrlSuffix = "advanced-security/features-and-capabilities/misconfigurations-scans"
 )
 
 type IacScanManager struct {
@@ -33,20 +32,21 @@ type IacScanManager struct {
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), threadId); err != nil {
 		return
 	}
 	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, resultsToCompare...)
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target...", utils.IacScan.ToTextString()))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.IacScan, threadId, module, targetCount))
 	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...)))
+	log.Info(utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
 	return
 }
 

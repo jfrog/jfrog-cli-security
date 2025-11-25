@@ -23,7 +23,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
 	assert.NoError(t, err)
 
 	// Assert
@@ -33,6 +33,7 @@ func TestNewSastScanManager(t *testing.T) {
 		assert.NotEmpty(t, sastScanManager.resultsFileName)
 		assert.NotEmpty(t, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 		assert.Equal(t, &jas.FakeServerDetails, sastScanManager.scanner.ServerDetails)
+		assert.Empty(t, sastScanManager.sastRules)
 	}
 }
 
@@ -43,10 +44,10 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "", sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -61,7 +62,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -84,7 +85,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false, "")
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -185,4 +186,21 @@ func TestGroupResultsByLocation(t *testing.T) {
 		groupResultsByLocation([]*sarif.Run{test.run})
 		assert.ElementsMatch(t, test.expectedOutput.Results, test.run.Results)
 	}
+}
+
+func TestSastRules(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+	require.NoError(t, err)
+
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "test-rules.json")
+	require.NoError(t, err)
+	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
+	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
+	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
 }

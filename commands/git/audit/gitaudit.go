@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -52,7 +53,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
-	gaCmd.source = *gitInfo
+	gaCmd.gitContext = *gitInfo
 	// Run the scan
 	auditResults := RunGitAudit(gaCmd.GitAuditParams)
 	// Process the results and output
@@ -61,7 +62,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	return sourceAudit.ProcessResultsAndOutput(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
+	return sourceAudit.OutputResultsAndCmdError(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
@@ -83,34 +84,43 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.Watches,
 		params.resultsContext.RepoPath,
 		params.resultsContext.ProjectKey,
-		params.source.Source.GitRepoHttpsCloneUrl,
+		params.gitContext.Source.GitRepoHttpsCloneUrl,
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
-		false,
+		params.includeSbom,
 	)
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
+	// Source control params
+	auditParams.SetGitContext(&params.gitContext).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
-	auditParams.SetOutputFormat(params.outputFormat)
+	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
+	auditParams.SetUploadCdxResults(params.uploadResults).SetRtResultRepository(params.rtResultRepository)
 	// Cmd information
-	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
+	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator)
 	// Basic params
-	auditParams.SetUseJas(true).SetIsRecursiveScan(true)
+	isRecursiveScan := true
+	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		// 'Xray lib' BOM generator supports only one working directory, no recursive scan (single target)
+		isRecursiveScan = false
+	}
+	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
 	return auditParams
 }
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
-	event.GitInfo = &params.source
+	event.GitInfo = &params.gitContext
 	event.IsGitInfoFlow = true
 	multiScanId, startTime := xsc.SendNewScanEvent(
 		params.xrayVersion,
 		params.xscVersion,
 		params.serverDetails,
 		event,
+		params.GetProjectKey(),
 	)
 	params.multiScanId = multiScanId
 	params.startTime = startTime
@@ -124,10 +134,14 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf git audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secrets Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf git audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+	}
+	if cmdResults.ResultsPlatformUrl != "" {
+		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(gaCmd.outputFormat).
+		SetOutputDir(gaCmd.outputDir).
 		SetPrintExtendedTable(gaCmd.extendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(gaCmd.scansToPerform)

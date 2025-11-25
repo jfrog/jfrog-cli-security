@@ -40,7 +40,7 @@ func TestNewSecretsScanManagerWithFilesToCompare(t *testing.T) {
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
 	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
@@ -55,7 +55,7 @@ func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir)
 	require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
-	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
+	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 1, 0)
 	assert.Error(t, err)
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Secrets, err), "failed to run Secrets scan")
 	assert.Nil(t, vulnerabilitiesResults)

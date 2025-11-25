@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"fmt"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -9,12 +10,12 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -54,23 +55,41 @@ func TestCountContributorsFlags(t *testing.T) {
 	assert.ErrorContains(t, err, "Unsupported SCM type")
 }
 
-func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git", "audit"}, getAuditCmdArgs(params)...)...)
+type gitAuditCommandTestParams struct {
+	auditCommandTestParams
+	// Override the test project repo clone url
+	OverrideRepoCloneUrl string
 }
 
-func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams auditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
+func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
+}
+
+func getDummyGitRepoUrl() string {
+	return fmt.Sprintf("https://github.com/jfrog/dummy-repo-url-%s.git", securityTests.GetUniqueSuffix())
+}
+
+func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
 	defer cleanUpProject()
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
+	if gitAuditParams.OverrideRepoCloneUrl != "" {
+		// Override the git remote url to a dummy one to avoid flaky tests due to collisions in policy/watch created for the same repo.
+		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")
+	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, gitAuditParams)
+	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
 	if expectError != "" {
 		assert.ErrorContains(t, err, expectError)
 	} else {
 		assert.NoError(t, err)
 	}
 	validations.VerifySimpleJsonResults(t, output, validationParams)
-	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
+	if !gitAuditParams.WithStaticSca {
+		validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
+	}
 }
 
 func TestGitAuditSimpleJson(t *testing.T) {
@@ -78,7 +97,7 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	defer testCleanUp()
 	createTestProjectRunGitAuditAndValidate(t,
 		filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "gitlab"),
-		auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true},
+		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true}},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Total:           &validations.TotalCount{Licenses: 3, Vulnerabilities: 2},
@@ -87,24 +106,64 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	)
 }
 
-func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
-	if !coreutils.IsLinux() {
-		t.Skip("Skipping test. This test only runs on Linux to avoid flaky tests when running in parallel tests.")
-	}
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
-	defer testCleanUp()
+func TestGitAuditStaticScaCycloneDx(t *testing.T) {
+	integration.InitAuditNewScaTests(t, securityUtils.StaticScanMinVersion)
+	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
+	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{
+				Format:        format.SimpleJson,
+				WithStaticSca: true,
+				WithSbom:      true,
+				WithLicense:   true,
+				WithVuln:      true,
+				Watches:       []string{watchName},
+			},
+		},
+		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
+		validations.ValidationParams{
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12, Vulnerabilities: 16},
+			Vulnerabilities: &validations.VulnerabilityCount{
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2},
+			},
+			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2}},
+		},
+	)
+}
+
+func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
+	defer testCleanUp()
+
+	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
+	dummyCloneUrl := getDummyGitRepoUrl()
+
+	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
+	defer cleanUpPolicy()
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	defer cleanUpWatch()
+
+	// Run the audit command with git repo and verify violations are reported to the platform.
+	createTestProjectRunGitAuditAndValidate(t, projectPath,
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true},
+			OverrideRepoCloneUrl:   dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
@@ -115,26 +174,29 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 
 	// Create an ignore rules for the git repo
 	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
 		CVEs:            []string{"any"}, Licenses: []string{"any"},
 		Watches: []string{watchName},
 	})
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
 		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
 	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
 		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
 		Watches:         []string{watchName},
 	})
 	defer cleanSastUpIgnoreRule()
 
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		auditCommandTestParams{Format: format.SimpleJson},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson},
+			OverrideRepoCloneUrl:   dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "",
 		// No Violations should be reported since all violations are ignored.
 		validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}},
@@ -152,14 +214,14 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	_, cleanUpWatch := securityTestUtils.CreateTestProjectKeyWatch(t, policyName, "project-key-jas-violations-watch", *securityTests.JfrogTestProjectKey)
+	_, cleanUpWatch := securityTestUtils.CreateWatchOnProjectBuilds(t, policyName, "project-key-jas-violations-watch", *securityTests.JfrogTestProjectKey)
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t,
 		filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues"),
-		auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey},
-		xrayVersion, xscVersion, results.NewFailBuildError().Error(),
+		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey}},
+		xrayVersion, xscVersion, policy.NewFailBuildError().Error(),
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Violations: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
@@ -168,11 +230,13 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	)
 }
 
-func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
+func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
+	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations - This watch DO NOT skip not-applicable results
 	var firstPolicyCleaned, firstWatchCleaned bool
@@ -182,7 +246,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			cleanUpPolicy()
 		}
 	}()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer func() {
 		if !firstWatchCleaned {
 			cleanUpWatch()
@@ -191,7 +255,10 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
+			OverrideRepoCloneUrl:   dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
@@ -211,12 +278,15 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
-	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
+	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
-		auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
+		gitAuditCommandTestParams{
+			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
+			OverrideRepoCloneUrl:   dummyCloneUrl,
+		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{

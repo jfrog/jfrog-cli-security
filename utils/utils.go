@@ -23,6 +23,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
@@ -31,10 +32,13 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	JasInfoURL                    = "https://jfrog.com/xray/"
+	BaseDocumentationURL = "https://jfrog.com/help/r/jfrog-security-user-guide/products/"
+	XrayInfoURL          = "https://jfrog.com/xray/"
+	JasInfoURL           = "https://jfrog.com/devops-native-security/"
+
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
+	StaticScanMinVersion          = "3.133.0"
 
 	XrayToolName = "JFrog Xray Scanner"
 
@@ -47,6 +51,8 @@ const (
 	CurrentGithubWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
 	CurrentGithubWorkflowJobEnvVar       = "GITHUB_JOB"
 	CurrentGithubShaEnvVar               = "GITHUB_SHA"
+
+	IsAllowEmojis = "JF_ALLOW_EMOJIS"
 )
 
 var (
@@ -57,15 +63,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
-	ScaScan                      SubScanType        = "sca"
-	IacScan                      SubScanType        = "iac"
-	SastScan                     SubScanType        = "sast"
-	SecretsScan                  SubScanType        = "secrets"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -81,12 +84,6 @@ func (subScan SubScanType) ToTextString() string {
 		return text
 	}
 	return string(subScan)
-}
-
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
 }
 
 type SubScanType string
@@ -129,28 +126,33 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
-func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+func getScanFindingName(scanType SubScanType) string {
+	if scanType == SecretsScan {
+		return fmt.Sprintf("%s exposures", subScanTypeToText[scanType])
+	}
+	return fmt.Sprintf("%s vulnerabilities", subScanTypeToText[scanType])
+}
 
-	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
+func GetScanStartLog(scanType SubScanType, target string, targetCount, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	msg := "Found"
-	hasVulnerabilities := vulnerabilitiesCount > 0
-	if hasVulnerabilities {
-		if scanType == SecretsScan {
-			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
-		} else {
-			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
-		}
+	if targetCount > 1 {
+		return logPrefix + fmt.Sprintf("Running %s scan on target '%s'...", subScanTypeToText[scanType], target)
 	}
-	if violationsCount > 0 {
-		if hasVulnerabilities {
-			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
-		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
-		}
+	return logPrefix + fmt.Sprintf("Running %s scan...", subScanTypeToText[scanType])
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, scanStartTime time.Time, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	return msg
+	if vulnerabilitiesCount == 0 {
+		return logPrefix + fmt.Sprintf("No %s were found (duration %s)", getScanFindingName(scanType), time.Since(scanStartTime).String())
+	}
+	return logPrefix + fmt.Sprintf("Found %d %s (duration %s)", vulnerabilitiesCount, getScanFindingName(scanType), time.Since(scanStartTime).String())
 }
 
 func IsCI() bool {
@@ -321,14 +323,14 @@ func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
 	return bom, nil
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (pathToSave string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	pathToSave = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
-	return SaveCdxContentToFile(pathToSave, bom)
+	return pathToSave, SaveCdxContentToFile(pathToSave, bom)
 }
 
 func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
@@ -342,23 +344,29 @@ func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
+func DumpCdxJsonContentToFile(fileContent []byte, scanResultsOutputDir, filePrefix string, threadId int) (resultsFileFullPath string, err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, filePrefix, "cdx.json", threadId)
+}
+
 func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	return
 }
 
 func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	return
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (err error) {
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, prefix, suffix string, threadId int) (resultsFileFullPath string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
-	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
+	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(prefix), GetCurrentTimeUnix(), suffix))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, prefix, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+		return "", fmt.Errorf("failed to write %s scan results to file: %s", prefix, err.Error())
 	}
 	return
 }
@@ -373,4 +381,60 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 		return ""
 	}
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
+}
+
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+	// Get JPD / Releases remote details to download the resource from.
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	if err != nil {
+		return err
+	}
+	// Check if the resource should be downloaded.
+	// First get the latest resource checksum from Artifactory.
+	client, httpClientDetails, err := dependencies.CreateHttpClient(rtDetails)
+	if err != nil {
+		return err
+	}
+	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
+	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
+	if err != nil {
+		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
+	}
+	// Find current resource checksum.
+	checksumFilePath := filepath.Join(targetDir, dependencies.ChecksumFileName)
+	if match, err := isArtifactChecksumsMatch(remoteFileDetails, checksumFilePath, true); err != nil || match {
+		// If the checksums are identical, there's no need to download.
+		return err
+	}
+	// Download & unzip the resource files
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", resourceName))
+	if err = dependencies.DownloadDependency(rtDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
+		return err
+	}
+	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+}
+
+func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFilePath string, contentIsTheChecksum bool) (match bool, err error) {
+	if remoteFileDetails == nil {
+		return false, fmt.Errorf("remote file details are nil for %s", localFilePath)
+	}
+	// Find current checksum.
+	if exist, err := fileutils.IsFileExists(localFilePath, false); err != nil || !exist {
+		return false, err
+	}
+	// Read the file content
+	content, err := fileutils.ReadFile(localFilePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read file %s: %w", localFilePath, err)
+	}
+	if contentIsTheChecksum {
+		// File content is the checksum value, compare the local checksum with the remote one.
+		return remoteFileDetails.Checksum.Sha256 == string(content), nil
+	}
+	// File content is the actual file, calculate the checksum and compare it with the remote one.
+	sha256, err := Sha256Hash(string(content))
+	if err != nil {
+		return false, fmt.Errorf("failed to calculate the local file checksum: %w", err)
+	}
+	return remoteFileDetails.Checksum.Sha256 == sha256, nil
 }

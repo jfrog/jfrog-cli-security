@@ -1,292 +1,638 @@
 {
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
   "version": "2.1.0",
-  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
   "runs": [
     {
-      "tool": {
-        "driver": {
-          "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sca",
-          "name": "JFrog Xray Scanner",
-          "rules": [
-            {
-              "id": "CVE-2024-38428_debian:bookworm:openssl_3.0.13-1~deb12u1",
-              "shortDescription": {
-                "text": "[CVE-2024-38428] debian:bookworm:openssl 3.0.13-1~deb12u1"
-              },
-              "help": {
-                "text": "Interpretation Conflict",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |"
-              },
-              "properties": {
-                "security-severity": "10.0"
-              }
-            },
-            {
-              "id": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-              "shortDescription": {
-                "text": "[CVE-2024-6119] debian:bookworm:libssl3 3.0.13-1~deb12u1"
-              },
-              "help": {
-                "text": "Issue summary",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
-              },
-              "properties": {
-                "security-severity": "0.0"
-              }
-            },
-            {
-              "id": "CVE-2024-38428_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-              "shortDescription": {
-                "text": "[CVE-2024-38428] debian:bookworm:libssl3 3.0.13-1~deb12u1"
-              },
-              "help": {
-                "text": "Interpretation Conflict",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
-              },
-              "properties": {
-                "security-severity": "10.0"
-              }
-            }
-          ],
-          "version": "3.107.13"
-        }
-      },
+      "addresses": [],
+      "graphs": [],
       "invocations": [
         {
           "executionSuccessful": true,
+          "notificationConfigurationOverrides": [],
+          "ruleConfigurationOverrides": [],
+          "toolConfigurationNotifications": [],
+          "toolExecutionNotifications": [],
           "workingDirectory": {
-            "uri": "temp/folders/T/jfrog.cli.temp.-11-11"
+            "index": -1,
+            "uri": "file://temp/folders/T/jfrog.cli.temp.-11-11"
           }
         }
       ],
+      "language": "en-US",
+      "logicalLocations": [],
+      "newlineSequences": [
+        "\r\n",
+        "\n"
+      ],
+      "policies": [],
+      "redactionTokens": [],
       "results": [
         {
+          "fingerprints": {
+            "jfrogFingerprintHash": "e6f4a9c7ce3643f0d3ec12c524a58ac3"
+          },
+          "attachments": [],
+          "codeFlows": [],
+          "fixes": [],
+          "graphTraversals": [],
+          "graphs": [],
+          "kind": "fail",
+          "level": "none",
+          "locations": [
+            {
+              "annotations": [],
+              "id": 0,
+              "logicalLocations": [
+                {
+                  "index": -1,
+                  "kind": "layer",
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "parentIndex": -1,
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": -1,
+                  "uri": "file://sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                },
+                "region": {
+                  "byteOffset": 0,
+                  "charOffset": 0,
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              },
+              "relationships": []
+            }
+          ],
+          "message": {
+            "arguments": [],
+            "markdown": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+            "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar "
+          },
           "properties": {
             "applicability": "Applicable",
             "fixedVersion": "No fix available"
           },
+          "rank": -1,
+          "relatedLocations": [],
           "ruleId": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-          "ruleIndex": 1,
-          "level": "none",
-          "message": {
-            "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
-            "markdown": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
-                }
-              },
-              "logicalLocations": [
-                {
-                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
-                  "kind": "layer",
-                  "properties": {
-                    "algorithm": "sha256"
-                  }
-                }
-              ]
-            }
-          ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "5b5d2ba57a2eddf58f4579b7ebe42599"
-          }
+          "ruleIndex": -1,
+          "stacks": [],
+          "taxa": []
         },
         {
-          "properties": {
-            "applicability": "Undetermined",
-            "fixedVersion": "No fix available"
+          "fingerprints": {
+            "jfrogFingerprintHash": "278de720df7920303f1ca9df7f22e4b5"
           },
-          "ruleId": "CVE-2024-38428_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-          "ruleIndex": 2,
+          "attachments": [],
+          "codeFlows": [],
+          "fixes": [],
+          "graphTraversals": [],
+          "graphs": [],
+          "kind": "fail",
           "level": "error",
-          "message": {
-            "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
-            "markdown": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
-          },
           "locations": [
             {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
-                }
-              },
+              "annotations": [],
+              "id": 0,
               "logicalLocations": [
                 {
-                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "index": -1,
                   "kind": "layer",
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "parentIndex": -1,
                   "properties": {
                     "algorithm": "sha256"
                   }
                 }
-              ]
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": -1,
+                  "uri": "file://sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                },
+                "region": {
+                  "byteOffset": 0,
+                  "charOffset": 0,
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              },
+              "relationships": []
             }
           ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "e4ad8f8a303959f43d395a9967290329"
-          }
-        },
-        {
+          "message": {
+            "arguments": [],
+            "markdown": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+            "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar "
+          },
           "properties": {
             "applicability": "Undetermined",
             "fixedVersion": "[3.0.14-1~deb12u2]"
           },
+          "rank": -1,
+          "relatedLocations": [],
           "ruleId": "CVE-2024-38428_debian:bookworm:openssl_3.0.13-1~deb12u1",
-          "ruleIndex": 0,
-          "level": "error",
-          "message": {
-            "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
-            "markdown": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          "ruleIndex": -1,
+          "stacks": [],
+          "taxa": []
+        },
+        {
+          "fingerprints": {
+            "jfrogFingerprintHash": "485b7550ec42d46c79810919343673ae"
           },
+          "attachments": [],
+          "codeFlows": [],
+          "fixes": [],
+          "graphTraversals": [],
+          "graphs": [],
+          "kind": "fail",
+          "level": "error",
           "locations": [
             {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
-                }
-              },
+              "annotations": [],
+              "id": 0,
               "logicalLocations": [
                 {
-                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "index": -1,
                   "kind": "layer",
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "parentIndex": -1,
                   "properties": {
                     "algorithm": "sha256"
                   }
                 }
-              ]
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": -1,
+                  "uri": "file://sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                },
+                "region": {
+                  "byteOffset": 0,
+                  "charOffset": 0,
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              },
+              "relationships": []
             }
           ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "fde53f1fba5bffb4d79b03735c86ee2d"
-          }
+          "message": {
+            "arguments": [],
+            "markdown": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+            "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar "
+          },
+          "properties": {
+            "applicability": "Undetermined",
+            "fixedVersion": "No fix available"
+          },
+          "rank": -1,
+          "relatedLocations": [],
+          "ruleId": "CVE-2024-38428_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+          "ruleIndex": -1,
+          "stacks": [],
+          "taxa": []
         }
-      ]
-    },
-    {
+      ],
+      "runAggregates": [],
+      "taxonomies": [],
+      "threadFlowLocations": [],
       "tool": {
         "driver": {
-          "name": "JFrog Binary Secrets Scanner",
+          "contents": [
+            "localizedData",
+            "nonLocalizedData"
+          ],
+          "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sca",
+          "isComprehensive": false,
+          "language": "en-US",
+          "locations": [],
+          "name": "JFrog Xray Scanner",
+          "notifications": [],
           "rules": [
             {
-              "id": "REQ.SECRET.GENERIC.CODE",
-              "shortDescription": {
-                "text": "[Secret in Binary found] Scanner for REQ.SECRET.GENERIC.CODE",
-                "markdown": "Scanner for REQ.SECRET.GENERIC.CODE"
-              },
               "fullDescription": {
-                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
-                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |",
+                "text": "Issue summary"
               },
               "help": {
-                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
-                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |",
+                "text": "Issue summary"
+              },
+              "id": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+              "name": "CVE-2024-6119-debian:bookworm:libssl3-3.0.13-1~deb12u1",
+              "properties": {
+                "impactPaths": [
+                  [
+                    {
+                      "name": "platform.jfrog.io/swamp-docker/swamp",
+                      "version": "latest"
+                    },
+                    {
+                      "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                      "version": "",
+                      "location": {
+                        "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                      }
+                    },
+                    {
+                      "name": "debian:bookworm:libssl3",
+                      "version": "3.0.13-1~deb12u1",
+                      "location": {
+                        "file": "libssl3:3.0.13-1~deb12u1"
+                      }
+                    }
+                  ]
+                ],
+                "security-severity": "0.0"
+              },
+              "relationships": [],
+              "shortDescription": {
+                "text": "[CVE-2024-6119] debian:bookworm:libssl3 3.0.13-1~deb12u1"
+              }
+            },
+            {
+              "fullDescription": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |",
+                "text": "Interpretation Conflict"
+              },
+              "help": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |",
+                "text": "Interpretation Conflict"
+              },
+              "id": "CVE-2024-38428_debian:bookworm:openssl_3.0.13-1~deb12u1",
+              "name": "CVE-2024-38428-debian:bookworm:openssl-3.0.13-1~deb12u1",
+              "properties": {
+                "impactPaths": [
+                  [
+                    {
+                      "name": "platform.jfrog.io/swamp-docker/swamp",
+                      "version": "latest"
+                    },
+                    {
+                      "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                      "version": "",
+                      "location": {
+                        "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                      }
+                    },
+                    {
+                      "name": "debian:bookworm:openssl",
+                      "version": "3.0.13-1~deb12u1",
+                      "location": {
+                        "file": "openssl:3.0.13-1~deb12u1"
+                      }
+                    }
+                  ]
+                ],
+                "security-severity": "10.0"
+              },
+              "relationships": [],
+              "shortDescription": {
+                "text": "[CVE-2024-38428] debian:bookworm:openssl 3.0.13-1~deb12u1"
+              }
+            },
+            {
+              "fullDescription": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |",
+                "text": "Interpretation Conflict"
+              },
+              "help": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |",
+                "text": "Interpretation Conflict"
+              },
+              "id": "CVE-2024-38428_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+              "name": "CVE-2024-38428-debian:bookworm:libssl3-3.0.13-1~deb12u1",
+              "properties": {
+                "impactPaths": [
+                  [
+                    {
+                      "name": "platform.jfrog.io/swamp-docker/swamp",
+                      "version": "latest"
+                    },
+                    {
+                      "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                      "version": "",
+                      "location": {
+                        "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                      }
+                    },
+                    {
+                      "name": "debian:bookworm:libssl3",
+                      "version": "3.0.13-1~deb12u1",
+                      "location": {
+                        "file": "libssl3:3.0.13-1~deb12u1"
+                      }
+                    }
+                  ]
+                ],
+                "security-severity": "10.0"
+              },
+              "relationships": [],
+              "shortDescription": {
+                "text": "[CVE-2024-38428] debian:bookworm:libssl3 3.0.13-1~deb12u1"
               }
             }
-          ]
-        }
+          ],
+          "supportedTaxonomies": [],
+          "taxa": [],
+          "version": "3.107.13"
+        },
+        "extensions": []
       },
+      "translations": [],
+      "versionControlProvenance": [],
+      "webRequests": [],
+      "webResponses": []
+    },
+    {
+      "addresses": [],
+      "graphs": [],
       "invocations": [
         {
-          "executionSuccessful": null,
+          "notificationConfigurationOverrides": [],
+          "ruleConfigurationOverrides": [],
+          "toolConfigurationNotifications": [],
+          "toolExecutionNotifications": [],
           "workingDirectory": {
+            "index": -1,
             "uri": "temp/folders/T/jfrog.cli.temp.-11-11"
           }
         }
       ],
+      "language": "en-US",
+      "logicalLocations": [],
+      "newlineSequences": [
+        "\r\n",
+        "\n"
+      ],
+      "policies": [],
+      "redactionTokens": [],
       "results": [
         {
+          "fingerprints": {
+            "jfrogFingerprintHash": "6b99fa4445061b0eea53dc99803c8eca"
+          },
+          "attachments": [],
+          "codeFlows": [],
+          "fixes": [],
+          "graphTraversals": [],
+          "graphs": [],
+          "level": "info",
+          "locations": [
+            {
+              "annotations": [],
+              "id": 0,
+              "logicalLocations": [
+                {
+                  "index": -1,
+                  "kind": "layer",
+                  "name": "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0",
+                  "parentIndex": -1,
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": -1,
+                  "uri": "usr/src/app/server/index.js"
+                },
+                "region": {
+                  "byteOffset": 0,
+                  "charOffset": 0,
+                  "endColumn": 57,
+                  "endLine": 5,
+                  "snippet": {
+                    "text": "tok************"
+                  },
+                  "startColumn": 7,
+                  "startLine": 5
+                }
+              },
+              "relationships": []
+            }
+          ],
+          "message": {
+            "arguments": [],
+            "markdown": "🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************\nToken Validation Inactive",
+            "text": "Secret REQ.SECRET.GENERIC.CODE were found"
+          },
           "properties": {
             "metadata": "expired",
             "tokenValidation": "Inactive"
           },
-          "ruleId": "REQ.SECRET.GENERIC.CODE",
-          "level": "info",
-          "message": {
-            "text": "Secret REQ.SECRET.GENERIC.CODE were found",
-            "markdown": "🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************\nToken Validation Inactive"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "usr/src/app/server/index.js"
-                },
-                "region": {
-                  "startLine": 5,
-                  "startColumn": 7,
-                  "endLine": 5,
-                  "endColumn": 57,
-                  "snippet": {
-                    "text": "tok************"
-                  }
-                }
-              },
-              "logicalLocations": [
-                {
-                  "name": "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0",
-                  "kind": "layer",
-                  "properties": {
-                    "algorithm": "sha256"
-                  }
-                }
-              ]
-            }
-          ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "6b99fa4445061b0eea53dc99803c8eca"
-          }
-        },
-        {
-          "properties": {
-            "issueId": "sec-violation-1",
-            "metadata": "expired",
-            "policies": [
-              "policy"
-            ],
-            "tokenValidation": "Inactive",
-            "watch": "watch"
-          },
+          "rank": -1,
+          "relatedLocations": [],
           "ruleId": "REQ.SECRET.GENERIC.CODE",
           "ruleIndex": 0,
-          "level": "info",
-          "message": {
-            "text": "Secret REQ.SECRET.GENERIC.CODE were found",
-            "markdown": "Security Violation 🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************\nToken Validation Inactive"
-          },
-          "locations": [
+          "stacks": [],
+          "taxa": []
+        }
+      ],
+      "runAggregates": [],
+      "taxonomies": [],
+      "threadFlowLocations": [],
+      "tool": {
+        "driver": {
+          "contents": [
+            "localizedData",
+            "nonLocalizedData"
+          ],
+          "isComprehensive": false,
+          "language": "en-US",
+          "locations": [],
+          "name": "JFrog Binary Secrets Scanner",
+          "notifications": [],
+          "rules": [
             {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "usr/src/app/server/index.js"
-                },
-                "region": {
-                  "startLine": 5,
-                  "startColumn": 7,
-                  "endLine": 5,
-                  "endColumn": 57,
-                  "snippet": {
-                    "text": "tok************"
-                  }
-                }
+              "fullDescription": {
+                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
+                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
               },
-              "logicalLocations": [
-                {
-                  "name": "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0",
-                  "kind": "layer",
-                  "properties": {
-                    "algorithm": "sha256"
-                  }
-                }
-              ]
+              "help": {
+                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
+                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
+              },
+              "id": "REQ.SECRET.GENERIC.CODE",
+              "relationships": [],
+              "shortDescription": {
+                "markdown": "Scanner for REQ.SECRET.GENERIC.CODE",
+                "text": "[Secret in Binary found] Scanner for REQ.SECRET.GENERIC.CODE"
+              }
             }
           ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "7d0f57f0cc66fc6f3373fe1965297533"
+          "supportedTaxonomies": [],
+          "taxa": []
+        },
+        "extensions": []
+      },
+      "translations": [],
+      "versionControlProvenance": [],
+      "webRequests": [],
+      "webResponses": []
+    },
+    {
+      "addresses": [],
+      "graphs": [],
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "notificationConfigurationOverrides": [],
+          "ruleConfigurationOverrides": [],
+          "toolConfigurationNotifications": [],
+          "toolExecutionNotifications": [],
+          "workingDirectory": {
+            "index": -1,
+            "uri": "file:///Users/assafa/code/jfrog/jfrog-cli-security/utils/results/conversion"
           }
         }
-      ]
+      ],
+      "language": "en-US",
+      "logicalLocations": [],
+      "newlineSequences": [
+        "\r\n",
+        "\n"
+      ],
+      "policies": [],
+      "redactionTokens": [],
+      "results": [
+        {
+          "fingerprints": {
+            "jfrogFingerprintHash": "7779a66b09fd07ea9d03f9bc00c48e83"
+          },
+          "attachments": [],
+          "codeFlows": [],
+          "fixes": [],
+          "graphTraversals": [],
+          "graphs": [],
+          "kind": "fail",
+          "level": "none",
+          "locations": [
+            {
+              "annotations": [],
+              "id": -1,
+              "logicalLocations": [],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": -1,
+                  "uri": "file://Package-Descriptor"
+                }
+              },
+              "relationships": []
+            }
+          ],
+          "message": {
+            "arguments": [],
+            "markdown": "Security Violation [CVE-2024-6119] sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595  (security-watch)",
+            "text": "[CVE-2024-6119] sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595  (security-watch)"
+          },
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "No fix available",
+            "policies": "debian-security",
+            "type": "cve",
+            "watch": "security-watch"
+          },
+          "rank": -1,
+          "relatedLocations": [],
+          "ruleId": "CVE-2024-6119_debian/bookworm/libssl3_3.0.13-1~deb12u1",
+          "ruleIndex": -1,
+          "stacks": [],
+          "taxa": []
+        }
+      ],
+      "runAggregates": [],
+      "taxonomies": [],
+      "threadFlowLocations": [],
+      "tool": {
+        "driver": {
+          "contents": [
+            "localizedData",
+            "nonLocalizedData"
+          ],
+          "informationUri": "https://jfrog.com/xray/",
+          "isComprehensive": false,
+          "language": "en-US",
+          "locations": [],
+          "name": "JFrog Policy Enforcer",
+          "notifications": [],
+          "rules": [
+            {
+              "fullDescription": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595 `       | No fix available   |",
+                "text": "Issue summary"
+              },
+              "help": {
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595 `       | No fix available   |",
+                "text": "Issue summary"
+              },
+              "id": "CVE-2024-6119_debian/bookworm/libssl3_3.0.13-1~deb12u1",
+              "name": "CVE-2024-6119-debian/bookworm/libssl3-3.0.13-1~deb12u1",
+              "properties": {
+                "impactPaths": [
+                  [
+                    {
+                      "name": "platform.jfrog.io/swamp-docker/swamp",
+                      "version": "latest"
+                    },
+                    {
+                      "name": "sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                      "version": ""
+                    },
+                    {
+                      "name": "libssl3",
+                      "version": "3.0.13-1~deb12u1"
+                    }
+                  ]
+                ],
+                "security-severity": "0.0"
+              },
+              "relationships": [],
+              "shortDescription": {
+                "text": "[Security Violation] [CVE-2024-6119] debian/bookworm/libssl3 3.0.13-1~deb12u1 (security-watch)"
+              }
+            },
+            {
+              "fullDescription": {
+                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
+                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
+              },
+              "help": {
+                "markdown": "The Scanner checks for REQ.SECRET.GENERIC.CODE",
+                "text": "The Scanner checks for REQ.SECRET.GENERIC.CODE"
+              },
+              "id": "REQ.SECRET.GENERIC.CODE",
+              "relationships": null,
+              "shortDescription": {
+                "markdown": "Scanner for REQ.SECRET.GENERIC.CODE",
+                "text": "[Security Violation] Scanner for REQ.SECRET.GENERIC.CODE"
+              }
+            }
+          ],
+          "supportedTaxonomies": [],
+          "taxa": [],
+          "version": "3.107.13"
+        },
+        "extensions": []
+      },
+      "translations": [],
+      "versionControlProvenance": [],
+      "webRequests": [],
+      "webResponses": []
     }
-  ]
+  ],
+  "properties": {}
 }

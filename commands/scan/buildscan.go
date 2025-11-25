@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -32,6 +33,7 @@ type BuildScanCommand struct {
 	failBuild              bool
 	printExtendedTable     bool
 	rescan                 bool
+	triggerRetries         int
 }
 
 func NewBuildScanCommand() *BuildScanCommand {
@@ -77,6 +79,11 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 	return bsc
 }
 
+func (bsc *BuildScanCommand) SetTriggerScanRetries(triggerRetries int) *BuildScanCommand {
+	bsc.triggerRetries = triggerRetries
+	return bsc
+}
+
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
 	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails, xrayutils.WithScopedProjectKey(bsc.buildConfiguration.GetProject()))
@@ -114,13 +121,13 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	}
 	// If failBuild flag is true and also got fail build response from Xray
 	if bsc.failBuild && isFailBuildResponse {
-		return results.NewFailBuildError()
+		return policy.NewFailBuildError()
 	}
 	return
 }
 
 func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayServicesManager, xrayVersion string, params services.XrayBuildParams) (isFailBuildResponse bool, err error) {
-	buildScanResults, noFailBuildPolicy, err := xrayManager.BuildScan(params, bsc.includeVulnerabilities)
+	buildScanResults, noFailBuildPolicy, err := xrayManager.BuildScan(params, bsc.includeVulnerabilities, bsc.triggerRetries)
 	if err != nil {
 		return false, err
 	}

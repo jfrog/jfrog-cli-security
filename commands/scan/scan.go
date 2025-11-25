@@ -17,6 +17,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
@@ -225,6 +227,13 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	cmdResults := scanCmd.RunScan(cmdType)
 
+	// Violations
+	if cmdResults.HasViolationContext() {
+		if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
+			return fmt.Errorf("failed to enrich with violations: %s", err.Error())
+		}
+	}
+
 	if scanCmd.progress != nil {
 		if err = scanCmd.progress.Quit(); err != nil {
 			return errors.Join(err, cmdResults.GetErrors())
@@ -246,18 +255,12 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	if err = cmdResults.GetErrors(); err != nil {
 		return
 	}
-	// We consider failing the build only when --fail=true. If a user had provided --fail=false, we don't fail the build even when fail-build rules are applied.
-	// If violation context was provided, we need to check all existing violations for fail-build rules.
-	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(cmdResults)
-	if err != nil {
-		return fmt.Errorf("failed to check if build should fail: %w", err)
-	}
-
-	if scanCmd.fail && scanCmd.resultsContext.HasViolationContext() && shouldFailBuildByPolicy {
-		return results.NewFailBuildError()
-	}
 	log.Info("Scan completed successfully.")
-	return nil
+	if scanCmd.fail {
+		// We consider failing the build only when --fail=true. If a user had provided --fail=false, we don't fail the build even when fail-build rules are applied.
+		err = policy.CheckPolicyFailBuildError(cmdResults)
+	}
+	return
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
@@ -333,7 +336,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	cmdResults.SetStartTime(scanCmd.startTime)
 	cmdResults.SetResultsContext(scanCmd.resultsContext)
 	// Send entitlement request
-	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion); err != nil {
+	if entitledForJas, err := jas.IsEntitledForJas(xrayManager, scanCmd.xrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
@@ -342,10 +345,6 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 		}
 	}
 	return
-}
-
-func isEntitledForJas(xrayManager *xrayClient.XrayServicesManager, xrayVersion string) (bool, error) {
-	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }
 
 func NewScanCommand() *ScanCommand {
@@ -361,6 +360,10 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
+		if scanCmd.spec == nil || len(scanCmd.spec.Files) == 0 {
+			log.Warn("No files were specified.")
+			return
+		}
 		specFiles := scanCmd.spec.Files
 		for i := range specFiles {
 			artifactHandlerFunc := scanCmd.createIndexerHandlerFunc(&specFiles[i], cmdResults, indexedFileProducer, jasFileProducerConsumer)
@@ -541,6 +544,11 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		log.Debug("Jas scanner was not created, skipping advance security scans...")
 		return
 	}
+	// Set the analyzer manager executable path.
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+		return fmt.Errorf("failed to set analyzer manager executable path: %s", err.Error())
+	}
+	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	jasParams := runner.JasRunnerParams{
 		Runner:         jasFileProducerConsumer,
 		ServerDetails:  scanCmd.serverDetails,

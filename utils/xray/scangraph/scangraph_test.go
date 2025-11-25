@@ -1,10 +1,11 @@
 package scangraph
 
 import (
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFilterResultIfNeeded(t *testing.T) {
@@ -25,12 +26,16 @@ func TestFilterResultIfNeeded(t *testing.T) {
 			name: "No filter level specified",
 			scanResult: services.ScanResponse{
 				Violations: []services.Violation{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
 					{Severity: "Critical"},
 				},
 				Vulnerabilities: []services.Vulnerability{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
@@ -42,12 +47,16 @@ func TestFilterResultIfNeeded(t *testing.T) {
 			},
 			expected: services.ScanResponse{
 				Violations: []services.Violation{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
 					{Severity: "Critical"},
 				},
 				Vulnerabilities: []services.Vulnerability{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
@@ -59,12 +68,16 @@ func TestFilterResultIfNeeded(t *testing.T) {
 			name: "Filter violations and vulnerabilities by high severity",
 			scanResult: services.ScanResponse{
 				Violations: []services.Violation{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
 					{Severity: "Critical"},
 				},
 				Vulnerabilities: []services.Vulnerability{
+					{Severity: "Unknown"},
+					{Severity: "Information"},
 					{Severity: "Low"},
 					{Severity: "Medium"},
 					{Severity: "High"},
@@ -72,7 +85,7 @@ func TestFilterResultIfNeeded(t *testing.T) {
 				},
 			},
 			params: ScanGraphParams{
-				severityLevel: 18,
+				severityLevel: 30,
 			},
 			expected: services.ScanResponse{
 				Violations: []services.Violation{

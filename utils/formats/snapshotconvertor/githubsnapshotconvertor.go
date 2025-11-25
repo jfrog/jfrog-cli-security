@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	directDependency   = "Direct"
-	indirectDependency = "Indirect"
+	directDependency   = "direct"
+	indirectDependency = "indirect"
 )
 
-func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanTime time.Time, jobId, jobCorrelator, commitSha, gitRef, detectorName, detectorVersion, detectorUrl string) (*vcsclient.SbomSnapshot, error) {
+func CreateGithubSnapshotFromSbom(bom *cdxutils.FullBOM, snapshotVersion int, scanTime time.Time, jobId, jobCorrelator, commitSha, gitRef, detectorName, detectorVersion, detectorUrl string) (*vcsclient.SbomSnapshot, error) {
 	if bom == nil {
 		return nil, errors.New("received cycloneDX is nil")
 	}
@@ -69,7 +69,7 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 		resolvedDependencies := make(map[string]*vcsclient.ResolvedDependency)
 		for _, component := range componentsList {
 			var relationship string
-			bomRelationship := cdxutils.GetComponentRelation(bom, component.BOMRef, false)
+			bomRelationship := cdxutils.GetComponentRelation(&bom.BOM, component.BOMRef, false)
 			switch bomRelationship {
 			case cdxutils.RootRelation:
 				continue

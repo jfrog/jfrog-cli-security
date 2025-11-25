@@ -3,6 +3,7 @@ package applicability
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -17,7 +18,7 @@ import (
 
 const (
 	applicabilityScanCommand   = "ca"
-	applicabilityDocsUrlSuffix = "contextual-analysis"
+	applicabilityDocsUrlSuffix = "advanced-security/features-and-capabilities/contextual-analysis-of-cves"
 
 	ApplicabilityScannerType         ApplicabilityScanType = "analyze-applicability"
 	ApplicabilityDockerScanScanType  ApplicabilityScanType = "analyze-applicability-docker-scan"
@@ -42,6 +43,7 @@ type ContextualAnalysisScanParams struct {
 	ScanType                     ApplicabilityScanType
 	ThirdPartyContextualAnalysis bool
 	ThreadId                     int
+	TargetCount                  int
 	Module                       jfrogappsconfig.Module
 }
 
@@ -52,7 +54,7 @@ type ContextualAnalysisScanParams struct {
 // Parsing the analyzer manager results.
 func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), params.ThreadId); err != nil {
 		return
 	}
 	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
@@ -60,14 +62,15 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + fmt.Sprintf("Running %s scan on target...", utils.ContextualAnalysisScan.ToTextString()))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.ContextualAnalysisScan, params.ThreadId, params.Module, params.TargetCount))
 	// Applicability scan does not produce violations.
 	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Module); err != nil {
 		return
 	}
 	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
 	if applicableCveCount > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false)+"Found", applicableCveCount, "applicable cves")
+		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false)+"Found", applicableCveCount, "applicable cves", fmt.Sprintf("(duration %s)", time.Since(startTime)))
 	}
 	return
 }

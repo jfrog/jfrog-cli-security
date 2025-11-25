@@ -10,6 +10,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/uuid"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/gofrog/datastructures"
 
@@ -18,6 +19,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
+
+type FullBOM struct {
+	cyclonedx.BOM
+	Sast []*sarif.Run `json:"sast,omitempty"`
+}
 
 // Regular expression to match CWE IDs, which can be in the format "CWE-1234" or just "1234".
 var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
@@ -208,7 +214,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
 func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
-	if strings.Contains(dependency.Ref, "generic:root") && skipDefaultRoot {
+	if strings.Contains(dependency.Ref, techutils.ToPackageRef("root", "", "")) && skipDefaultRoot {
 		// dummy root, the actual roots are the dependencies of this component.
 		roots = []cyclonedx.Dependency{}
 		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
@@ -229,7 +235,7 @@ func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dep
 		// The component is the root
 		return append(roots, dependency)
 	}
-	// In SCANG the root can be a file or directory component (the Metadata component) and the actual roots are the component children
+	// In Xray-Lib-Plugin the root can be a file or directory component (the Metadata component) and the actual roots are the component children
 	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
 		roots = append(roots, dependency)
 	} else if bom.Metadata != nil && bom.Metadata.Component != nil && bom.Metadata.Component.BOMRef == dependency.Ref {
@@ -269,11 +275,31 @@ func GetFileRef(filePathOrUri string) string {
 	if err != nil {
 		return uri
 	}
-	return wdRef
+	return fmt.Sprintf("file:%s", wdRef)
 }
 
 func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
+}
+
+func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersion []string) *[]cyclonedx.AffectedVersions {
+	if len(fixedVersion) == 0 {
+		return nil
+	}
+	affected := CreateScaImpactedAffects(affectedComponent, fixedVersion)
+	if affected.Range == nil {
+		return nil
+	}
+	notAffectedVersions := []cyclonedx.AffectedVersions{}
+	for _, version := range *affected.Range {
+		if version.Status == cyclonedx.VulnerabilityStatusNotAffected {
+			notAffectedVersions = append(notAffectedVersions, version)
+		}
+	}
+	if len(notAffectedVersions) == 0 {
+		return nil
+	}
+	return &notAffectedVersions
 }
 
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
@@ -444,18 +470,40 @@ func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixe
 		Range: &[]cyclonedx.AffectedVersions{},
 	}
 	// Affected version
-	*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+	AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 		Version: impactedPackageVersion,
 		Status:  cyclonedx.VulnerabilityStatusAffected,
 	})
 	// Fixed versions
 	for _, fixedVersion := range fixedVersions {
-		*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+		AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 			Version: fixedVersion,
 			Status:  cyclonedx.VulnerabilityStatusNotAffected,
 		})
 	}
 	return
+}
+
+func AppendAffectedVersionsIfNotExists(affect *cyclonedx.Affects, affectedVersions ...cyclonedx.AffectedVersions) {
+	if affect.Range == nil {
+		affect.Range = &[]cyclonedx.AffectedVersions{}
+	}
+	// Validate that the affected version does not already exist in the affected versions
+	for _, newAffectedVersion := range affectedVersions {
+		if newAffectedVersion.Version == "" {
+			continue
+		}
+		exists := false
+		for _, existingAffectedVersion := range *affect.Range {
+			if existingAffectedVersion.Version == newAffectedVersion.Version {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			*affect.Range = append(*affect.Range, newAffectedVersion)
+		}
+	}
 }
 
 type CdxVulnerabilityParams struct {

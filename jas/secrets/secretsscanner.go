@@ -1,11 +1,9 @@
 package secrets
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
-
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -18,7 +16,7 @@ import (
 
 const (
 	secretsScanCommand   = "sec"
-	secretsDocsUrlSuffix = "secrets"
+	secretsDocsUrlSuffix = "advanced-security/features-and-capabilities/secrets-scans"
 
 	SecretsScannerType            SecretsScanType = "secrets-scan"         // #nosec
 	SecretsScannerDockerScanType  SecretsScanType = "secrets-docker-scan"  // #nosec
@@ -40,20 +38,21 @@ type SecretScanManager struct {
 // Creating an SecretScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), threadId); err != nil {
 		return
 	}
 	secretScanManager, err := newSecretsScanManager(scanner, scanType, scannerTempDir, resultsToCompare...)
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target...", utils.SecretsScan.ToTextString()))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.SecretsScan, threadId, module, targetCount))
 	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...)))
+	log.Info(utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
 	return
 }
 

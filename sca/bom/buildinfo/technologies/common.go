@@ -10,6 +10,10 @@ import (
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -17,11 +21,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 )
 
 const (
@@ -58,7 +57,9 @@ type BuildInfoBomGeneratorParams struct {
 	NpmIgnoreNodeModules    bool
 	NpmOverwritePackageLock bool
 	// Pnpm params
-	MaxTreeDepth      string
+	MaxTreeDepth string
+	// NuGet params
+	SolutionFilePath string
 	UseIncludedBuilds bool
 }
 

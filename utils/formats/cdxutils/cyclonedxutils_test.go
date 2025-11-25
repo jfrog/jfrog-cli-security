@@ -350,13 +350,13 @@ func TestGetComponentRelation(t *testing.T) {
 			name: "Root - skip generic root, actual roots are dependencies",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual-root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual-root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
 					{Ref: "actual-root1", Dependencies: &[]string{"comp1"}},
 					{Ref: "actual-root2", Dependencies: &[]string{}},
 				},
@@ -404,7 +404,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "File component",
 			path: "/path/to/file.txt",
 			expected: cyclonedx.Component{
-				BOMRef: "f5aa4f4f1380b71acc56750e9f8ff825",
+				BOMRef: "file:f5aa4f4f1380b71acc56750e9f8ff825",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/file.txt",
 			},
@@ -413,7 +413,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "Directory component",
 			path: "/path/to/directory/",
 			expected: cyclonedx.Component{
-				BOMRef: "0b02f93c6b83cab52b1024d1aebad31c",
+				BOMRef: "file:0b02f93c6b83cab52b1024d1aebad31c",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/directory/",
 			},
@@ -422,7 +422,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "file with special characters and spaces",
 			path: "/path/to/file with spaces.txt",
 			expected: cyclonedx.Component{
-				BOMRef: "b24231d78bc53506b3a74b40cf0e1e99",
+				BOMRef: "file:b24231d78bc53506b3a74b40cf0e1e99",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/file with spaces.txt",
 			},
@@ -625,7 +625,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}},
 		},
 		{
-			name: "SCANG - Single root dependency",
+			name: "XrayLib - Single root dependency",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{
@@ -678,13 +678,13 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			name: "BuildInfo - generic root with skipDefaultRoot=true",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual_root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 					{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				},
 			},
@@ -692,28 +692,28 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			expected: []cyclonedx.Dependency{
 				{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				{Ref: "actual_root2"},
-				{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 			},
 		},
 		{
 			name: "BuildInfo - generic root with skipDefaultRoot=false",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "not_actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Not Actual Root 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 					{Ref: "not_actual_root1", Dependencies: &[]string{}},
 				},
 			},
 			skipRoot: false,
 			expected: []cyclonedx.Dependency{
-				{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 			},
 		},
 		{
-			name: "SCANG - Multiple root dependencies",
+			name: "XrayLib - Multiple root dependencies",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{
@@ -751,7 +751,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			},
 		},
 		{
-			name: "SCANG - Circular dependencies",
+			name: "XrayLib - Circular dependencies",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{

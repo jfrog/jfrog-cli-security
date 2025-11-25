@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -39,11 +40,13 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 }
 
 func TestJasRunner(t *testing.T) {
-	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
+	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
 	targetResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
 
 	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}, targetResults.GetTechnologies()...)))
+	assert.NoError(t, err)
+	jasScanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable()
 	assert.NoError(t, err)
 
 	targetResults.ScaScanResults(0, jas.FakeBasicXrayResults[0])
@@ -63,7 +66,7 @@ func TestJasRunner(t *testing.T) {
 }
 
 func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
-	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
+	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner, _ := jas.NewJasScanner(&jas.FakeServerDetails)

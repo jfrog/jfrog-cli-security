@@ -3,31 +3,33 @@ package audit
 import (
 	"time"
 
-	"github.com/jfrog/jfrog-client-go/xray/services"
-
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
+	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
-	*xrayutils.AuditBasicParams
+	*AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
+	allowedLicenses             []string
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Dynamic logic params
@@ -35,6 +37,10 @@ type AuditParams struct {
 	bomGenerator                    bom.SbomGenerator
 	customBomGenBinaryPath          string
 	scaScanStrategy                 scan.SbomScanStrategy
+	uploadCdxResults                bool
+	rtResultRepository              string
+	violationGenerator              policy.PolicyHandler
+	sastRules                       string
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -43,8 +49,17 @@ type AuditParams struct {
 
 func NewAuditParams() *AuditParams {
 	return &AuditParams{
-		AuditBasicParams: &xrayutils.AuditBasicParams{},
+		AuditBasicParams: &AuditBasicParams{},
 	}
+}
+
+func (params *AuditParams) SetGitContext(gitContext *xscServices.XscGitInfoContext) *AuditParams {
+	params.gitContext = gitContext
+	return params
+}
+
+func (params *AuditParams) GitContext() *xscServices.XscGitInfoContext {
+	return params.gitContext
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {
@@ -91,6 +106,15 @@ func (params *AuditParams) CustomAnalyzerManagerBinaryPath() string {
 	return params.customAnalyzerManagerBinaryPath
 }
 
+func (params *AuditParams) SetSastRules(sastRules string) *AuditParams {
+	params.sastRules = sastRules
+	return params
+}
+
+func (params *AuditParams) SastRules() string {
+	return params.sastRules
+}
+
 func (params *AuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *AuditParams {
 	params.scaScanStrategy = scaScanStrategy
 	return params
@@ -109,7 +133,7 @@ func (params *AuditParams) StartTime() time.Time {
 	return params.startTime
 }
 
-func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
+func (params *AuditParams) SetGraphBasicParams(gbp *AuditBasicParams) *AuditParams {
 	params.AuditBasicParams = gbp
 	return params
 }
@@ -180,7 +204,7 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 }
 
 func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.BuildInfoBomGeneratorParams, err error) {
-	serverDetails, err := params.AuditBasicParams.ServerDetails()
+	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return
 	}
@@ -207,6 +231,7 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
+		MaxTreeDepth: params.MaxTreeDepth(),
 		MaxTreeDepth:      params.MaxTreeDepth(),
 		UseIncludedBuilds: params.UseIncludedBuilds(),
 	}
@@ -273,4 +298,40 @@ func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Tec
 		return false
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+}
+
+func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {
+	params.violationGenerator = violationGenerator
+	return params
+}
+
+func (params *AuditParams) ViolationGenerator() policy.PolicyHandler {
+	return params.violationGenerator
+}
+
+func (params *AuditParams) SetAllowedLicenses(allowedLicenses []string) *AuditParams {
+	params.allowedLicenses = allowedLicenses
+	return params
+}
+
+func (params *AuditParams) AllowedLicenses() []string {
+	return params.allowedLicenses
+}
+
+func (params *AuditParams) SetUploadCdxResults(uploadCdxResults bool) *AuditParams {
+	params.uploadCdxResults = uploadCdxResults
+	return params
+}
+
+func (params *AuditParams) UploadCdxResults() bool {
+	return params.uploadCdxResults
+}
+
+func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *AuditParams {
+	params.rtResultRepository = rtResultRepository
+	return params
+}
+
+func (params *AuditParams) RtResultRepository() string {
+	return params.rtResultRepository
 }
