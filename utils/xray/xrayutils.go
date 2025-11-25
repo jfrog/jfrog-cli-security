@@ -7,19 +7,23 @@ import (
 const MaxUniqueAppearances = 10
 
 type DepTreeNode struct {
-	Classifier *string   `json:"classifier"`
-	Types      *[]string `json:"types"`
-	Children   []string  `json:"children"`
+	Classifier     *string   `json:"classifier"`
+	Types          *[]string `json:"types"`
+	Children       []string  `json:"children"`
+	Unresolved     bool      `json:"unresolved,omitempty"`
+	Configurations *[]string `json:"configurations,omitempty"`
 }
 
 func toNodeTypesMap(depMap map[string]DepTreeNode) map[string]*DepTreeNode {
 	mapOfTypes := map[string]*DepTreeNode{}
 	for nodId, value := range depMap {
 		mapOfTypes[nodId] = nil
-		if value.Types != nil || value.Classifier != nil {
+		if value.Types != nil || value.Classifier != nil || value.Configurations != nil {
 			mapOfTypes[nodId] = &DepTreeNode{
-				Classifier: value.Classifier,
-				Types:      value.Types,
+				Classifier:     value.Classifier,
+				Types:          value.Types,
+				Configurations: value.Configurations,
+				Unresolved:     value.Unresolved,
 			}
 		}
 	}

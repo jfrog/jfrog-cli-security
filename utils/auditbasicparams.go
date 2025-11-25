@@ -78,6 +78,7 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
+	useIncludedBuilds                bool
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -133,6 +134,13 @@ func (abp *AuditBasicParams) MaxTreeDepth() string {
 
 func (abp *AuditBasicParams) SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams {
 	abp.maxTreeDepth = maxTreeDepth
+	return abp
+}
+
+func (abp *AuditBasicParams) UseIncludedBuilds() bool { return abp.useIncludedBuilds }
+
+func (abp *AuditBasicParams) SetUseIncludedBuilds(useIncludedBuilds bool) *AuditBasicParams {
+	abp.useIncludedBuilds = useIncludedBuilds
 	return abp
 }
 

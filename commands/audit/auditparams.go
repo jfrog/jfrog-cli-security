@@ -3,6 +3,8 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-client-go/xray/services"
+
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -12,7 +14,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 type AuditParams struct {
@@ -206,7 +207,8 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
-		MaxTreeDepth: params.MaxTreeDepth(),
+		MaxTreeDepth:      params.MaxTreeDepth(),
+		UseIncludedBuilds: params.UseIncludedBuilds(),
 	}
 	return
 }

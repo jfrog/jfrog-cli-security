@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -71,15 +72,16 @@ const (
 	InsecureTls = "insecure-tls"
 
 	// Generic command flags
-	SpecFlag    = "spec"
-	Threads     = "threads"
-	Recursive   = "recursive"
-	RegexpFlag  = "regexp"
-	AntFlag     = "ant"
-	Project     = "project"
-	Exclusions  = "exclusions"
-	IncludeDirs = "include-dirs"
-	UseWrapper  = "use-wrapper"
+	SpecFlag          = "spec"
+	Threads           = "threads"
+	Recursive         = "recursive"
+	RegexpFlag        = "regexp"
+	AntFlag           = "ant"
+	Project           = "project"
+	Exclusions        = "exclusions"
+	IncludeDirs       = "include-dirs"
+	UseWrapper        = "use-wrapper"
+	UseIncludedBuilds = "use-included-builds"
 )
 
 const (
