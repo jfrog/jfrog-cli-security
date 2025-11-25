@@ -231,7 +231,6 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
-		MaxTreeDepth: params.MaxTreeDepth(),
 		MaxTreeDepth:      params.MaxTreeDepth(),
 		UseIncludedBuilds: params.UseIncludedBuilds(),
 	}
