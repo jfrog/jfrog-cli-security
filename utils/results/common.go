@@ -471,6 +471,33 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
+func GetCveApplicabilityFieldFixed(cveId string, applicabilityScanResults []*sarif.Run) *formats.Applicability {
+	if len(applicabilityScanResults) == 0 {
+		return nil
+	}
+	applicability := formats.Applicability{}
+	var applicabilityStatuses []jasutils.ApplicabilityStatus
+	for _, applicabilityRun := range applicabilityScanResults {
+		// Get information from the rule
+		if rule := sarifutils.GetRuleById(applicabilityRun, jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
+			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
+			applicability.UndeterminedReason = sarifutils.GetRuleUndeterminedReason(rule)
+			if status := getApplicabilityStatusFromRule(rule); status != jasutils.NotScanned {
+				applicabilityStatuses = append(applicabilityStatuses, status)
+			}
+		}
+		cveResults := sarifutils.GetNotPassingResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun)
+	}
+	// Calculate final applicability status
+	if len(applicabilityStatuses) > 0 {
+		applicability.Status = string(GetFinalApplicabilityStatus(applicabilityStatuses))
+	} else {
+		// No status found in rules, set to Not Covered
+		applicability.Status = string(jasutils.NotCovered)
+	}
+	return &applicability
+}
+
 func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run) *formats.Applicability {
 	if len(applicabilityScanResults) == 0 {
 		return nil
@@ -483,16 +510,17 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
 			applicability.UndeterminedReason = sarifutils.GetRuleUndeterminedReason(rule)
 			status := getApplicabilityStatusFromRule(rule)
-			if status != "" {
+			if status != jasutils.NotScanned {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
 		}
-		cveResults := sarifutils.GetResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun)
+		cveResults := sarifutils.GetNotPassingResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun)
 		if len(cveResults) == 0 {
 			continue
 		}
 		resultFound = true
 		for _, result := range cveResults {
+
 			// Add new evidences from locations
 			for _, location := range result.Locations {
 				if evidence := getEvidence(result, location, applicabilityRun.Invocations...); evidence != nil {
@@ -559,6 +587,10 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 		if cve.Applicability != nil {
 			applicableStatuses = append(applicableStatuses, jasutils.ApplicabilityStatus(cve.Applicability.Status))
 		}
+	}
+	if len(applicableStatuses) == 0 {
+		// CA scan ran but no applicability status found for any CVEs
+		return jasutils.NotCovered
 	}
 	return GetFinalApplicabilityStatus(applicableStatuses)
 }
@@ -632,14 +664,19 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 	return
 }
 
-// If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
+// If we don't get any statues it means the applicability  -> scanner didn't run = not scanned, scanner run = not covered
 // If at least one cve is applicable -> final value is applicable
 // Else if at least one cve is undetermined -> final value is undetermined
 // Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
-func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
+func GetFinalApplicabilityStatus(hasContextualAnalysisRun bool, applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
 	if len(applicabilityStatuses) == 0 {
+		if hasContextualAnalysisRun {
+			// Run exists but no statuses found
+			return jasutils.NotCovered
+		}
+		// No run so not scanned
 		return jasutils.NotScanned
 	}
 	foundUndetermined := false
@@ -647,6 +684,7 @@ func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	foundNotCovered := false
 	for _, status := range applicabilityStatuses {
 		if status == jasutils.Applicable {
+			// Has at least one applicable cve
 			return jasutils.Applicable
 		}
 		if status == jasutils.ApplicabilityUndetermined {
@@ -661,15 +699,18 @@ func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 
 	}
 	if foundUndetermined {
+		// Has at least one undetermined cve and no applicable cve
 		return jasutils.ApplicabilityUndetermined
 	}
 	if foundMissingContext {
+		// Has at least one missing context cve and no (applicable or undetermined) cve
 		return jasutils.MissingContext
 	}
 	if foundNotCovered {
+
 		return jasutils.NotCovered
 	}
-
+	// Here we know that all cves are not applicable (did not find any other status )
 	return jasutils.NotApplicable
 }
 

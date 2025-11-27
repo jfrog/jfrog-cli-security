@@ -577,8 +577,15 @@ func GetResultMsgText(result *sarif.Result) string {
 }
 
 func GetResultRuleId(result *sarif.Result) string {
-	if result.RuleID != nil {
+	if result != nil && result.RuleID != nil {
 		return *result.RuleID
+	}
+	return ""
+}
+
+func GetResultKind(result *sarif.Result) string {
+	if result != nil {
+		return result.Kind
 	}
 	return ""
 }
@@ -904,10 +911,10 @@ func GetResultFingerprint(result *sarif.Result) string {
 	return ""
 }
 
-func GetResultsByRuleId(ruleId string, runs ...*sarif.Run) (results []*sarif.Result) {
+func GetNotPassingResultsByRuleId(ruleId string, runs ...*sarif.Run) (results []*sarif.Result) {
 	for _, run := range runs {
 		for _, result := range run.Results {
-			if GetResultRuleId(result) == ruleId {
+			if GetResultRuleId(result) == ruleId && GetResultKind(result) != "pass" {
 				results = append(results, result)
 			}
 		}
