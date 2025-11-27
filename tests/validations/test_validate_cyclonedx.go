@@ -35,16 +35,22 @@ func ValidateCommandCycloneDxOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
-func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content *cdxutils.FullBOM) {
-	actualValues := validationCountActualValues{}
+func GetCycloneDxActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
+	var results *cdxutils.FullBOM
+	assert.NoError(t, json.Unmarshal([]byte(content), &results), "Failed to unmarshal content to json.")
+	return toActualValuesCycloneDx(t, results)
+}
 
+func toActualValuesCycloneDx(t *testing.T, content *cdxutils.FullBOM) (actualValues ValidationCountActualValues) {
 	actualValues.SbomComponents, actualValues.RootComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(&content.BOM)
 	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities = countScaVulnerabilities(&content.BOM)
 	actualValues.SastVulnerabilities, actualValues.SecretsVulnerabilities, actualValues.IacVulnerabilities, actualValues.InactiveSecretsVulnerabilities = countJasVulnerabilities(content)
-
 	actualValues.Vulnerabilities = actualValues.ScaVulnerabilities + actualValues.SastVulnerabilities + actualValues.SecretsVulnerabilities + actualValues.IacVulnerabilities
+	return
+}
 
-	ValidateCount(t, "cyclonedx BOM", params, actualValues)
+func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content *cdxutils.FullBOM) {
+	ValidateCount(t, "cyclonedx BOM", params, toActualValuesCycloneDx(t, content))
 }
 
 func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, rootComponents, directComponents, transitiveComponents, licenses int) {

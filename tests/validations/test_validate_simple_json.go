@@ -39,12 +39,14 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
-// Validate simple-json report results according to the expected counts in the validation params.
-// Actual content should be a formats.SimpleJsonResults in the validation params.
-// If Expected is provided, the validation will check if the Actual content matches the expected results.
-// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
-func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
-	actualValues := validationCountActualValues{
+func GetSimpleJsonActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
+	var results formats.SimpleJsonResults
+	assert.NoError(t, json.Unmarshal([]byte(content), &results), "Failed to unmarshal content to formats.SimpleJsonResults")
+	return toActualValuesSimpleJson(t, results)
+}
+
+func toActualValuesSimpleJson(t *testing.T, results formats.SimpleJsonResults) (actualValues ValidationCountActualValues) {
+	actualValues = ValidationCountActualValues{
 		// Total
 		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities),
 		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations),
@@ -109,8 +111,15 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 			actualValues.MissingContextViolations++
 		}
 	}
+	return
+}
 
-	ValidateCount(t, "simple-json", params, actualValues)
+// Validate simple-json report results according to the expected counts in the validation params.
+// Actual content should be a formats.SimpleJsonResults in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
+func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
+	ValidateCount(t, "simple-json", params, toActualValuesSimpleJson(t, results))
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
