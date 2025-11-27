@@ -43,10 +43,10 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 func GetSarifActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
 	results, err := sarif.FromString(content)
 	assert.NoError(t, err, "Failed to unmarshal content to sarif report.")
-	return toActualValuesSarif(t, results)
+	return toActualValuesSarif(results)
 }
 
-func toActualValuesSarif(t *testing.T, content *sarif.Report) (actualValues ValidationCountActualValues) {
+func toActualValuesSarif(content *sarif.Report) (actualValues ValidationCountActualValues) {
 	// SCA
 	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations = countScaResults(content)
 	actualValues.Vulnerabilities += actualValues.ScaVulnerabilities
@@ -78,7 +78,7 @@ func toActualValuesSarif(t *testing.T, content *sarif.Report) (actualValues Vali
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sarif.Report) {
-	actualValues := toActualValuesSarif(t, report)
+	actualValues := toActualValuesSarif(report)
 	if params.Total != nil {
 		// Not supported in the summary output
 		params.Total.Licenses = 0

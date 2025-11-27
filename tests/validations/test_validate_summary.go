@@ -23,10 +23,10 @@ func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {
 func GetSummaryActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
 	var results formats.ResultsSummary
 	assert.NoError(t, json.Unmarshal([]byte(content), &results), "Failed to unmarshal content to formats.ResultsSummary.")
-	return toActualValuesSummary(t, results)
+	return toActualValuesSummary(results)
 }
 
-func toActualValuesSummary(t *testing.T, results formats.ResultsSummary) (actualValues ValidationCountActualValues) {
+func toActualValuesSummary(results formats.ResultsSummary) (actualValues ValidationCountActualValues) {
 	actualValues = ValidationCountActualValues{
 		// Total
 		Vulnerabilities: results.GetTotalVulnerabilities(),
@@ -113,7 +113,7 @@ func toActualValuesSummary(t *testing.T, results formats.ResultsSummary) (actual
 }
 
 func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results formats.ResultsSummary) {
-	actualValues := toActualValuesSummary(t, results)
+	actualValues := toActualValuesSummary(results)
 	if params.Total != nil {
 		// Not supported in the summary output
 		params.Total.Licenses = 0

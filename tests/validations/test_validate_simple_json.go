@@ -42,10 +42,10 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 func GetSimpleJsonActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
 	var results formats.SimpleJsonResults
 	assert.NoError(t, json.Unmarshal([]byte(content), &results), "Failed to unmarshal content to formats.SimpleJsonResults")
-	return toActualValuesSimpleJson(t, results)
+	return toActualValuesSimpleJson(results)
 }
 
-func toActualValuesSimpleJson(t *testing.T, results formats.SimpleJsonResults) (actualValues ValidationCountActualValues) {
+func toActualValuesSimpleJson(results formats.SimpleJsonResults) (actualValues ValidationCountActualValues) {
 	actualValues = ValidationCountActualValues{
 		// Total
 		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities),
@@ -119,7 +119,7 @@ func toActualValuesSimpleJson(t *testing.T, results formats.SimpleJsonResults) (
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
-	ValidateCount(t, "simple-json", params, toActualValuesSimpleJson(t, results))
+	ValidateCount(t, "simple-json", params, toActualValuesSimpleJson(results))
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
