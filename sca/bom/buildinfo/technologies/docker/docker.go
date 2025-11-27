@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -12,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -93,13 +95,17 @@ func getMultiArchShaRefs(params technologies.BuildInfoBomGeneratorParams, repo, 
 		return nil
 	}
 
-	shaRefs := make([]string, 0, len(manifestList.Manifests))
+	// Find the manifest matching the current architecture
+	currentArch := runtime.GOARCH
 	for _, manifest := range manifestList.Manifests {
-		if manifest.Digest != "" {
-			shaRefs = append(shaRefs, dockerPackagePrefix+pkgName+":"+manifest.Digest)
+		if manifest.Digest != "" && manifest.Platform.Architecture == currentArch {
+			log.Debug("Found matching Docker architecture %s, digest: %s", currentArch, manifest.Digest)
+			return []string{dockerPackagePrefix + pkgName + ":" + manifest.Digest}
 		}
 	}
-	return shaRefs
+
+	log.Debug("No matching Docker architecture found for %s, checking all manifests", currentArch)
+	return nil
 }
 
 func buildManifestUrl(serverDetails *config.ServerDetails, repo, pkgName, pkgVersion string) string {
@@ -186,6 +192,10 @@ func GetDockerRepoConfig(serverDetails *config.ServerDetails, imageName, depsRep
 
 type dockerManifestList struct {
 	Manifests []struct {
-		Digest string `json:"digest"`
+		Digest   string `json:"digest"`
+		Platform struct {
+			Architecture string `json:"architecture"`
+			OS           string `json:"os"`
+		} `json:"platform"`
 	} `json:"manifests"`
 }
