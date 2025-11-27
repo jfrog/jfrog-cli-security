@@ -658,17 +658,24 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	testCases := []struct {
 		name           string
 		input          []jasutils.ApplicabilityStatus
+		hasRuns        bool
 		expectedOutput jasutils.ApplicabilityStatus
 	}{
 		{
 			name:           "applicable wins all statuses",
-			input:          []jasutils.ApplicabilityStatus{jasutils.ApplicabilityUndetermined, jasutils.Applicable, jasutils.NotCovered, jasutils.NotApplicable},
+			hasRuns:        true,
+			input:          []jasutils.ApplicabilityStatus{jasutils.ApplicabilityUndetermined, jasutils.NotScanned, jasutils.Applicable, jasutils.NotCovered, jasutils.NotApplicable},
 			expectedOutput: jasutils.Applicable,
 		},
 		{
 			name:           "undetermined wins not covered",
 			input:          []jasutils.ApplicabilityStatus{jasutils.NotCovered, jasutils.ApplicabilityUndetermined, jasutils.NotCovered, jasutils.NotApplicable},
 			expectedOutput: jasutils.ApplicabilityUndetermined,
+		},
+		{
+			name:           "missing context wins not covered",
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotCovered, jasutils.MissingContext, jasutils.NotCovered, jasutils.NotApplicable},
+			expectedOutput: jasutils.MissingContext,
 		},
 		{
 			name:           "not covered wins not applicable",
@@ -681,14 +688,26 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 			expectedOutput: jasutils.NotApplicable,
 		},
 		{
-			name:           "no statuses",
+			name:           "no statuses - no runs",
 			input:          []jasutils.ApplicabilityStatus{},
 			expectedOutput: jasutils.NotScanned,
+		},
+		{
+			name:           "no statuses - has runs",
+			input:          []jasutils.ApplicabilityStatus{},
+			hasRuns:        true,
+			expectedOutput: jasutils.NotCovered,
+		},
+		{
+			name:           "ignore not scanned statuses",
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotScanned, jasutils.NotScanned},
+			hasRuns:        true,
+			expectedOutput: jasutils.NotCovered,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedOutput, GetFinalApplicabilityStatus(tc.input))
+			assert.Equal(t, tc.expectedOutput, GetFinalApplicabilityStatus(tc.hasRuns, tc.input))
 		})
 	}
 }
