@@ -3,16 +3,12 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"os/exec"
 	"runtime"
 	"strings"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	"github.com/jfrog/jfrog-client-go/artifactory"
-	"github.com/jfrog/jfrog-client-go/auth"
-	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -29,27 +25,31 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return nil, nil, fmt.Errorf("docker image name is required")
 	}
 
-	imageName := normalizeImageName(params.DockerImageName)
-	repo, pkgName, pkgVersion := extractRepoImageAndTag(imageName)
-	if repo == "" {
-		return nil, nil, fmt.Errorf("invalid docker image format: '%s'. Expected format: 'repo/path/image:tag' or 'repo/image:tag'", imageName)
-	}
+	fullImageName := normalizeImageName(params.DockerImageName)
+
+	_, pkgName, pkgVersion := extractRepoImageAndTag(fullImageName)
 	if pkgName == "" {
-		return nil, nil, fmt.Errorf("invalid docker image format: '%s'. Image name is missing", imageName)
+		return nil, nil, fmt.Errorf("invalid docker image format: '%s'. Image name is missing", fullImageName)
 	}
 
 	pkgName = strings.TrimPrefix(pkgName, "library/")
-	imageRef := dockerPackagePrefix + pkgName + ":" + pkgVersion
+
+	archDigest, dockerErr := getArchDigestUsingDocker(fullImageName)
+	if dockerErr != nil {
+		return nil, nil, dockerErr
+	}
+
+	var imageRef string
+	if archDigest != "" {
+		imageRef = dockerPackagePrefix + pkgName + ":" + archDigest
+		log.Debug("Using arch-specific Docker digest: %s", imageRef)
+	} else {
+		imageRef = dockerPackagePrefix + pkgName + ":" + pkgVersion
+		log.Debug("Using tag for Docker image: %s", imageRef)
+	}
+
 	uniqueDeps = []string{imageRef}
 	childNodes := []*xrayUtils.GraphNode{{Id: imageRef}}
-
-	if hasServerDetails(params) {
-		shaRefs := getMultiArchShaRefs(params, repo, pkgName, pkgVersion)
-		if len(shaRefs) > 0 {
-			uniqueDeps = shaRefs
-			childNodes = createShaNodes(shaRefs)
-		}
-	}
 
 	return []*xrayUtils.GraphNode{{Id: "root", Nodes: childNodes}}, uniqueDeps, nil
 }
@@ -62,98 +62,72 @@ func normalizeImageName(imageName string) string {
 	return strings.TrimSuffix(imageName, "/")
 }
 
-func hasServerDetails(params technologies.BuildInfoBomGeneratorParams) bool {
-	return params.ServerDetails != nil && (params.ServerDetails.ArtifactoryUrl != "" || params.ServerDetails.Url != "")
-}
+func getArchDigestUsingDocker(fullImageName string) (string, error) {
+	log.Debug("Running docker buildx imagetools inspect for: %s", fullImageName)
 
-func getMultiArchShaRefs(params technologies.BuildInfoBomGeneratorParams, repo, pkgName, pkgVersion string) []string {
-	rtManager, err := rtUtils.CreateServiceManager(params.ServerDetails, 2, 0, false)
+	cmd := exec.Command("docker", "buildx", "imagetools", "inspect", "--raw", fullImageName)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil
+		outputStr := string(output)
+
+		if strings.Contains(outputStr, "403") || strings.Contains(outputStr, "Forbidden") {
+			log.Debug(fmt.Sprintf("Received 403 Forbidden: %s", outputStr))
+			log.Debug("403 response received (single-arch image or blocked), using tag for validating checks")
+			return "", nil
+		}
+
+		// For other errors, return the original Docker error output
+		return "", fmt.Errorf("%s", strings.TrimSpace(outputStr))
 	}
 
-	rtAuth, err := params.ServerDetails.CreateArtAuthConfig()
-	if err != nil {
-		return nil
+	var manifestList dockerManifestList
+	if err := json.Unmarshal(output, &manifestList); err != nil {
+		log.Debug("Not a multi-arch manifest list, will use tag directly")
+		return "", nil
 	}
 
-	manifestUrl := buildManifestUrl(params.ServerDetails, repo, pkgName, pkgVersion)
-	httpClientDetails := createDockerHttpClientDetails(rtAuth)
-
-	resp, _, err := rtManager.Client().SendHead(manifestUrl, &httpClientDetails)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
-		return nil
+	if len(manifestList.Manifests) == 0 {
+		log.Debug("Single-arch image, will use tag directly")
+		return "", nil
 	}
 
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "manifest.list.v2+json") && !strings.Contains(contentType, "image.index.v1+json") {
-		return nil
-	}
-
-	manifestList := fetchManifestList(rtManager, manifestUrl, httpClientDetails)
-	if manifestList == nil || len(manifestList.Manifests) == 0 {
-		return nil
-	}
-
-	// Find the manifest matching the current architecture
 	currentArch := runtime.GOARCH
 	for _, manifest := range manifestList.Manifests {
 		if manifest.Digest != "" && manifest.Platform.Architecture == currentArch {
 			log.Debug("Found matching Docker architecture %s, digest: %s", currentArch, manifest.Digest)
-			return []string{dockerPackagePrefix + pkgName + ":" + manifest.Digest}
+			return manifest.Digest, nil
 		}
 	}
 
-	log.Debug("No matching Docker architecture found for %s, checking all manifests", currentArch)
-	return nil
-}
-
-func buildManifestUrl(serverDetails *config.ServerDetails, repo, pkgName, pkgVersion string) string {
-	artiUrl := serverDetails.ArtifactoryUrl
-	if artiUrl == "" && serverDetails.Url != "" {
-		artiUrl = strings.TrimSuffix(serverDetails.Url, "/") + "/artifactory"
-	}
-	return fmt.Sprintf("%s/api/docker/%s/v2/%s/manifests/%s",
-		strings.TrimSuffix(artiUrl, "/"), repo, pkgName, pkgVersion)
-}
-
-func createDockerHttpClientDetails(rtAuth auth.ServiceDetails) httputils.HttpClientDetails {
-	httpClientDetails := rtAuth.CreateHttpClientDetails()
-	httpClientDetails.Headers["Accept"] = "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v1+prettyjws, application/json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.index.v1+json"
-	return httpClientDetails
-}
-
-func fetchManifestList(rtManager artifactory.ArtifactoryServicesManager, manifestUrl string, httpClientDetails httputils.HttpClientDetails) *dockerManifestList {
-	resp, respBody, _, err := rtManager.Client().SendGet(manifestUrl, false, &httpClientDetails)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
-		return nil
-	}
-
-	var manifestList dockerManifestList
-	if err := json.Unmarshal(respBody, &manifestList); err != nil {
-		return nil
-	}
-	return &manifestList
-}
-
-func createShaNodes(shaRefs []string) []*xrayUtils.GraphNode {
-	nodes := make([]*xrayUtils.GraphNode, 0, len(shaRefs))
-	for _, shaRef := range shaRefs {
-		nodes = append(nodes, &xrayUtils.GraphNode{Id: shaRef})
-	}
-	return nodes
+	log.Debug("No matching architecture found for %s in multi-arch image, will use tag directly", currentArch)
+	return "", nil
 }
 
 func extractRepoImageAndTag(imagePath string) (repo, image, tag string) {
 	tag = "latest"
+
 	if lastColon := strings.LastIndex(imagePath, ":"); lastColon > 0 {
-		tag = imagePath[lastColon+1:]
-		imagePath = imagePath[:lastColon]
+		afterColon := imagePath[lastColon+1:]
+		if !strings.Contains(afterColon, "/") {
+			tag = afterColon
+			imagePath = imagePath[:lastColon]
+		}
 	}
 
 	parts := strings.Split(imagePath, "/")
 	if len(parts) < 2 {
 		return "", imagePath, tag
+	}
+
+	firstPart := parts[0]
+	if strings.Contains(firstPart, ".") || strings.Contains(firstPart, ":") {
+		if len(parts) == 2 {
+			return "", parts[1], tag
+		}
+		if len(parts) == 3 {
+			return parts[1], parts[2], tag
+		}
+		return parts[1], strings.Join(parts[2:], "/"), tag
 	}
 
 	return parts[0], strings.Join(parts[1:], "/"), tag
@@ -182,7 +156,7 @@ func GetDockerRepositoryConfig(serverDetails *config.ServerDetails, imageName, d
 
 func GetDockerRepoConfig(serverDetails *config.ServerDetails, imageName, depsRepo string) (*project.RepositoryConfig, error) {
 	if imageName == "" {
-		return nil, fmt.Errorf("docker image name is required. Use --image flag with format 'repo/path/image:tag'")
+		return nil, fmt.Errorf("docker image name is required. Use --image flag with format 'RT-URL/repo/path/image:tag'")
 	}
 	if serverDetails == nil {
 		return nil, fmt.Errorf("server details are required")
