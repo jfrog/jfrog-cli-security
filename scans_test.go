@@ -353,7 +353,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 	// Run docker scan on image
 	cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
 	if validateSecrets {
-		cmdArgs = append(cmdArgs, "--validate-secrets", "--format=simple-json")
+		cmdArgs = append(cmdArgs, "--secrets", "--validate-secrets", "--format=simple-json")
 	} else {
 		cmdArgs = append(cmdArgs, "--format=json")
 	}
