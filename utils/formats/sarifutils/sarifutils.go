@@ -577,7 +577,7 @@ func GetResultMsgText(result *sarif.Result) string {
 }
 
 func GetResultRuleId(result *sarif.Result) string {
-	if result.RuleID != nil {
+	if result != nil && result.RuleID != nil {
 		return *result.RuleID
 	}
 	return ""
