@@ -552,7 +552,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 		if !ok {
 			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", sarifutils.GetRuleId(rule)))
 		}
-		switch status {
+		switch strings.ToLower(status) {
 		case "not_covered":
 			return jasutils.NotCovered
 		case "undetermined":
