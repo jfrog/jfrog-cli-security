@@ -145,8 +145,8 @@
                         "visible": true
                     },
                     "4": {
-                        "ref": "ninja/1.13.1",
-                        "require": "ninja/1.13.1",
+                        "ref": "ninja/1.13.2",
+                        "require": "ninja/1.13.2",
                         "run": true,
                         "libs": false,
                         "skip": false,
@@ -965,7 +965,7 @@
                 },
                 "dependencies": {
                     "4": {
-                        "ref": "ninja/1.13.1",
+                        "ref": "ninja/1.13.2",
                         "require": "ninja/[>=1.10.2 <2]",
                         "run": true,
                         "libs": false,
@@ -985,7 +985,7 @@
                 "test": false
             },
             "4": {
-                "ref": "ninja/1.13.1#294f8721dbcde145674f7ba44994700e",
+                "ref": "ninja/1.13.2#294f8721dbcde145674f7ba44994700e",
                 "id": "4",
                 "recipe": "Downloaded",
                 "package_id": "3593751651824fb813502c69c971267624ced41a",
@@ -1016,7 +1016,7 @@
                 "win_bash_run": null,
                 "default_options": null,
                 "options_description": null,
-                "version": "1.13.1",
+                "version": "1.13.2",
                 "topics": [
                     "ninja",
                     "build"
@@ -1079,7 +1079,7 @@
                     }
                 },
                 "conf_info": {},
-                "label": "ninja/1.13.1",
+                "label": "ninja/1.13.2",
                 "info": {
                     "settings": {
                         "os": "Linux",
@@ -1092,7 +1092,7 @@
                     "sources": {
                         "1.13.1": {
                             "sha256": "f0055ad0369bf2e372955ba55128d000cfcc21777057806015b45e4accbebf23",
-                            "url": "https://github.com/ninja-build/ninja/archive/v1.13.1.tar.gz"
+                            "url": "https://github.com/ninja-build/ninja/archive/v1.13.2.tar.gz"
                         }
                     }
                 },
@@ -1106,7 +1106,7 @@
         },
         "overrides": {},
         "resolved_ranges": {
-            "ninja/[>=1.10.2 <2]": "ninja/1.13.1"
+            "ninja/[>=1.10.2 <2]": "ninja/1.13.2"
         },
         "replaced_requires": {},
         "error": null
