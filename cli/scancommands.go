@@ -295,6 +295,12 @@ func ScanCmd(c *components.Context) error {
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
+	// Check sub-scans to perform
+	if subScans, err := getSubScansToPreform(c); err != nil {
+		return err
+	} else if len(subScans) > 0 {
+		scanCmd.SetScansToPerform(subScans)
+	}
 	return commandsCommon.Exec(scanCmd)
 }
 
@@ -705,6 +711,12 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand := scan.NewDockerScanCommand()
+	// Check sub-scans to perform
+	if subScans, err := getSubScansToPreform(c); err != nil {
+		return err
+	} else if len(subScans) > 0 {
+		containerScanCommand.SetScansToPerform(subScans)
+	}
 	containerScanCommand.
 		SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).

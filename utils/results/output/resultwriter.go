@@ -271,22 +271,21 @@ func (rw *ResultsWriter) printTables() (err error) {
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
-	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
-		return
-	}
-	if rw.showViolations || rw.commandResults.HasViolationContext() {
-		if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
-			return
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
+		if rw.showViolations || rw.commandResults.HasViolationContext() {
+			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
+				return
+			}
 		}
-	}
-	if rw.commandResults.IncludesVulnerabilities() {
-		if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
-			return
+		if rw.commandResults.IncludesVulnerabilities() {
+			if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+				return
+			}
 		}
-	}
-	if rw.commandResults.IncludesLicenses() {
-		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
-			return
+		if rw.commandResults.IncludesLicenses() {
+			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
+				return
+			}
 		}
 	}
 	if !rw.commandResults.IncludeSbom() {
