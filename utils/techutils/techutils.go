@@ -3,7 +3,6 @@ package techutils
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -831,6 +830,9 @@ func ConvertXrayPackageType(xrayPackageType string) string {
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	if packageType == "gav" {
+		componentName = strings.ReplaceAll(componentName, "/", ":")
+	}
 	if componentVersion == "" {
 		// If the component version is empty, we return the component name only
 		return fmt.Sprintf("%s://%s", packageType, componentName)
@@ -895,30 +897,27 @@ func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
 	return
 }
 
+// scheme:type/namespace/name@version?qualifiers#subpath -> pkg:type/namespace/name@version?properties
 func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
 	if packageType == "" {
 		packageType = "generic"
 	}
-	purl := packageurl.NewPackageURL(packageType, "", compName, version, properties, "").String()
-	// Unescape the output
-	output, err := url.QueryUnescape(purl)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
-		// Return the original output
-		return purl
+	// Replace ':' in compName and namespace with '/' to support groupId:artifactId format in Maven
+	compName = strings.ReplaceAll(compName, ":", "/")
+	// Check if compName contains a namespace
+	namespace := ""
+	if lastIndex := strings.LastIndex(compName, "/"); lastIndex != -1 {
+		namespace = compName[:lastIndex]
+		compName = compName[lastIndex+1:]
 	}
-	return
+	return packageurl.NewPackageURL(packageType, namespace, compName, version, properties, "").String()
 }
 
 func ToPackageRef(compName, version, packageType string) (output string) {
 	if packageType == "" {
 		packageType = "generic"
 	}
-	if version == "" {
-		// If the version is empty, we return the component name only
-		return fmt.Sprintf("%s:%s", packageType, compName)
-	}
-	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
+	return ToPackageUrl(compName, version, packageType)
 }
 
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id

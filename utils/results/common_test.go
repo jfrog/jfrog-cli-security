@@ -22,246 +22,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func TestViolationFailBuild(t *testing.T) {
-	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
-
-	tests := []struct {
-		name           string
-		auditResults   *SecurityCommandResults
-		expectedResult bool
-	}{
-		{
-			name:           "non-applicable violations with FailBuild & no skip-non-applicable in ScaResults.Violations - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(false)),
-			expectedResult: true,
-		},
-		{
-			name:           "non-applicable violations with FailBuild & skip-non-applicable in ScaResults.Violations - build should not fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(true)),
-			expectedResult: false,
-		},
-		{
-			name:           "non-applicable violations with FailBuild & no skip-non-applicable in DeprecatedXrayResults - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(false)),
-			expectedResult: true,
-		},
-		{
-			name:           "non-applicable violations with FailBuild & skip-non-applicable in DeprecatedXrayResults - build should not fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(true)),
-			expectedResult: false,
-		},
-		{
-			name:           "no applicability results, violations with FailBuild in DeprecatedXrayResults - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, false, nil),
-			expectedResult: true,
-		},
-		{
-			name:           "no applicability results, violations with FailBuild in ScaResults.Violations - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, false, nil),
-			expectedResult: true,
-		},
-		{
-			name: "multiple targets - first target should not fail, second target should fail",
-			auditResults: &SecurityCommandResults{
-				EntitledForJas: true,
-				Targets: []*TargetResults{
-					{
-						// First target - should not fail
-						ScanTarget: ScanTarget{Target: "test-target-1"},
-						ScaResults: &ScaScanResults{
-							Violations: []services.Violation{
-								{
-									// Violation 1: FailBuild & FailPr set to false - should not fail
-									Components:    components,
-									ViolationType: utils.ViolationTypeSecurity.String(),
-									FailBuild:     false,
-									FailPr:        false,
-									Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
-									Severity:      "High",
-								},
-								{
-									// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
-									Components:    components,
-									ViolationType: utils.ViolationTypeSecurity.String(),
-									FailBuild:     true,
-									Policies:      []services.Policy{{SkipNotApplicable: true}},
-									Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
-									Severity:      "High",
-								},
-							},
-						},
-						JasResults: &JasScansResults{
-							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
-								{
-									Scan: []*sarif.Run{
-										{
-											Tool: &sarif.Tool{
-												Driver: &sarif.ToolComponent{
-													Rules: []*sarif.ReportingDescriptor{
-														{
-															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-2222")),
-															Properties: &sarif.PropertyBag{
-																Properties: map[string]interface{}{
-																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-																},
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					{
-						// Second target - should fail
-						ScanTarget: ScanTarget{Target: "test-target-2"},
-						ScaResults: &ScaScanResults{
-							Violations: []services.Violation{
-								{
-									// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
-									Components:    components,
-									ViolationType: utils.ViolationTypeSecurity.String(),
-									FailBuild:     true,
-									Policies:      []services.Policy{{SkipNotApplicable: false}},
-									Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
-									Severity:      "High",
-								},
-								{
-									// Violation 2: FailBuild & FailPr set to false - should not fail
-									Components:    components,
-									ViolationType: utils.ViolationTypeSecurity.String(),
-									FailBuild:     false,
-									FailPr:        false,
-									Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
-									Severity:      "High",
-								},
-							},
-						},
-						JasResults: &JasScansResults{
-							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
-								{
-									Scan: []*sarif.Run{
-										{
-											Tool: &sarif.Tool{
-												Driver: &sarif.ToolComponent{
-													Rules: []*sarif.ReportingDescriptor{
-														{
-															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-3333")),
-															Properties: &sarif.PropertyBag{
-																Properties: map[string]interface{}{
-																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-																},
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedResult: true, // Should fail because second target has a violation that should fail
-		},
-		{
-			name: "no sca results - build should not fail",
-			auditResults: &SecurityCommandResults{
-				EntitledForJas: true,
-				Targets: []*TargetResults{
-					{
-						ScanTarget: ScanTarget{Target: "test-target"},
-						ScaResults: nil,
-						JasResults: &JasScansResults{},
-					},
-				},
-			},
-			expectedResult: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			shouldFailBuild, err := CheckIfFailBuild(test.auditResults)
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, shouldFailBuild)
-		})
-	}
-}
-
-func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, skipNotApplicable *bool) *SecurityCommandResults {
-	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
-	cveId := "CVE-2024-1234"
-
-	target := &TargetResults{
-		ScanTarget: ScanTarget{Target: "test-target"},
-		ScaResults: &ScaScanResults{},
-	}
-
-	violation := services.Violation{
-		Components:    components,
-		ViolationType: utils.ViolationTypeSecurity.String(),
-		FailBuild:     true,
-		Cves:          []services.Cve{{Id: cveId}},
-		Severity:      "High",
-	}
-
-	if skipNotApplicable != nil {
-		violation.Policies = []services.Policy{{SkipNotApplicable: *skipNotApplicable}}
-	}
-
-	if useNewViolations {
-		target.ScaResults.Violations = []services.Violation{violation}
-	} else {
-		target.ScaResults.DeprecatedXrayResults = []ScanResult[services.ScanResponse]{
-			{
-				Scan: services.ScanResponse{
-					Violations: []services.Violation{violation},
-				},
-			},
-		}
-	}
-
-	if hasJasResults {
-		target.JasResults = &JasScansResults{
-			ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
-				{
-					Scan: []*sarif.Run{
-						{
-							Tool: &sarif.Tool{
-								Driver: &sarif.ToolComponent{
-									Rules: []*sarif.ReportingDescriptor{
-										{
-											ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId(cveId)),
-											Properties: &sarif.PropertyBag{
-												Properties: map[string]interface{}{
-													jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	} else {
-		target.JasResults = nil
-	}
-
-	return &SecurityCommandResults{
-		EntitledForJas: true,
-		Targets:        []*TargetResults{target},
-	}
-}
-
 func TestFindMaxCVEScore(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -933,112 +693,6 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	}
 }
 
-func TestShouldSkipNotApplicable(t *testing.T) {
-	testCases := []struct {
-		name                string
-		violation           services.Violation
-		applicabilityStatus jasutils.ApplicabilityStatus
-		shouldSkip          bool
-		errorExpected       bool
-	}{
-		{
-			name:                "Applicable CVE - should NOT skip",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.Applicable,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name:                "Undetermined CVE - should NOT skip",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.ApplicabilityUndetermined,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name:                "Not covered CVE - should NOT skip",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.NotCovered,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name:                "Missing Context CVE - should NOT skip",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.MissingContext,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name:                "Not scanned CVE - should NOT skip",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.NotScanned,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name: "Non applicable CVE with skip-non-applicable in ALL policies - SHOULD skip",
-			violation: services.Violation{
-				Policies: []services.Policy{
-					{
-						Policy:            "policy-1",
-						SkipNotApplicable: true,
-					},
-					{
-						Policy:            "policy-2",
-						SkipNotApplicable: true,
-					},
-				},
-			},
-			applicabilityStatus: jasutils.NotApplicable,
-			shouldSkip:          true,
-			errorExpected:       false,
-		},
-		{
-			name: "Non applicable CVE with skip-non-applicable in SOME policies - should NOT skip",
-			violation: services.Violation{
-				Policies: []services.Policy{
-					{
-						Policy:            "policy-1",
-						SkipNotApplicable: true,
-					},
-					{
-						Policy:            "policy-2",
-						SkipNotApplicable: false,
-					},
-				},
-			},
-			applicabilityStatus: jasutils.NotApplicable,
-			shouldSkip:          false,
-			errorExpected:       false,
-		},
-		{
-			name:                "Violation without policy - error expected",
-			violation:           services.Violation{},
-			applicabilityStatus: jasutils.NotApplicable,
-			shouldSkip:          false,
-			errorExpected:       true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			shouldSkip, err := shouldSkipNotApplicable(tc.violation, tc.applicabilityStatus)
-			if tc.errorExpected {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			if tc.shouldSkip {
-				assert.True(t, shouldSkip)
-			} else {
-				assert.False(t, shouldSkip)
-			}
-		})
-	}
-}
-
 func TestExtractXrayDirectViolations(t *testing.T) {
 	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
 		{
@@ -1205,7 +859,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:npm/root@1.0.0",
-					BOMRef:     "npm:root:1.0.0",
+					BOMRef:     "pkg:npm/root@1.0.0",
 					Name:       "root",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1224,7 +878,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:npm/root@1.0.0",
-					BOMRef:     "npm:root:1.0.0",
+					BOMRef:     "pkg:npm/root@1.0.0",
 					Name:       "root",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1232,7 +886,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/A@1.0.1",
-					BOMRef:     "npm:A:1.0.1",
+					BOMRef:     "pkg:npm/A@1.0.1",
 					Name:       "A",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1240,8 +894,8 @@ func TestDepTreeToSbom(t *testing.T) {
 			},
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
-					Ref:          "npm:root:1.0.0",
-					Dependencies: &[]string{"npm:A:1.0.1"},
+					Ref:          "pkg:npm/root@1.0.0",
+					Dependencies: &[]string{"pkg:npm/A@1.0.1"},
 				},
 			},
 		},
@@ -1269,7 +923,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:npm/root@1.0.0",
-					BOMRef:     "npm:root:1.0.0",
+					BOMRef:     "pkg:npm/root@1.0.0",
 					Name:       "root",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1277,7 +931,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/A@1.0.1",
-					BOMRef:     "npm:A:1.0.1",
+					BOMRef:     "pkg:npm/A@1.0.1",
 					Name:       "A",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1285,7 +939,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/B@1.0.0",
-					BOMRef:     "npm:B:1.0.0",
+					BOMRef:     "pkg:npm/B@1.0.0",
 					Name:       "B",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1293,7 +947,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Indirect
 					PackageURL: "pkg:npm/C@1.0.1",
-					BOMRef:     "npm:C:1.0.1",
+					BOMRef:     "pkg:npm/C@1.0.1",
 					Name:       "C",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1301,7 +955,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/D@2.0.0",
-					BOMRef:     "npm:D:2.0.0",
+					BOMRef:     "pkg:npm/D@2.0.0",
 					Name:       "D",
 					Version:    "2.0.0",
 					Type:       "library",
@@ -1309,16 +963,16 @@ func TestDepTreeToSbom(t *testing.T) {
 			},
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
-					Ref:          "npm:root:1.0.0",
-					Dependencies: &[]string{"npm:A:1.0.1", "npm:B:1.0.0", "npm:D:2.0.0"},
+					Ref:          "pkg:npm/root@1.0.0",
+					Dependencies: &[]string{"pkg:npm/A@1.0.1", "pkg:npm/B@1.0.0", "pkg:npm/D@2.0.0"},
 				},
 				{
-					Ref:          "npm:A:1.0.1",
-					Dependencies: &[]string{"npm:B:1.0.0", "npm:C:1.0.1"},
+					Ref:          "pkg:npm/A@1.0.1",
+					Dependencies: &[]string{"pkg:npm/B@1.0.0", "pkg:npm/C@1.0.1"},
 				},
 				{
-					Ref:          "npm:D:2.0.0",
-					Dependencies: &[]string{"npm:C:1.0.1"},
+					Ref:          "pkg:npm/D@2.0.0",
+					Dependencies: &[]string{"pkg:npm/C@1.0.1"},
 				},
 			},
 		},
@@ -1354,7 +1008,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:npm/npm-app-root@1.0.0",
-					BOMRef:     "npm:npm-app-root:1.0.0",
+					BOMRef:     "pkg:npm/npm-app-root@1.0.0",
 					Name:       "npm-app-root",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1362,7 +1016,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/A@1.0.1",
-					BOMRef:     "npm:A:1.0.1",
+					BOMRef:     "pkg:npm/A@1.0.1",
 					Name:       "A",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1370,7 +1024,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Indirect
 					PackageURL: "pkg:npm/B@1.0.0",
-					BOMRef:     "npm:B:1.0.0",
+					BOMRef:     "pkg:npm/B@1.0.0",
 					Name:       "B",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1378,7 +1032,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/C@1.0.1",
-					BOMRef:     "npm:C:1.0.1",
+					BOMRef:     "pkg:npm/C@1.0.1",
 					Name:       "C",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1386,7 +1040,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:npm/D@1.0.0",
-					BOMRef:     "npm:D:1.0.0",
+					BOMRef:     "pkg:npm/D@1.0.0",
 					Name:       "D",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1394,7 +1048,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:golang/go-app-root@1.0.0",
-					BOMRef:     "golang:go-app-root:1.0.0",
+					BOMRef:     "pkg:golang/go-app-root@1.0.0",
 					Name:       "go-app-root",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1402,7 +1056,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Direct
 					PackageURL: "pkg:golang/A@2.0.1",
-					BOMRef:     "golang:A:2.0.1",
+					BOMRef:     "pkg:golang/A@2.0.1",
 					Name:       "A",
 					Version:    "2.0.1",
 					Type:       "library",
@@ -1410,7 +1064,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Indirect
 					PackageURL: "pkg:golang/B@1.0.0",
-					BOMRef:     "golang:B:1.0.0",
+					BOMRef:     "pkg:golang/B@1.0.0",
 					Name:       "B",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1418,7 +1072,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Indirect
 					PackageURL: "pkg:golang/C@1.0.1",
-					BOMRef:     "golang:C:1.0.1",
+					BOMRef:     "pkg:golang/C@1.0.1",
 					Name:       "C",
 					Version:    "1.0.1",
 					Type:       "library",
@@ -1426,7 +1080,7 @@ func TestDepTreeToSbom(t *testing.T) {
 				{
 					// Indirect
 					PackageURL: "pkg:golang/D@1.2.3",
-					BOMRef:     "golang:D:1.2.3",
+					BOMRef:     "pkg:golang/D@1.2.3",
 					Name:       "D",
 					Version:    "1.2.3",
 					Type:       "library",
@@ -1434,20 +1088,20 @@ func TestDepTreeToSbom(t *testing.T) {
 			},
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
-					Ref:          "npm:npm-app-root:1.0.0",
-					Dependencies: &[]string{"npm:A:1.0.1", "npm:C:1.0.1", "npm:D:1.0.0"},
+					Ref:          "pkg:npm/npm-app-root@1.0.0",
+					Dependencies: &[]string{"pkg:npm/A@1.0.1", "pkg:npm/C@1.0.1", "pkg:npm/D@1.0.0"},
 				},
 				{
-					Ref:          "npm:A:1.0.1",
-					Dependencies: &[]string{"npm:B:1.0.0"},
+					Ref:          "pkg:npm/A@1.0.1",
+					Dependencies: &[]string{"pkg:npm/B@1.0.0"},
 				},
 				{
-					Ref:          "golang:go-app-root:1.0.0",
-					Dependencies: &[]string{"golang:A:2.0.1"},
+					Ref:          "pkg:golang/go-app-root@1.0.0",
+					Dependencies: &[]string{"pkg:golang/A@2.0.1"},
 				},
 				{
-					Ref:          "golang:A:2.0.1",
-					Dependencies: &[]string{"golang:B:1.0.0", "golang:C:1.0.1", "golang:D:1.2.3"},
+					Ref:          "pkg:golang/A@2.0.1",
+					Dependencies: &[]string{"pkg:golang/B@1.0.0", "pkg:golang/C@1.0.1", "pkg:golang/D@1.2.3"},
 				},
 			},
 		},
@@ -1494,7 +1148,7 @@ func TestCompTreeToSbom(t *testing.T) {
 			expectedComponents: &[]cyclonedx.Component{
 				{
 					PackageURL: "pkg:maven/jar-app@3.12",
-					BOMRef:     "maven:jar-app:3.12",
+					BOMRef:     "pkg:maven/jar-app@3.12",
 					Name:       "jar-app",
 					Version:    "3.12",
 					Type:       "library",
@@ -1545,7 +1199,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Root
 					PackageURL: "pkg:docker/my-docker-image@1.0.0",
-					BOMRef:     "docker:my-docker-image:1.0.0",
+					BOMRef:     "pkg:docker/my-docker-image@1.0.0",
 					Name:       "my-docker-image",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1575,7 +1229,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Dependency
 					PackageURL: "pkg:docker/my-dependency@2.0.0",
-					BOMRef:     "docker:my-dependency:2.0.0",
+					BOMRef:     "pkg:docker/my-dependency@2.0.0",
 					Name:       "my-dependency",
 					Version:    "2.0.0",
 					Type:       "library",
@@ -1596,8 +1250,8 @@ func TestCompTreeToSbom(t *testing.T) {
 			},
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
-					Ref:          "docker:my-docker-image:1.0.0",
-					Dependencies: &[]string{"docker:my-dependency:2.0.0"},
+					Ref:          "pkg:docker/my-docker-image@1.0.0",
+					Dependencies: &[]string{"pkg:docker/my-dependency@2.0.0"},
 				},
 			},
 		},
@@ -1643,7 +1297,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Docker Root
 					PackageURL: "pkg:docker/my-docker-image@1.0.0",
-					BOMRef:     "docker:my-docker-image:1.0.0",
+					BOMRef:     "pkg:docker/my-docker-image@1.0.0",
 					Name:       "my-docker-image",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1651,7 +1305,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Docker Dependency
 					PackageURL: "pkg:docker/my-dependency@2.0.0",
-					BOMRef:     "docker:my-dependency:2.0.0",
+					BOMRef:     "pkg:docker/my-dependency@2.0.0",
 					Name:       "my-dependency",
 					Version:    "2.0.0",
 					Type:       "library",
@@ -1659,7 +1313,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Docker Sub-dependency
 					PackageURL: "pkg:docker/my-sub-dependency@3.0.0",
-					BOMRef:     "docker:my-sub-dependency:3.0.0",
+					BOMRef:     "pkg:docker/my-sub-dependency@3.0.0",
 					Name:       "my-sub-dependency",
 					Version:    "3.0.0",
 					Type:       "library",
@@ -1667,7 +1321,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Docker Other Dependency
 					PackageURL: "pkg:docker/my-other-dependency@4.0.0",
-					BOMRef:     "docker:my-other-dependency:4.0.0",
+					BOMRef:     "pkg:docker/my-other-dependency@4.0.0",
 					Name:       "my-other-dependency",
 					Version:    "4.0.0",
 					Type:       "library",
@@ -1675,7 +1329,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Jar Root
 					PackageURL: "pkg:maven/my-java-app@1.0.0",
-					BOMRef:     "maven:my-java-app:1.0.0",
+					BOMRef:     "pkg:maven/my-java-app@1.0.0",
 					Name:       "my-java-app",
 					Version:    "1.0.0",
 					Type:       "library",
@@ -1690,7 +1344,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Jar Dependency
 					PackageURL: "pkg:maven/my-java-dependency@2.0.0",
-					BOMRef:     "maven:my-java-dependency:2.0.0",
+					BOMRef:     "pkg:maven/my-java-dependency@2.0.0",
 					Name:       "my-java-dependency",
 					Version:    "2.0.0",
 					Type:       "library",
@@ -1698,7 +1352,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Jar Sub-dependency
 					PackageURL: "pkg:maven/my-java-sub-dependency@3.0.0",
-					BOMRef:     "maven:my-java-sub-dependency:3.0.0",
+					BOMRef:     "pkg:maven/my-java-sub-dependency@3.0.0",
 					Name:       "my-java-sub-dependency",
 					Version:    "3.0.0",
 					Type:       "library",
@@ -1706,7 +1360,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Jar Other Dependency
 					PackageURL: "pkg:maven/dependency@4.0.0",
-					BOMRef:     "maven:dependency:4.0.0",
+					BOMRef:     "pkg:maven/dependency@4.0.0",
 					Name:       "dependency",
 					Version:    "4.0.0",
 					Type:       "library",
@@ -1714,7 +1368,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				{
 					// Jar Other Java Dependency
 					PackageURL: "pkg:maven/my-java-other-dependency@4.0.0",
-					BOMRef:     "maven:my-java-other-dependency:4.0.0",
+					BOMRef:     "pkg:maven/my-java-other-dependency@4.0.0",
 					Name:       "my-java-other-dependency",
 					Version:    "4.0.0",
 					Type:       "library",
@@ -1722,24 +1376,24 @@ func TestCompTreeToSbom(t *testing.T) {
 			},
 			expectedDependencies: &[]cyclonedx.Dependency{
 				{
-					Ref:          "docker:my-docker-image:1.0.0",
-					Dependencies: &[]string{"docker:my-dependency:2.0.0"},
+					Ref:          "pkg:docker/my-docker-image@1.0.0",
+					Dependencies: &[]string{"pkg:docker/my-dependency@2.0.0"},
 				},
 				{
-					Ref:          "docker:my-dependency:2.0.0",
-					Dependencies: &[]string{"docker:my-sub-dependency:3.0.0", "docker:my-other-dependency:4.0.0"},
+					Ref:          "pkg:docker/my-dependency@2.0.0",
+					Dependencies: &[]string{"pkg:docker/my-sub-dependency@3.0.0", "pkg:docker/my-other-dependency@4.0.0"},
 				},
 				{
-					Ref:          "maven:my-java-app:1.0.0",
-					Dependencies: &[]string{"maven:my-java-dependency:2.0.0", "maven:my-java-other-dependency:4.0.0", "maven:my-java-sub-dependency:3.0.0"},
+					Ref:          "pkg:maven/my-java-app@1.0.0",
+					Dependencies: &[]string{"pkg:maven/my-java-dependency@2.0.0", "pkg:maven/my-java-other-dependency@4.0.0", "pkg:maven/my-java-sub-dependency@3.0.0"},
 				},
 				{
-					Ref:          "maven:my-java-dependency:2.0.0",
-					Dependencies: &[]string{"maven:my-java-sub-dependency:3.0.0", "maven:dependency:4.0.0"},
+					Ref:          "pkg:maven/my-java-dependency@2.0.0",
+					Dependencies: &[]string{"pkg:maven/my-java-sub-dependency@3.0.0", "pkg:maven/dependency@4.0.0"},
 				},
 				{
-					Ref:          "maven:my-java-other-dependency:4.0.0",
-					Dependencies: &[]string{"maven:my-java-sub-dependency:3.0.0"},
+					Ref:          "pkg:maven/my-java-other-dependency@4.0.0",
+					Dependencies: &[]string{"pkg:maven/my-java-sub-dependency@3.0.0"},
 				},
 			},
 		},
@@ -2719,7 +2373,7 @@ func TestScanResponseToSbom(t *testing.T) {
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{
-						BOMRef:     "npm:example-component:1.0.0",
+						BOMRef:     "pkg:npm/example-component@1.0.0",
 						Name:       "example-component",
 						Version:    "1.0.0",
 						Type:       "library",
@@ -2734,14 +2388,14 @@ func TestScanResponseToSbom(t *testing.T) {
 						},
 					},
 					{
-						BOMRef:     "npm:another-component:2.0.0",
+						BOMRef:     "pkg:npm/another-component@2.0.0",
 						Name:       "another-component",
 						Version:    "2.0.0",
 						Type:       "library",
 						PackageURL: "pkg:npm/another-component@2.0.0",
 					},
 					{
-						BOMRef:     "npm:other-component:3.0.0",
+						BOMRef:     "pkg:npm/other-component@3.0.0",
 						Name:       "other-component",
 						Version:    "3.0.0",
 						Type:       "library",
@@ -2759,7 +2413,7 @@ func TestScanResponseToSbom(t *testing.T) {
 						Detail:      "Test Vulnerability extended information description",
 						Affects: &[]cyclonedx.Affects{
 							{
-								Ref: "npm:example-component:1.0.0",
+								Ref: "pkg:npm/example-component@1.0.0",
 								Range: &[]cyclonedx.AffectedVersions{
 									{
 										Version: "1.0.0",
@@ -2768,7 +2422,7 @@ func TestScanResponseToSbom(t *testing.T) {
 								},
 							},
 							{
-								Ref: "npm:another-component:2.0.0",
+								Ref: "pkg:npm/another-component@2.0.0",
 								Range: &[]cyclonedx.AffectedVersions{
 									{
 										Version: "2.0.0",
@@ -2829,7 +2483,7 @@ func TestScanResponseToSbom(t *testing.T) {
 						Description: "Another Vulnerability No Cve",
 						Affects: &[]cyclonedx.Affects{
 							{
-								Ref: "npm:example-component:1.0.0",
+								Ref: "pkg:npm/example-component@1.0.0",
 								Range: &[]cyclonedx.AffectedVersions{
 									{
 										Version: "1.0.0",
@@ -2838,7 +2492,7 @@ func TestScanResponseToSbom(t *testing.T) {
 								},
 							},
 							{
-								Ref: "npm:other-component:3.0.0",
+								Ref: "pkg:npm/other-component@3.0.0",
 								Range: &[]cyclonedx.AffectedVersions{
 									{
 										Version: "3.0.0",

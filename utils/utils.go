@@ -32,10 +32,13 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	JasInfoURL                    = "https://jfrog.com/xray/"
+	BaseDocumentationURL = "https://jfrog.com/help/r/jfrog-security-user-guide/products/"
+	XrayInfoURL          = "https://jfrog.com/xray/"
+	JasInfoURL           = "https://jfrog.com/devops-native-security/"
+
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
+	StaticScanMinVersion          = "3.133.0"
 
 	XrayToolName = "JFrog Xray Scanner"
 
@@ -60,15 +63,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
-	ScaScan                      SubScanType        = "sca"
-	IacScan                      SubScanType        = "iac"
-	SastScan                     SubScanType        = "sast"
-	SecretsScan                  SubScanType        = "secrets"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -84,12 +84,6 @@ func (subScan SubScanType) ToTextString() string {
 		return text
 	}
 	return string(subScan)
-}
-
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
 }
 
 type SubScanType string
@@ -132,28 +126,33 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
-func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+func getScanFindingName(scanType SubScanType) string {
+	if scanType == SecretsScan {
+		return fmt.Sprintf("%s exposures", subScanTypeToText[scanType])
+	}
+	return fmt.Sprintf("%s vulnerabilities", subScanTypeToText[scanType])
+}
 
-	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
+func GetScanStartLog(scanType SubScanType, target string, targetCount, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	msg := "Found"
-	hasVulnerabilities := vulnerabilitiesCount > 0
-	if hasVulnerabilities {
-		if scanType == SecretsScan {
-			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
-		} else {
-			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
-		}
+	if targetCount > 1 {
+		return logPrefix + fmt.Sprintf("Running %s scan on target '%s'...", subScanTypeToText[scanType], target)
 	}
-	if violationsCount > 0 {
-		if hasVulnerabilities {
-			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
-		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
-		}
+	return logPrefix + fmt.Sprintf("Running %s scan...", subScanTypeToText[scanType])
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, scanStartTime time.Time, threadId int) string {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	return msg
+	if vulnerabilitiesCount == 0 {
+		return logPrefix + fmt.Sprintf("No %s were found (duration %s)", getScanFindingName(scanType), time.Since(scanStartTime).String())
+	}
+	return logPrefix + fmt.Sprintf("Found %d %s (duration %s)", vulnerabilitiesCount, getScanFindingName(scanType), time.Since(scanStartTime).String())
 }
 
 func IsCI() bool {
@@ -324,14 +323,14 @@ func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
 	return bom, nil
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (pathToSave string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	pathToSave = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
-	return SaveCdxContentToFile(pathToSave, bom)
+	return pathToSave, SaveCdxContentToFile(pathToSave, bom)
 }
 
 func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
@@ -345,27 +344,29 @@ func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
-func DumpFullBOMContentToFile(fileContent []byte, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+func DumpCdxJsonContentToFile(fileContent []byte, scanResultsOutputDir, filePrefix string, threadId int) (resultsFileFullPath string, err error) {
 	return DumpContentToFile(fileContent, scanResultsOutputDir, filePrefix, "cdx.json", threadId)
 }
 
 func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+	return
 }
 
 func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
-	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	_, err = DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+	return
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (err error) {
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, prefix, suffix string, threadId int) (resultsFileFullPath string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
-	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
+	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(prefix), GetCurrentTimeUnix(), suffix))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, prefix, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+		return "", fmt.Errorf("failed to write %s scan results to file: %s", prefix, err.Error())
 	}
 	return
 }

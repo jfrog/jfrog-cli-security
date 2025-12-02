@@ -5,6 +5,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -22,6 +23,7 @@ type GitAuditParams struct {
 	failBuild      bool
 	// Scan params
 	scansToPerform []utils.SubScanType
+	includeSbom    bool
 	threads        int
 	exclusions     []string
 	// Output params
@@ -34,8 +36,12 @@ type GitAuditParams struct {
 	repositoryLocalPath string
 	multiScanId         string
 	startTime           time.Time
-	bomGenerator        bom.SbomGenerator
-	scaScanStrategy     scan.SbomScanStrategy
+	// Dynamic logic params
+	bomGenerator       bom.SbomGenerator
+	scaScanStrategy    scan.SbomScanStrategy
+	violationGenerator policy.PolicyHandler
+	uploadResults      bool
+	rtResultRepository string
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -133,5 +139,37 @@ func (gap *GitAuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrat
 
 func (gap *GitAuditParams) SetOutputDir(outputDir string) *GitAuditParams {
 	gap.outputDir = outputDir
+	return gap
+}
+
+func (gap *GitAuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *GitAuditParams {
+	gap.violationGenerator = violationGenerator
+	return gap
+}
+
+func (gap *GitAuditParams) ViolationGenerator() policy.PolicyHandler {
+	return gap.violationGenerator
+}
+
+func (gap *GitAuditParams) SetUploadCdxResults(uploadCdxResults bool) *GitAuditParams {
+	gap.uploadResults = uploadCdxResults
+	return gap
+}
+
+func (gap *GitAuditParams) UploadCdxResults() bool {
+	return gap.uploadResults
+}
+
+func (gap *GitAuditParams) SetRtResultRepository(rtResultRepository string) *GitAuditParams {
+	gap.rtResultRepository = rtResultRepository
+	return gap
+}
+
+func (gap *GitAuditParams) RtResultRepository() string {
+	return gap.rtResultRepository
+}
+
+func (gap *GitAuditParams) SetIncludeSbom(includeSbom bool) *GitAuditParams {
+	gap.includeSbom = includeSbom
 	return gap
 }

@@ -214,7 +214,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
 func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
-	if strings.Contains(dependency.Ref, "generic:root") && skipDefaultRoot {
+	if strings.Contains(dependency.Ref, techutils.ToPackageRef("root", "", "")) && skipDefaultRoot {
 		// dummy root, the actual roots are the dependencies of this component.
 		roots = []cyclonedx.Dependency{}
 		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
@@ -275,11 +275,31 @@ func GetFileRef(filePathOrUri string) string {
 	if err != nil {
 		return uri
 	}
-	return wdRef
+	return fmt.Sprintf("file:%s", wdRef)
 }
 
 func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
+}
+
+func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersion []string) *[]cyclonedx.AffectedVersions {
+	if len(fixedVersion) == 0 {
+		return nil
+	}
+	affected := CreateScaImpactedAffects(affectedComponent, fixedVersion)
+	if affected.Range == nil {
+		return nil
+	}
+	notAffectedVersions := []cyclonedx.AffectedVersions{}
+	for _, version := range *affected.Range {
+		if version.Status == cyclonedx.VulnerabilityStatusNotAffected {
+			notAffectedVersions = append(notAffectedVersions, version)
+		}
+	}
+	if len(notAffectedVersions) == 0 {
+		return nil
+	}
+	return &notAffectedVersions
 }
 
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {

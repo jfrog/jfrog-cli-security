@@ -54,24 +54,24 @@ func (ess *EnrichScanStrategy) PrepareStrategy() (err error) {
 	return
 }
 
-func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
+func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, err error) {
 	catalogManager, err := catalog.CreateCatalogServiceManager(ess.serverDetails, catalog.WithScopedProjectKey(ess.projectKey))
 	if err != nil {
-		return nil, []services.Violation{}, fmt.Errorf("failed to create catalog service manager: %w", err)
+		return nil, fmt.Errorf("failed to create catalog service manager: %w", err)
 	}
 	enriched, err = catalogManager.Enrich(target)
 	if err != nil {
-		return nil, []services.Violation{}, fmt.Errorf("failed to enrich SBOM: %w", err)
+		return nil, fmt.Errorf("failed to enrich SBOM: %w", err)
 	}
 	log.Debug("SBOM enrichment completed successfully")
 	// Fixed versions are not returned from the enrich API, next we need to enrich with remediation API.
 	xrayManager, err := xray.CreateXrayServiceManager(ess.serverDetails, xray.WithScopedProjectKey(ess.projectKey))
 	if err != nil {
-		return nil, []services.Violation{}, fmt.Errorf("failed to create Xray service manager: %w", err)
+		return enriched, fmt.Errorf("failed to create Xray service manager: %w", err)
 	}
 	err = remediation.AttachFixedVersionsToVulnerabilities(xrayManager, enriched)
 	if err != nil {
-		return nil, []services.Violation{}, fmt.Errorf("failed to attach fixed versions to vulnerabilities: %w", err)
+		return enriched, fmt.Errorf("failed to attach fixed versions to vulnerabilities: %w", err)
 	}
 	log.Debug("SBOM remediation enrichment completed successfully")
 	return

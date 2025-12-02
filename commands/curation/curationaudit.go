@@ -426,6 +426,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmOverwritePackageLock: true,
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
+		// NuGet params
+		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
 }
 

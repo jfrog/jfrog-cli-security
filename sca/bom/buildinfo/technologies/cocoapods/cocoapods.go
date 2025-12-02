@@ -142,8 +142,8 @@ func GetPodDependenciesGraph(data string) (map[string][]string, map[string]strin
 		if len(mainDepMatch) == 3 {
 			versionMatch := versionRegex.FindStringSubmatch(line)
 			currentMainDep = mainDepMatch[1]
-			_, ok := dependencyMap[currentMainDep]
-			if !ok {
+			if _, ok := dependencyMap[currentMainDep]; !ok && len(versionMatch) > 1 {
+				// New dependency with version found
 				dependencyMap[currentMainDep] = []string{}
 				versionMap[currentMainDep] = versionMatch[1]
 			}
