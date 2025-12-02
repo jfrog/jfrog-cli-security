@@ -966,7 +966,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 				if dl, ok := downloadUrlsMap[normalizedId]; ok {
 					downloadUrls = []string{dl}
 				} else {
-					log.Debug(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
+					log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
 				}
 			} else {
 				log.Debug(fmt.Sprintf("Package %s has unexpected format", id))
