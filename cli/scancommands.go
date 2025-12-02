@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
@@ -30,13 +31,14 @@ import (
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/urfave/cli"
+
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
@@ -501,7 +503,8 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
-		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
+		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions)).
+		SetUseIncludedBuilds(c.GetBoolFlagValue(flags.UseIncludedBuilds))
 	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
 
