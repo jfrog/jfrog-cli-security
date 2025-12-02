@@ -707,6 +707,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"typing-extensions":                     filepath.Join("resources", "typing-extensions-resp"),
 				"pexpect-4.8.0-py2.py3-none-any.whl":    filepath.Join("resources", "pexpect-4.8.0-py2.py3-none-any.whl"),
 				"ptyprocess-0.7.0-py2.py3-none-any.whl": filepath.Join("resources", "ptyprocess-0.7.0-py2.py3-none-any.whl"),
+				"typing_extensions-4.15.0-py3-none-any.whl": filepath.Join("resources", "typing_extensions-4.15.0-py3-none-any.whl"),
 			},
 			requestToFail: map[string]bool{
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
