@@ -704,6 +704,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"pip":                                   filepath.Join("resources", "pip-resp"),
 				"pexpect":                               filepath.Join("resources", "pexpect-resp"),
 				"ptyprocess":                            filepath.Join("resources", "ptyprocess-resp"),
+				"typing-extensions":                     filepath.Join("resources", "typing-extensions-resp"),
 				"pexpect-4.8.0-py2.py3-none-any.whl":    filepath.Join("resources", "pexpect-4.8.0-py2.py3-none-any.whl"),
 				"ptyprocess-0.7.0-py2.py3-none-any.whl": filepath.Join("resources", "ptyprocess-0.7.0-py2.py3-none-any.whl"),
 			},
