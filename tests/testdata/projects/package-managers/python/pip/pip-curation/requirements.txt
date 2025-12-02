@@ -1,1 +1,2 @@
 pexpect==4.8.0
+typing-extensions==4.15.0
