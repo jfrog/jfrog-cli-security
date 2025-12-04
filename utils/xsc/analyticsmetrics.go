@@ -11,12 +11,13 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
-	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 )
 
 func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices.EventType, serviceDetails *config.ServerDetails) *xscservices.XscAnalyticsGeneralEvent {
@@ -115,6 +116,28 @@ func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, 
 			TotalScanDuration: totalDuration.String(),
 		},
 	}
+}
+
+func SendGitIntegrationEvent(serverDetails *config.ServerDetails, xrayVersion string, eventType, gitProvider, gitOwner, gitRepository, gitBranch, eventStatus, failureReason string) error {
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, error: %s ", err.Error()))
+		return err
+	}
+	gitIntegrationEvent := xscservices.GitIntegrationEvent{
+		EventType:     eventType,
+		GitProvider:   gitProvider,
+		GitOwner:      gitOwner,
+		GitRepository: gitRepository,
+		GitBranch:     gitBranch,
+		EventStatus:   eventStatus,
+		FailureReason: failureReason,
+	}
+	if err = xscService.SendGitIntegrationEvent(gitIntegrationEvent, xrayVersion); err != nil {
+		log.Debug(fmt.Sprintf("failed sending git integration event request to XSC service, error: %s ", err.Error()))
+		return err
+	}
+	return nil
 }
 
 func checkVersionForGitRepoKeyAnalytics(xrayVersion string) bool {
