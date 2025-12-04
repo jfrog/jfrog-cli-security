@@ -25,6 +25,7 @@ const (
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
+	MaliciousScan        = "malicious-scan"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -174,6 +175,9 @@ var commandFlags = map[string][]string{
 	},
 	Enrich: {
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
+	},
+	MaliciousScan: {
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs,
 	},
 	BuildScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,

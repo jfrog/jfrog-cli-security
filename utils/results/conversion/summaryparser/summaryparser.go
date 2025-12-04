@@ -258,6 +258,19 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error
 	return results.ForEachJasIssue(results.CollectRuns(iacs...), sc.entitledForJas, sc.getJasHandler(jasutils.IaC))
 }
 
+func (sc *CmdResultsSummaryConverter) ParseMalicious(malicious ...[]*sarif.Run) (err error) {
+	if !sc.entitledForJas {
+		return
+	}
+	if sc.currentScan == nil {
+		return results.ErrResetConvertor
+	}
+	if sc.currentScan.Vulnerabilities.MaliciousResults == nil {
+		sc.currentScan.Vulnerabilities.MaliciousResults = &formats.ResultSummary{}
+	}
+	return results.ForEachJasIssue(results.CollectRuns(malicious...), sc.entitledForJas, sc.getJasHandler(jasutils.MaliciousCode))
+}
+
 func (sc *CmdResultsSummaryConverter) ParseSast(sast ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
@@ -288,6 +301,8 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 			count = sc.currentScan.Vulnerabilities.IacResults
 		case jasutils.Sast:
 			count = sc.currentScan.Vulnerabilities.SastResults
+		case jasutils.MaliciousCode:
+			count = sc.currentScan.Vulnerabilities.MaliciousResults
 		}
 		countJasIssues(count, location, severity, resultStatus)
 		return
