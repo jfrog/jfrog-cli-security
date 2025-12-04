@@ -23,6 +23,9 @@ type ResultsTables struct {
 	// Secrets
 	SecretsVulnerabilitiesTable []secretsTableRow
 	SecretsViolationsTable      []secretsTableRow
+	// Malicious Code
+	MaliciousVulnerabilitiesTable []iacOrSastTableRow
+	MaliciousViolationsTable      []iacOrSastTableRow
 }
 
 // Used for vulnerabilities and security violations
