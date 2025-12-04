@@ -380,6 +380,21 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(sast ...[]*sarif.Run) (err e
 	return
 }
 
+func (sjc *CmdResultsSimpleJsonConverter) ParseMalicious(malicious ...[]*sarif.Run) (err error) {
+	if !sjc.entitledForJas {
+		return
+	}
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	maliciousSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.CollectRuns(malicious...)...)
+	if err != nil || len(maliciousSimpleJson) == 0 {
+		return
+	}
+	sjc.current.MaliciousVulnerabilities = append(sjc.current.MaliciousVulnerabilities, maliciousSimpleJson...)
+	return
+}
+
 func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
 	err := results.ForEachScanGraphVulnerability(

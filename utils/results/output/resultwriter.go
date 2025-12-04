@@ -264,6 +264,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
 		return
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.MaliciousCodeScan, jasutils.MaliciousCode); err != nil {
+		return
+	}
 	if len(rw.tableNotes) > 0 {
 		printMessages(rw.tableNotes)
 	}
@@ -411,6 +414,14 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 		} else {
 			return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
 				"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
+		}
+	case jasutils.MaliciousCode:
+		if violations {
+			return coreutils.PrintTable(tables.MaliciousViolationsTable, "Malicious Code Violations",
+				"✨ No Malicious Code violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.MaliciousVulnerabilitiesTable, "Malicious Code Detection",
+				"✨ No Malicious Code vulnerabilities were found ✨", false)
 		}
 	}
 	return nil

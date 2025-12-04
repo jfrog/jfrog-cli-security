@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
+	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -72,6 +73,11 @@ func AddJasScannersTasks(params JasRunnerParams) error {
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.MaliciousCodeScan, runMaliciousScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
+	}
+
 	if !runAllScanners {
 		// Binary scan only supports secrets and contextual scans.
 		return errorsCollection
@@ -109,6 +115,8 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
 		case jasutils.IaC:
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
+		case jasutils.MaliciousCode:
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.MaliciousScannerConfig.EnableMaliciousScan
 		case jasutils.Applicability:
 			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
@@ -185,6 +193,22 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Sast, threadId, vulnerabilitiesResults, violationsResults)
+	}
+}
+
+func runMaliciousScan(params *JasRunnerParams) parallel.TaskFunc {
+	return func(threadId int) (err error) {
+		defer func() {
+			params.Runner.JasScannersWg.Done()
+		}()
+		vulnerabilitiesResults, violationsResults, err := maliciouscode.RunMaliciousScan(params.Scanner, maliciouscode.MaliciousScannerType, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.MaliciousCode)...)
+		params.Runner.ResultsMu.Lock()
+		defer params.Runner.ResultsMu.Unlock()
+		params.ScanResults.AddJasScanResults(jasutils.MaliciousCode, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.MaliciousCode, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.MaliciousCode, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 

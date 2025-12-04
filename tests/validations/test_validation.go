@@ -60,6 +60,8 @@ type ScanCount struct {
 	Iac int
 	// Expected number of Secrets issues
 	Secrets int
+	// Expected number of Malicious Code issues
+	MaliciousCode int
 }
 
 type SbomCount struct {
