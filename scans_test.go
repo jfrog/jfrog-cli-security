@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
@@ -42,10 +44,28 @@ type binaryScanParams struct {
 	WithLicense bool
 	// --sbom flag value if provided
 	WithSbom bool
+	// selective scans to perform
+	WithSubScans []utils.SubScanType
+	// -- without-contextual-analysis flag value if provided
+	WithoutContextualAnalysis bool
 	// Will combined with "," if provided and be used as --watches flag value
 	Watches []string
 	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
 	WithVuln bool
+	// Number of threads to use for scanning
+	Threads int
+}
+
+func subScansToFlags(subScans []utils.SubScanType) (flags []string) {
+	for _, scanType := range subScans {
+		switch scanType {
+		case utils.ScaScan:
+			flags = append(flags, "--sca")
+		case utils.SecretsScan:
+			flags = append(flags, "--secrets")
+		}
+	}
+	return flags
 }
 
 func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
@@ -58,11 +78,20 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 	if params.Format != "" {
 		args = append(args, "--format="+string(params.Format))
 	}
+	if len(params.WithSubScans) > 0 {
+		args = append(args, subScansToFlags(params.WithSubScans)...)
+	}
+	if params.WithoutContextualAnalysis {
+		args = append(args, "--without-contextual-analysis")
+	}
 	if params.WithVuln {
 		args = append(args, "--vuln")
 	}
 	if len(params.Watches) > 0 {
 		args = append(args, "--watches="+strings.Join(params.Watches, ","))
+	}
+	if params.Threads > 0 {
+		args = append(args, "--threads="+strconv.Itoa(params.Threads))
 	}
 	args = append(args, params.BinaryPattern)
 	return args
@@ -106,7 +135,7 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 
 func TestXrayBinaryScanCycloneDx(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "backupfriend-client.tar.gz", false)
+	output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -119,7 +148,7 @@ func TestXrayBinaryScanCycloneDx(t *testing.T) {
 func TestXrayBinaryScanJsonDocker(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	// In Windows, indexer fails to index the tar, Caused by: failed to rename path for layer so we run in clean copy in temp dir
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "xmas.tar", true)
+	output := testXrayBinaryScanJASArtifact(t, "xmas.tar", true, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 6},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -131,7 +160,7 @@ func TestXrayBinaryScanJsonDocker(t *testing.T) {
 
 func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "backupfriend-client.tar.gz", false)
+	output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -143,7 +172,7 @@ func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "student-services-security-0.0.1.jar", false)
+	output := testXrayBinaryScanJASArtifact(t, "student-services-security-0.0.1.jar", false, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -151,6 +180,49 @@ func TestXrayBinaryScanJsonJar(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 17, NotCovered: 3, NotApplicable: 20},
 		},
 	})
+}
+
+func TestXrayBinaryScanSelectiveScan(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	testCases := []struct {
+		name      string
+		subScans  []utils.SubScanType
+		withoutCa bool
+		validate  func(t *testing.T, issueCount validations.ValidationCountActualValues)
+	}{
+		{
+			name:      "SCA only scan",
+			subScans:  []utils.SubScanType{utils.ScaScan},
+			withoutCa: true,
+			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
+				// Expect only SCA vulnerabilities
+				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 3, "SCA vulnerabilities count mismatch - should be 3 or more")
+				// All other vulnerability types should be 0
+				assert.Equal(t, 0, issueCount.SecretsVulnerabilities, "Secrets vulnerabilities count mismatch - should be 0")
+				assert.Equal(t, 0, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 0")
+				assert.Equal(t, 0, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 0")
+			},
+		},
+		{
+			name:     "Secrets only scan",
+			subScans: []utils.SubScanType{utils.SecretsScan},
+			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
+				// Expect only Secrets vulnerabilities
+				assert.GreaterOrEqual(t, issueCount.SecretsVulnerabilities, 2, "Secrets vulnerabilities count mismatch - should be 2 or more")
+				// All other vulnerability types should be 0
+				assert.Equal(t, 0, issueCount.ScaVulnerabilities, "SCA vulnerabilities count mismatch - should be 0")
+				assert.Equal(t, 0, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 0")
+				assert.Equal(t, 0, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 0")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx, WithSubScans: tc.subScans, WithoutContextualAnalysis: tc.withoutCa})
+			tc.validate(t, validations.GetCycloneDxActualValues(t, output))
+		})
+	}
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
@@ -193,19 +265,19 @@ func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorEx
 	return testXrayBinaryScan(t, params, errorExpected)
 }
 
-func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string, inTempDir bool) string {
+func testXrayBinaryScanJASArtifact(t *testing.T, artifact string, inTempDir bool, params binaryScanParams) string {
 	pathToScan := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan")
 	if inTempDir {
 		var cleanUp func()
 		pathToScan, cleanUp = securityTestUtils.CreateTestProjectEnvAndChdir(t, pathToScan)
 		defer cleanUp()
 	}
-	pathToScan = filepath.Join(pathToScan, artifact)
+	params.BinaryPattern = filepath.Join(pathToScan, artifact)
+	if params.Threads == 0 {
+		params.Threads = 5
+	}
 	return testXrayBinaryScan(t,
-		binaryScanParams{
-			BinaryPattern: pathToScan,
-			Format:        format,
-		},
+		params,
 		false,
 	)
 }
@@ -281,7 +353,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 	// Run docker scan on image
 	cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
 	if validateSecrets {
-		cmdArgs = append(cmdArgs, "--validate-secrets", "--format=simple-json")
+		cmdArgs = append(cmdArgs, "--secrets", "--validate-secrets", "--format=simple-json")
 	} else {
 		cmdArgs = append(cmdArgs, "--format=json")
 	}
