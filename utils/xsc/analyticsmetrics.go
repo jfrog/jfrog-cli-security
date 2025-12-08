@@ -118,10 +118,9 @@ func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, 
 	}
 }
 
-func SendGitIntegrationEvent(serverDetails *config.ServerDetails, xrayVersion string, eventType, gitProvider, gitOwner, gitRepository, gitBranch, eventStatus, failureReason string) error {
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
+func SendGitIntegrationEvent(serverDetails *config.ServerDetails, xrayVersion, projectKey, eventType, gitProvider, gitOwner, gitRepository, gitBranch, eventStatus, failureReason string) error {
+	xscService, err := CreateXscService(serverDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
-		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, error: %s ", err.Error()))
 		return err
 	}
 	gitIntegrationEvent := xscservices.GitIntegrationEvent{
@@ -133,11 +132,7 @@ func SendGitIntegrationEvent(serverDetails *config.ServerDetails, xrayVersion st
 		EventStatus:   eventStatus,
 		FailureReason: failureReason,
 	}
-	if err = xscService.SendGitIntegrationEvent(gitIntegrationEvent, xrayVersion); err != nil {
-		log.Debug(fmt.Sprintf("failed sending git integration event request to XSC service, error: %s ", err.Error()))
-		return err
-	}
-	return nil
+	return xscService.SendGitIntegrationEvent(gitIntegrationEvent, xrayVersion)
 }
 
 func checkVersionForGitRepoKeyAnalytics(xrayVersion string) bool {
