@@ -476,24 +476,18 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		return nil
 	}
 	applicability := formats.Applicability{}
-	resultFound := false
 	var applicabilityStatuses []jasutils.ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
+		// Get applicability information from the rule
 		if rule := sarifutils.GetRuleById(applicabilityRun, jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
 			applicability.UndeterminedReason = sarifutils.GetRuleUndeterminedReason(rule)
-			status := getApplicabilityStatusFromRule(rule)
-			if status != "" {
+			if status := getApplicabilityStatusFromRule(rule); status != jasutils.NotScanned {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
 		}
-		cveResults := sarifutils.GetResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun)
-		if len(cveResults) == 0 {
-			continue
-		}
-		resultFound = true
-		for _, result := range cveResults {
-			// Add new evidences from locations
+		// Get applicability evidence from the results
+		for _, result := range sarifutils.GetResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun) {
 			for _, location := range result.Locations {
 				if evidence := getEvidence(result, location, applicabilityRun.Invocations...); evidence != nil {
 					applicability.Evidence = append(applicability.Evidence, *evidence)
@@ -501,16 +495,8 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 			}
 		}
 	}
-	switch {
-	case len(applicabilityStatuses) > 0:
-		applicability.Status = string(GetFinalApplicabilityStatus(applicabilityStatuses))
-	case !resultFound:
-		applicability.Status = string(jasutils.ApplicabilityUndetermined)
-	case len(applicability.Evidence) == 0:
-		applicability.Status = string(jasutils.NotApplicable)
-	default:
-		applicability.Status = string(jasutils.Applicable)
-	}
+	// Calculate final applicability status
+	applicability.Status = GetFinalApplicabilityStatus(true, applicabilityStatuses).String()
 	return &applicability
 }
 
@@ -551,16 +537,13 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 	if !entitledForJas || len(applicabilityScanResults) == 0 {
 		return jasutils.NotScanned
 	}
-	if len(cves) == 0 {
-		return jasutils.NotCovered
-	}
 	var applicableStatuses []jasutils.ApplicabilityStatus
 	for _, cve := range cves {
 		if cve.Applicability != nil {
 			applicableStatuses = append(applicableStatuses, jasutils.ApplicabilityStatus(cve.Applicability.Status))
 		}
 	}
-	return GetFinalApplicabilityStatus(applicableStatuses)
+	return GetFinalApplicabilityStatus(true, applicableStatuses)
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
@@ -569,7 +552,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 		if !ok {
 			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", sarifutils.GetRuleId(rule)))
 		}
-		switch status {
+		switch strings.ToLower(status) {
 		case "not_covered":
 			return jasutils.NotCovered
 		case "undetermined":
@@ -632,45 +615,58 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 	return
 }
 
-// If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
-// If at least one cve is applicable -> final value is applicable
-// Else if at least one cve is undetermined -> final value is undetermined
-// Else if at least one cve is missing context -> final value is missing context
-// Else if all cves are not covered -> final value is not covered
-// Else (case when all cves aren't applicable) -> final value is not applicable
-func GetFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
-	if len(applicabilityStatuses) == 0 {
+// If we don't get any statues (not scanned are ignored) it means the applicability -> scanner didn't run = not scanned, scanner run = not covered
+// If only one status -> final value is that status
+// Else If at least one status is applicable -> final value is applicable
+// Else if at least one status is undetermined -> final value is undetermined
+// Else if at least one status is missing context -> final value is missing context
+// Else if all statuses are not applicable -> final value is not applicable
+// Else (at least one status is not covered) -> final value is not covered
+func GetFinalApplicabilityStatus(hasContextualAnalysisRun bool, applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
+	actualStatuses := []jasutils.ApplicabilityStatus{}
+	for _, status := range applicabilityStatuses {
+		if status != jasutils.NotScanned {
+			actualStatuses = append(actualStatuses, status)
+		}
+	}
+	if len(actualStatuses) == 0 {
+		if hasContextualAnalysisRun {
+			// Run exists but no statuses found
+			return jasutils.NotCovered
+		}
+		// No runs so not scanned
 		return jasutils.NotScanned
+	}
+	if len(actualStatuses) == 1 {
+		// Only one status so return it directly
+		return actualStatuses[0]
 	}
 	foundUndetermined := false
 	foundMissingContext := false
-	foundNotCovered := false
-	for _, status := range applicabilityStatuses {
+	allNotApplicable := true
+	for _, status := range actualStatuses {
 		if status == jasutils.Applicable {
+			// Has at least one applicable status
 			return jasutils.Applicable
 		}
-		if status == jasutils.ApplicabilityUndetermined {
-			foundUndetermined = true
-		}
-		if status == jasutils.MissingContext {
-			foundMissingContext = true
-		}
-		if status == jasutils.NotCovered {
-			foundNotCovered = true
-		}
-
+		foundUndetermined = foundUndetermined || (status == jasutils.ApplicabilityUndetermined)
+		foundMissingContext = foundMissingContext || (status == jasutils.MissingContext)
+		allNotApplicable = allNotApplicable && (status == jasutils.NotApplicable)
 	}
 	if foundUndetermined {
+		// Has at least one undetermined status and no applicable status
 		return jasutils.ApplicabilityUndetermined
 	}
 	if foundMissingContext {
+		// Has at least one missing context status and no applicable or undetermined status
 		return jasutils.MissingContext
 	}
-	if foundNotCovered {
-		return jasutils.NotCovered
+	if allNotApplicable {
+		// All statuses are not applicable
+		return jasutils.NotApplicable
 	}
-
-	return jasutils.NotApplicable
+	// At least one status is not covered (and no applicable, undetermined or missing context and not all are not applicable)
+	return jasutils.NotCovered
 }
 
 func GetJasResultApplicability(result *sarif.Result) *formats.Applicability {
