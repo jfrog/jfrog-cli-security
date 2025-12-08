@@ -955,31 +955,31 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 }
 
 func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloadUrls []string, name, version string) {
-	if downloadUrlsMap != nil {
-		if dl, ok := downloadUrlsMap[id]; ok {
-			downloadUrls = []string{dl}
-		} else {
-			idWithoutPrefix := strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
-			allParts := strings.Split(idWithoutPrefix, ":")
-			if len(allParts) >= 2 {
-				normalizedName := strings.ToLower(strings.TrimSpace(allParts[0]))
-				normalizedName = strings.ReplaceAll(normalizedName, "-", "_")
-				normalizedId := python.PythonPackageTypeIdentifier + normalizedName + ":" + strings.TrimSpace(allParts[1])
-				if dl, ok := downloadUrlsMap[normalizedId]; ok {
-					downloadUrls = []string{dl}
-				} else {
-					log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
-				}
-			} else {
-				log.Debug(fmt.Sprintf("Package %s has unexpected format", id))
-			}
-		}
+	idWithoutPrefix := strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
+	parts := strings.Split(idWithoutPrefix, ":")
+	if len(parts) < 2 {
+		log.Debug(fmt.Sprintf("Package %s has unexpected format", id))
+		return
 	}
-	id = strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
-	allParts := strings.Split(id, ":")
-	if len(allParts) >= 2 {
-		name = allParts[0]
-		version = allParts[1]
+
+	name, version = parts[0], parts[1]
+
+	if downloadUrlsMap == nil {
+		return
+	}
+	if dl, ok := downloadUrlsMap[id]; ok {
+		downloadUrls = []string{dl}
+		return
+	}
+
+	// Python package names are case-insensitive and treat hyphens/underscores as equivalentl.
+	// The download URLs map uses normalized names, so we normalize the id to find a match.
+	normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(parts[0])), "-", "_")
+	normalizedId := python.PythonPackageTypeIdentifier + normalizedName + ":" + strings.TrimSpace(parts[1])
+	if dl, ok := downloadUrlsMap[normalizedId]; ok {
+		downloadUrls = []string{dl}
+	} else {
+		log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
 	}
 	return
 }
