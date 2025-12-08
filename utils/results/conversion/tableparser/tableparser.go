@@ -48,6 +48,8 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
 		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
 		SastViolationsTable:            formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastViolations),
+		MaliciousVulnerabilitiesTable:  formats.ConvertToMaliciousTableRow(simpleJsonFormat.MaliciousVulnerabilities),
+		MaliciousViolationsTable:       formats.ConvertToMaliciousTableRow(simpleJsonFormat.MaliciousViolations),
 	}, nil
 }
 
@@ -89,6 +91,10 @@ func (tc *CmdResultsTableConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) 
 
 func (tc *CmdResultsTableConverter) ParseSast(sast ...[]*sarif.Run) (err error) {
 	return tc.simpleJsonConvertor.ParseSast(sast...)
+}
+
+func (tc *CmdResultsTableConverter) ParseMalicious(malicious ...[]*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseMalicious(malicious...)
 }
 
 func (tc *CmdResultsTableConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
