@@ -265,7 +265,6 @@ func SearchComponentByRefGitDiff(components *[]cyclonedx.Component, ref string) 
 		return
 	}
 	for i, comp := range *components {
-		techutils.PurlToXrayComponentId(comp.BOMRef)
 		if techutils.PurlToXrayComponentId(comp.BOMRef) == techutils.PurlToXrayComponentId(ref) {
 			return &(*components)[i]
 		}
