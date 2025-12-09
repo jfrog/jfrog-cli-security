@@ -379,9 +379,10 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			name:           "applicable cve",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_testCve1"),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_testCve1")),
+				sarifutils.CreateRunWithDummyResultAndRuleInformation(
 					sarifutils.CreateResultWithOneLocation("fileName2", 1, 0, 0, 0, "snippet2", "applic_testCve2", "warning"),
+					"rule-msg", "rule-markdown", []string{"applicability"}, []string{"applicable"},
 				),
 			},
 			cves:           []services.Cve{{Id: "testCve2"}},
@@ -409,7 +410,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}}},
 		},
 		{
-			name:           "undetermined cve",
+			name:           "not covered cve",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(
@@ -418,52 +419,36 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 				),
 			},
 			cves:           []services.Cve{{Id: "testCve3"}},
-			expectedResult: jasutils.ApplicabilityUndetermined,
+			expectedResult: jasutils.NotCovered,
 			expectedCves:   []formats.CveRow{{Id: "testCve3"}},
-		},
-		{
-			name:           "not applicable cve",
-			entitledForJas: true,
-			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-					sarifutils.CreateDummyPassingResult("applic_testCve2"),
-				),
-			},
-			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: jasutils.NotApplicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}},
 		},
 		{
 			name:           "applicable and not applicable cves",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleInformation(
+					sarifutils.CreateResultWithOneLocation("fileName1", 1, 0, 0, 0, "snippet1", "applic_testCve1", "warning"), "rule-msg", "rule-markdown", []string{"applicability"}, []string{"applicable"},
+				),
+				sarifutils.CreateRunWithDummyResultAndRuleInformation(
+					sarifutils.CreateResultWithOneLocation("fileName2", 2, 0, 0, 0, "snippet2", "applic_testCve2", "warning"), "rule-msg", "rule-markdown", []string{"applicability"}, []string{"not_applicable"},
+				),
 				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-					sarifutils.CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"),
+					sarifutils.CreateDummyPassingResult("applic_testCve3"),
 				),
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
-				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
-					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"}}},
+				{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.Applicable.String(),
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName1", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet1"}}},
+				}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String(),
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName2", StartLine: 2, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet2"}}},
 				}},
 			},
 		},
 		{
-			name:           "undetermined and not applicable cves",
-			entitledForJas: true,
-			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_testCve1")),
-			},
-			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: jasutils.ApplicabilityUndetermined,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2"}},
-		},
-		{
-			name:           "new scan statuses - applicable wins all statuses",
+			name:           "applicable wins all statuses",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
@@ -481,7 +466,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			},
 		},
 		{
-			name:           "new scan statuses - not covered wins not applicable",
+			name:           "not covered wins not applicable",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
@@ -495,7 +480,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			},
 		},
 		{
-			name:           "new scan statuses - undetermined wins not covered",
+			name:           "undetermined wins not covered",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
@@ -509,7 +494,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			},
 		},
 		{
-			name:           "new scan statuses - missing context wins not covered",
+			name:           "missing context wins not covered",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
@@ -537,10 +522,8 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			name:           "disqualified evidence",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-					sarifutils.CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"),
-				),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"), []string{"applicability"}, []string{"applicable"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_applicable"}),
 			},
 			cves: []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			components: map[string]services.Component{
@@ -658,17 +641,24 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	testCases := []struct {
 		name           string
 		input          []jasutils.ApplicabilityStatus
+		hasRuns        bool
 		expectedOutput jasutils.ApplicabilityStatus
 	}{
 		{
 			name:           "applicable wins all statuses",
-			input:          []jasutils.ApplicabilityStatus{jasutils.ApplicabilityUndetermined, jasutils.Applicable, jasutils.NotCovered, jasutils.NotApplicable},
+			hasRuns:        true,
+			input:          []jasutils.ApplicabilityStatus{jasutils.ApplicabilityUndetermined, jasutils.NotScanned, jasutils.Applicable, jasutils.NotCovered, jasutils.NotApplicable},
 			expectedOutput: jasutils.Applicable,
 		},
 		{
 			name:           "undetermined wins not covered",
 			input:          []jasutils.ApplicabilityStatus{jasutils.NotCovered, jasutils.ApplicabilityUndetermined, jasutils.NotCovered, jasutils.NotApplicable},
 			expectedOutput: jasutils.ApplicabilityUndetermined,
+		},
+		{
+			name:           "missing context wins not covered",
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotCovered, jasutils.MissingContext, jasutils.NotCovered, jasutils.NotApplicable},
+			expectedOutput: jasutils.MissingContext,
 		},
 		{
 			name:           "not covered wins not applicable",
@@ -681,14 +671,26 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 			expectedOutput: jasutils.NotApplicable,
 		},
 		{
-			name:           "no statuses",
+			name:           "no statuses - no runs",
 			input:          []jasutils.ApplicabilityStatus{},
 			expectedOutput: jasutils.NotScanned,
+		},
+		{
+			name:           "no statuses - has runs",
+			input:          []jasutils.ApplicabilityStatus{},
+			hasRuns:        true,
+			expectedOutput: jasutils.NotCovered,
+		},
+		{
+			name:           "ignore not scanned statuses",
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotScanned, jasutils.NotScanned},
+			hasRuns:        true,
+			expectedOutput: jasutils.NotCovered,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedOutput, GetFinalApplicabilityStatus(tc.input))
+			assert.Equal(t, tc.expectedOutput, GetFinalApplicabilityStatus(tc.hasRuns, tc.input))
 		})
 	}
 }

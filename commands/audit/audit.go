@@ -315,9 +315,11 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
-	// Initialize the BOM generator
-	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
+	// Initialize the BOM generator if needed
+	if params.resultsContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.scansToPerform...) {
+		if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
+			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
+		}
 	}
 	populateScanTargets(cmdResults, params)
 	// Initialize the SCA scan strategy
