@@ -384,11 +384,11 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 	}
 	excludeRefs := datastructures.MakeSet[string]()
 	for _, compRef := range excludeComponents {
-		excludeRefs.Add(compRef)
+		excludeRefs.Add(techutils.PurlToXrayComponentId(compRef))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludeRefs.Exists(dep.Ref) {
+		if excludeRefs.Exists(techutils.PurlToXrayComponentId(dep.Ref)) {
 			// This dependency is excluded, skip it
 			continue
 		}
@@ -396,7 +396,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludeRefs.Exists(depRef) {
+				if !excludeRefs.Exists(techutils.PurlToXrayComponentId(depRef)) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
