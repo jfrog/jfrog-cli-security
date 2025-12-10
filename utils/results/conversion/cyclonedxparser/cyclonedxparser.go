@@ -334,7 +334,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateFileComponent(filePathOrUri 
 	return &(*cdc.bom.Components)[len(*cdc.bom.Components)-1]
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, description string, source *cyclonedx.Service, cwe []string, ratings []cyclonedx.VulnerabilityRating, properties ...cyclonedx.Property) (vulnerability *cyclonedx.Vulnerability) {
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, description string, source *cyclonedx.Service, cwe []string, ratings []cyclonedx.VulnerabilityRating) (vulnerability *cyclonedx.Vulnerability) {
 	if vulnerability = cdxutils.SearchVulnerabilityByRef(&cdc.bom.BOM, ref); vulnerability != nil {
 		return
 	}
@@ -351,7 +351,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, descr
 		CWE:         cwe,
 		Ratings:     ratings,
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdxutils.CreateBaseVulnerability(params, properties...))
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdxutils.CreateBaseVulnerability(params))
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 

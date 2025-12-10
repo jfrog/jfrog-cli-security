@@ -23,13 +23,15 @@ func AttachFixedVersionsToVulnerabilities(xrayManager *xray.XrayServicesManager,
 		return fmt.Errorf("failed to get remediation options from Xray: %w", err)
 	}
 	log.Verbose(fmt.Sprintf("Remediation options received from Xray: %+v", remediationOptions))
+	// Right now, we only support QuickestFixStrategy (fixing the actual component to a specific version)
+	strategy := utils.QuickestFixStrategy
 	for _, vulnerability := range *bom.Vulnerabilities {
-		matchVulnerabilityToRemediationOptions(bom, &vulnerability, remediationOptions)
+		matchVulnerabilityToRemediationOptions(bom, &vulnerability, remediationOptions, strategy)
 	}
 	return nil
 }
 
-func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *cyclonedx.Vulnerability, remediationOptions utils.CveRemediationResponse) {
+func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *cyclonedx.Vulnerability, remediationOptions utils.CveRemediationResponse, strategy utils.FixStrategy) {
 	if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
 		log.Debug("No affected components found for vulnerability " + vulnerability.ID + ", skipping attaching fixed versions")
 		return
@@ -43,7 +45,7 @@ func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *c
 				continue
 			}
 			// Convert remediation steps to fixed versions affected versions
-			for _, step := range getAffectComponentCveRemediationStepsByFixedVersion(vulnerability.ID, *affectComponent, cveRemediationOptions) {
+			for _, step := range getAffectComponentCveRemediationStepsByFixedVersion(vulnerability.ID, *affectComponent, cveRemediationOptions, strategy) {
 				cdxutils.AppendAffectedVersionsIfNotExists(&affect, cyclonedx.AffectedVersions{
 					Version: step.UpgradeTo.Version,
 					Status:  cyclonedx.VulnerabilityStatusNotAffected,
@@ -56,13 +58,18 @@ func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *c
 	}
 }
 
-func getAffectComponentCveRemediationStepsByFixedVersion(cve string, component cyclonedx.Component, cveRemediationOptions []utils.Option) (steps []utils.OptionStep) {
+func getAffectComponentCveRemediationStepsByFixedVersion(cve string, component cyclonedx.Component, cveRemediationOptions []utils.Option, strategy utils.FixStrategy) (steps []utils.OptionStep) {
 	for _, cveRemediationOption := range cveRemediationOptions {
 		if cveRemediationOption.Type != utils.InLock {
 			// We only want InLock remediation type (forcing the actual component to a specific fix version)
 			continue
 		}
-		for _, step := range cveRemediationOption.Steps {
+		stepsMap, found := cveRemediationOption.Steps[strategy]
+		if !found || len(stepsMap) == 0 {
+			log.Debug(fmt.Sprintf("No remediation steps found for strategy '%d' for component '%s' in vulnerability '%s'", strategy, component.Name, cve))
+			continue
+		}
+		for _, step := range stepsMap {
 			if step.StepType == utils.NoFixVersion {
 				log.Debug(fmt.Sprintf("No fix version available for component '%s' in vulnerability '%s'", component.Name, cve))
 				continue
