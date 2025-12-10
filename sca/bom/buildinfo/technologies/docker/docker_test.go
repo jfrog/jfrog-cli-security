@@ -109,17 +109,6 @@ func TestParseDockerImage(t *testing.T) {
 			expectedImg:  "nginx",
 			expectedTag:  "latest",
 		},
-		// Error cases
-		{
-			name:        "Empty image name",
-			imageName:   "",
-			expectError: true,
-		},
-		{
-			name:        "No registry",
-			imageName:   "nginx:latest",
-			expectError: true,
-		},
 	}
 
 	for _, tt := range tests {

@@ -1281,36 +1281,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 			wantScope:        "",
 			wantVersion:      "latest",
 		},
-		{
-			name:             "Empty id returns empty values",
-			id:               "",
-			artiUrl:          "http://test.jfrog.io/artifactory",
-			repo:             "docker-remote",
-			wantDownloadUrls: nil,
-			wantName:         "",
-			wantScope:        "",
-			wantVersion:      "",
-		},
-		{
-			name:             "Without artiUrl and repo, no download URL",
-			id:               "docker://nginx:1.21.0",
-			artiUrl:          "",
-			repo:             "",
-			wantDownloadUrls: nil,
-			wantName:         "nginx",
-			wantScope:        "",
-			wantVersion:      "1.21.0",
-		},
-		{
-			name:             "Artifactory URL with trailing slash",
-			id:               "docker://nginx:1.21.0",
-			artiUrl:          "http://test.jfrog.io/artifactory/",
-			repo:             "docker-remote",
-			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
-			wantName:         "nginx",
-			wantScope:        "",
-			wantVersion:      "1.21.0",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

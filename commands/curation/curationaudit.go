@@ -137,9 +137,6 @@ func (ca *CurationAuditCommand) checkDockerSupport() (bool, error) {
 	if dockerImageName == "" {
 		return false, nil
 	}
-	if !strings.Contains(dockerImageName, "/") {
-		return false, errorutils.CheckErrorf("invalid docker image format: '%s'. Expected format: 'repo/image:tag' or 'repo/path/image:tag'", dockerImageName)
-	}
 	return true, nil
 }
 

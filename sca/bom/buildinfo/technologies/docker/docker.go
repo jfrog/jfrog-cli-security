@@ -30,16 +30,7 @@ var (
 
 func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	imageName = strings.TrimSpace(imageName)
-	if imageName == "" {
-		return nil, fmt.Errorf("docker image name is required")
-	}
-	if idx := strings.Index(imageName, ","); idx > 0 {
-		imageName = strings.TrimSpace(imageName[:idx])
-	}
-	imageName = strings.TrimSuffix(imageName, "/")
-
 	info := &DockerImageInfo{Tag: "latest"}
-
 	if idx := strings.LastIndex(imageName, ":"); idx > 0 {
 		afterColon := imageName[idx+1:]
 		if !strings.Contains(afterColon, "/") {
@@ -55,13 +46,6 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 
 	info.Registry = parts[0]
 	info.Repo, info.Image = parseRegistryAndExtract(info.Registry, parts[1:])
-
-	if info.Image == "" {
-		return nil, fmt.Errorf("invalid docker image format: '%s'", imageName)
-	}
-	if info.Repo == "" {
-		return nil, fmt.Errorf("could not determine repository from: '%s'", imageName)
-	}
 
 	log.Debug(fmt.Sprintf("Parsed Docker image - Registry: %s, Repo: %s, Image: %s, Tag: %s",
 		info.Registry, info.Repo, info.Image, info.Tag))
