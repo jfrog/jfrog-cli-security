@@ -149,7 +149,8 @@ const (
 	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
 	// Unique curation flags
-	CurationOutput = "curation-format"
+	CurationOutput  = "curation-format"
+	DockerImageName = "image"
 	SolutionPath   = "solution-path"
 
 	// Unique git flags
@@ -206,7 +207,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,DockerImageName,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -329,6 +330,9 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+
+	// Docker flags
+	DockerImageName: components.NewStringFlag(DockerImageName, "[Docker] Defines the Docker image name to audit. Format: 'repo/path/image:tag'. For example: 'curation-docker/dweomer/nginx-auth-ldap:1.13.5' or 'repo/image:tag'. If no tag is provided, 'latest' is used."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

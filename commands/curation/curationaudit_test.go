@@ -427,7 +427,7 @@ func TestDoCurationAudit(t *testing.T) {
 			cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
 			defer cleanUp()
 			// Create audit command, and run it
-			results, err := createCurationCmdAndRun(tt)
+			results, err := createCurationCmdAndRun(tt, config)
 			// Validate the results
 			if tt.requestToError == nil {
 				assert.NoError(t, err)
@@ -505,7 +505,7 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	callbackPreTest()
 }
 
-func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport, err error) {
+func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
@@ -513,6 +513,11 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
+	if tt.dockerImageName != "" {
+		curationCmd.SetDockerImageName(tt.dockerImageName)
+		// Docker requires server details to be set explicitly
+		curationCmd.SetServerDetails(serverDetails)
+	}
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -568,6 +573,7 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
+	dockerImageName          string
 }
 
 func (tc testCase) getPathToTests() string {
@@ -985,6 +991,43 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 			allowInsecureTls: true,
 		},
+		{
+			name:            "docker tree - one blocked package",
+			tech:            techutils.Docker,
+			pathToProject:   filepath.Join("projects", "package-managers", "docker", "curation-project"),
+			dockerImageName: "repo-test-docker/dweomer/nginx-auth-ldap:1.13.5-on-alpine-3.5",
+			requestToFail: map[string]bool{
+				"/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": true,
+			},
+			expectedRequest: map[string]bool{
+				"/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"root:latest": {
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "dweomer/nginx-auth-ldap",
+							ParentVersion:     "1.13.5-on-alpine-3.5",
+							BlockedPackageUrl: "/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5",
+							PackageName:       "dweomer/nginx-auth-ldap",
+							PackageVersion:    "1.13.5-on-alpine-3.5",
+							DepRelation:       "direct",
+							PkgType:           "docker",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 0,
+				},
+			},
+			allowInsecureTls: true,
+		},
 	}
 	return tests
 }
@@ -1179,6 +1222,99 @@ func Test_getGemNameScopeAndVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotDownloadUrls, gotName, gotScope, gotVersion := getGemNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+func Test_getDockerNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Basic docker image with tag",
+			id:               "docker://nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
+			wantName:         "nginx",
+			wantScope:        "",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with registry prefix",
+			id:               "docker://registry.example.com/nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/registry.example.com/nginx/manifests/1.21.0"},
+			wantName:         "registry.example.com/nginx",
+			wantScope:        "",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with sha256 digest",
+			id:               "docker://nginx:sha256:abc123def456",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/sha256:abc123def456"},
+			wantName:         "nginx",
+			wantScope:        "",
+			wantVersion:      "sha256:abc123def456",
+		},
+		{
+			name:             "Docker image without version defaults to latest",
+			id:               "docker://nginx",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/latest"},
+			wantName:         "nginx",
+			wantScope:        "",
+			wantVersion:      "latest",
+		},
+		{
+			name:             "Empty id returns empty values",
+			id:               "",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantScope:        "",
+			wantVersion:      "",
+		},
+		{
+			name:             "Without artiUrl and repo, no download URL",
+			id:               "docker://nginx:1.21.0",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "nginx",
+			wantScope:        "",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Artifactory URL with trailing slash",
+			id:               "docker://nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory/",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
+			wantName:         "nginx",
+			wantScope:        "",
+			wantVersion:      "1.21.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getDockerNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
 			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
 			assert.Equal(t, tt.wantName, gotName, "name mismatch")
 			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")

@@ -232,6 +232,8 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
 		MaxTreeDepth: params.MaxTreeDepth(),
+		// Docker params
+		DockerImageName: params.DockerImageName(),
 	}
 	return
 }
