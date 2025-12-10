@@ -1,11 +1,9 @@
 package docker
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -24,19 +22,10 @@ type DockerImageInfo struct {
 	Tag      string
 }
 
-type dockerManifestList struct {
-	Manifests []struct {
-		Digest   string `json:"digest"`
-		Platform struct {
-			Architecture string `json:"architecture"`
-			OS           string `json:"os"`
-		} `json:"platform"`
-	} `json:"manifests"`
-}
-
 var (
 	jfrogSubdomainPattern = regexp.MustCompile(`^([a-zA-Z0-9]+)-([a-zA-Z0-9-]+)\.jfrog\.io$`)
 	ipAddressPattern      = regexp.MustCompile(`^\d+\.`)
+	hexDigestPattern      = regexp.MustCompile(`[a-fA-F0-9]{64}`)
 )
 
 func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
@@ -141,33 +130,34 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 }
 
 func getArchDigestUsingDocker(fullImageName string) (string, error) {
-	cmd := exec.Command("docker", "buildx", "imagetools", "inspect", "--raw", fullImageName)
-	output, err := cmd.CombinedOutput()
+	log.Debug(fmt.Sprintf("Pulling Docker image: %s", fullImageName))
+	pullCmd := exec.Command("docker", "pull", fullImageName)
+	output, err := pullCmd.CombinedOutput()
 	if err != nil {
 		outputStr := string(output)
-		if strings.Contains(outputStr, "403") || strings.Contains(outputStr, "Forbidden") {
-			return "", nil
+		if strings.Contains(outputStr, "curation service") {
+			return extractDigestFromBlockedMessage(outputStr), nil
 		}
-		return "", fmt.Errorf("%s", strings.TrimSpace(outputStr))
+		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(outputStr))
 	}
 
-	var manifestList dockerManifestList
-	if err := json.Unmarshal(output, &manifestList); err != nil {
+	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{index .RepoDigests 0}}")
+	output, err = inspectCmd.CombinedOutput()
+	if err != nil {
 		return "", nil
 	}
-
-	if len(manifestList.Manifests) == 0 {
-		return "", nil
+	repoDigest := strings.TrimSpace(string(output))
+	if idx := strings.Index(repoDigest, "@"); idx > 0 {
+		return repoDigest[idx+1:], nil
 	}
-
-	currentArch := runtime.GOARCH
-	for _, manifest := range manifestList.Manifests {
-		if manifest.Platform.Architecture == currentArch && manifest.Digest != "" {
-			return manifest.Digest, nil
-		}
-	}
-
 	return "", nil
+}
+
+func extractDigestFromBlockedMessage(output string) string {
+	if match := hexDigestPattern.FindString(output); match != "" {
+		return "sha256:" + match
+	}
+	return ""
 }
 
 func GetDockerRepositoryConfig(serverDetails *config.ServerDetails, imageName string) (*project.RepositoryConfig, error) {

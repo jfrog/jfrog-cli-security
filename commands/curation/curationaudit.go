@@ -853,6 +853,9 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	if scope != "" {
 		name = scope + "/" + name
 	}
+	if nc.tech == techutils.Docker {
+		nc.httpClientDetails.Headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json"
+	}
 	for _, packageUrl := range packageUrls {
 		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &nc.httpClientDetails)
 		if err != nil {
@@ -1174,24 +1177,13 @@ func getDockerNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []stri
 	}
 
 	id = strings.TrimPrefix(id, "docker://")
-	var lastColonIndex int
-	if strings.Contains(id, ":sha256:") {
-		sha256Index := strings.Index(id, ":sha256:")
-		if sha256Index > 0 {
-			lastColonIndex = sha256Index
-		} else {
-			lastColonIndex = strings.LastIndex(id, ":")
-		}
-	} else {
-		lastColonIndex = strings.LastIndex(id, ":")
-	}
 
-	if lastColonIndex > 0 {
-		name = id[:lastColonIndex]
-		version = id[lastColonIndex+1:]
+	if idx := strings.Index(id, ":sha256:"); idx > 0 {
+		name, version = id[:idx], id[idx+1:]
+	} else if idx := strings.LastIndex(id, ":"); idx > 0 {
+		name, version = id[:idx], id[idx+1:]
 	} else {
-		name = id
-		version = "latest"
+		name, version = id, "latest"
 	}
 
 	if artiUrl != "" && repo != "" {
@@ -1199,7 +1191,7 @@ func getDockerNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []stri
 			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
 	}
 
-	return
+	return downloadUrls, name, scope, version
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {
