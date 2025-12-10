@@ -579,6 +579,10 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		Module:         module,
 		ScansToPerform: scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
+			if graphScanResults == nil {
+				// No SCA scan results, return empty CVE lists.
+				return
+			}
 			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, *directDepsListFromVulnerabilities(graphScanResults))
 		},
 		ScanResults: targetResults,
