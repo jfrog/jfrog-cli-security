@@ -28,15 +28,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -57,15 +59,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -98,15 +102,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -139,15 +145,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "missing-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "missing-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -180,15 +188,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -226,25 +236,27 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
-								},
-							},
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.2",
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.2",
+									},
 								},
 							},
 						},
@@ -286,15 +298,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.DirectDependency, // Not InLock
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -327,12 +341,14 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.NoFixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.NoFixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
 								},
 							},
 						},
@@ -365,12 +381,14 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.PackageNotFound,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "1.0.0",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.PackageNotFound,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "1.0.0",
+									},
 								},
 							},
 						},
@@ -403,15 +421,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "different-component", // Name mismatch
-									Version: "1.0.0",
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "1.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "different-component", // Name mismatch
+										Version: "1.0.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "1.0.1",
+									},
 								},
 							},
 						},
@@ -444,15 +464,17 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 				"CVE-2023-1234": []utils.Option{
 					{
 						Type: utils.InLock,
-						Steps: []utils.OptionStep{
-							{
-								StepType: utils.FixVersion,
-								PkgVersion: utils.PackageVersionKey{
-									Name:    "test-component",
-									Version: "2.0.0", // Version mismatch
-								},
-								UpgradeTo: utils.PackageVersionKey{
-									Version: "2.0.1",
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "test-component",
+										Version: "2.0.0", // Version mismatch
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "2.0.1",
+									},
 								},
 							},
 						},
@@ -475,7 +497,7 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 			}
 
 			// Execute the function
-			matchVulnerabilityToRemediationOptions(tt.bom, &vulnCopy, tt.remediationOptions)
+			matchVulnerabilityToRemediationOptions(tt.bom, &vulnCopy, tt.remediationOptions, utils.QuickestFixStrategy)
 
 			// For most test cases, check if affects remain unchanged (no fixed versions added)
 			if tt.expectedAffectedVersions == nil {
@@ -557,25 +579,27 @@ func TestMatchVulnerabilityToRemediationOptionsMultipleAffects(t *testing.T) {
 		"CVE-2023-1234": []utils.Option{
 			{
 				Type: utils.InLock,
-				Steps: []utils.OptionStep{
-					{
-						StepType: utils.FixVersion,
-						PkgVersion: utils.PackageVersionKey{
-							Name:    "component1",
-							Version: "1.0.0",
+				Steps: map[utils.FixStrategy][]utils.OptionStep{
+					utils.QuickestFixStrategy: {
+						{
+							StepType: utils.FixVersion,
+							PkgVersion: utils.PackageVersionKey{
+								Name:    "component1",
+								Version: "1.0.0",
+							},
+							UpgradeTo: utils.PackageVersionKey{
+								Version: "1.0.1",
+							},
 						},
-						UpgradeTo: utils.PackageVersionKey{
-							Version: "1.0.1",
-						},
-					},
-					{
-						StepType: utils.FixVersion,
-						PkgVersion: utils.PackageVersionKey{
-							Name:    "component2",
-							Version: "2.0.0",
-						},
-						UpgradeTo: utils.PackageVersionKey{
-							Version: "2.0.1",
+						{
+							StepType: utils.FixVersion,
+							PkgVersion: utils.PackageVersionKey{
+								Name:    "component2",
+								Version: "2.0.0",
+							},
+							UpgradeTo: utils.PackageVersionKey{
+								Version: "2.0.1",
+							},
 						},
 					},
 				},
@@ -584,7 +608,7 @@ func TestMatchVulnerabilityToRemediationOptionsMultipleAffects(t *testing.T) {
 	}
 
 	// Execute the function
-	matchVulnerabilityToRemediationOptions(bom, vulnerability, remediationOptions)
+	matchVulnerabilityToRemediationOptions(bom, vulnerability, remediationOptions, utils.QuickestFixStrategy)
 
 	// Verify results for each affect
 	assert.NotNil(t, vulnerability.Affects)

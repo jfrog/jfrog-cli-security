@@ -173,7 +173,7 @@ var commandFlags = map[string][]string{
 		binarySca, binarySecrets, binaryWithoutCA, SecretValidation,
 	},
 	Enrich: {
-		Url, user, password, accessToken, ServerId, Threads, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
 	},
 	BuildScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
