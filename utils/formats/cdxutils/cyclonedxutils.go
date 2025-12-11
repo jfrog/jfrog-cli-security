@@ -100,7 +100,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRo
 	if bom == nil || bom.Components == nil {
 		return UnknownRelation
 	}
-	component := SearchComponentByRefGitDiff(bom.Components, componentRef)
+	component := SearchComponentByRef(bom.Components, componentRef)
 	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
 		// The component is not found in the BOM components or not library, return UnknownRelation
 		return UnknownRelation
@@ -260,12 +260,12 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	return
 }
 
-func SearchComponentByRefGitDiff(components *[]cyclonedx.Component, ref string) (component *cyclonedx.Component) {
+func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) (component *cyclonedx.Component) {
 	if components == nil || len(*components) == 0 {
 		return
 	}
 	for i, comp := range *components {
-		if techutils.PurlToXrayComponentId(comp.BOMRef) == techutils.PurlToXrayComponentId(ref) {
+		if techutils.PurlToXrayComponentId(comp.PackageURL) == techutils.PurlToXrayComponentId(purl) {
 			return &(*components)[i]
 		}
 	}
@@ -321,7 +321,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRefGitDiff(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
