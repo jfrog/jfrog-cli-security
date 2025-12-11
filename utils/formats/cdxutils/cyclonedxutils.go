@@ -260,6 +260,18 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	return
 }
 
+func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) (component *cyclonedx.Component) {
+	if components == nil || len(*components) == 0 {
+		return
+	}
+	for i, comp := range *components {
+		if techutils.PurlToXrayComponentId(comp.PackageURL) == techutils.PurlToXrayComponentId(purl) {
+			return &(*components)[i]
+		}
+	}
+	return
+}
+
 func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
 		BOMRef: GetFileRef(filePathOrUri),
@@ -309,7 +321,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
@@ -372,11 +384,11 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 	}
 	excludeRefs := datastructures.MakeSet[string]()
 	for _, compRef := range excludeComponents {
-		excludeRefs.Add(compRef)
+		excludeRefs.Add(techutils.PurlToXrayComponentId(compRef))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludeRefs.Exists(dep.Ref) {
+		if excludeRefs.Exists(techutils.PurlToXrayComponentId(dep.Ref)) {
 			// This dependency is excluded, skip it
 			continue
 		}
@@ -384,7 +396,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludeRefs.Exists(depRef) {
+				if !excludeRefs.Exists(techutils.PurlToXrayComponentId(depRef)) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
