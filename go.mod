@@ -15,8 +15,8 @@ require (
 	github.com/jfrog/froggit-go v1.20.6
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20251210120128-176c677fed4c
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20251125083543-e689762c4ff0
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20251211075913-35ebcd308e93
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20251210085744-f8481d179ac5
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20251209090954-d6b1c70d3a5e
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
@@ -136,7 +136,7 @@ require (
 )
 
 // attiasas:fix_cdx_remediation_api
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251210093930-2b29e73a9eb0
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20251211082620-f39892d0512b
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
