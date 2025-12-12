@@ -149,8 +149,9 @@ const (
 	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
 	// Unique curation flags
-	CurationOutput = "curation-format"
-	SolutionPath   = "solution-path"
+	CurationOutput  = "curation-format"
+	DockerImageName = "image"
+	SolutionPath    = "solution-path"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -206,7 +207,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath, DockerImageName,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -329,6 +330,9 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+
+	// Docker flags
+	DockerImageName: components.NewStringFlag(DockerImageName, "[Docker] Defines the Docker image name to audit. Uses the same format as Docker client with Artifactory. Examples: 'acme.jfrog.io/docker-local/nginx:1.21' (repository path) or 'acme-docker-local.jfrog.io/nginx:1.21' (subdomain). Supports all Artifactory hosting methods."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
