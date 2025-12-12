@@ -236,11 +236,11 @@ var commandFlags = map[string][]string{
 var flagsMap = map[string]components.Flag{
 	// Common commands flags
 	ServerId:    components.NewStringFlag(ServerId, "Server ID configured using the config command."),
-	Url:         components.NewStringFlag(Url, "JFrog URL."),
-	XrayUrl:     components.NewStringFlag(XrayUrl, "JFrog Xray URL."),
-	user:        components.NewStringFlag(user, "JFrog username."),
-	password:    components.NewStringFlag(password, "JFrog password."),
-	accessToken: components.NewStringFlag(accessToken, "JFrog access token."),
+	Url:         components.NewStringFlag(Url, "Specifies the URL of the JFrog platform."),
+	XrayUrl:     components.NewStringFlag(XrayUrl, "Specifies the URL of your Xray server."),
+	user:        components.NewStringFlag(user, "Specifies the user name of your JFrog platform."),
+	password:    components.NewStringFlag(password, "Specifies the user password of your JFrog platform."),
+	accessToken: components.NewStringFlag(accessToken, "Specifies the access token of your JFrog platform."),
 	Threads:     components.NewStringFlag(Threads, "The number of parallel threads used to scan the source code project.", components.WithIntDefaultValue(cliutils.Threads)),
 	// Xray flags
 	LicenseId: components.NewStringFlag(LicenseId, "Xray license ID.", components.SetMandatory(), components.WithHelpValue("Xray license ID")),
