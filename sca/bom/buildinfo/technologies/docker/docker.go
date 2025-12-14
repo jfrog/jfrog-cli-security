@@ -109,7 +109,8 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 
 	log.Debug(fmt.Sprintf("Docker image reference: %s", imageRef))
 
-	return []*xrayUtils.GraphNode{{Id: "root", Nodes: []*xrayUtils.GraphNode{{Id: imageRef}}}},
+	rootId := imageInfo.Image + ":" + imageInfo.Tag
+	return []*xrayUtils.GraphNode{{Id: rootId, Nodes: []*xrayUtils.GraphNode{{Id: imageRef}}}},
 		[]string{imageRef}, nil
 }
 
@@ -123,16 +124,6 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 			return extractDigestFromBlockedMessage(outputStr), nil
 		}
 		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(outputStr))
-	}
-
-	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{index .RepoDigests 0}}")
-	output, err = inspectCmd.CombinedOutput()
-	if err != nil {
-		return "", nil
-	}
-	repoDigest := strings.TrimSpace(string(output))
-	if idx := strings.Index(repoDigest, "@"); idx > 0 {
-		return repoDigest[idx+1:], nil
 	}
 	return "", nil
 }

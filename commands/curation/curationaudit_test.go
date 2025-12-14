@@ -21,6 +21,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -506,6 +507,9 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 }
 
 func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
+	if tt.tech == techutils.Docker && tt.mockDepTree != nil {
+		return runDockerCurationWithMockTree(tt, serverDetails)
+	}
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
@@ -521,6 +525,36 @@ func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
+}
+
+func runDockerCurationWithMockTree(tt testCase, serverDetails *config.ServerDetails) (map[string]*CurationReport, error) {
+	rtAuth, _ := serverDetails.CreateArtAuthConfig()
+	rtManager, _ := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 strings.SplitN(tt.dockerImageName, "/", 2)[0],
+		tech:                 techutils.Docker,
+		parallelRequests:     3,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{tt.mockDepTree.Id: {}}
+	_ = analyzer.fetchNodesStatus(tt.mockDepTree, &packagesStatusMap, rootNodes)
+
+	var packagesStatus []*PackageStatus
+	analyzer.GraphsRelations([]*xrayUtils.GraphNode{tt.mockDepTree}, &packagesStatusMap, &packagesStatus)
+
+	return map[string]*CurationReport{
+		tt.mockDepTree.Id: {
+			packagesStatus:        packagesStatus,
+			totalNumberOfPackages: len(tt.mockDepTree.Nodes),
+		},
+	}, nil
 }
 
 func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
@@ -574,6 +608,8 @@ type testCase struct {
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
 	dockerImageName          string
+	// mockDepTree is used for Docker tests to bypass docker pull
+	mockDepTree *xrayUtils.GraphNode
 }
 
 func (tc testCase) getPathToTests() string {
@@ -992,26 +1028,26 @@ func getTestCasesForDoCurationAudit() []testCase {
 			allowInsecureTls: true,
 		},
 		{
-			name:            "docker tree - one blocked package",
+			name:            "docker tree - malicious package blocked",
 			tech:            techutils.Docker,
 			pathToProject:   filepath.Join("projects", "package-managers", "docker", "curation-project"),
-			dockerImageName: "repo-test-docker/dweomer/nginx-auth-ldap:1.13.5-on-alpine-3.5",
+			dockerImageName: "docker-curation/ganodndentcom/drupal:latest",
 			requestToFail: map[string]bool{
-				"/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": true,
+				"/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest": true,
 			},
 			expectedRequest: map[string]bool{
-				"/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": false,
+				"/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"root:latest": {
+				"ganodndentcom/drupal:latest": {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "dweomer/nginx-auth-ldap",
-							ParentVersion:     "1.13.5-on-alpine-3.5",
-							BlockedPackageUrl: "/api/docker/repo-test-docker/v2/dweomer/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5",
-							PackageName:       "dweomer/nginx-auth-ldap",
-							PackageVersion:    "1.13.5-on-alpine-3.5",
+							ParentName:        "ganodndentcom/drupal",
+							ParentVersion:     "latest",
+							BlockedPackageUrl: "/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest",
+							PackageName:       "ganodndentcom/drupal",
+							PackageVersion:    "latest",
 							DepRelation:       "direct",
 							PkgType:           "docker",
 							BlockingReason:    "Policy violations",
@@ -1023,10 +1059,17 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
-					totalNumberOfPackages: 0,
+					totalNumberOfPackages: 1,
 				},
 			},
 			allowInsecureTls: true,
+			// Mock dependency tree to bypass docker pull
+			mockDepTree: &xrayUtils.GraphNode{
+				Id: "ganodndentcom/drupal:latest",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "docker://ganodndentcom/drupal:latest"},
+				},
+			},
 		},
 	}
 	return tests
