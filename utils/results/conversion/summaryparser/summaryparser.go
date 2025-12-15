@@ -240,7 +240,7 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err
 	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, false))
+	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
@@ -255,7 +255,7 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error
 	if sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.CollectRuns(iacs...), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false))
+	return results.ForEachJasIssue(results.CollectRuns(iacs...), sc.entitledForJas, sc.getJasHandler(jasutils.IaC))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSast(sast ...[]*sarif.Run) (err error) {
@@ -269,11 +269,11 @@ func (sc *CmdResultsSummaryConverter) ParseSast(sast ...[]*sarif.Run) (err error
 	if sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.CollectRuns(sast...), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false))
+	return results.ForEachJasIssue(results.CollectRuns(sast...), sc.entitledForJas, sc.getJasHandler(jasutils.Sast))
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles
-func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasIssueFunc {
+func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType) results.ParseJasIssueFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		// Get the count map in the `sc.currentScan` object based on the scanType and violation
 		resultStatus := formats.NoStatus
@@ -283,23 +283,11 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 			if tokenStatus := sarifutils.GetResultPropertyTokenValidation(result); tokenStatus != "" {
 				resultStatus = tokenStatus
 			}
-			if violations {
-				count = sc.currentScan.Violations.SecretsResults
-			} else {
-				count = sc.currentScan.Vulnerabilities.SecretsResults
-			}
+			count = sc.currentScan.Vulnerabilities.SecretsResults
 		case jasutils.IaC:
-			if violations {
-				count = sc.currentScan.Violations.IacResults
-			} else {
-				count = sc.currentScan.Vulnerabilities.IacResults
-			}
+			count = sc.currentScan.Vulnerabilities.IacResults
 		case jasutils.Sast:
-			if violations {
-				count = sc.currentScan.Violations.SastResults
-			} else {
-				count = sc.currentScan.Vulnerabilities.SastResults
-			}
+			count = sc.currentScan.Vulnerabilities.SastResults
 		}
 		countJasIssues(count, location, severity, resultStatus)
 		return
