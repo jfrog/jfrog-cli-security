@@ -260,12 +260,12 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	return
 }
 
-func SearchComponentByCleanRef(components *[]cyclonedx.Component, bomRef string) (component *cyclonedx.Component) {
+func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) (component *cyclonedx.Component) {
 	if components == nil || len(*components) == 0 {
 		return
 	}
 	for i, comp := range *components {
-		if techutils.PurlToXrayComponentId(comp.BOMRef) == techutils.PurlToXrayComponentId(bomRef) {
+		if techutils.PurlToXrayComponentId(comp.PackageURL) == techutils.PurlToXrayComponentId(purl) {
 			return &(*components)[i]
 		}
 	}
@@ -321,12 +321,12 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByCleanRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
 		// Exclude the component from the dependencies
-		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, compToExclude.BOMRef)
+		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, bom.Components, compToExclude)
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
@@ -378,13 +378,15 @@ func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents 
 	return &filteredComponents
 }
 
-func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeComponents ...string) *[]cyclonedx.Dependency {
+func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[]cyclonedx.Component, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Dependency {
 	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
 		return dependencies
 	}
 	excludeRefs := datastructures.MakeSet[string]()
-	for _, compRef := range excludeComponents {
-		excludeRefs.Add(techutils.PurlToXrayComponentId(compRef))
+	excludePurls := datastructures.MakeSet[string]()
+	for _, component := range excludeComponents {
+		excludeRefs.Add(component.BOMRef)
+		excludePurls.Add(techutils.PurlToXrayComponentId(component.PackageURL))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
@@ -396,7 +398,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludeRefs.Exists(techutils.PurlToXrayComponentId(depRef)) {
+				if !excludeRefs.Exists(depRef) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
