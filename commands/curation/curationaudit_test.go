@@ -16,13 +16,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -429,7 +427,7 @@ func TestDoCurationAudit(t *testing.T) {
 			cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
 			defer cleanUp()
 			// Create audit command, and run it
-			results, err := createCurationCmdAndRun(tt, config)
+			results, err := createCurationCmdAndRun(tt)
 			// Validate the results
 			if tt.requestToError == nil {
 				assert.NoError(t, err)
@@ -507,11 +505,7 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	callbackPreTest()
 }
 
-func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
-	// For Docker, building dep tree manually (since its not possible to do docker pull )
-	if tt.tech == techutils.Docker {
-		return runDockerCurationTest(tt, serverDetails)
-	}
+func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport, err error) {
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
@@ -519,38 +513,9 @@ func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
-	curationCmd.SetDockerImageName(tt.dockerImageName)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
-}
-
-func runDockerCurationTest(tt testCase, serverDetails *config.ServerDetails) (map[string]*CurationReport, error) {
-	imageInfo, _ := docker.ParseDockerImage(tt.dockerImageName)
-	rootId := imageInfo.Image + ":" + imageInfo.Tag
-
-	rtManager, _ := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
-	rtAuth, _ := serverDetails.CreateArtAuthConfig()
-
-	analyzer := treeAnalyzer{
-		rtManager:            rtManager,
-		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
-		rtAuth:               rtAuth,
-		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
-		url:                  rtAuth.GetUrl(),
-		repo:                 imageInfo.Repo,
-		tech:                 techutils.Docker,
-		parallelRequests:     3,
-	}
-
-	tree := []*xrayUtils.GraphNode{{Id: rootId, Nodes: []*xrayUtils.GraphNode{{Id: "docker://" + rootId}}}}
-	statusMap := sync.Map{}
-	var status []*PackageStatus
-
-	_ = analyzer.fetchNodesStatus(tree[0], &statusMap, map[string]struct{}{rootId: {}})
-	analyzer.GraphsRelations(tree, &statusMap, &status)
-
-	return map[string]*CurationReport{rootId: {packagesStatus: status, totalNumberOfPackages: 1}}, nil
 }
 
 func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
@@ -603,7 +568,6 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
-	dockerImageName          string
 }
 
 func (tc testCase) getPathToTests() string {
@@ -1021,43 +985,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 			allowInsecureTls: true,
 		},
-		{
-			name:            "docker tree - one blocked package",
-			tech:            techutils.Docker,
-			pathToProject:   filepath.Join("projects", "package-managers", "docker", "curation-project"),
-			dockerImageName: "repo-test-docker/dweomer/nginx-auth-ldap:1.13.5-on-alpine-3.5",
-			requestToFail: map[string]bool{
-				"/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": true,
-			},
-			expectedRequest: map[string]bool{
-				"/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": false,
-			},
-			expectedResp: map[string]*CurationReport{
-				"nginx-auth-ldap:1.13.5-on-alpine-3.5": {
-					packagesStatus: []*PackageStatus{
-						{
-							Action:            "blocked",
-							ParentName:        "nginx-auth-ldap",
-							ParentVersion:     "1.13.5-on-alpine-3.5",
-							BlockedPackageUrl: "/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5",
-							PackageName:       "nginx-auth-ldap",
-							PackageVersion:    "1.13.5-on-alpine-3.5",
-							DepRelation:       "direct",
-							PkgType:           "docker",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-					},
-					totalNumberOfPackages: 1,
-				},
-			},
-			allowInsecureTls: true,
-		},
 	}
 	return tests
 }
@@ -1322,7 +1249,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 		})
 	}
 }
-
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
