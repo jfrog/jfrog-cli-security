@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -507,8 +508,9 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 }
 
 func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
-	if tt.tech == techutils.Docker && tt.mockDepTree != nil {
-		return runDockerCurationWithMockTree(tt, serverDetails)
+	// For Docker, building dep tree manually (since its not possible to do docker pull )
+	if tt.tech == techutils.Docker {
+		return runDockerCurationTest(tt, serverDetails)
 	}
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
@@ -517,19 +519,18 @@ func createCurationCmdAndRun(tt testCase, serverDetails *config.ServerDetails) (
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
-	if tt.dockerImageName != "" {
-		curationCmd.SetDockerImageName(tt.dockerImageName)
-		// Docker requires server details to be set explicitly
-		curationCmd.SetServerDetails(serverDetails)
-	}
+	curationCmd.SetDockerImageName(tt.dockerImageName)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
 }
 
-func runDockerCurationWithMockTree(tt testCase, serverDetails *config.ServerDetails) (map[string]*CurationReport, error) {
-	rtAuth, _ := serverDetails.CreateArtAuthConfig()
+func runDockerCurationTest(tt testCase, serverDetails *config.ServerDetails) (map[string]*CurationReport, error) {
+	imageInfo, _ := docker.ParseDockerImage(tt.dockerImageName)
+	rootId := imageInfo.Image + ":" + imageInfo.Tag
+
 	rtManager, _ := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	rtAuth, _ := serverDetails.CreateArtAuthConfig()
 
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -537,24 +538,19 @@ func runDockerCurationWithMockTree(tt testCase, serverDetails *config.ServerDeta
 		rtAuth:               rtAuth,
 		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
 		url:                  rtAuth.GetUrl(),
-		repo:                 strings.SplitN(tt.dockerImageName, "/", 2)[0],
+		repo:                 imageInfo.Repo,
 		tech:                 techutils.Docker,
 		parallelRequests:     3,
 	}
 
-	packagesStatusMap := sync.Map{}
-	rootNodes := map[string]struct{}{tt.mockDepTree.Id: {}}
-	_ = analyzer.fetchNodesStatus(tt.mockDepTree, &packagesStatusMap, rootNodes)
+	tree := []*xrayUtils.GraphNode{{Id: rootId, Nodes: []*xrayUtils.GraphNode{{Id: "docker://" + rootId}}}}
+	statusMap := sync.Map{}
+	var status []*PackageStatus
 
-	var packagesStatus []*PackageStatus
-	analyzer.GraphsRelations([]*xrayUtils.GraphNode{tt.mockDepTree}, &packagesStatusMap, &packagesStatus)
+	analyzer.fetchNodesStatus(tree[0], &statusMap, map[string]struct{}{rootId: {}})
+	analyzer.GraphsRelations(tree, &statusMap, &status)
 
-	return map[string]*CurationReport{
-		tt.mockDepTree.Id: {
-			packagesStatus:        packagesStatus,
-			totalNumberOfPackages: len(tt.mockDepTree.Nodes),
-		},
-	}, nil
+	return map[string]*CurationReport{rootId: {packagesStatus: status, totalNumberOfPackages: 1}}, nil
 }
 
 func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
@@ -608,8 +604,6 @@ type testCase struct {
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
 	dockerImageName          string
-	// mockDepTree is used for Docker tests to bypass docker pull
-	mockDepTree *xrayUtils.GraphNode
 }
 
 func (tc testCase) getPathToTests() string {
@@ -1028,26 +1022,26 @@ func getTestCasesForDoCurationAudit() []testCase {
 			allowInsecureTls: true,
 		},
 		{
-			name:            "docker tree - malicious package blocked",
+			name:            "docker tree - one blocked package",
 			tech:            techutils.Docker,
 			pathToProject:   filepath.Join("projects", "package-managers", "docker", "curation-project"),
-			dockerImageName: "docker-curation/ganodndentcom/drupal:latest",
+			dockerImageName: "repo-test-docker/dweomer/nginx-auth-ldap:1.13.5-on-alpine-3.5",
 			requestToFail: map[string]bool{
-				"/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest": true,
+				"/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": true,
 			},
 			expectedRequest: map[string]bool{
-				"/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest": false,
+				"/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"ganodndentcom/drupal:latest": {
+				"nginx-auth-ldap:1.13.5-on-alpine-3.5": {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "ganodndentcom/drupal",
-							ParentVersion:     "latest",
-							BlockedPackageUrl: "/api/docker/docker-curation/v2/ganodndentcom/drupal/manifests/latest",
-							PackageName:       "ganodndentcom/drupal",
-							PackageVersion:    "latest",
+							ParentName:        "nginx-auth-ldap",
+							ParentVersion:     "1.13.5-on-alpine-3.5",
+							BlockedPackageUrl: "/api/docker/dweomer/v2/nginx-auth-ldap/manifests/1.13.5-on-alpine-3.5",
+							PackageName:       "nginx-auth-ldap",
+							PackageVersion:    "1.13.5-on-alpine-3.5",
 							DepRelation:       "direct",
 							PkgType:           "docker",
 							BlockingReason:    "Policy violations",
@@ -1063,13 +1057,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 				},
 			},
 			allowInsecureTls: true,
-			// Mock dependency tree to bypass docker pull
-			mockDepTree: &xrayUtils.GraphNode{
-				Id: "ganodndentcom/drupal:latest",
-				Nodes: []*xrayUtils.GraphNode{
-					{Id: "docker://ganodndentcom/drupal:latest"},
-				},
-			},
 		},
 	}
 	return tests

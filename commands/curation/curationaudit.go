@@ -405,20 +405,8 @@ func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (
 
 func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
-		if tech == techutils.Docker {
-			serverDetails, err = ca.ServerDetails()
-			if err != nil {
-				return
-			}
-			repoConfig, err := docker.GetDockerRepositoryConfig(serverDetails, ca.DockerImageName())
-			if err != nil {
-				return nil, err
-			}
-			ca.setPackageManagerConfig(repoConfig)
-		} else {
-			if err = ca.SetRepo(tech); err != nil {
-				return
-			}
+		if err = ca.SetRepo(tech); err != nil {
+			return
 		}
 	}
 	serverDetails, err = ca.PackageManagerConfig.ServerDetails()
@@ -747,6 +735,16 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
+	// If the technology is Docker, we need to get the repository config from the Docker image name
+	if tech == techutils.Docker {
+		repoConfig, err := docker.GetDockerRepositoryConfig(ca.DockerImageName())
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(repoConfig)
+		return nil
+	}
+
 	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
 	if err != nil {
 		return err
@@ -1176,11 +1174,14 @@ func getDockerNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []stri
 	id = strings.TrimPrefix(id, "docker://")
 
 	if idx := strings.Index(id, ":sha256:"); idx > 0 {
-		name, version = id[:idx], id[idx+1:]
+		name = id[:idx]
+		version = id[idx+1:]
 	} else if idx := strings.LastIndex(id, ":"); idx > 0 {
-		name, version = id[:idx], id[idx+1:]
+		name = id[:idx]
+		version = id[idx+1:]
 	} else {
-		name, version = id, "latest"
+		name = id
+		version = "latest"
 	}
 
 	if artiUrl != "" && repo != "" {

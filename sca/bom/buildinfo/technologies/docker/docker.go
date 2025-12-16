@@ -45,7 +45,9 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	}
 
 	info.Registry = parts[0]
-	info.Repo, info.Image = parseRegistryAndExtract(info.Registry, parts[1:])
+	repo, image := parseRegistryAndExtract(info.Registry, parts[1:])
+	info.Repo = repo
+	info.Image = image
 
 	log.Debug(fmt.Sprintf("Parsed Docker image - Registry: %s, Repo: %s, Image: %s, Tag: %s",
 		info.Registry, info.Repo, info.Image, info.Tag))
@@ -57,7 +59,7 @@ func parseRegistryAndExtract(registry string, remainingParts []string) (repo, im
 	image = strings.Join(remainingParts, "/")
 
 	// SaaS subdomain: <INSTANCE>-<REPO>.jfrog.io/image:tag (repo in subdomain, check first)
-	if matches := jfrogSubdomainPattern.FindStringSubmatch(registry); matches != nil {
+	if matches := jfrogSubdomainPattern.FindStringSubmatch(registry); len(matches) > 2 {
 		repo = matches[2]
 		return
 	}
@@ -135,15 +137,17 @@ func extractDigestFromBlockedMessage(output string) string {
 	return ""
 }
 
-func GetDockerRepositoryConfig(serverDetails *config.ServerDetails, imageName string) (*project.RepositoryConfig, error) {
+func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, error) {
 	imageInfo, err := ParseDockerImage(imageName)
 	if err != nil {
 		return nil, err
 	}
-	return GetDockerRepositoryConfigFromInfo(serverDetails, imageInfo)
-}
 
-func GetDockerRepositoryConfigFromInfo(serverDetails *config.ServerDetails, imageInfo *DockerImageInfo) (*project.RepositoryConfig, error) {
+	serverDetails, err := config.GetDefaultServerConf()
+	if err != nil {
+		return nil, err
+	}
+
 	repoConfig := &project.RepositoryConfig{}
 	repoConfig.SetServerDetails(serverDetails).SetTargetRepo(imageInfo.Repo)
 	return repoConfig, nil
