@@ -382,15 +382,13 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
 		return dependencies
 	}
-	excludeRefs := datastructures.MakeSet[string]()
 	excludePurls := datastructures.MakeSet[string]()
 	for _, component := range excludeComponents {
-		excludeRefs.Add(component.BOMRef)
 		excludePurls.Add(techutils.PurlToXrayComponentId(component.PackageURL))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludeRefs.Exists(techutils.PurlToXrayComponentId(dep.Ref)) {
+		if excludePurls.Exists(GetTrimmedPurl(dep.Ref, components)) {
 			// This dependency is excluded, skip it
 			continue
 		}
@@ -398,7 +396,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludeRefs.Exists(depRef) {
+				if !excludePurls.Exists(GetTrimmedPurl(depRef, components)) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
@@ -411,6 +409,15 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 		}
 	}
 	return &filteredDependencies
+}
+
+func GetTrimmedPurl(dep string, components *[]cyclonedx.Component) string {
+	component := SearchComponentByRef(components, dep)
+	if component == nil {
+		// couldn't find component - skipping
+		return ""
+	}
+	return techutils.PurlToXrayComponentId(component.PackageURL)
 }
 
 func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {
