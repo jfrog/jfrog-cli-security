@@ -127,7 +127,7 @@ func TestGetExcludePatterns(t *testing.T) {
 	for _, testCase := range getExcludePatternsCases {
 		t.Run("", func(t *testing.T) {
 			scanner := testCase.scanner
-			actualExcludePatterns := GetExcludePatterns(module, scanner)
+			actualExcludePatterns := GetExcludePatterns(module, scanner, []string{})
 			if scanner == nil {
 				assert.ElementsMatch(t, module.ExcludePatterns, actualExcludePatterns)
 				return

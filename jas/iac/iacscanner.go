@@ -70,7 +70,7 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsTo
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = iac.createConfigFile(module, append(iac.scanner.Exclusions, iac.scanner.ScannersExclusions.IacExcludePatterns...)...); err != nil {
+	if err = iac.createConfigFile(module, iac.scanner.ScannersExclusions.IacExcludePatterns, iac.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
@@ -91,7 +91,7 @@ type iacScanConfiguration struct {
 	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
-func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
+func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, centralConfigExclusions []string, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Iac)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclu
 				Output:                 iac.resultsFileName,
 				PathToResultsToCompare: iac.resultsToCompareFileName,
 				Type:                   iacScannerType,
-				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
+				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
 			},
 		},
 	}
