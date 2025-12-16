@@ -260,12 +260,12 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	return
 }
 
-func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) (component *cyclonedx.Component) {
+func SearchComponentByCleanRef(components *[]cyclonedx.Component, bomRef string) (component *cyclonedx.Component) {
 	if components == nil || len(*components) == 0 {
 		return
 	}
 	for i, comp := range *components {
-		if techutils.PurlToXrayComponentId(comp.PackageURL) == techutils.PurlToXrayComponentId(purl) {
+		if techutils.PurlToXrayComponentId(comp.BOMRef) == techutils.PurlToXrayComponentId(bomRef) {
 			return &(*components)[i]
 		}
 	}
@@ -321,7 +321,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
