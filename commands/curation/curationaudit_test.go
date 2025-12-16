@@ -547,7 +547,7 @@ func runDockerCurationTest(tt testCase, serverDetails *config.ServerDetails) (ma
 	statusMap := sync.Map{}
 	var status []*PackageStatus
 
-	analyzer.fetchNodesStatus(tree[0], &statusMap, map[string]struct{}{rootId: {}})
+	_ = analyzer.fetchNodesStatus(tree[0], &statusMap, map[string]struct{}{rootId: {}})
 	analyzer.GraphsRelations(tree, &statusMap, &status)
 
 	return map[string]*CurationReport{rootId: {packagesStatus: status, totalNumberOfPackages: 1}}, nil
