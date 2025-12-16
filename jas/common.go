@@ -442,23 +442,6 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 
 // This function convert every exclude pattern to a file exclude pattern form.
 // Checks are being made since some of the exclude patters we get here might already be in a file exclude pattern
-// Additionally, we keep patterns without duplications
-func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
-	uniqueExcludePatterns := datastructures.MakeSet[string]()
-	for _, excludePattern := range excludePatterns {
-		if !strings.HasPrefix(excludePattern, "**/") {
-			excludePattern = "**/" + excludePattern
-		}
-		if !strings.HasSuffix(excludePattern, "/**") {
-			excludePattern += "/**"
-		}
-		uniqueExcludePatterns.Add(excludePattern)
-	}
-	return uniqueExcludePatterns.ToSlice()
-}
-
-// This function convert every exclude pattern to a file exclude pattern form.
-// Checks are being made since some of the exclude patters we get here might already be in a file exclude pattern
 func convertToFilesExcludePatterns(excludePatterns []string) (converted []string) {
 	for _, excludePattern := range excludePatterns {
 		if !strings.HasPrefix(excludePattern, "**/") {
