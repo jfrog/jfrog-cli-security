@@ -388,7 +388,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludePurls.Exists(GetTrimmedPurl(dep.Ref, components)) {
+		if excludePurls.Exists(GetTrimmedPurlByRef(dep.Ref, components)) {
 			// This dependency is excluded, skip it
 			continue
 		}
@@ -396,7 +396,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludePurls.Exists(GetTrimmedPurl(depRef, components)) {
+				if !excludePurls.Exists(GetTrimmedPurlByRef(depRef, components)) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
@@ -411,10 +411,10 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 	return &filteredDependencies
 }
 
-func GetTrimmedPurl(dep string, components *[]cyclonedx.Component) string {
+func GetTrimmedPurlByRef(dep string, components *[]cyclonedx.Component) string {
 	component := SearchComponentByRef(components, dep)
 	if component == nil {
-		// couldn't find component - skipping
+		// couldn't find component
 		return ""
 	}
 	return techutils.PurlToXrayComponentId(component.PackageURL)
