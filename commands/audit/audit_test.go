@@ -381,7 +381,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"*api_secrets*"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
@@ -441,7 +441,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"*flask_webgoat*"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: false,
@@ -459,7 +459,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			name:        "Enable only IaC scanner",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
 			configProfile: services.ConfigProfile{
-				ProfileName: "only-sast",
+				ProfileName: "only-iac",
 				Modules: []services.Module{{
 					ModuleId:     1,
 					ModuleName:   "only-iac-module",
@@ -510,7 +510,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan:   true,
-							ExcludePatterns: []string{"*iac/gcp*"},
+							ExcludePatterns: []string{"**/*iac/gcp*/**"},
 						},
 					},
 				}},
@@ -570,11 +570,11 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"*flask_webgoat*"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"*api_secrets*"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
