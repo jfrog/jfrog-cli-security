@@ -1204,6 +1204,32 @@ func TestExclude(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Exclude by same name+version while ignoring hash",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=4321", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:npm/comp2@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
+				},
+			},
+			// Exclude the same name+version, with a hash that should be ignored
+			exclude: []cyclonedx.Component{{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=1234"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp3"}},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
