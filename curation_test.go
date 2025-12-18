@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -108,10 +109,9 @@ func getCurationExpectedResponse(config *config.ServerDetails) []curation.Packag
 
 func TestDockerCurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
-	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" {
+	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" {
 		t.Skip("Skipping Docker curation test - container registry not configured")
 	}
-
 	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
 	integration.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
