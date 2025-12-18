@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -116,10 +115,6 @@ func TestDockerCurationAudit(t *testing.T) {
 	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
 	integration.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
-	loginCmd := exec.Command("docker", "login", *securityTests.ContainerRegistry, "-u", *securityTests.JfrogUser, "--password-stdin")
-	loginCmd.Stdin = strings.NewReader(*securityTests.JfrogAccessToken)
-	loginOutput, err := loginCmd.CombinedOutput()
-	require.NoError(t, err, "Docker login failed: %s", string(loginOutput))
 
 	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
 
@@ -133,7 +128,7 @@ func TestDockerCurationAudit(t *testing.T) {
 	require.GreaterOrEqual(t, bracketIndex, 0, "Expected JSON array in output, got: %s", output)
 
 	var results []curation.PackageStatus
-	err = json.Unmarshal([]byte(output[bracketIndex:]), &results)
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &results)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, results, "Expected at least one blocked package")
