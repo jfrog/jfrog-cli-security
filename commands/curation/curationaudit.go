@@ -844,9 +844,6 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	if scope != "" {
 		name = scope + "/" + name
 	}
-	if nc.tech == techutils.Docker {
-		nc.httpClientDetails.Headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json"
-	}
 	for _, packageUrl := range packageUrls {
 		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &nc.httpClientDetails)
 		if err != nil {
