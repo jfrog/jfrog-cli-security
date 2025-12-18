@@ -113,27 +113,13 @@ func TestDockerCurationAudit(t *testing.T) {
 		t.Skip("Skipping Docker curation test - container registry not configured")
 	}
 
-	cleanUpJfrogHome, err := coreTests.SetJfrogHome()
-	assert.NoError(t, err)
-	defer cleanUpJfrogHome()
-
-	serverDetails := &config.ServerDetails{
-		ServerId:       "default",
-		Url:            *securityTests.JfrogUrl,
-		ArtifactoryUrl: *securityTests.JfrogUrl + securityTests.ArtifactoryEndpoint,
-		XrayUrl:        *securityTests.JfrogUrl + securityTests.XrayEndpoint,
-		AccessToken:    *securityTests.JfrogAccessToken,
-	}
-	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, serverDetails.ServerId).
-		SetDetails(serverDetails).
-		SetInteractive(false)
-	assert.NoError(t, configCmd.Run())
-
-	loginCmd := exec.Command("docker", "login", *securityTests.ContainerRegistry, "-u", "admin", "--password-stdin")
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
+	integration.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
+	loginCmd := exec.Command("docker", "login", *securityTests.ContainerRegistry, "-u", *securityTests.JfrogUser, "--password-stdin")
 	loginCmd.Stdin = strings.NewReader(*securityTests.JfrogAccessToken)
-	if loginOutput, err := loginCmd.CombinedOutput(); err != nil {
-		t.Skipf("Skipping Docker curation test - Docker login failed: %s", string(loginOutput))
-	}
+	loginOutput, err := loginCmd.CombinedOutput()
+	require.NoError(t, err, "Docker login failed: %s", string(loginOutput))
 
 	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
 
@@ -142,10 +128,6 @@ func TestDockerCurationAudit(t *testing.T) {
 	output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
 		"--image="+testImage,
 		"--format="+string(format.Json))
-
-	if strings.Contains(output, "docker.sock") || strings.Contains(output, "docker daemon") {
-		t.Skip("Skipping Docker curation test - Docker is not running")
-	}
 
 	bracketIndex := strings.Index(output, "[")
 	require.GreaterOrEqual(t, bracketIndex, 0, "Expected JSON array in output, got: %s", output)
