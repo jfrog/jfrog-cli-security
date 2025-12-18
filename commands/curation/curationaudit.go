@@ -133,11 +133,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 }
 
 func (ca *CurationAuditCommand) checkDockerSupport() (bool, error) {
-	dockerImageName := ca.DockerImageName()
-	if dockerImageName == "" {
-		return false, nil
-	}
-	return true, nil
+	return ca.DockerImageName() != "", nil
 }
 
 func (ca *CurationAuditCommand) getRtVersion(tech techutils.Technology) (string, error) {
