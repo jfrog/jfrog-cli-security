@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -103,6 +104,53 @@ func getCurationExpectedResponse(config *config.ServerDetails) []curation.Packag
 		},
 	}
 	return expectedResp
+}
+
+func TestDockerCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" {
+		t.Skip("Skipping Docker curation test - container registry not configured")
+	}
+
+	cleanUpJfrogHome, err := coreTests.SetJfrogHome()
+	assert.NoError(t, err)
+	defer cleanUpJfrogHome()
+
+	serverDetails := &config.ServerDetails{
+		ServerId:       "default",
+		Url:            *securityTests.JfrogUrl,
+		ArtifactoryUrl: *securityTests.JfrogUrl + securityTests.ArtifactoryEndpoint,
+		XrayUrl:        *securityTests.JfrogUrl + securityTests.XrayEndpoint,
+		AccessToken:    *securityTests.JfrogAccessToken,
+	}
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, serverDetails.ServerId).
+		SetDetails(serverDetails).
+		SetInteractive(false)
+	assert.NoError(t, configCmd.Run())
+
+	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
+
+	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "ganodndentcom/drupal")
+
+	output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
+		"--image="+testImage,
+		"--format="+string(format.Json))
+
+	if strings.Contains(output, "docker.sock") || strings.Contains(output, "docker daemon") {
+		t.Skip("Skipping Docker curation test - Docker is not running")
+	}
+
+	var results []curation.PackageStatus
+	bracketIndex := strings.Index(output, "[")
+	err = json.Unmarshal([]byte(output[bracketIndex:]), &results)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, results, "Expected at least one blocked package")
+	assert.Equal(t, "blocked", results[0].Action)
+	assert.Equal(t, "ganodndentcom/drupal", results[0].PackageName)
+	assert.Equal(t, curation.BlockingReasonPolicy, results[0].BlockingReason)
+	require.NotEmpty(t, results[0].Policy, "Expected at least one policy violation")
+	assert.Equal(t, "Malicious package", results[0].Policy[0].Condition)
 }
 
 func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {

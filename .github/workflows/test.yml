@@ -309,6 +309,10 @@ jobs:
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
+      - name: Docker Login
+        if: runner.os == 'Linux'
+        run: echo "${{ secrets.PLATFORM_ADMIN_TOKEN }}" | docker login ${{ secrets.CONTAINER_REGISTRY }} -u admin --password-stdin
+
       # Test
       - name: Run tests
         run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
