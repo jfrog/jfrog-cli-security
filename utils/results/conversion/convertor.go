@@ -84,6 +84,18 @@ func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.Securi
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
+// ConvertTargetToSimpleJson converts a single TargetResults to SimpleJson format without flattening multiple targets.
+func (c *CommandResultsConvertor) ConvertTargetToSimpleJson(target *results.TargetResults, cmdResults *results.SecurityCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
+	if target == nil {
+		return formats.SimpleJsonResults{}, nil
+	}
+	singleTargetResults := &results.SecurityCommandResults{
+		ResultsMetaData: cmdResults.ResultsMetaData,
+		Targets:         []*results.TargetResults{target},
+	}
+	return c.ConvertToSimpleJson(singleTargetResults)
+}
+
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
 	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.PlatformUrl, c.Params.PatchBinaryPaths)
 	return parseCommandResults(c.Params, parser, cmdResults)

@@ -799,3 +799,77 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	})
 	return cmdResults, expected
 }
+
+func TestConvertTargetToSimpleJson(t *testing.T) {
+	target1 := &results.TargetResults{
+		ScanTarget: results.ScanTarget{Target: "/path/to/project1"},
+		ScaResults: &results.ScaScanResults{
+			DeprecatedXrayResults: []services.ScanResponse{{
+				Vulnerabilities: []services.Vulnerability{
+					{
+						Cves:     []services.Cve{{Id: "CVE-2023-1234"}},
+						Severity: "High",
+						Components: map[string]services.Component{
+							"pkg1": {
+								FixedVersions: []string{"1.2.0"},
+								ImpactPaths:   [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "pkg1"}}},
+							},
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	target2 := &results.TargetResults{
+		ScanTarget: results.ScanTarget{Target: "/path/to/project2"},
+		ScaResults: &results.ScaScanResults{
+			DeprecatedXrayResults: []services.ScanResponse{{
+				Vulnerabilities: []services.Vulnerability{
+					{
+						Cves:     []services.Cve{{Id: "CVE-2023-5678"}},
+						Severity: "Critical",
+						Components: map[string]services.Component{
+							"pkg2": {
+								FixedVersions: []string{"2.0.0"},
+								ImpactPaths:   [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "pkg2"}}},
+							},
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	cmdResults := &results.SecurityCommandResults{
+		ResultsMetaData: results.ResultsMetaData{
+			CmdType: utils.SourceCode,
+			ResultContext: results.ResultContext{
+				IncludeVulnerabilities: true,
+			},
+		},
+		Targets: []*results.TargetResults{target1, target2},
+	}
+
+	convertor := NewCommandResultsConvertor(ResultConvertParams{
+		IncludeVulnerabilities: true,
+		HasViolationContext:    false,
+	})
+
+	// Test converting first target only
+	result1, err := convertor.ConvertTargetToSimpleJson(target1, cmdResults)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, result1.Vulnerabilities)
+	assert.Equal(t, 1, len(result1.Vulnerabilities))
+	assert.Equal(t, "CVE-2023-1234", result1.Vulnerabilities[0].Cves[0].Id)
+
+	// Test converting second target only
+	result2, err := convertor.ConvertTargetToSimpleJson(target2, cmdResults)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, result2.Vulnerabilities)
+	assert.Equal(t, 1, len(result2.Vulnerabilities))
+	assert.Equal(t, "CVE-2023-5678", result2.Vulnerabilities[0].Cves[0].Id)
+
+	// Verify no flattening occurred
+	assert.NotEqual(t, result1.Vulnerabilities[0].Cves[0].Id, result2.Vulnerabilities[0].Cves[0].Id)
+}
