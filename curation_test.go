@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -128,6 +129,12 @@ func TestDockerCurationAudit(t *testing.T) {
 		SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
 
+	loginCmd := exec.Command("docker", "login", *securityTests.ContainerRegistry, "-u", "admin", "--password-stdin")
+	loginCmd.Stdin = strings.NewReader(*securityTests.JfrogAccessToken)
+	if loginOutput, err := loginCmd.CombinedOutput(); err != nil {
+		t.Skipf("Skipping Docker curation test - Docker login failed: %s", string(loginOutput))
+	}
+
 	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
 
 	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "ganodndentcom/drupal")
@@ -140,8 +147,10 @@ func TestDockerCurationAudit(t *testing.T) {
 		t.Skip("Skipping Docker curation test - Docker is not running")
 	}
 
-	var results []curation.PackageStatus
 	bracketIndex := strings.Index(output, "[")
+	require.GreaterOrEqual(t, bracketIndex, 0, "Expected JSON array in output, got: %s", output)
+
+	var results []curation.PackageStatus
 	err = json.Unmarshal([]byte(output[bracketIndex:]), &results)
 	require.NoError(t, err)
 
