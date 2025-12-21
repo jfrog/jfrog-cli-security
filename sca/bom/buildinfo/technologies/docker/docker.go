@@ -39,13 +39,13 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 		}
 	}
 
-	parts := strings.Split(imageName, "/")
+	parts := strings.SplitN(imageName, "/", 2)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid docker image format: '%s'", imageName)
 	}
 
 	info.Registry = parts[0]
-	repo, image := parseRegistryAndExtract(info.Registry, parts[1:])
+	repo, image := parseRegistryAndExtract(info.Registry, parts[1])
 	info.Repo = repo
 	info.Image = image
 
@@ -55,8 +55,8 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	return info, nil
 }
 
-func parseRegistryAndExtract(registry string, remainingParts []string) (repo, image string) {
-	image = strings.Join(remainingParts, "/")
+func parseRegistryAndExtract(registry string, remaining string) (repo, image string) {
+	image = remaining
 
 	// SaaS subdomain: <INSTANCE>-<REPO>.jfrog.io/image:tag (repo in subdomain, check first)
 	if matches := jfrogSubdomainPattern.FindStringSubmatch(registry); len(matches) > 2 {
@@ -71,10 +71,9 @@ func parseRegistryAndExtract(registry string, remainingParts []string) (repo, im
 		return
 	}
 
-	// Repository path: <REGISTRY>/<REPO>/image:tag (2+ parts means repo in path)
-	if len(remainingParts) >= 2 {
-		repo = remainingParts[0]
-		image = strings.Join(remainingParts[1:], "/")
+	// Repository path: <REGISTRY>/<REPO>/image:tag (repo in path if contains /)
+	if strings.Contains(remaining, "/") {
+		repo, image, _ = strings.Cut(remaining, "/")
 		return
 	}
 

@@ -109,6 +109,13 @@ func TestParseDockerImage(t *testing.T) {
 			expectedImg:  "nginx",
 			expectedTag:  "latest",
 		},
+		{
+			name:         "Tag with multiple dots",
+			imageName:    "acme.jfrog.io/docker-local/myapp:1.0.0",
+			expectedRepo: "docker-local",
+			expectedImg:  "myapp",
+			expectedTag:  "1.0.0",
+		},
 	}
 
 	for _, tt := range tests {
