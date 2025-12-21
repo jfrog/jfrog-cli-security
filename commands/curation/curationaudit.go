@@ -103,9 +103,7 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
-	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.DockerImageName() != "", nil
-	},
+	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
