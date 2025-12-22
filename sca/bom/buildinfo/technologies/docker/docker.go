@@ -139,7 +139,7 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{.Os}} {{.Architecture}}")
 	inspectOutput, inspectErr := inspectCmd.CombinedOutput()
 	if inspectErr != nil {
-		log.Debug(fmt.Sprintf("docker inspect failed: %v", inspectErr))
+		log.Error(fmt.Sprintf("docker inspect failed: %v", inspectErr))
 		return "", nil
 	}
 	parts := strings.Fields(strings.TrimSpace(string(inspectOutput)))
@@ -154,13 +154,13 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
 	buildxOutput, buildxErr := buildxCmd.CombinedOutput()
 	if buildxErr != nil {
-		log.Debug(fmt.Sprintf("docker buildx imagetools inspect failed: %v", buildxErr))
+		log.Error(fmt.Sprintf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput))))
 		return "", nil
 	}
 
 	var manifest dockerManifestList
 	if err := json.Unmarshal(buildxOutput, &manifest); err != nil {
-		log.Debug(fmt.Sprintf("Failed to parse manifest JSON: %v", err))
+		log.Error(fmt.Sprintf("Failed to parse manifest JSON: %v", err))
 		return "", nil
 	}
 
