@@ -62,8 +62,6 @@ func TestGetExcludePattern(t *testing.T) {
 						},
 					},
 				},
-				IsDefault:      false,
-				IsBasicProfile: false,
 			},
 			expected: "(^exclude1$)|(^exclude2$)|(^exclude3$)",
 		},

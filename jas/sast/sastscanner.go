@@ -69,7 +69,7 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFile(module, ssm.signedDescriptions, append(ssm.scanner.Exclusions, ssm.scanner.ScannersExclusions.SastExcludePatterns...)...); err != nil {
+	if err = ssm.createConfigFile(module, ssm.signedDescriptions, ssm.scanner.ScannersExclusions.SastExcludePatterns, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -104,7 +104,7 @@ type sastParameters struct {
 	SignedDescriptions bool `yaml:"signed_descriptions,omitempty"`
 }
 
-func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, exclusions ...string) error {
+func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, centralConfigExclusions []string, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -125,7 +125,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
-				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, exclusions...),
+				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
 				UserRules:       ssm.sastRules,
 			},
 		},
