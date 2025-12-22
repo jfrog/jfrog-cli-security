@@ -135,11 +135,11 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 		}
 		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(string(pullOutput)))
 	}
-	//IF IMAGE EXISTS LOCALLY
+	// IF IMAGE EXISTS LOCALLY
 	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{.Os}} {{.Architecture}}")
-	inspectOutput, err := inspectCmd.CombinedOutput()
-	if err != nil {
-		log.Debug(fmt.Sprintf("docker inspect failed: %s", strings.TrimSpace(string(inspectOutput))))
+	inspectOutput, inspectErr := inspectCmd.CombinedOutput()
+	if inspectErr != nil {
+		log.Debug(fmt.Sprintf("docker inspect failed: %v", inspectErr))
 		return "", nil
 	}
 	parts := strings.Fields(strings.TrimSpace(string(inspectOutput)))
@@ -152,9 +152,9 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	log.Debug(fmt.Sprintf("Local platform: %s/%s", localOS, localArch))
 
 	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
-	buildxOutput, err := buildxCmd.CombinedOutput()
-	if err != nil {
-		log.Debug(fmt.Sprintf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput))))
+	buildxOutput, buildxErr := buildxCmd.CombinedOutput()
+	if buildxErr != nil {
+		log.Debug(fmt.Sprintf("docker buildx imagetools inspect failed: %v", buildxErr))
 		return "", nil
 	}
 
