@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -20,6 +21,16 @@ type DockerImageInfo struct {
 	Repo     string
 	Image    string
 	Tag      string
+}
+
+type dockerManifestList struct {
+	Manifests []struct {
+		Digest   string `json:"digest"`
+		Platform struct {
+			Architecture string `json:"architecture"`
+			OS           string `json:"os"`
+		} `json:"platform"`
+	} `json:"manifests"`
 }
 
 var (
@@ -116,16 +127,51 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 }
 
 func getArchDigestUsingDocker(fullImageName string) (string, error) {
-	log.Debug(fmt.Sprintf("Pulling Docker image: %s", fullImageName))
 	pullCmd := exec.Command("docker", "pull", fullImageName)
-	output, err := pullCmd.CombinedOutput()
+	pullOutput, err := pullCmd.CombinedOutput()
 	if err != nil {
-		outputStr := string(output)
-		if strings.Contains(outputStr, "curation service") {
-			return extractDigestFromBlockedMessage(outputStr), nil
+		if strings.Contains(string(pullOutput), "curation service") {
+			return extractDigestFromBlockedMessage(string(pullOutput)), nil
 		}
-		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(outputStr))
+		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(string(pullOutput)))
 	}
+	//IF IMAGE EXISTS LOCALLY
+	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{.Os}} {{.Architecture}}")
+	inspectOutput, err := inspectCmd.CombinedOutput()
+	if err != nil {
+		log.Debug(fmt.Sprintf("docker inspect failed: %s", strings.TrimSpace(string(inspectOutput))))
+		return "", nil
+	}
+	parts := strings.Fields(strings.TrimSpace(string(inspectOutput)))
+	if len(parts) != 2 {
+		return "", nil
+	}
+	localOS := parts[0]
+	localArch := parts[1]
+
+	log.Debug(fmt.Sprintf("Local platform: %s/%s", localOS, localArch))
+
+	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
+	buildxOutput, err := buildxCmd.CombinedOutput()
+	if err != nil {
+		log.Debug(fmt.Sprintf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput))))
+		return "", nil
+	}
+
+	var manifest dockerManifestList
+	if err := json.Unmarshal(buildxOutput, &manifest); err != nil {
+		log.Debug(fmt.Sprintf("Failed to parse manifest JSON: %v", err))
+		return "", nil
+	}
+
+	for _, m := range manifest.Manifests {
+		if m.Platform.OS == localOS && m.Platform.Architecture == localArch {
+			log.Debug(fmt.Sprintf("Found arch-specific digest: %s", m.Digest))
+			return m.Digest, nil
+		}
+	}
+
+	log.Debug(fmt.Sprintf("No matching manifest found for %s/%s", localOS, localArch))
 	return "", nil
 }
 
