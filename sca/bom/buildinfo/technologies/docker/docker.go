@@ -154,8 +154,7 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
 	buildxOutput, buildxErr := buildxCmd.CombinedOutput()
 	if buildxErr != nil {
-		log.Error(fmt.Sprintf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput))))
-		return "", nil
+		return "", fmt.Errorf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput)))
 	}
 
 	var manifest dockerManifestList
