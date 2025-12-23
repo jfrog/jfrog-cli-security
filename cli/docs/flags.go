@@ -177,7 +177,7 @@ var commandFlags = map[string][]string{
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
 	},
 	MaliciousScan: {
-		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs,
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs, scanProjectKey,
 	},
 	BuildScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,

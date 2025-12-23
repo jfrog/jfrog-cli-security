@@ -270,7 +270,8 @@ func MaliciousScanCmd(c *components.Context) error {
 		SetWorkingDirs(workingDirs).
 		SetThreads(threads).
 		SetOutputFormat(format).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetProject(getProject(c))
 	if c.IsFlagSet(flags.AnalyzerManagerCustomPath) {
 		maliciousScanCmd.SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	}

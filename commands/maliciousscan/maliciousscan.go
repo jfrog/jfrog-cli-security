@@ -30,6 +30,7 @@ type MaliciousScanCommand struct {
 	minSeverityFilter         severityutils.Severity
 	progress                  ioUtils.ProgressMgr
 	customAnalyzerManagerPath string
+	project                   string
 }
 
 func (cmd *MaliciousScanCommand) SetProgress(progress ioUtils.ProgressMgr) {
@@ -63,6 +64,11 @@ func (cmd *MaliciousScanCommand) SetMinSeverityFilter(minSeverity severityutils.
 
 func (cmd *MaliciousScanCommand) SetCustomAnalyzerManagerPath(path string) *MaliciousScanCommand {
 	cmd.customAnalyzerManagerPath = path
+	return cmd
+}
+
+func (cmd *MaliciousScanCommand) SetProject(project string) *MaliciousScanCommand {
+	cmd.project = project
 	return cmd
 }
 
@@ -100,7 +106,7 @@ func (cmd *MaliciousScanCommand) Run() (err error) {
 }
 
 func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entitledForJas bool, workingDirs []string, err error) {
-	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails)
+	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xray.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return "", false, nil, err
 	}
@@ -142,7 +148,7 @@ func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 			jas.GetAnalyzerManagerXscEnvVars(
 				"",
 				"",
-				"",
+				cmd.project,
 				nil,
 			),
 		),
