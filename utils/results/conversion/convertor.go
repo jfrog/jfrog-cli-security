@@ -1,6 +1,8 @@
 package conversion
 
 import (
+	"slices"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -43,6 +45,8 @@ type ResultConvertParams struct {
 	Pretty bool
 	// The JFrog platform URL to be used in the results (Sarif only - GitHub integration)
 	PlatformUrl string
+	// A list of target names to include in the output, if empty all targets will be included
+	IncludeTargets []string
 }
 
 func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConvertor {
@@ -108,6 +112,10 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		return
 	}
 	for _, targetScansResults := range cmdResults.Targets {
+		if len(params.IncludeTargets) > 0 && !slices.Contains(params.IncludeTargets, targetScansResults.Target) {
+			// Skip this target as it's not in the include list
+			continue
+		}
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
