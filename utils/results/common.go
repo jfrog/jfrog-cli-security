@@ -1042,9 +1042,12 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 }
 
 func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cyclonedx.Dependency, dependencyAppearances map[string]int8) {
+	if node == nil {
+		return
+	}
 	dependencyAppearances[node.Id]++
-	if node == nil || dependencyAppearances[node.Id] >= MaxUniqueAppearances || node.NodeHasLoop() {
-		// If the node is nil or has a loop or appeared too many times, stop the recursion
+	if dependencyAppearances[node.Id] >= MaxUniqueAppearances || node.NodeHasLoop() {
+		// If the node has a loop or appeared too many times, stop the recursion
 		return
 	}
 	for _, dep := range cdxutils.GetDirectDependencies(dependencies, node.Id) {
