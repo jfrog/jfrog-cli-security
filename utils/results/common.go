@@ -33,6 +33,9 @@ const (
 	DirectDependencyPathLength = 2
 	nodeModules                = "node_modules"
 
+	// MaxUniqueAppearances defines the maximum number of times a dependency can appear in a dependency tree.
+	MaxUniqueAppearances = 10
+
 	// <FILE_REF>#L<START_LINE>C<START_COLUMN>-L<END_LINE>C<END_COLUMN>
 	LocationIdTemplate = "%s#L%dC%d-L%dC%d"
 	// Applicability properties for cdx
@@ -1029,10 +1032,11 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
+	dependencyAppearances := map[string]int8{}
 	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom, false) {
 		// Create a new GraphNode with ref as the ID, when populating the tree we need to use the ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
-		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
+		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies, dependencyAppearances)
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
 	// Translate refs to Purl/Xray IDs
@@ -1042,9 +1046,10 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 	return
 }
 
-func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cyclonedx.Dependency) {
-	if node == nil || node.NodeHasLoop() {
-		// If the node is nil or has a loop, return
+func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cyclonedx.Dependency, dependencyAppearances map[string]int8) {
+	dependencyAppearances[node.Id]++
+	if node == nil || dependencyAppearances[node.Id] >= MaxUniqueAppearances || node.NodeHasLoop() {
+		// If the node is nil or has a loop or appeared too many times, stop the recursion
 		return
 	}
 	for _, dep := range cdxutils.GetDirectDependencies(dependencies, node.Id) {
@@ -1052,7 +1057,7 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cycl
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
 		// Recursively populate the node data
-		populateDepsNodeDataFromBom(depNode, dependencies)
+		populateDepsNodeDataFromBom(depNode, dependencies, dependencyAppearances)
 	}
 }
 
