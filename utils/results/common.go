@@ -1044,7 +1044,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 
 func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cyclonedx.Dependency) {
 	if node == nil || node.NodeHasLoop() {
-		// If the node is nil or has a loop. stop the recursion
+		// If the node is nil or has a loop, return
 		return
 	}
 	for _, dep := range cdxutils.GetDirectDependencies(dependencies, node.Id) {
