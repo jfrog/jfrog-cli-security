@@ -86,7 +86,6 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			resolveRepoName: securityTests.MvnVirtualRepo,
 			cacheRepoName:   securityTests.MvnRemoteRepo,
 			projectType:     project.Maven,
-			skipMsg:         "Snapshot repository is blocked by JPD, pending fix XRAY-124910",
 		},
 		{
 			testProjectPath: []string{"go", "simple-project"},
