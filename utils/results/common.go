@@ -59,6 +59,11 @@ func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIss
 	}
 	for _, run := range runs {
 		for _, result := range run.Results {
+			if result.Kind == "informational" {
+				// The specified rule was evaluated and produced a purely informational result that does not indicate the presence of a problem
+				log.Verbose(fmt.Sprintf("Skipping informational result with rule id: %s", sarifutils.GetResultRuleId(result)))
+				continue
+			}
 			severity, err := severityutils.ParseSeverity(result.Level, true)
 			if err != nil {
 				return err
