@@ -69,6 +69,7 @@ const (
 	SastScan                  SubScanType = "sast"
 	SecretsScan               SubScanType = "secrets"
 	SecretTokenValidationScan SubScanType = "secrets_token_validation"
+	MaliciousCodeScan         SubScanType = "malicious_code"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -77,6 +78,7 @@ var subScanTypeToText = map[SubScanType]string{
 	IacScan:                "IaC",
 	SastScan:               "SAST",
 	SecretsScan:            "Secrets",
+	MaliciousCodeScan:      "Malicious Code",
 }
 
 func (subScan SubScanType) ToTextString() string {
@@ -108,13 +110,17 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
 func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
 	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
+	}
+	if subScan == MaliciousCodeScan {
+		// Scan not requested by default, needs to be specified directly to run it
+		return slices.Contains(requestedScans, subScan)
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
