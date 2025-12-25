@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -103,6 +105,38 @@ func getCurationExpectedResponse(config *config.ServerDetails) []curation.Packag
 		},
 	}
 	return expectedResp
+}
+
+func TestDockerCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" {
+		t.Skip("Skipping Docker curation test - container registry not configured")
+	}
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
+	integration.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
+
+	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
+
+	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "ganodndentcom/drupal")
+
+	output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
+		"--image="+testImage,
+		"--format="+string(format.Json))
+
+	bracketIndex := strings.Index(output, "[")
+	require.GreaterOrEqual(t, bracketIndex, 0, "Expected JSON array in output, got: %s", output)
+
+	var results []curation.PackageStatus
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &results)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, results, "Expected at least one blocked package")
+	assert.Equal(t, "blocked", results[0].Action)
+	assert.Equal(t, "ganodndentcom/drupal", results[0].PackageName)
+	assert.Equal(t, curation.BlockingReasonPolicy, results[0].BlockingReason)
+	require.NotEmpty(t, results[0].Policy, "Expected at least one policy violation")
+	assert.Equal(t, "Malicious package", results[0].Policy[0].Condition)
 }
 
 func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {

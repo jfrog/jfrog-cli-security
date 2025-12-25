@@ -49,6 +49,8 @@ type AuditParamsInterface interface {
 	AllowPartialResults() bool
 	GetXrayVersion() string
 	GetConfigProfile() *xscservices.ConfigProfile
+	DockerImageName() string
+	SetDockerImageName(dockerImageName string) *AuditBasicParams
 	SolutionFilePath() string
 	SetSolutionFilePath(solutionFilePath string) *AuditBasicParams
 }
@@ -81,6 +83,7 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
+	dockerImageName                  string
 	solutionFilePath                 string
 }
 
@@ -332,6 +335,15 @@ func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile
 
 func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
 	return abp.configProfile
+}
+
+func (abp *AuditBasicParams) DockerImageName() string {
+	return abp.dockerImageName
+}
+
+func (abp *AuditBasicParams) SetDockerImageName(dockerImageName string) *AuditBasicParams {
+	abp.dockerImageName = dockerImageName
+	return abp
 }
 
 func (abp *AuditBasicParams) SolutionFilePath() string {
