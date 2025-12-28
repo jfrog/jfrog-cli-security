@@ -470,7 +470,22 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	return
 }
 
+func scaIndependentScans(scans []utils.SubScanType) bool {
+	for _, scan_type := range scans {
+		if (scan_type != utils.SecretsScan && scan_type != utils.SastScan && scan_type != utils.IacScan) {
+			return false
+		}
+	}
+	return true
+}
+
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
+
+	if scaIndependentScans(params.ScansToPerform()) {
+		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
+		return
+	}
+
 	for _, requestedDirectory := range params.workingDirs {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
