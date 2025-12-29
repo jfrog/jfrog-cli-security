@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -114,16 +113,12 @@ func TestDockerCurationAudit(t *testing.T) {
 	}
 	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
-	integration.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
-
-	testCli := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), false)
 
 	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "ganodndentcom/drupal")
 
-	output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
+	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
 		"--image="+testImage,
 		"--format="+string(format.Json))
-
 	bracketIndex := strings.Index(output, "[")
 	require.GreaterOrEqual(t, bracketIndex, 0, "Expected JSON array in output, got: %s", output)
 

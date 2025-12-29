@@ -138,9 +138,32 @@ func TestBuildDependencyTree(t *testing.T) {
 		name            string
 		dockerImageName string
 		expectError     bool
+		errorContains   string
 	}{
-		{name: "Empty image name", dockerImageName: "", expectError: true},
-		{name: "No registry", dockerImageName: "image:tag", expectError: true},
+		{
+			name:            "Empty image name",
+			dockerImageName: "",
+			expectError:     true,
+			errorContains:   "docker image name is required",
+		},
+		{
+			name:            "No registry - single part image",
+			dockerImageName: "nginx",
+			expectError:     true,
+			errorContains:   "invalid docker image format",
+		},
+		{
+			name:            "No registry - image with tag only",
+			dockerImageName: "nginx:1.21",
+			expectError:     true,
+			errorContains:   "invalid docker image format",
+		},
+		{
+			name:            "Whitespace only",
+			dockerImageName: "   ",
+			expectError:     true,
+			errorContains:   "invalid docker image format",
+		},
 	}
 
 	for _, tt := range tests {
@@ -149,6 +172,11 @@ func TestBuildDependencyTree(t *testing.T) {
 			_, _, err := BuildDependencyTree(params)
 			if tt.expectError {
 				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

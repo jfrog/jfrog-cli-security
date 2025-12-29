@@ -1187,7 +1187,7 @@ func Test_getGemNameScopeAndVersion(t *testing.T) {
 	}
 }
 
-func Test_getDockerNameScopeAndVersion(t *testing.T) {
+func Test_getDockerNameAndVersion(t *testing.T) {
 	tests := []struct {
 		name             string
 		id               string
@@ -1195,7 +1195,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 		repo             string
 		wantDownloadUrls []string
 		wantName         string
-		wantScope        string
 		wantVersion      string
 	}{
 		{
@@ -1205,7 +1204,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 			repo:             "docker-remote",
 			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
 			wantName:         "nginx",
-			wantScope:        "",
 			wantVersion:      "1.21.0",
 		},
 		{
@@ -1215,7 +1213,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 			repo:             "docker-remote",
 			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/registry.example.com/nginx/manifests/1.21.0"},
 			wantName:         "registry.example.com/nginx",
-			wantScope:        "",
 			wantVersion:      "1.21.0",
 		},
 		{
@@ -1225,7 +1222,6 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 			repo:             "docker-remote",
 			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/sha256:abc123def456"},
 			wantName:         "nginx",
-			wantScope:        "",
 			wantVersion:      "sha256:abc123def456",
 		},
 		{
@@ -1235,16 +1231,14 @@ func Test_getDockerNameScopeAndVersion(t *testing.T) {
 			repo:             "docker-remote",
 			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/latest"},
 			wantName:         "nginx",
-			wantScope:        "",
 			wantVersion:      "latest",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDownloadUrls, gotName, gotScope, gotVersion := getDockerNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			gotDownloadUrls, gotName, gotVersion := getDockerNameAndVersion(tt.id, tt.artiUrl, tt.repo)
 			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
 			assert.Equal(t, tt.wantName, gotName, "name mismatch")
-			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
 			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
 		})
 	}

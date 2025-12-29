@@ -56,9 +56,7 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	}
 
 	info.Registry = parts[0]
-	repo, image := parseRegistryAndExtract(info.Registry, parts[1])
-	info.Repo = repo
-	info.Image = image
+	info.Repo, info.Image = parseRegistryAndExtract(info.Registry, parts[1])
 
 	log.Debug(fmt.Sprintf("Parsed Docker image - Registry: %s, Repo: %s, Image: %s, Tag: %s",
 		info.Registry, info.Repo, info.Image, info.Tag))
@@ -121,6 +119,8 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 
 	log.Debug(fmt.Sprintf("Docker image reference: %s", imageRef))
 
+	// Note: It does NOT extract the actual dependencies/packages inside the Docker image layers.
+	// The graph contains just the image reference to verify if it's blocked by curation policies.
 	rootId := imageInfo.Image + ":" + imageInfo.Tag
 	return []*xrayUtils.GraphNode{{Id: rootId, Nodes: []*xrayUtils.GraphNode{{Id: imageRef}}}},
 		[]string{imageRef}, nil
@@ -150,6 +150,7 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	localArch := parts[1]
 
 	log.Debug(fmt.Sprintf("Local platform: %s/%s", localOS, localArch))
+	// In case the image is found locally, we need to get the digest of the image using the buildx.
 
 	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
 	buildxOutput, buildxErr := buildxCmd.CombinedOutput()

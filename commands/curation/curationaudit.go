@@ -219,6 +219,7 @@ type CurationAuditCommand struct {
 	workingDirs          []string
 	OriginPath           string
 	parallelRequests     int
+	dockerImageName      string
 	audit.AuditParamsInterface
 }
 
@@ -252,6 +253,15 @@ func (ca *CurationAuditCommand) SetWorkingDirs(dirs []string) *CurationAuditComm
 
 func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditCommand {
 	ca.parallelRequests = threads
+	return ca
+}
+
+func (ca *CurationAuditCommand) DockerImageName() string {
+	return ca.dockerImageName
+}
+
+func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *CurationAuditCommand {
+	ca.dockerImageName = dockerImageName
 	return ca
 }
 
@@ -353,6 +363,7 @@ func getPolicyAndConditionId(policy, condition string) string {
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := techutils.DetectedTechnologiesList()
 	if ca.DockerImageName() != "" {
+		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
 	}
 	for _, tech := range techs {
@@ -968,7 +979,8 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
 		return
 	case techutils.Docker:
-		return getDockerNameScopeAndVersion(node.Id, artiUrl, repo)
+		downloadUrls, name, version = getDockerNameAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
@@ -1153,20 +1165,27 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 	return []string{packageUrl}
 }
 
-func getDockerNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
+func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
 	if id == "" {
 		return
 	}
 
 	id = strings.TrimPrefix(id, "docker://")
 
-	if idx := strings.Index(id, ":sha256:"); idx > 0 {
-		name = id[:idx]
-		version = id[idx+1:]
-	} else if idx := strings.LastIndex(id, ":"); idx > 0 {
-		name = id[:idx]
-		version = id[idx+1:]
-	} else {
+	sha256Idx := strings.Index(id, ":sha256:")
+	tagIdx := strings.LastIndex(id, ":")
+
+	switch {
+	// Example: docker://nginx:sha256:abc123def456
+	case sha256Idx > 0:
+		name = id[:sha256Idx]
+		version = id[sha256Idx+1:]
+	// Example: docker://nginx:1.21
+	case tagIdx > 0:
+		name = id[:tagIdx]
+		version = id[tagIdx+1:]
+	// Example: docker://nginx (no tag specified, defaults to "latest")
+	default:
 		name = id
 		version = "latest"
 	}
@@ -1176,7 +1195,7 @@ func getDockerNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []stri
 			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
 	}
 
-	return downloadUrls, name, scope, version
+	return
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {
