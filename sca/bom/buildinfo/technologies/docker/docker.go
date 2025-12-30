@@ -208,7 +208,7 @@ func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, err
 		return nil, fmt.Errorf("Failed to check if repository '%s' exists on Artifactory '%s': %w", imageInfo.Repo, serverDetails.Url, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("repository '%s' was not found on Artifactory (%s). Ensure the repository exists.", imageInfo.Repo, serverDetails.Url)
+		return nil, fmt.Errorf("Repository '%s' was not found on Artifactory (%s). Ensure the repository exists.", imageInfo.Repo, serverDetails.Url)
 	}
 
 	repoConfig := &project.RepositoryConfig{}
