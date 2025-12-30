@@ -139,7 +139,7 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	// IF Image exists locally, we need to get the digest of the image for the specific OS/architecture
 	localOS, localArch, err := getLocalPlatform(fullImageName)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return findDigestForPlatform(fullImageName, localOS, localArch)
@@ -205,10 +205,10 @@ func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, err
 	}
 	exists, err := artifactory.IsRepoExists(imageInfo.Repo, serverDetails)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to check if repository '%s' exists on Artifactory '%s': %w", imageInfo.Repo, serverDetails.Url, err)
+		return nil, fmt.Errorf("failed to check if repository '%s' exists on Artifactory '%s': %w", imageInfo.Repo, serverDetails.Url, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("Repository '%s' was not found on Artifactory (%s). Ensure the repository exists.", imageInfo.Repo, serverDetails.Url)
+		return nil, fmt.Errorf("repository '%s' was not found on Artifactory (%s), ensure the repository exists", imageInfo.Repo, serverDetails.Url)
 	}
 
 	repoConfig := &project.RepositoryConfig{}
