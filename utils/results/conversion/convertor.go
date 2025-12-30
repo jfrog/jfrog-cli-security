@@ -68,6 +68,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseSecrets(secrets ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
+	ParseMalicious(malicious ...[]*sarif.Run) error
 	// Parse JFrog violations to the format if supported
 	ParseViolations(violations violationutils.Violations) error
 	// When done parsing the stream results, get the converted content
@@ -206,7 +207,11 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// Parsing JAS SAST results
-	return parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults)
+	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+		return
+	}
+	// Parsing JAS Malicious Code results
+	return parser.ParseMalicious(targetResults.JasResults.JasVulnerabilities.MaliciousScanResults)
 }
 
 func parseViolations[T interface{}](parser ResultsStreamFormatParser[T], violations *violationutils.Violations) (err error) {

@@ -193,6 +193,18 @@ func ConvertToIacOrSastTableRow(rows []SourceCodeRow) (tableRows []iacOrSastTabl
 	return
 }
 
+func ConvertToMaliciousTableRow(rows []SourceCodeRow) (tableRows []maliciousTableRow) {
+	for i := range rows {
+		tableRows = append(tableRows, maliciousTableRow{
+			severity: rows[i].Severity,
+			file:     rows[i].File,
+			evidence: rows[i].Snippet,
+			finding:  rows[i].Finding,
+		})
+	}
+	return
+}
+
 func convertToComponentTableRow(rows []ComponentRow) (tableRows []directDependenciesTableRow) {
 	for i := range rows {
 		tableRows = append(tableRows, directDependenciesTableRow{

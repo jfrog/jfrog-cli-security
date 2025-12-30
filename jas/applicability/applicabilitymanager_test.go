@@ -175,7 +175,7 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = applicabilityManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd})
+	err = applicabilityManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
 	assert.NoError(t, err)
 
 	defer func() {

@@ -127,7 +127,7 @@ func TestGetExcludePatterns(t *testing.T) {
 	for _, testCase := range getExcludePatternsCases {
 		t.Run("", func(t *testing.T) {
 			scanner := testCase.scanner
-			actualExcludePatterns := GetExcludePatterns(module, scanner)
+			actualExcludePatterns := GetExcludePatterns(module, scanner, []string{})
 			if scanner == nil {
 				assert.ElementsMatch(t, module.ExcludePatterns, actualExcludePatterns)
 				return
@@ -280,7 +280,7 @@ func TestAddScoreToRunRules(t *testing.T) {
 	}
 }
 
-func TestFilterUniqueAndConvertToFilesExcludePatterns(t *testing.T) {
+func TestConvertToFilesExcludePatterns(t *testing.T) {
 	tests := []struct {
 		name            string
 		excludePatterns []string
@@ -297,7 +297,7 @@ func TestFilterUniqueAndConvertToFilesExcludePatterns(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		filteredExcludePatterns := filterUniqueAndConvertToFilesExcludePatterns(test.excludePatterns)
+		filteredExcludePatterns := convertToFilesExcludePatterns(test.excludePatterns)
 		// Sort is needed since we create the response slice from a Set (unordered)
 		slices.Sort(filteredExcludePatterns)
 		assert.EqualValues(t, test.expectedOutput, filteredExcludePatterns)
