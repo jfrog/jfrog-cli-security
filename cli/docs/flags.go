@@ -332,7 +332,7 @@ var flagsMap = map[string]components.Flag{
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
 
 	// Docker flags
-	DockerImageName: components.NewStringFlag(DockerImageName, "[Docker] Specifies the image name to audit. The image name should include the Artifactory registry. Examples: 'acme.jfrog.io/docker-local/nginx:1.21' (repository path) or 'acme-docker-local.jfrog.io/nginx:1.21' (subdomain)."),
+	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
