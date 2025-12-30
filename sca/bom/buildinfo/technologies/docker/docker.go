@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -135,24 +136,34 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 		}
 		return "", fmt.Errorf("docker pull failed: %s", strings.TrimSpace(string(pullOutput)))
 	}
-	// IF IMAGE EXISTS LOCALLY
-	inspectCmd := exec.Command("docker", "inspect", fullImageName, "--format", "{{.Os}} {{.Architecture}}")
+	// IF Image exists locally, we need to get the digest of the image for the specific OS/architecture
+	localOS, localArch, err := getLocalPlatform(fullImageName)
+	if err != nil {
+		return "", nil
+	}
+
+	return findDigestForPlatform(fullImageName, localOS, localArch)
+}
+
+// Retrieves the OS and architecture of a locally pulled Docker image.
+func getLocalPlatform(imageName string) (os, arch string, err error) {
+	inspectCmd := exec.Command("docker", "inspect", imageName, "--format", "{{.Os}} {{.Architecture}}")
 	inspectOutput, inspectErr := inspectCmd.CombinedOutput()
 	if inspectErr != nil {
 		log.Error(fmt.Sprintf("docker inspect failed: %v", inspectErr))
-		return "", nil
+		return "", "", inspectErr
 	}
 	parts := strings.Fields(strings.TrimSpace(string(inspectOutput)))
 	if len(parts) != 2 {
-		return "", nil
+		return "", "", fmt.Errorf("unexpected inspect output format")
 	}
-	localOS := parts[0]
-	localArch := parts[1]
+	log.Debug(fmt.Sprintf("Local platform: %s/%s", parts[0], parts[1]))
+	return parts[0], parts[1], nil
+}
 
-	log.Debug(fmt.Sprintf("Local platform: %s/%s", localOS, localArch))
-	// In case the image is found locally, we need to get the digest of the image using the buildx.
-
-	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", fullImageName, "--raw")
+// Retrieves the digest for a specific OS/architecture from the image manifest.
+func findDigestForPlatform(imageName, targetOS, targetArch string) (string, error) {
+	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", imageName, "--raw")
 	buildxOutput, buildxErr := buildxCmd.CombinedOutput()
 	if buildxErr != nil {
 		return "", fmt.Errorf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput)))
@@ -165,13 +176,13 @@ func getArchDigestUsingDocker(fullImageName string) (string, error) {
 	}
 
 	for _, m := range manifest.Manifests {
-		if m.Platform.OS == localOS && m.Platform.Architecture == localArch {
+		if m.Platform.OS == targetOS && m.Platform.Architecture == targetArch {
 			log.Debug(fmt.Sprintf("Found arch-specific digest: %s", m.Digest))
 			return m.Digest, nil
 		}
 	}
 
-	log.Debug(fmt.Sprintf("No matching manifest found for %s/%s", localOS, localArch))
+	log.Debug(fmt.Sprintf("No matching manifest found for %s/%s", targetOS, targetArch))
 	return "", nil
 }
 
@@ -191,6 +202,13 @@ func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, err
 	serverDetails, err := config.GetDefaultServerConf()
 	if err != nil {
 		return nil, err
+	}
+	exists, err := artifactory.IsRepoExists(imageInfo.Repo, serverDetails)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if repository '%s' exists on Artifactory '%s': %w", imageInfo.Repo, serverDetails.Url, err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("repository '%s' was not found on Artifactory (%s). Ensure the repository exists.", imageInfo.Repo, serverDetails.Url)
 	}
 
 	repoConfig := &project.RepositoryConfig{}
