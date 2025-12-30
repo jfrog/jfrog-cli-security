@@ -697,6 +697,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
+	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	return curationAuditCommand, nil
 }
 
