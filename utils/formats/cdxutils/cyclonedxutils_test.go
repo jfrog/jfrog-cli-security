@@ -1121,9 +1121,9 @@ func TestExclude(t *testing.T) {
 	bom := cyclonedx.NewBOM()
 	bom.Components = &[]cyclonedx.Component{
 		{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 	}
 	bom.Dependencies = &[]cyclonedx.Dependency{
 		{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
@@ -1152,9 +1152,9 @@ func TestExclude(t *testing.T) {
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
@@ -1164,25 +1164,25 @@ func TestExclude(t *testing.T) {
 		},
 		{
 			name:    "Exclude single component with transitive dependencies",
-			exclude: []cyclonedx.Component{{BOMRef: "comp1"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp1", PackageURL: "pkg:comp1"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"comp3"}}},
 			},
 		},
 		{
 			name:    "Exclude single component existing both directly and transitively",
-			exclude: []cyclonedx.Component{{BOMRef: "comp3"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp3", PackageURL: "pkg:comp3"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
@@ -1192,15 +1192,41 @@ func TestExclude(t *testing.T) {
 		},
 		{
 			name:    "Exclude multiple components",
-			exclude: []cyclonedx.Component{{BOMRef: "comp2"}, {BOMRef: "comp3"}, {BOMRef: "exclude-me"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp2", PackageURL: "pkg:comp2"}, {BOMRef: "comp3", PackageURL: "pkg:comp3"}, {BOMRef: "exclude-me", PackageURL: "pkg:exclude-me"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+		},
+		{
+			name: "Exclude by same name+version while ignoring hash",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=4321", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:npm/comp2@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
+				},
+			},
+			// Exclude the same name+version, with a hash that should be ignored
+			exclude: []cyclonedx.Component{{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=1234"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp3"}},
 				},
 			},
 		},
