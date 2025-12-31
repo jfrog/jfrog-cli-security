@@ -243,7 +243,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-
+	log.Info("####### jf audit Scan Finished #######")
 	return OutputResultsAndCmdError(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
 }
 

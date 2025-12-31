@@ -481,7 +481,6 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
-	log.Info("####### jf audit Scan Finished #######")
 	return err
 }
 
