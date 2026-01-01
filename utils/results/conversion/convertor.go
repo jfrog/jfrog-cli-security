@@ -1,6 +1,8 @@
 package conversion
 
 import (
+	"slices"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -43,6 +45,8 @@ type ResultConvertParams struct {
 	Pretty bool
 	// The JFrog platform URL to be used in the results (Sarif only - GitHub integration)
 	PlatformUrl string
+	// A list of target names to include in the output, if empty all targets will be included
+	IncludeTargets []string
 }
 
 func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConvertor {
@@ -68,6 +72,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseSecrets(secrets ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
+	ParseMalicious(malicious ...[]*sarif.Run) error
 	// Parse JFrog violations to the format if supported
 	ParseViolations(violations violationutils.Violations) error
 	// When done parsing the stream results, get the converted content
@@ -108,6 +113,10 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		return
 	}
 	for _, targetScansResults := range cmdResults.Targets {
+		if len(params.IncludeTargets) > 0 && !slices.Contains(params.IncludeTargets, targetScansResults.Target) {
+			// Skip this target as it's not in the include list
+			continue
+		}
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
@@ -206,7 +215,11 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// Parsing JAS SAST results
-	return parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults)
+	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+		return
+	}
+	// Parsing JAS Malicious Code results
+	return parser.ParseMalicious(targetResults.JasResults.JasVulnerabilities.MaliciousScanResults)
 }
 
 func parseViolations[T interface{}](parser ResultsStreamFormatParser[T], violations *violationutils.Violations) (err error) {

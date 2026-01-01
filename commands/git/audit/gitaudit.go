@@ -62,6 +62,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
+	log.Info("####### jf git audit Scan Finished #######")
 	return sourceAudit.OutputResultsAndCmdError(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 

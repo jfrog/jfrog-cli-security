@@ -37,6 +37,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -102,6 +103,7 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
+	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -217,6 +219,7 @@ type CurationAuditCommand struct {
 	workingDirs          []string
 	OriginPath           string
 	parallelRequests     int
+	dockerImageName      string
 	audit.AuditParamsInterface
 }
 
@@ -250,6 +253,15 @@ func (ca *CurationAuditCommand) SetWorkingDirs(dirs []string) *CurationAuditComm
 
 func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditCommand {
 	ca.parallelRequests = threads
+	return ca
+}
+
+func (ca *CurationAuditCommand) DockerImageName() string {
+	return ca.dockerImageName
+}
+
+func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *CurationAuditCommand {
+	ca.dockerImageName = dockerImageName
 	return ca
 }
 
@@ -350,6 +362,10 @@ func getPolicyAndConditionId(policy, condition string) string {
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := techutils.DetectedTechnologiesList()
+	if ca.DockerImageName() != "" {
+		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
+		techs = []string{techutils.Docker.String()}
+	}
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {
@@ -426,6 +442,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmOverwritePackageLock: true,
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
+		// Docker params
+		DockerImageName: ca.DockerImageName(),
 		// NuGet params
 		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
@@ -718,6 +736,16 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
+	// If the technology is Docker, we need to get the repository config from the Docker image name
+	if tech == techutils.Docker {
+		repoConfig, err := docker.GetDockerRepositoryConfig(ca.DockerImageName())
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(repoConfig)
+		return nil
+	}
+
 	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
 	if err != nil {
 		return err
@@ -950,6 +978,9 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 	case techutils.Nuget:
 		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
 		return
+	case techutils.Docker:
+		downloadUrls, name, version = getDockerNameAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
@@ -1132,6 +1163,39 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
+}
+
+func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	if id == "" {
+		return
+	}
+
+	id = strings.TrimPrefix(id, "docker://")
+
+	sha256Idx := strings.Index(id, ":sha256:")
+	tagIdx := strings.LastIndex(id, ":")
+
+	switch {
+	// Example: docker://nginx:sha256:abc123def456
+	case sha256Idx > 0:
+		name = id[:sha256Idx]
+		version = id[sha256Idx+1:]
+	// Example: docker://nginx:1.21
+	case tagIdx > 0:
+		name = id[:tagIdx]
+		version = id[tagIdx+1:]
+	// Example: docker://nginx (no tag specified, defaults to "latest")
+	default:
+		name = id
+		version = "latest"
+	}
+
+	if artiUrl != "" && repo != "" {
+		downloadUrls = []string{fmt.Sprintf("%s/api/docker/%s/v2/%s/manifests/%s",
+			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
+	}
+
+	return
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {
