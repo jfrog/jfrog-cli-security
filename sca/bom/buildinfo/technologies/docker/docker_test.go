@@ -558,10 +558,6 @@ func TestParseDockerImageWithArtifactoryUrl(t *testing.T) {
 			expectedImg:    "ghcr.io/actions/runner",
 			expectedTag:    "latest",
 		},
-
-		// ==========================================
-		// Edge cases - Artifactory URL variations
-		// ==========================================
 		{
 			name:           "Artifactory URL without trailing slash",
 			imageName:      "acme.jfrog.io/docker-local/nginx:1.21",

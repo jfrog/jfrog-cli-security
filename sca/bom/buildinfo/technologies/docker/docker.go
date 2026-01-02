@@ -85,7 +85,6 @@ func ParseDockerImageWithArtifactoryUrl(imageName, url string) (*DockerImageInfo
 
 // parseWithArtifactoryUrl determines Docker access method by comparing registry with Artifactory URL.
 func parseWithArtifactoryUrl(registry, remaining, url string) (repo, image string) {
-	image = remaining
 	baseDomain := getArtifactoryBaseDomain(url)
 
 	registryHost, registryPort := splitHostPort(registry)
@@ -135,11 +134,9 @@ func extractSubdomainRepo(registryHost, baseDomain string, isSaaS bool) string {
 				return strings.TrimPrefix(prefix, instance+"-")
 			}
 		}
-	} else {
+	} else if strings.HasSuffix(registryHost, "."+baseDomain) {
 		// Self-hosted pattern: <repo>.<baseDomain>
-		if strings.HasSuffix(registryHost, "."+baseDomain) {
-			return strings.TrimSuffix(registryHost, "."+baseDomain)
-		}
+		return strings.TrimSuffix(registryHost, "."+baseDomain)
 	}
 	return ""
 }
