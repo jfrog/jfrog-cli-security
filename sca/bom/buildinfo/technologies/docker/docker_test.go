@@ -630,6 +630,146 @@ func TestParseDockerImageWithArtifactoryUrl(t *testing.T) {
 			expectedImg:    "gcr.io/distroless/static-debian11",
 			expectedTag:    "nonroot",
 		},
+		{
+			name:           "IP with port - simple image",
+			imageName:      "192.168.1.100:8081/nginx:1.21",
+			artifactoryUrl: "https://192.168.1.100/artifactory",
+			expectedRepo:   "8081",
+			expectedImg:    "nginx",
+			expectedTag:    "1.21",
+		},
+		{
+			name:           "IP with port - nested image",
+			imageName:      "192.168.1.100:8082/bitnami/redis:7.0",
+			artifactoryUrl: "https://192.168.1.100/artifactory",
+			expectedRepo:   "8082",
+			expectedImg:    "bitnami/redis",
+			expectedTag:    "7.0",
+		},
+		{
+			name:           "IP with port - deeply nested image",
+			imageName:      "10.0.0.50:9000/org/team/myservice:v2.1.0",
+			artifactoryUrl: "https://10.0.0.50/artifactory",
+			expectedRepo:   "9000",
+			expectedImg:    "org/team/myservice",
+			expectedTag:    "v2.1.0",
+		},
+		{
+			name:           "IP with port - no tag",
+			imageName:      "172.16.0.1:8081/alpine",
+			artifactoryUrl: "https://172.16.0.1/artifactory",
+			expectedRepo:   "8081",
+			expectedImg:    "alpine",
+			expectedTag:    "latest",
+		},
+		{
+			name:           "IP with port - high port number",
+			imageName:      "192.168.1.100:54321/myapp:latest",
+			artifactoryUrl: "https://192.168.1.100/artifactory",
+			expectedRepo:   "54321",
+			expectedImg:    "myapp",
+			expectedTag:    "latest",
+		},
+
+		// ==========================================
+		// IP ADDRESS WITH REPO PATH (no port)
+		// ==========================================
+		{
+			name:           "IP repo path - simple image",
+			imageName:      "192.168.1.100/docker-local/nginx:1.21",
+			artifactoryUrl: "https://192.168.1.100/artifactory",
+			expectedRepo:   "docker-local",
+			expectedImg:    "nginx",
+			expectedTag:    "1.21",
+		},
+		{
+			name:           "IP repo path - nested image",
+			imageName:      "10.0.0.50/docker-remote/bitnami/nginx:alpine",
+			artifactoryUrl: "https://10.0.0.50/artifactory",
+			expectedRepo:   "docker-remote",
+			expectedImg:    "bitnami/nginx",
+			expectedTag:    "alpine",
+		},
+		{
+			name:           "IP repo path - deeply nested image",
+			imageName:      "172.16.0.1/docker-virtual/gcr.io/google-containers/pause:3.2",
+			artifactoryUrl: "https://172.16.0.1/artifactory",
+			expectedRepo:   "docker-virtual",
+			expectedImg:    "gcr.io/google-containers/pause",
+			expectedTag:    "3.2",
+		},
+
+		// ==========================================
+		// IP ADDRESS - Artifactory URL also has port
+		// ==========================================
+		{
+			name:           "IP with port - Artifactory URL has port too",
+			imageName:      "192.168.1.100:8081/nginx:1.21",
+			artifactoryUrl: "http://192.168.1.100:8082/artifactory",
+			expectedRepo:   "8081",
+			expectedImg:    "nginx",
+			expectedTag:    "1.21",
+		},
+		{
+			name:           "IP with port - nested image, Artifactory URL has port",
+			imageName:      "10.0.0.50:9000/bitnami/redis:7.0",
+			artifactoryUrl: "http://10.0.0.50:8082/artifactory",
+			expectedRepo:   "9000",
+			expectedImg:    "bitnami/redis",
+			expectedTag:    "7.0",
+		},
+		{
+			name:           "IP repo path - Artifactory URL has port",
+			imageName:      "192.168.1.100/docker-local/nginx:1.21",
+			artifactoryUrl: "http://192.168.1.100:8082/artifactory",
+			expectedRepo:   "docker-local",
+			expectedImg:    "nginx",
+			expectedTag:    "1.21",
+		},
+		{
+			name:           "IP repo path - nested image, Artifactory URL has port",
+			imageName:      "10.0.0.50/docker-remote/gcr.io/distroless/static:latest",
+			artifactoryUrl: "http://10.0.0.50:8082/artifactory",
+			expectedRepo:   "docker-remote",
+			expectedImg:    "gcr.io/distroless/static",
+			expectedTag:    "latest",
+		},
+
+		// ==========================================
+		// IP:PORT with REPO PATH method (same port as Artifactory)
+		// ==========================================
+		{
+			name:           "IP:port repo path - simple image",
+			imageName:      "192.168.1.100:8082/docker-test/nginx:1.21",
+			artifactoryUrl: "http://192.168.1.100:8082/artifactory",
+			expectedRepo:   "docker-test",
+			expectedImg:    "nginx",
+			expectedTag:    "1.21",
+		},
+		{
+			name:           "IP:port repo path - nested image path",
+			imageName:      "192.168.1.100:8082/docker-test/image/path:test",
+			artifactoryUrl: "http://192.168.1.100:8082/artifactory",
+			expectedRepo:   "docker-test",
+			expectedImg:    "image/path",
+			expectedTag:    "test",
+		},
+		{
+			name:           "IP:port repo path - deeply nested",
+			imageName:      "10.0.0.50:8082/my-repo/org/team/service:v2.0",
+			artifactoryUrl: "http://10.0.0.50:8082/artifactory",
+			expectedRepo:   "my-repo",
+			expectedImg:    "org/team/service",
+			expectedTag:    "v2.0",
+		},
+		{
+			name:           "IP:port repo path - no tag",
+			imageName:      "172.16.0.1:8082/docker-local/alpine",
+			artifactoryUrl: "http://172.16.0.1:8082/artifactory",
+			expectedRepo:   "docker-local",
+			expectedImg:    "alpine",
+			expectedTag:    "latest",
+		},
 	}
 
 	for _, tt := range tests {

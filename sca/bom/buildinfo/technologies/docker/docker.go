@@ -3,6 +3,7 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -38,21 +39,15 @@ var (
 	hexDigestPattern = regexp.MustCompile(`[a-fA-F0-9]{64}`)
 )
 
-// getArtifactoryBaseDomain extracts the base domain from the configured Artifactory URL.
-// e.g., "https://myinstance.jfrog.io/artifactory" -> "myinstance.jfrog.io"
-// e.g., "https://artifactory.company.com:8081/artifactory" -> "artifactory.company.com"
-func getArtifactoryBaseDomain(url string) string {
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "http://")
-	if idx := strings.Index(url, "/"); idx > 0 {
-		url = url[:idx]
+// getArtifactoryHostPort extracts the host and port from the configured Artifactory URL.
+// e.g., "https://myinstance.jfrog.io/artifactory" -> "myinstance.jfrog.io", ""
+// e.g., "http://177.111.1.100:8082/artifactory" -> "192.168.1.100", "8082"
+func getArtifactoryHostPort(artifactoryUrl string) (host, port string) {
+	parsed, err := url.Parse(artifactoryUrl)
+	if err != nil || parsed.Host == "" {
+		return "", ""
 	}
-	if idx := strings.LastIndex(url, ":"); idx > 0 {
-		if !strings.Contains(url[idx:], "]") {
-			url = url[:idx]
-		}
-	}
-	return url
+	return splitHostPort(parsed.Host)
 }
 
 // ParseDockerImageWithArtifactoryUrl parses a Docker image name and extracts repo based on Artifactory URL.
@@ -85,26 +80,26 @@ func ParseDockerImageWithArtifactoryUrl(imageName, url string) (*DockerImageInfo
 
 // parseWithArtifactoryUrl determines Docker access method by comparing registry with Artifactory URL.
 func parseWithArtifactoryUrl(registry, remaining, url string) (repo, image string) {
-	baseDomain := getArtifactoryBaseDomain(url)
+	artifactoryHost, artifactoryPort := getArtifactoryHostPort(url)
 
 	registryHost, registryPort := splitHostPort(registry)
 
-	isSaaS := strings.HasSuffix(baseDomain, ".jfrog.io") || strings.HasSuffix(baseDomain, ".jfrogdev.org")
+	isSaaS := strings.HasSuffix(artifactoryHost, ".jfrog.io") || strings.HasSuffix(artifactoryHost, ".jfrogdev.org")
 
-	if repo = extractSubdomainRepo(registryHost, baseDomain, isSaaS); repo != "" {
+	if repo = extractSubdomainRepo(registryHost, artifactoryHost, isSaaS); repo != "" {
 		log.Debug(fmt.Sprintf("Subdomain method detected (repo=%s)", repo))
 		return repo, remaining
 	}
-
-	if registryPort != "" && registryHost == baseDomain {
+	if registryPort != "" && registryHost == artifactoryHost && registryPort != artifactoryPort {
 		log.Debug(fmt.Sprintf("Port method detected (repo=%s)", registryPort))
 		return registryPort, remaining
 	}
-	if registryHost == baseDomain && registryPort == "" {
+
+	if registryHost == artifactoryHost {
 		log.Debug("Repository Path method detected")
 		return extractRepoFromPath(remaining)
 	}
-	log.Debug("Fallback: using Repository Path extraction")
+	log.Debug("Using Repository Path extraction")
 	return extractRepoFromPath(remaining)
 }
 
