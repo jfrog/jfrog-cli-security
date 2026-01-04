@@ -734,10 +734,6 @@ func TestParseDockerImageWithArtifactoryUrl(t *testing.T) {
 			expectedImg:    "gcr.io/distroless/static",
 			expectedTag:    "latest",
 		},
-
-		// ==========================================
-		// IP:PORT with REPO PATH method (same port as Artifactory)
-		// ==========================================
 		{
 			name:           "IP:port repo path - simple image",
 			imageName:      "192.168.1.100:8082/docker-test/nginx:1.21",

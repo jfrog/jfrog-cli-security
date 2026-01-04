@@ -154,6 +154,9 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 	if err != nil {
 		return nil, nil, err
 	}
+	if serverDetails == nil {
+		return nil, nil, fmt.Errorf("no Artifactory server configured. Use 'jf c add' to configure a server")
+	}
 
 	imageInfo, err := ParseDockerImageWithArtifactoryUrl(params.DockerImageName, serverDetails.Url)
 	if err != nil {
@@ -251,6 +254,9 @@ func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, err
 	serverDetails, err := config.GetDefaultServerConf()
 	if err != nil {
 		return nil, err
+	}
+	if serverDetails == nil {
+		return nil, fmt.Errorf("no Artifactory server configured. Use 'jf c add' to configure a server")
 	}
 	imageInfo, err := ParseDockerImageWithArtifactoryUrl(imageName, serverDetails.Url)
 	if err != nil {
