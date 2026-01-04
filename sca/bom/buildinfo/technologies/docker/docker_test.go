@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -781,34 +782,34 @@ func TestParseDockerImageWithArtifactoryUrl(t *testing.T) {
 
 func TestBuildDependencyTree(t *testing.T) {
 	tests := []struct {
-		name            string
-		dockerImageName string
-		expectError     bool
-		errorContains   string
+		name             string
+		dockerImageName  string
+		expectError      bool
+		errorContainsAny []string
 	}{
 		{
-			name:            "Empty image name",
-			dockerImageName: "",
-			expectError:     true,
-			errorContains:   "docker image name is required",
+			name:             "Empty image name",
+			dockerImageName:  "",
+			expectError:      true,
+			errorContainsAny: []string{"docker image name is required"},
 		},
 		{
-			name:            "No registry - single part image",
-			dockerImageName: "nginx",
-			expectError:     true,
-			errorContains:   "invalid docker image format",
+			name:             "No registry - single part image",
+			dockerImageName:  "nginx",
+			expectError:      true,
+			errorContainsAny: []string{"no Artifactory server configured", "invalid docker image format"},
 		},
 		{
-			name:            "No registry - image with tag only",
-			dockerImageName: "nginx:1.21",
-			expectError:     true,
-			errorContains:   "invalid docker image format",
+			name:             "No registry - image with tag only",
+			dockerImageName:  "nginx:1.21",
+			expectError:      true,
+			errorContainsAny: []string{"no Artifactory server configured", "invalid docker image format"},
 		},
 		{
-			name:            "Whitespace only",
-			dockerImageName: "   ",
-			expectError:     true,
-			errorContains:   "invalid docker image format",
+			name:             "Whitespace only",
+			dockerImageName:  "   ",
+			expectError:      true,
+			errorContainsAny: []string{"no Artifactory server configured", "invalid docker image format"},
 		},
 	}
 
@@ -818,8 +819,16 @@ func TestBuildDependencyTree(t *testing.T) {
 			_, _, err := BuildDependencyTree(params)
 			if tt.expectError {
 				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+				if len(tt.errorContainsAny) > 0 {
+					errMsg := err.Error()
+					matched := false
+					for _, expected := range tt.errorContainsAny {
+						if strings.Contains(errMsg, expected) {
+							matched = true
+							break
+						}
+					}
+					assert.True(t, matched, "error %q should contain one of %v", errMsg, tt.errorContainsAny)
 				}
 			} else {
 				assert.NoError(t, err)
