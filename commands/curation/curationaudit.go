@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -79,6 +80,53 @@ const (
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
+
+	// Curation request headers
+	waiverHeader = "X-Artifactory-Curation-Request-Waiver"
+)
+
+func generateWaiverHeaderValue() string {
+	batchID := uuid.New().String()
+	headerData := map[string]string{
+		"batch_id": batchID,
+	}
+	jsonData, _ := json.Marshal(headerData)
+	return string(jsonData)
+}
+
+// addFieldToWaiverHeader adds a field to the existing waiver header JSON and returns the updated JSON string
+func addFieldToWaiverHeader(fieldName string, fieldValue interface{}) (string, error) {
+	// Parse the existing header
+	var headerData map[string]interface{}
+	if err := json.Unmarshal([]byte(waiverHeaderValue), &headerData); err != nil {
+		return "", fmt.Errorf("failed to parse waiver header: %v", err)
+	}
+	headerData[fieldName] = fieldValue
+	updatedHeaderData, err := json.Marshal(headerData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal updated header: %v", err)
+	}
+	return string(updatedHeaderData), nil
+}
+
+// createRequestDetails creates a copy of httpClientDetails for thread-safe header modification
+func (nc *treeAnalyzer) createRequestDetails() httputils.HttpClientDetails {
+	requestDetails := nc.httpClientDetails
+	if requestDetails.Headers == nil {
+		requestDetails.Headers = make(map[string]string)
+	} else {
+		// Create a copy of the headers map
+		requestDetails.Headers = make(map[string]string)
+		for k, v := range nc.httpClientDetails.Headers {
+			requestDetails.Headers[k] = v
+		}
+	}
+	return requestDetails
+}
+
+var (
+	waiverHeaderValue string
+	blockedPackageUrl string
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -510,6 +558,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		parallelRequests:     ca.parallelRequests,
 		downloadUrls:         depTreeResult.DownloadUrls,
 	}
+	// Initialize the waiver header value with batch ID from Xray API
+	waiverHeaderValue = generateWaiverHeaderValue()
+	blockedPackageUrl = ""
+
+	// Add curation client header to all requests
+	analyzer.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 
 	rootNodes := map[string]struct{}{}
 	for _, tree := range depTreeResult.FullDepTrees {
@@ -529,6 +583,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// We subtract 1 because the root node is not a package.
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
 	}
+
 	return err
 }
 
@@ -591,7 +646,7 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 		return nil, err
 	}
 	clientDetails := rtAuth.CreateHttpClientDetails()
-	clientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = msg
+	clientDetails.Headers[waiverHeader] = msg
 	for _, pkg := range pkgs {
 		response, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
 		if err != nil {
@@ -818,12 +873,14 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	var multiErrors error
 	consumerProducer := parallel.NewBounedRunner(nc.parallelRequests, false)
 	errorsQueue := clientutils.NewErrorsQueue(1)
+
 	go func() {
 		defer consumerProducer.Done()
 		for _, node := range graph.Nodes {
 			if _, ok := rootNodeIds[node.Id]; ok {
 				continue
 			}
+
 			getTask := func(node xrayUtils.GraphNode) func(threadId int) error {
 				return func(threadId int) (err error) {
 					return nc.fetchNodeStatus(node, p)
@@ -838,6 +895,15 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	if err := errorsQueue.GetError(); err != nil {
 		multiErrors = errors.Join(err, multiErrors)
 	}
+
+	// After all parallel processing is done, send the completed request
+	// Only send completed request if there are blocked packages
+	if blockedPackageUrl != "" {
+		if err := nc.sendCompletedRequest(blockedPackageUrl); err != nil {
+			multiErrors = errors.Join(err, multiErrors)
+		}
+	}
+
 	return multiErrors
 }
 
@@ -849,8 +915,15 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	if scope != "" {
 		name = scope + "/" + name
 	}
+
 	for _, packageUrl := range packageUrls {
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &nc.httpClientDetails)
+		// Create a copy of httpClientDetails for this request to avoid modifying the shared one
+		requestDetails := nc.createRequestDetails()
+
+		// Set the header for regular HEAD request
+		requestDetails.Headers[waiverHeader] = waiverHeaderValue
+
+		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
 				return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
@@ -867,6 +940,11 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
 		if resp.StatusCode == http.StatusForbidden {
+			// Track this blocked package URL (only need one for completed request)
+			if blockedPackageUrl == "" {
+				blockedPackageUrl = packageUrl
+			}
+
 			pkStatus, err := nc.getBlockedPackageDetails(packageUrl, name, version)
 			if err != nil {
 				return err
@@ -887,8 +965,11 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	nc.httpClientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
+	// Create a copy of httpClientDetails for this request to avoid modifying the shared one
+	requestDetails := nc.createRequestDetails()
+	requestDetails.Headers[waiverHeader] = "syn"
+
+	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &requestDetails)
 	if err != nil {
 		if getResp == nil {
 			return nil, err
@@ -926,6 +1007,17 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 		}
 	}
 	return nil, nil
+}
+
+func (nc *treeAnalyzer) sendCompletedRequest(packageUrl string) error {
+	requestDetails := nc.createRequestDetails()
+	completedHeaderData, err := addFieldToWaiverHeader("completed", true)
+	if err != nil {
+		return err
+	}
+	requestDetails.Headers[waiverHeader] = completedHeaderData
+	_, _, err = nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
+	return err
 }
 
 // Return policies and conditions names from the FORBIDDEN HTTP error message.

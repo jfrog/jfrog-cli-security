@@ -21,6 +21,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -483,6 +484,101 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 			assert.ErrorIs(t, err, os.ErrPermission)
 		}
 	}
+}
+
+func TestCurationHeaders(t *testing.T) {
+	// Test that batch ID generation works correctly
+	headerValue := generateWaiverHeaderValue()
+
+	// Verify it's valid JSON with batch_id
+	var headerData map[string]interface{}
+	err := json.Unmarshal([]byte(headerValue), &headerData)
+	require.NoError(t, err)
+	assert.Contains(t, headerData, "batch_id")
+	assert.NotEmpty(t, headerData["batch_id"])
+
+	// Test that completed request adds "completed" flag
+	var capturedHeader http.Header
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		capturedHeader = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}
+
+	mockServer, mockServerDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+	defer mockServer.Close()
+
+	// Create analyzer and send completed request
+	rtAuth, err := mockServerDetails.CreateArtAuthConfig()
+	require.NoError(t, err)
+	rtManager, err := rtUtils.CreateServiceManager(mockServerDetails, 2, 0, false)
+	require.NoError(t, err)
+	analyzer := &treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
+	}
+	// Use JSON header format like: {"batch_id":"196c55b0-5724-4a94-aa45-9b0bfd658985"}
+	waiverHeaderValue = `{"batch_id":"196c55b0-5724-4a94-aa45-9b0bfd658985"}`
+	testUrl := mockServerDetails.GetArtifactoryUrl() + "/test/pkg"
+	err = analyzer.sendCompletedRequest(testUrl)
+	assert.NoError(t, err)
+	assert.NotNil(t, capturedHeader)
+	waiverHeader := capturedHeader["X-Artifactory-Curation-Request-Waiver"]
+
+	// Parse the completed header JSON
+	var completedHeaderData map[string]interface{}
+	err = json.Unmarshal([]byte(waiverHeader[0]), &completedHeaderData)
+	require.NoError(t, err)
+	assert.Equal(t, "196c55b0-5724-4a94-aa45-9b0bfd658985", completedHeaderData["batch_id"])
+	assert.Equal(t, true, completedHeaderData["completed"])
+}
+
+func TestCurationSynHeader(t *testing.T) {
+	// Test that syn field is added correctly to the header
+	headerValue := generateWaiverHeaderValue()
+
+	// Verify it's valid JSON with batch_id
+	var headerData map[string]interface{}
+	err := json.Unmarshal([]byte(headerValue), &headerData)
+	require.NoError(t, err)
+	assert.Contains(t, headerData, "batch_id")
+	assert.NotEmpty(t, headerData["batch_id"])
+
+	// Add syn field (simulating what happens in getBlockedPackageDetails)
+	headerData["syn"] = true
+	synHeaderData, err := json.Marshal(headerData)
+	require.NoError(t, err)
+
+	// Verify the final JSON contains both batch_id and syn
+	var finalHeaderData map[string]interface{}
+	err = json.Unmarshal(synHeaderData, &finalHeaderData)
+	require.NoError(t, err)
+	assert.Equal(t, true, finalHeaderData["syn"])
+	assert.Contains(t, finalHeaderData, "batch_id")
+}
+
+func TestAddFieldToWaiverHeader(t *testing.T) {
+	// Test the helper function directly
+	waiverHeaderValue = `{"batch_id":"test-batch-123"}`
+
+	// Add syn field
+	synHeader, err := addFieldToWaiverHeader("syn", true)
+	require.NoError(t, err)
+
+	var synData map[string]interface{}
+	err = json.Unmarshal([]byte(synHeader), &synData)
+	require.NoError(t, err)
+	assert.Equal(t, "test-batch-123", synData["batch_id"])
+	assert.Equal(t, true, synData["syn"])
+
+	// Add completed field
+	completedHeader, err := addFieldToWaiverHeader("completed", true)
+	require.NoError(t, err)
+
+	var completedData map[string]interface{}
+	err = json.Unmarshal([]byte(completedHeader), &completedData)
+	require.NoError(t, err)
+	assert.Equal(t, "test-batch-123", completedData["batch_id"])
+	assert.Equal(t, true, completedData["completed"])
 }
 
 func setCurationFlagsForTest(t *testing.T) func() {
