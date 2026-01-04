@@ -191,7 +191,7 @@ func TestXrayAuditConan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			validationsParams := validations.ValidationParams{
-				Total: &validations.TotalCount{Licenses: 2, Violations: 4},
+				Total: &validations.TotalCount{Licenses: 1, Violations: 4},
 			}
 			if tc.withVuln {
 				validationsParams.Total.Vulnerabilities = 8
