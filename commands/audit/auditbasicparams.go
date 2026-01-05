@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -82,6 +83,10 @@ type AuditBasicParams struct {
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
 	solutionFilePath                 string
+	// Logger allows callers to provide a custom logger for this audit.
+	// If set, CLI will use this logger instead of the global logger during the scan.
+	// This enables log separation for parallel scans.
+	logger log.Log
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -341,4 +346,17 @@ func (abp *AuditBasicParams) SolutionFilePath() string {
 func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
 	abp.solutionFilePath = solutionFilePath
 	return abp
+}
+
+// SetLogger sets a custom logger for this audit.
+// If set, CLI will temporarily swap the global logger during the scan,
+// enabling log separation for parallel scans.
+func (abp *AuditBasicParams) SetLogger(logger log.Log) *AuditBasicParams {
+	abp.logger = logger
+	return abp
+}
+
+// GetLogger returns the custom logger, or nil if not set.
+func (abp *AuditBasicParams) GetLogger() log.Log {
+	return abp.logger
 }

@@ -291,6 +291,13 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	// If a custom logger is provided, swap it in for the duration of the scan.
+	// This enables log separation when running multiple scans in parallel.
+	if customLogger := auditParams.GetLogger(); customLogger != nil {
+		originalLogger := log.GetLogger()
+		log.SetLogger(customLogger)
+		defer log.SetLogger(originalLogger)
+	}
 	// Prepare the command for the scan.
 	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
 		return
