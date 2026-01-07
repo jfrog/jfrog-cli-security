@@ -53,12 +53,14 @@ const (
 	blocked                = "blocked"
 	BlockingReasonPolicy   = "Policy violations"
 	BlockingReasonNotFound = "Package pending update"
+	BlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
 
 	directRelation   = "direct"
 	indirectRelation = "indirect"
 
 	BlockMessageKey  = "jfrog packages curation"
 	NotBeingFoundKey = "not being found"
+	IsOnDemand       = "on-demand"
 
 	extractPoliciesRegexTemplate = "({.*?})"
 
@@ -202,24 +204,26 @@ type PackageStatusTable struct {
 }
 
 type treeAnalyzer struct {
-	rtManager            artifactory.ArtifactoryServicesManager
-	extractPoliciesRegex *regexp.Regexp
-	rtAuth               auth.ServiceDetails
-	httpClientDetails    httputils.HttpClientDetails
-	url                  string
-	repo                 string
-	tech                 techutils.Technology
-	parallelRequests     int
-	downloadUrls         map[string]string
+	rtManager             artifactory.ArtifactoryServicesManager
+	extractPoliciesRegex  *regexp.Regexp
+	rtAuth                auth.ServiceDetails
+	httpClientDetails     httputils.HttpClientDetails
+	url                   string
+	repo                  string
+	tech                  techutils.Technology
+	parallelRequests      int
+	downloadUrls          map[string]string
+	includeCachedPackages bool
 }
 
 type CurationAuditCommand struct {
-	PackageManagerConfig *project.RepositoryConfig
-	extractPoliciesRegex *regexp.Regexp
-	workingDirs          []string
-	OriginPath           string
-	parallelRequests     int
-	dockerImageName      string
+	PackageManagerConfig  *project.RepositoryConfig
+	extractPoliciesRegex  *regexp.Regexp
+	workingDirs           []string
+	OriginPath            string
+	parallelRequests      int
+	dockerImageName       string
+	includeCachedPackages bool
 	audit.AuditParamsInterface
 }
 
@@ -262,6 +266,11 @@ func (ca *CurationAuditCommand) DockerImageName() string {
 
 func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *CurationAuditCommand {
 	ca.dockerImageName = dockerImageName
+	return ca
+}
+
+func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages bool) *CurationAuditCommand {
+	ca.includeCachedPackages = includeCachedPackages
 	return ca
 }
 
@@ -500,15 +509,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{
-		rtManager:            rtManager,
-		extractPoliciesRegex: ca.extractPoliciesRegex,
-		rtAuth:               rtAuth,
-		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
-		url:                  rtAuth.GetUrl(),
-		repo:                 ca.PackageManagerConfig.TargetRepo(),
-		tech:                 tech,
-		parallelRequests:     ca.parallelRequests,
-		downloadUrls:         depTreeResult.DownloadUrls,
+		rtManager:             rtManager,
+		extractPoliciesRegex:  ca.extractPoliciesRegex,
+		rtAuth:                rtAuth,
+		httpClientDetails:     rtAuth.CreateHttpClientDetails(),
+		url:                   rtAuth.GetUrl(),
+		repo:                  ca.PackageManagerConfig.TargetRepo(),
+		tech:                  tech,
+		parallelRequests:      ca.parallelRequests,
+		downloadUrls:          depTreeResult.DownloadUrls,
+		includeCachedPackages: ca.includeCachedPackages,
 	}
 
 	rootNodes := map[string]struct{}{}
@@ -866,7 +876,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		if resp != nil && resp.StatusCode >= 400 && resp.StatusCode != http.StatusForbidden {
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
-		if resp.StatusCode == http.StatusForbidden {
+		if resp.StatusCode == http.StatusForbidden || (nc.includeCachedPackages && resp.StatusCode == http.StatusOK) {
 			pkStatus, err := nc.getBlockedPackageDetails(packageUrl, name, version)
 			if err != nil {
 				return err
@@ -911,6 +921,8 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 			blockingReason := BlockingReasonPolicy
 			if strings.Contains(strings.ToLower(respError.Errors[0].Message), NotBeingFoundKey) {
 				blockingReason = BlockingReasonNotFound
+			} else if strings.Contains(strings.ToLower(respError.Errors[0].Message), IsOnDemand) {
+				blockingReason = BlockingReasonOnDemand
 			}
 			policies := nc.extractPoliciesFromMsg(respError)
 			return &PackageStatus{
@@ -933,21 +945,27 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 func (nc *treeAnalyzer) extractPoliciesFromMsg(respError *ErrorsResp) []Policy {
 	var policies []Policy
 	msg := respError.Errors[0].Message
-	allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
-	for _, match := range allMatches {
-		match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
-		polCond := strings.Split(match, ",")
-		if len(polCond) >= 2 {
-			pol := polCond[0]
-			cond := polCond[1]
+	if strings.Contains(strings.ToLower(msg), IsOnDemand) {
+		policies = []Policy{{Explanation: BlockingReasonOnDemand}}
+	} else if strings.Contains(strings.ToLower(msg), NotBeingFoundKey) {
+		policies = []Policy{{Explanation: BlockingReasonNotFound}}
+	} else {
+		allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
+		for _, match := range allMatches {
+			match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
+			polCond := strings.Split(match, ",")
+			if len(polCond) >= 2 {
+				pol := polCond[0]
+				cond := polCond[1]
 
-			if len(polCond) == 4 {
-				exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
-				policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
-					Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
-				continue
+				if len(polCond) == 4 {
+					exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
+					policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
+						Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
+					continue
+				}
+				policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
 			}
-			policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
 		}
 	}
 	return policies
