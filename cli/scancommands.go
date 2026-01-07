@@ -695,6 +695,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
+		SetUseIncludedBuilds(c.GetBoolFlagValue(flags.UseIncludedBuilds)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).

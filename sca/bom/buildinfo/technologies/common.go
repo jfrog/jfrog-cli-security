@@ -52,6 +52,7 @@ type BuildInfoBomGeneratorParams struct {
 	// Java params
 	IsMavenDepTreeInstalled bool
 	UseWrapper              bool
+	UseIncludedBuilds       bool
 	// Python params
 	PipRequirementsFile string
 	// Npm params
@@ -62,8 +63,7 @@ type BuildInfoBomGeneratorParams struct {
 	// Docker params
 	DockerImageName string
 	// NuGet params
-	SolutionFilePath  string
-	UseIncludedBuilds bool
+	SolutionFilePath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {

@@ -214,7 +214,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath, DockerImageName,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
