@@ -59,6 +59,8 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	// Pnpm params
 	MaxTreeDepth string
+	// Docker params
+	DockerImageName string
 	// NuGet params
 	SolutionFilePath  string
 	UseIncludedBuilds bool

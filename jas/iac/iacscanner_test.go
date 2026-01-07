@@ -67,7 +67,7 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = iacScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd})
+	err = iacScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
 
 	defer func() {
 		err = os.Remove(iacScanManager.configFileName)

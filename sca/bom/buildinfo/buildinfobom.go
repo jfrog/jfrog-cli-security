@@ -29,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
 	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
@@ -226,6 +227,8 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", params.XrayVersion)
 		}
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = swift.BuildDependencyTree(params)
+	case techutils.Docker:
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = docker.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}

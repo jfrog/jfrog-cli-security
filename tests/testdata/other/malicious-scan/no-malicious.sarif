@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "JFrog Malicious Code scanner",
+          "rules": [
+            {
+              "id": "entropy",
+              "shortDescription": {
+                "text": "Scanner for entropy"
+              }
+            }
+          ],
+          "version": ""
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "arguments": [
+            "./jas_scanner",
+            "scan",
+            "mal_config_example.yaml"
+          ],
+          "workingDirectory": {
+            "uri": "malicious_scanner"
+          }
+        }
+      ],
+      "results": []
+    }
+  ],
+  "version": "2.1.0",
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+}
+
+

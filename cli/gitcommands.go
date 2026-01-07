@@ -99,7 +99,6 @@ func GitAuditCmd(c *components.Context) error {
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
-	log.Info("####### jf git audit Scan Finished #######")
 	return err
 }
 
