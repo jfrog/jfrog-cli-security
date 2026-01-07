@@ -945,11 +945,13 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 func (nc *treeAnalyzer) extractPoliciesFromMsg(respError *ErrorsResp) []Policy {
 	var policies []Policy
 	msg := respError.Errors[0].Message
-	if strings.Contains(strings.ToLower(msg), IsOnDemand) {
+	lowerMsg := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lowerMsg, IsOnDemand):
 		policies = []Policy{{Explanation: BlockingReasonOnDemand}}
-	} else if strings.Contains(strings.ToLower(msg), NotBeingFoundKey) {
+	case strings.Contains(lowerMsg, NotBeingFoundKey):
 		policies = []Policy{{Explanation: BlockingReasonNotFound}}
-	} else {
+	default:
 		allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
 		for _, match := range allMatches {
 			match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
