@@ -291,12 +291,11 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	// If a custom logger is provided, swap it in for the duration of the scan.
-	// This enables log separation when running multiple scans in parallel.
-	if customLogger := auditParams.GetLogger(); customLogger != nil {
-		originalLogger := log.GetLogger()
-		log.SetLogger(customLogger)
-		defer log.SetLogger(originalLogger)
+	// Set up isolated logging for this audit if a log collector is provided.
+	// This enables completely isolated log capture for parallel audits.
+	if collector := auditParams.GetLogCollector(); collector != nil {
+		log.SetLoggerForGoroutine(collector.Logger())
+		defer log.ClearLoggerForGoroutine()
 	}
 	// Prepare the command for the scan.
 	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
@@ -629,7 +628,15 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner), func(taskErr error) {
+	// Capture current logger to propagate to child goroutine
+	currentLogger := log.GetLogger()
+	jasTask := createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner)
+	wrappedJasTask := func(threadId int) error {
+		log.SetLoggerForGoroutine(currentLogger)
+		defer log.ClearLoggerForGoroutine()
+		return jasTask(threadId)
+	}
+	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(wrappedJasTask, func(taskErr error) {
 		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())

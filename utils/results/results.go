@@ -830,7 +830,6 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 		diffResults.Targets = append(diffResults.Targets, diffTarget)
 	}
 
-	log.Info("[DIFF] JAS diff calculation completed with", len(diffResults.Targets), "diff targets")
 	return diffResults
 }
 
@@ -878,6 +877,16 @@ func applyAmDiffLogicAgainstAll(allTargetJasResults []*JasScansResults, sourceJa
 
 	log.Debug("[DIFF-AM] Built target fingerprint set with", len(targetKeys), "unique keys")
 
+	// Count source results before filtering
+	sourceSecrets := countSarifResults(sourceJasResults.JasVulnerabilities.SecretsScanResults) +
+		countSarifResults(sourceJasResults.JasViolations.SecretsScanResults)
+	sourceIac := countSarifResults(sourceJasResults.JasVulnerabilities.IacScanResults) +
+		countSarifResults(sourceJasResults.JasViolations.IacScanResults)
+	sourceSast := countSarifResults(sourceJasResults.JasVulnerabilities.SastScanResults) +
+		countSarifResults(sourceJasResults.JasViolations.SastScanResults)
+
+	log.Debug("[DIFF] Source findings before diff - Secrets:", sourceSecrets, "| IaC:", sourceIac, "| SAST:", sourceSast)
+
 	// Filter source results - keep only what's NOT in target
 	filteredJasResults := &JasScansResults{}
 
@@ -897,7 +906,29 @@ func applyAmDiffLogicAgainstAll(allTargetJasResults []*JasScansResults, sourceJa
 	filteredJasResults.JasViolations.SastScanResults = filterSarifRuns(
 		sourceJasResults.JasViolations.SastScanResults, targetKeys)
 
+	// Count filtered results after diff
+	diffSecrets := countSarifResults(filteredJasResults.JasVulnerabilities.SecretsScanResults) +
+		countSarifResults(filteredJasResults.JasViolations.SecretsScanResults)
+	diffIac := countSarifResults(filteredJasResults.JasVulnerabilities.IacScanResults) +
+		countSarifResults(filteredJasResults.JasViolations.IacScanResults)
+	diffSast := countSarifResults(filteredJasResults.JasVulnerabilities.SastScanResults) +
+		countSarifResults(filteredJasResults.JasViolations.SastScanResults)
+
+	log.Info("[DIFF] New findings after diff - Secrets:", diffSecrets, "| IaC:", diffIac, "| SAST:", diffSast)
+	log.Info("[DIFF] Filtered out - Secrets:", sourceSecrets-diffSecrets, "| IaC:", sourceIac-diffIac, "| SAST:", sourceSast-diffSast)
+
 	return filteredJasResults
+}
+
+// countSarifResults counts total results across all SARIF runs
+func countSarifResults(runs []*sarif.Run) int {
+	count := 0
+	for _, run := range runs {
+		if run != nil {
+			count += len(run.Results)
+		}
+	}
+	return count
 }
 
 // extractFingerprints extracts fingerprints from SARIF run (for SAST)

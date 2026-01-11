@@ -5,7 +5,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -82,11 +81,10 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
-	solutionFilePath                 string
-	// Logger allows callers to provide a custom logger for this audit.
-	// If set, CLI will use this logger instead of the global logger during the scan.
-	// This enables log separation for parallel scans.
-	logger log.Log
+	solutionFilePath string
+	// logCollector provides isolated log capture for this audit.
+	// When set, all logs from this audit are captured in the collector's buffer.
+	logCollector *LogCollector
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -348,15 +346,15 @@ func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *Audit
 	return abp
 }
 
-// SetLogger sets a custom logger for this audit.
-// If set, CLI will temporarily swap the global logger during the scan,
-// enabling log separation for parallel scans.
-func (abp *AuditBasicParams) SetLogger(logger log.Log) *AuditBasicParams {
-	abp.logger = logger
+// SetLogCollector sets a log collector for isolated log capture.
+// When set, all logs from this audit will be captured in the collector's buffer,
+// enabling parallel audits to have completely isolated logs.
+func (abp *AuditBasicParams) SetLogCollector(collector *LogCollector) *AuditBasicParams {
+	abp.logCollector = collector
 	return abp
 }
 
-// GetLogger returns the custom logger, or nil if not set.
-func (abp *AuditBasicParams) GetLogger() log.Log {
-	return abp.logger
+// GetLogCollector returns the log collector, or nil if not set.
+func (abp *AuditBasicParams) GetLogCollector() *LogCollector {
+	return abp.logCollector
 }
