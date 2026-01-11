@@ -1,0 +1,8 @@
+rootProject.name = 'services'
+include 'webservice'
+
+include ':shared'
+project(':shared').projectDir=file("$rootDir/../shared")
+
+include ':api'
+project(':api').projectDir=file("$rootDir/../api")
