@@ -294,7 +294,6 @@ var flagsMap = map[string]components.Flag{
 	UseIncludedBuilds: components.NewBoolFlag(
 		UseIncludedBuilds,
 		"[Gradle] Set to true if you'd like to take into account included builds (composite builds) of gradle projects, in addition to including subprojects",
-		components.WithBoolDefaultValue(false),
 	),
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),

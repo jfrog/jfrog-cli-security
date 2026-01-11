@@ -3,6 +3,9 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
+
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
@@ -12,8 +15,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
@@ -228,11 +229,11 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Java params
 		IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
 		UseWrapper:              params.UseWrapper(),
+		UseIncludedBuilds:       params.UseIncludedBuilds(),
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
-		MaxTreeDepth:      params.MaxTreeDepth(),
-		UseIncludedBuilds: params.UseIncludedBuilds(),
+		MaxTreeDepth: params.MaxTreeDepth(),
 	}
 	return
 }
