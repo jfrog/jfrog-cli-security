@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -84,15 +85,16 @@ const (
 	InsecureTls = "insecure-tls"
 
 	// Generic command flags
-	SpecFlag    = "spec"
-	Threads     = "threads"
-	Recursive   = "recursive"
-	RegexpFlag  = "regexp"
-	AntFlag     = "ant"
-	Project     = "project"
-	Exclusions  = "exclusions"
-	IncludeDirs = "include-dirs"
-	UseWrapper  = "use-wrapper"
+	SpecFlag          = "spec"
+	Threads           = "threads"
+	Recursive         = "recursive"
+	RegexpFlag        = "regexp"
+	AntFlag           = "ant"
+	Project           = "project"
+	Exclusions        = "exclusions"
+	IncludeDirs       = "include-dirs"
+	UseWrapper        = "use-wrapper"
+	UseIncludedBuilds = "use-included-builds"
 )
 
 const (
@@ -193,7 +195,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -212,7 +214,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath, DockerImageName,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -288,6 +290,10 @@ var flagsMap = map[string]components.Flag{
 		UseWrapper,
 		"[Gradle, Maven] Set to true if you'd like to use the Gradle or Maven wrapper.",
 		components.WithBoolDefaultValue(true),
+	),
+	UseIncludedBuilds: components.NewBoolFlag(
+		UseIncludedBuilds,
+		"[Gradle] Set to true if you'd like to take into account included builds (composite builds) of gradle projects, in addition to including subprojects",
 	),
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
