@@ -84,7 +84,7 @@ func TestGetDiff(t *testing.T) {
 						Sbom: &cyclonedx.BOM{
 							Components: &[]cyclonedx.Component{
 								{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "root", Version: "1.0"},
-								{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component1", Version: "1.0"},
+								{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component1", PackageURL: "pkg:component1", Version: "1.0"},
 							},
 							Dependencies: &[]cyclonedx.Dependency{
 								{Ref: "root", Dependencies: &[]string{"component1"}},
@@ -96,8 +96,8 @@ func TestGetDiff(t *testing.T) {
 			sbom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "root", Version: "1.0"},
-					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component1", Version: "1.0"},
-					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component2", Version: "2.0"},
+					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component1", PackageURL: "pkg:component1", Version: "1.0"},
+					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component2", PackageURL: "pkg:component2", Version: "2.0"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"component1", "component2"}},
@@ -107,7 +107,7 @@ func TestGetDiff(t *testing.T) {
 			expectedSbom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "root", Version: "1.0"},
-					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component2", Version: "2.0"},
+					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component2", PackageURL: "pkg:component2", Version: "2.0"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"component2"}},

@@ -36,10 +36,11 @@ type ScanSummary struct {
 }
 
 type ScanResultSummary struct {
-	ScaResults     *ScaScanResultSummary `json:"sca,omitempty"`
-	IacResults     *ResultSummary        `json:"iac,omitempty"`
-	SecretsResults *ResultSummary        `json:"secrets,omitempty"`
-	SastResults    *ResultSummary        `json:"sast,omitempty"`
+	ScaResults       *ScaScanResultSummary `json:"sca,omitempty"`
+	IacResults       *ResultSummary        `json:"iac,omitempty"`
+	SecretsResults   *ResultSummary        `json:"secrets,omitempty"`
+	SastResults      *ResultSummary        `json:"sast,omitempty"`
+	MaliciousResults *ResultSummary        `json:"maliciousCode,omitempty"`
 }
 
 type ScanViolationsSummary struct {

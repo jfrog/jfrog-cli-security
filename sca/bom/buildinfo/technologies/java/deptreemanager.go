@@ -31,16 +31,18 @@ type DepTreeParams struct {
 	IsMavenDepTreeInstalled bool
 	IsCurationCmd           bool
 	CurationCacheFolder     string
+	UseIncludedBuilds       bool
 }
 
 type DepTreeManager struct {
-	server     *config.ServerDetails
-	depsRepo   string
-	useWrapper bool
+	server            *config.ServerDetails
+	depsRepo          string
+	useWrapper        bool
+	useIncludedBuilds bool
 }
 
 func NewDepTreeManager(params *DepTreeParams) DepTreeManager {
-	return DepTreeManager{useWrapper: params.UseWrapper, depsRepo: params.DepsRepo, server: params.Server}
+	return DepTreeManager{useWrapper: params.UseWrapper, depsRepo: params.DepsRepo, server: params.Server, useIncludedBuilds: params.UseIncludedBuilds}
 }
 
 // The structure of a dependency tree of a module in a Gradle/Maven project, as created by the gradle-dep-tree and maven-dep-tree plugins.
@@ -78,10 +80,13 @@ func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, 
 			childId := GavPackageTypeIdentifier + childName
 			childrenList = append(childrenList, childId)
 		}
+
 		moduleTreeMap[dependencyId] = xray.DepTreeNode{
-			Classifier: dependency.Classifier,
-			Types:      dependency.Types,
-			Children:   childrenList,
+			Classifier:     dependency.Classifier,
+			Types:          dependency.Types,
+			Children:       childrenList,
+			Unresolved:     dependency.Unresolved,
+			Configurations: dependency.Configurations,
 		}
 	}
 	return xray.BuildXrayDependencyTree(moduleTreeMap, GavPackageTypeIdentifier+module.Root)

@@ -23,7 +23,7 @@ import (
 
 const (
 	xrayLibPluginVersionEnvVariable = "JFROG_CLI_XRAY_LIB_PLUGIN_VERSION"
-	defaultXrayLibPluginVersion     = "0.0.3-19"
+	defaultXrayLibPluginVersion     = "0.0.3-29"
 
 	xrayLibPluginRtRepository   = "xray-scan-lib"
 	XrayLibPluginExecutableName = "xray-scan-plugin"

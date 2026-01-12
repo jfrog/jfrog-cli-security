@@ -21,6 +21,7 @@ const (
 	Secrets       JasScanType = "Secrets"
 	IaC           JasScanType = "IaC"
 	Sast          JasScanType = "Sast"
+	MaliciousCode JasScanType = "MaliciousCode"
 )
 
 const (
@@ -40,7 +41,7 @@ func (jst JasScanType) String() string {
 }
 
 func GetJasScanTypes() []JasScanType {
-	return []JasScanType{Applicability, Secrets, IaC, Sast}
+	return []JasScanType{Applicability, Secrets, IaC, Sast, MaliciousCode}
 }
 
 func (tvs TokenValidationStatus) String() string { return string(tvs) }
@@ -97,6 +98,8 @@ func SubScanTypeToJasScanType(subScanType utils.SubScanType) JasScanType {
 		return Secrets
 	case utils.ContextualAnalysisScan:
 		return Applicability
+	case utils.MaliciousCodeScan:
+		return MaliciousCode
 	}
 	return ""
 }

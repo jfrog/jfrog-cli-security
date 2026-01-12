@@ -182,8 +182,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		if len(auditCmd.workingDirs) > 1 {
 			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
-	} else {
-		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
+		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
+		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(auditCmd.workingDirs) == 0
 	}
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
@@ -242,7 +243,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-
+	log.Info("####### jf audit Scan Finished #######")
 	return OutputResultsAndCmdError(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
 }
 
