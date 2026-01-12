@@ -82,6 +82,7 @@ type AuditBasicParams struct {
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
 	solutionFilePath                 string
+	useIncludedBuilds                bool
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -340,5 +341,12 @@ func (abp *AuditBasicParams) SolutionFilePath() string {
 
 func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
 	abp.solutionFilePath = solutionFilePath
+	return abp
+}
+
+func (abp *AuditBasicParams) UseIncludedBuilds() bool { return abp.useIncludedBuilds }
+
+func (abp *AuditBasicParams) SetUseIncludedBuilds(useIncludedBuilds bool) *AuditBasicParams {
+	abp.useIncludedBuilds = useIncludedBuilds
 	return abp
 }
