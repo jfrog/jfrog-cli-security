@@ -3,6 +3,7 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -35,12 +36,22 @@ type dockerManifestList struct {
 }
 
 var (
-	jfrogSubdomainPattern = regexp.MustCompile(`^([a-zA-Z0-9]+)-([a-zA-Z0-9-]+)\.jfrog\.io$`)
-	ipAddressPattern      = regexp.MustCompile(`^\d+\.`)
-	hexDigestPattern      = regexp.MustCompile(`[a-fA-F0-9]{64}`)
+	hexDigestPattern = regexp.MustCompile(`[a-fA-F0-9]{64}`)
 )
 
-func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
+// getArtifactoryHostPort extracts the host and port from the configured Artifactory URL.
+// e.g., "https://myinstance.jfrog.io/artifactory" -> "myinstance.jfrog.io", ""
+// e.g., "http://177.111.1.100:8082/artifactory" -> "192.168.1.100", "8082"
+func getArtifactoryHostPort(artifactoryUrl string) (host, port string) {
+	parsed, err := url.Parse(artifactoryUrl)
+	if err != nil || parsed.Host == "" {
+		return "", ""
+	}
+	return splitHostPort(parsed.Host)
+}
+
+// ParseDockerImageWithArtifactoryUrl parses a Docker image name and extracts repo based on Artifactory URL.
+func ParseDockerImageWithArtifactoryUrl(imageName, url string) (*DockerImageInfo, error) {
 	imageName = strings.TrimSpace(imageName)
 	info := &DockerImageInfo{Tag: "latest"}
 	if idx := strings.LastIndex(imageName, ":"); idx > 0 {
@@ -57,7 +68,9 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	}
 
 	info.Registry = parts[0]
-	info.Repo, info.Image = parseRegistryAndExtract(info.Registry, parts[1])
+	remaining := parts[1]
+
+	info.Repo, info.Image = parseWithArtifactoryUrl(info.Registry, remaining, url)
 
 	log.Debug(fmt.Sprintf("Parsed Docker image - Registry: %s, Repo: %s, Image: %s, Tag: %s",
 		info.Registry, info.Repo, info.Image, info.Tag))
@@ -65,35 +78,71 @@ func ParseDockerImage(imageName string) (*DockerImageInfo, error) {
 	return info, nil
 }
 
-func parseRegistryAndExtract(registry string, remaining string) (repo, image string) {
-	image = remaining
+// parseWithArtifactoryUrl determines Docker access method by comparing registry with Artifactory URL.
+func parseWithArtifactoryUrl(registry, remaining, url string) (repo, image string) {
+	artifactoryHost, artifactoryPort := getArtifactoryHostPort(url)
 
-	// SaaS subdomain: <INSTANCE>-<REPO>.jfrog.io/image:tag (repo in subdomain, check first)
-	if matches := jfrogSubdomainPattern.FindStringSubmatch(registry); len(matches) > 2 {
-		repo = matches[2]
-		return
+	registryHost, registryPort := splitHostPort(registry)
+
+	isSaaS := strings.HasSuffix(artifactoryHost, ".jfrog.io") || strings.HasSuffix(artifactoryHost, ".jfrogdev.org")
+
+	if repo = extractSubdomainRepo(registryHost, artifactoryHost, isSaaS); repo != "" {
+		log.Debug(fmt.Sprintf("Subdomain method detected (repo=%s)", repo))
+		return repo, remaining
+	}
+	if registryPort != "" && registryHost == artifactoryHost && registryPort != artifactoryPort {
+		log.Debug(fmt.Sprintf("Port method detected (repo=%s)", registryPort))
+		return registryPort, remaining
 	}
 
-	// Subdomain pattern: <REPO>.<DOMAIN>/image:tag (repo in subdomain, not IP, check first)
-	registryParts := strings.Split(registry, ".")
-	if len(registryParts) >= 3 && !strings.HasSuffix(registry, ".jfrog.io") && !ipAddressPattern.MatchString(registry) {
-		repo = registryParts[0]
+	if registryHost == artifactoryHost {
+		log.Debug("Repository Path method detected")
+		return extractRepoFromPath(remaining)
+	}
+	log.Debug("Using Repository Path extraction")
+	return extractRepoFromPath(remaining)
+}
+
+func splitHostPort(registry string) (host, port string) {
+	if idx := strings.LastIndex(registry, ":"); idx > 0 {
+		return registry[:idx], registry[idx+1:]
+	}
+	return registry, ""
+}
+
+// extractSubdomainRepo extracts repo from subdomain based on platform type.
+// SaaS: <instance>-<repo>.<domain> → repo is after hyphen
+// Self-hosted: <repo>.<baseDomain> → repo is prepended subdomain
+func extractSubdomainRepo(registryHost, baseDomain string, isSaaS bool) string {
+	if isSaaS {
+		// SaaS pattern: <instance>-<repo>.<domain>
+		baseParts := strings.SplitN(baseDomain, ".", 2)
+		if len(baseParts) != 2 {
+			return ""
+		}
+		instance, domainSuffix := baseParts[0], baseParts[1]
+		expectedSuffix := "." + domainSuffix
+
+		if strings.HasSuffix(registryHost, expectedSuffix) {
+			prefix := strings.TrimSuffix(registryHost, expectedSuffix)
+			if strings.HasPrefix(prefix, instance+"-") && prefix != instance {
+				return strings.TrimPrefix(prefix, instance+"-")
+			}
+		}
+	} else if strings.HasSuffix(registryHost, "."+baseDomain) {
+		// Self-hosted pattern: <repo>.<baseDomain>
+		return strings.TrimSuffix(registryHost, "."+baseDomain)
+	}
+	return ""
+}
+
+// extractRepoFromPath extracts repo as first segment if path contains "/"
+func extractRepoFromPath(path string) (repo, image string) {
+	if strings.Contains(path, "/") {
+		repo, image, _ = strings.Cut(path, "/")
 		return
 	}
-
-	// Repository path: <REGISTRY>/<REPO>/image:tag (repo in path if contains /)
-	if strings.Contains(remaining, "/") {
-		repo, image, _ = strings.Cut(remaining, "/")
-		return
-	}
-
-	// Port method: <INSTANCE>:<PORT>/image:tag (port IS the repo, single part only)
-	if strings.Contains(registry, ":") {
-		_, repo, _ = strings.Cut(registry, ":")
-		return
-	}
-
-	return "", ""
+	return "", path
 }
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xrayUtils.GraphNode, []string, error) {
@@ -101,7 +150,15 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) ([]*xr
 		return nil, nil, fmt.Errorf("docker image name is required")
 	}
 
-	imageInfo, err := ParseDockerImage(params.DockerImageName)
+	serverDetails, err := config.GetDefaultServerConf()
+	if err != nil {
+		return nil, nil, err
+	}
+	if serverDetails == nil {
+		return nil, nil, fmt.Errorf("no Artifactory server configured. Use 'jf c add' to configure a server")
+	}
+
+	imageInfo, err := ParseDockerImageWithArtifactoryUrl(params.DockerImageName, serverDetails.Url)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -194,12 +251,14 @@ func extractDigestFromBlockedMessage(output string) string {
 }
 
 func GetDockerRepositoryConfig(imageName string) (*project.RepositoryConfig, error) {
-	imageInfo, err := ParseDockerImage(imageName)
+	serverDetails, err := config.GetDefaultServerConf()
 	if err != nil {
 		return nil, err
 	}
-
-	serverDetails, err := config.GetDefaultServerConf()
+	if serverDetails == nil {
+		return nil, fmt.Errorf("no Artifactory server configured. Use 'jf c add' to configure a server")
+	}
+	imageInfo, err := ParseDockerImageWithArtifactoryUrl(imageName, serverDetails.Url)
 	if err != nil {
 		return nil, err
 	}
