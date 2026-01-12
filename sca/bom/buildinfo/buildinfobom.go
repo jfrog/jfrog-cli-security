@@ -196,6 +196,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 			UseWrapper:              params.UseWrapper,
 			IsCurationCmd:           params.IsCurationCmd,
 			CurationCacheFolder:     curationCacheFolder,
+			UseIncludedBuilds:       params.UseIncludedBuilds,
 		}, tech)
 	case techutils.Npm:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = npm.BuildDependencyTree(params)

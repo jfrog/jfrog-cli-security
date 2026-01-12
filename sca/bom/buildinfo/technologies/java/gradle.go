@@ -163,7 +163,8 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		"-q",
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
-		"-Dcom.jfrog.includeAllBuildFiles=true"}
+		"-Dcom.jfrog.includeAllBuildFiles=true",
+		fmt.Sprintf("-Dcom.jfrog.includeIncludedBuilds=%t", gdt.useIncludedBuilds)}
 
 	// Add curation audit mode for pass-through functionality if this is a curation command
 	if gdt.isCurationCmd {
