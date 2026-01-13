@@ -73,7 +73,6 @@ func RunScaScan(strategy SbomScanStrategy, params ScaScanParams) (generalError e
 // For Audit scans, we run the scan in parallel using the SecurityParallelRunner.
 func runScaScanWithRunner(strategy SbomScanStrategy, params ScaScanParams) (generalError error) {
 	targetResult := params.ScanResults
-	// Capture current logger to propagate to child goroutine
 	currentLogger := log.GetLogger()
 	scaTask := createScaScanTaskWithRunner(params.Runner, strategy, params)
 	wrappedScaTask := func(threadId int) error {

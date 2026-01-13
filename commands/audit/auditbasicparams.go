@@ -346,15 +346,11 @@ func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *Audit
 	return abp
 }
 
-// SetLogCollector sets a log collector for isolated log capture.
-// When set, all logs from this audit will be captured in the collector's buffer,
-// enabling parallel audits to have completely isolated logs.
 func (abp *AuditBasicParams) SetLogCollector(collector *LogCollector) *AuditBasicParams {
 	abp.logCollector = collector
 	return abp
 }
 
-// GetLogCollector returns the log collector, or nil if not set.
 func (abp *AuditBasicParams) GetLogCollector() *LogCollector {
 	return abp.logCollector
 }

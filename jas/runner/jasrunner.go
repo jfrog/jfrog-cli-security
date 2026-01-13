@@ -129,10 +129,8 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 
 func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
-	// Capture the current logger to propagate to child goroutine
 	currentLogger := log.GetLogger()
 	wrappedTask := func(threadId int) error {
-		// Propagate the parent's logger to this child goroutine
 		log.SetLoggerForGoroutine(currentLogger)
 		defer log.ClearLoggerForGoroutine()
 		return task(threadId)

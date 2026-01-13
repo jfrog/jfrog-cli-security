@@ -291,8 +291,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	// Set up isolated logging for this audit if a log collector is provided.
-	// This enables completely isolated log capture for parallel audits.
+	// Set up isolated logging if a log collector is provided
 	if collector := auditParams.GetLogCollector(); collector != nil {
 		log.SetLoggerForGoroutine(collector.Logger())
 		defer log.ClearLoggerForGoroutine()
@@ -628,7 +627,6 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	// Capture current logger to propagate to child goroutine
 	currentLogger := log.GetLogger()
 	jasTask := createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner)
 	wrappedJasTask := func(threadId int) error {
