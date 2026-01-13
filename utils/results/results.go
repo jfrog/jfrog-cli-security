@@ -734,12 +734,7 @@ func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) 
 	return false
 }
 
-// =============================================================================
-// Parallel PR Scanning Functions
-// These functions support running SCA and JAS scans in parallel for PR scanning
-// =============================================================================
-
-// UnifyScaAndJasResults merges SCA results and JAS diff results into a single SecurityCommandResults
+// UnifyScaAndJasResults merges SCA and JAS diff results into a single SecurityCommandResults.
 func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *SecurityCommandResults {
 	// Create unified results based on JAS diff structure
 	unifiedResults := &SecurityCommandResults{
@@ -785,8 +780,8 @@ func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *
 	return unifiedResults
 }
 
-// CompareJasResults computes the diff between target and source JAS results
-// Returns only the NEW findings in source that don't exist in target
+// CompareJasResults computes the diff between target and source JAS results.
+// Returns only NEW findings in source that don't exist in target.
 func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *SecurityCommandResults {
 	log.Info("[DIFF] Starting JAS diff calculation")
 	log.Debug("[DIFF] Comparing", len(sourceResults.Targets), "source targets against", len(targetResults.Targets), "target targets")
@@ -819,8 +814,7 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 			}
 		}
 
-		// Apply diff logic against all collected targets
-		diffJasResults := applyAmDiffLogicAgainstAll(allTargetJasResults, sourceTarget.JasResults)
+		diffJasResults := filterExistingFindings(allTargetJasResults, sourceTarget.JasResults)
 
 		diffTarget := &TargetResults{
 			ScanTarget: sourceTarget.ScanTarget,
@@ -833,8 +827,8 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 	return diffResults
 }
 
-// applyAmDiffLogicAgainstAll applies the Analyzer Manager's diff logic against all target results
-func applyAmDiffLogicAgainstAll(allTargetJasResults []*JasScansResults, sourceJasResults *JasScansResults) *JasScansResults {
+// filterExistingFindings removes findings from source that already exist in target.
+func filterExistingFindings(allTargetJasResults []*JasScansResults, sourceJasResults *JasScansResults) *JasScansResults {
 	if sourceJasResults == nil {
 		return nil
 	}
@@ -875,7 +869,7 @@ func applyAmDiffLogicAgainstAll(allTargetJasResults []*JasScansResults, sourceJa
 		}
 	}
 
-	log.Debug("[DIFF-AM] Built target fingerprint set with", len(targetKeys), "unique keys")
+	log.Debug("[DIFF] Built target fingerprint set with", len(targetKeys), "unique keys")
 
 	// Count source results before filtering
 	sourceSecrets := countSarifResults(sourceJasResults.JasVulnerabilities.SecretsScanResults) +
