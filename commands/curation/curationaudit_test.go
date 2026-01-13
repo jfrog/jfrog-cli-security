@@ -1187,6 +1187,62 @@ func Test_getGemNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func Test_getDockerNameAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "Basic docker image with tag",
+			id:               "docker://nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
+			wantName:         "nginx",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with registry prefix",
+			id:               "docker://registry.example.com/nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/registry.example.com/nginx/manifests/1.21.0"},
+			wantName:         "registry.example.com/nginx",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with sha256 digest",
+			id:               "docker://nginx:sha256:abc123def456",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/sha256:abc123def456"},
+			wantName:         "nginx",
+			wantVersion:      "sha256:abc123def456",
+		},
+		{
+			name:             "Docker image without version defaults to latest",
+			id:               "docker://nginx",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/latest"},
+			wantName:         "nginx",
+			wantVersion:      "latest",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getDockerNameAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string

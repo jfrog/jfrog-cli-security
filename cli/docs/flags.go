@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -25,6 +26,7 @@ const (
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
+	MaliciousScan        = "malicious-scan"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -83,15 +85,16 @@ const (
 	InsecureTls = "insecure-tls"
 
 	// Generic command flags
-	SpecFlag    = "spec"
-	Threads     = "threads"
-	Recursive   = "recursive"
-	RegexpFlag  = "regexp"
-	AntFlag     = "ant"
-	Project     = "project"
-	Exclusions  = "exclusions"
-	IncludeDirs = "include-dirs"
-	UseWrapper  = "use-wrapper"
+	SpecFlag          = "spec"
+	Threads           = "threads"
+	Recursive         = "recursive"
+	RegexpFlag        = "regexp"
+	AntFlag           = "ant"
+	Project           = "project"
+	Exclusions        = "exclusions"
+	IncludeDirs       = "include-dirs"
+	UseWrapper        = "use-wrapper"
+	UseIncludedBuilds = "use-included-builds"
 )
 
 const (
@@ -129,6 +132,7 @@ const (
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
 	StaticSca           = "static-sca"
+	malProjectKey       = Project
 	scanProjectKey      = scanPrefix + Project
 	uploadProjectKey    = UploadCdx + "-" + Project
 
@@ -149,8 +153,9 @@ const (
 	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
 	// Unique curation flags
-	CurationOutput = "curation-format"
-	SolutionPath   = "solution-path"
+	CurationOutput  = "curation-format"
+	DockerImageName = "image"
+	SolutionPath    = "solution-path"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -175,6 +180,9 @@ var commandFlags = map[string][]string{
 	Enrich: {
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
 	},
+	MaliciousScan: {
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs, malProjectKey,
+	},
 	BuildScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
@@ -187,7 +195,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -206,7 +214,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -256,6 +264,7 @@ var flagsMap = map[string]components.Flag{
 	scanRegexp:       components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
 	scanAnt:          components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
 	scanProjectKey:   components.NewStringFlag(Project, "JFrog project key, to enable Xray to determine security violations accordingly. The command accepts this option only if the --repo-path and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	malProjectKey:    components.NewStringFlag(Project, "JFrog project key"),
 	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
 	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs, operational risk, and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
@@ -281,6 +290,10 @@ var flagsMap = map[string]components.Flag{
 		UseWrapper,
 		"[Gradle, Maven] Set to true if you'd like to use the Gradle or Maven wrapper.",
 		components.WithBoolDefaultValue(true),
+	),
+	UseIncludedBuilds: components.NewBoolFlag(
+		UseIncludedBuilds,
+		"[Gradle] Set to true if you'd like to take into account included builds (composite builds) of gradle projects, in addition to including subprojects",
 	),
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
@@ -329,6 +342,9 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+
+	// Docker flags
+	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

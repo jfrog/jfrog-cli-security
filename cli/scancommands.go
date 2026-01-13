@@ -18,9 +18,11 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
@@ -30,16 +32,18 @@ import (
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/maliciousscan"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 
@@ -71,6 +75,15 @@ func getAuditAndScansCommands() []components.Command {
 			Arguments:   enrichDocs.GetArguments(),
 			Category:    securityCategory,
 			Action:      EnrichCmd,
+		},
+		{
+			Name:        "malicious-scan",
+			Aliases:     []string{"ms"},
+			Flags:       flags.GetCommandFlags(flags.MaliciousScan),
+			Description: maliciousScanDocs.GetDescription(),
+			Arguments:   maliciousScanDocs.GetArguments(),
+			Category:    securityCategory,
+			Action:      MaliciousScanCmd,
 		},
 		{
 			Name:        "build-scan",
@@ -228,6 +241,43 @@ func EnrichCmd(c *components.Context) error {
 		SetThreads(threads).
 		SetSpec(specFile)
 	return commandsCommon.Exec(EnrichCmd)
+}
+
+func MaliciousScanCmd(c *components.Context) error {
+	serverDetails, err := CreateServerDetailsFromFlags(c)
+	if err != nil {
+		return err
+	}
+	if err = validateConnectionInputs(serverDetails); err != nil {
+		return err
+	}
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return err
+	}
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	minSeverity, err := getMinimumSeverity(c)
+	if err != nil {
+		return err
+	}
+	workingDirs := []string{}
+	if c.GetStringFlagValue(flags.WorkingDirs) != "" {
+		workingDirs = splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs))
+	}
+	maliciousScanCmd := maliciousscan.NewMaliciousScanCommand().
+		SetServerDetails(serverDetails).
+		SetWorkingDirs(workingDirs).
+		SetThreads(threads).
+		SetOutputFormat(format).
+		SetMinSeverityFilter(minSeverity).
+		SetProject(getProject(c))
+	if c.IsFlagSet(flags.AnalyzerManagerCustomPath) {
+		maliciousScanCmd.SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
+	}
+	return commandsCommon.Exec(maliciousScanCmd)
 }
 
 func ScanCmd(c *components.Context) error {
@@ -433,7 +483,6 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, auditCmd.GetProjectKey(), progressbar.ExecWithProgress(auditCmd))
-	log.Info("####### jf audit Scan Finished #######")
 	return err
 }
 
@@ -507,7 +556,8 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
-		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
+		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions)).
+		SetUseIncludedBuilds(c.GetBoolFlagValue(flags.UseIncludedBuilds))
 	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
 
@@ -645,10 +695,12 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
+		SetUseIncludedBuilds(c.GetBoolFlagValue(flags.UseIncludedBuilds)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
+	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	return curationAuditCommand, nil
 }
 

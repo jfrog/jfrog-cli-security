@@ -99,7 +99,6 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		return
 	}
 	if params.ConfigProfile != nil {
-		// This code section is related to CentralizedConfig integration in CI Next.
 		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
 		enabled := false
 		switch jasType {

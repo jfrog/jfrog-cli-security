@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 
 	"github.com/stretchr/testify/assert"
@@ -78,6 +79,30 @@ func TestGradleTreesWithConfig(t *testing.T) {
 	if assert.NoError(t, err) && assert.NotNil(t, modulesDependencyTrees) {
 		assert.Len(t, modulesDependencyTrees, 5)
 		assert.Len(t, uniqueDeps, 11)
+		// Check module
+		module := tests.GetAndAssertNode(t, modulesDependencyTrees, "org.jfrog.test.gradle.publish:api:1.0-SNAPSHOT")
+		assert.Len(t, module.Nodes, 4)
+
+		// Check direct dependency
+		directDependency := tests.GetAndAssertNode(t, module.Nodes, "commons-lang:commons-lang:2.4")
+		assert.Len(t, directDependency.Nodes, 1)
+
+		// Check transitive dependency
+		tests.GetAndAssertNode(t, directDependency.Nodes, "commons-io:commons-io:1.2")
+	}
+}
+
+func TestGradleTreesWithConfig_UsingIncludedBuilds(t *testing.T) {
+	// Create and change directory to test workspace
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle-example-included-builds"))
+	defer cleanUp()
+	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+
+	// Run getModulesDependencyTrees
+	modulesDependencyTrees, uniqueDeps, err := buildGradleDependencyTree(&DepTreeParams{UseWrapper: true, UseIncludedBuilds: true})
+	if assert.NoError(t, err) && assert.NotNil(t, modulesDependencyTrees) {
+		assert.Len(t, modulesDependencyTrees, 4)
+		assert.Len(t, uniqueDeps, 10)
 		// Check module
 		module := tests.GetAndAssertNode(t, modulesDependencyTrees, "org.jfrog.test.gradle.publish:api:1.0-SNAPSHOT")
 		assert.Len(t, module.Nodes, 4)

@@ -60,6 +60,7 @@ type SpecificScannersExcludePatterns struct {
 	SastExcludePatterns               []string
 	SecretsExcludePatterns            []string
 	IacExcludePatterns                []string
+	MaliciousCodeExcludePatterns      []string
 }
 
 type JasScannerOption func(f *JasScanner) error
