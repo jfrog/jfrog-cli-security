@@ -487,7 +487,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(false, test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }
