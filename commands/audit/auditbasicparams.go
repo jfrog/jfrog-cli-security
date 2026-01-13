@@ -82,8 +82,6 @@ type AuditBasicParams struct {
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
 	solutionFilePath string
-	// logCollector provides isolated log capture for this audit.
-	// When set, all logs from this audit are captured in the collector's buffer.
 	logCollector *LogCollector
 }
 
