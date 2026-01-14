@@ -11,6 +11,11 @@ import (
 
 // UnifyScaAndJasResults merges SCA and JAS diff results into a single SecurityCommandResults.
 func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *SecurityCommandResults {
+	gitContext := scaResults.GitContext
+	if gitContext == nil {
+		gitContext = jasDiffResults.GitContext
+	}
+
 	unifiedResults := &SecurityCommandResults{
 		ResultsMetaData: ResultsMetaData{
 			EntitledForJas:   jasDiffResults.EntitledForJas,
@@ -21,6 +26,7 @@ func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *
 			MultiScanId:      jasDiffResults.MultiScanId,
 			StartTime:        jasDiffResults.StartTime,
 			ResultContext:    jasDiffResults.ResultContext,
+			GitContext:       gitContext,
 		},
 	}
 
