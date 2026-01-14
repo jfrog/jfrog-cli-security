@@ -37,11 +37,20 @@ func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *
 			ScanTarget:       scaTarget.ScanTarget,
 			AppsConfigModule: scaTarget.AppsConfigModule,
 			ScaResults:       scaTarget.ScaResults,
-			JasResults:       nil,
+			JasResults:       scaTarget.JasResults,
 		}
 
-		if jasTarget != nil {
-			unifiedTarget.JasResults = jasTarget.JasResults
+		if jasTarget != nil && jasTarget.JasResults != nil {
+			if unifiedTarget.JasResults == nil {
+				unifiedTarget.JasResults = jasTarget.JasResults
+			} else {
+				unifiedTarget.JasResults.JasVulnerabilities.SecretsScanResults = jasTarget.JasResults.JasVulnerabilities.SecretsScanResults
+				unifiedTarget.JasResults.JasVulnerabilities.IacScanResults = jasTarget.JasResults.JasVulnerabilities.IacScanResults
+				unifiedTarget.JasResults.JasVulnerabilities.SastScanResults = jasTarget.JasResults.JasVulnerabilities.SastScanResults
+				unifiedTarget.JasResults.JasViolations.SecretsScanResults = jasTarget.JasResults.JasViolations.SecretsScanResults
+				unifiedTarget.JasResults.JasViolations.IacScanResults = jasTarget.JasResults.JasViolations.IacScanResults
+				unifiedTarget.JasResults.JasViolations.SastScanResults = jasTarget.JasResults.JasViolations.SastScanResults
+			}
 		}
 
 		unifiedResults.Targets = append(unifiedResults.Targets, unifiedTarget)
