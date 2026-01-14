@@ -14,10 +14,6 @@ func strPtr(s string) *string {
 	return &s
 }
 
-func intPtr(i int) *int {
-	return &i
-}
-
 func TestFilterSarifRuns_LocationBased(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -551,93 +547,6 @@ func TestGetInvocationWorkingDirectory(t *testing.T) {
 			result := getInvocationWorkingDirectory(tc.invocation)
 			assert.Equal(t, tc.expected, result)
 		})
-	}
-}
-
-func TestMergeStatusCodes(t *testing.T) {
-	testCases := []struct {
-		name     string
-		target   ResultsStatus
-		source   ResultsStatus
-		expected ResultsStatus
-	}{
-		{
-			name:     "both nil",
-			target:   ResultsStatus{},
-			source:   ResultsStatus{},
-			expected: ResultsStatus{},
-		},
-		{
-			name:   "target has error, source nil",
-			target: ResultsStatus{ScaScanStatusCode: intPtr(1)},
-			source: ResultsStatus{},
-			expected: ResultsStatus{
-				ScaScanStatusCode: intPtr(1),
-			},
-		},
-		{
-			name:   "source has error, target nil",
-			target: ResultsStatus{},
-			source: ResultsStatus{ScaScanStatusCode: intPtr(1)},
-			expected: ResultsStatus{
-				ScaScanStatusCode: intPtr(1),
-			},
-		},
-		{
-			name:   "target has error, source zero",
-			target: ResultsStatus{ScaScanStatusCode: intPtr(1)},
-			source: ResultsStatus{ScaScanStatusCode: intPtr(0)},
-			expected: ResultsStatus{
-				ScaScanStatusCode: intPtr(1),
-			},
-		},
-		{
-			name:   "target zero, source has error",
-			target: ResultsStatus{ScaScanStatusCode: intPtr(0)},
-			source: ResultsStatus{ScaScanStatusCode: intPtr(1)},
-			expected: ResultsStatus{
-				ScaScanStatusCode: intPtr(1),
-			},
-		},
-		{
-			name: "multiple fields",
-			target: ResultsStatus{
-				ScaScanStatusCode:     intPtr(1),
-				SecretsScanStatusCode: intPtr(0),
-			},
-			source: ResultsStatus{
-				ScaScanStatusCode:     intPtr(0),
-				SecretsScanStatusCode: intPtr(2),
-				IacScanStatusCode:     intPtr(3),
-			},
-			expected: ResultsStatus{
-				ScaScanStatusCode:     intPtr(1),
-				SecretsScanStatusCode: intPtr(2),
-				IacScanStatusCode:     intPtr(3),
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := MergeStatusCodes(tc.target, tc.source)
-
-			assertStatusCodeEqual(t, tc.expected.ScaScanStatusCode, result.ScaScanStatusCode, "ScaScanStatusCode")
-			assertStatusCodeEqual(t, tc.expected.SecretsScanStatusCode, result.SecretsScanStatusCode, "SecretsScanStatusCode")
-			assertStatusCodeEqual(t, tc.expected.IacScanStatusCode, result.IacScanStatusCode, "IacScanStatusCode")
-			assertStatusCodeEqual(t, tc.expected.SastScanStatusCode, result.SastScanStatusCode, "SastScanStatusCode")
-		})
-	}
-}
-
-func assertStatusCodeEqual(t *testing.T, expected, actual *int, field string) {
-	if expected == nil {
-		assert.Nil(t, actual, field+" should be nil")
-	} else {
-		assert.NotNil(t, actual, field+" should not be nil")
-		if actual != nil {
-			assert.Equal(t, *expected, *actual, field)
-		}
 	}
 }
 

@@ -261,32 +261,6 @@ func extractRelativePath(resultPath string, projectRoot string) string {
 	return strings.TrimPrefix(trimSlash, "/")
 }
 
-// MergeStatusCodes merges two ResultsStatus, taking the worst (non-zero) status for each scanner.
-func MergeStatusCodes(target, source ResultsStatus) ResultsStatus {
-	merged := ResultsStatus{}
-	merged.SbomScanStatusCode = mergeStatusCode(target.SbomScanStatusCode, source.SbomScanStatusCode)
-	merged.ScaScanStatusCode = mergeStatusCode(target.ScaScanStatusCode, source.ScaScanStatusCode)
-	merged.ContextualAnalysisStatusCode = mergeStatusCode(target.ContextualAnalysisStatusCode, source.ContextualAnalysisStatusCode)
-	merged.SecretsScanStatusCode = mergeStatusCode(target.SecretsScanStatusCode, source.SecretsScanStatusCode)
-	merged.IacScanStatusCode = mergeStatusCode(target.IacScanStatusCode, source.IacScanStatusCode)
-	merged.SastScanStatusCode = mergeStatusCode(target.SastScanStatusCode, source.SastScanStatusCode)
-	merged.ViolationsStatusCode = mergeStatusCode(target.ViolationsStatusCode, source.ViolationsStatusCode)
-	return merged
-}
-
-func mergeStatusCode(a, b *int) *int {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	if *a != 0 {
-		return a
-	}
-	return b
-}
-
 func filterSarifRuns(sourceRuns []*sarif.Run, targetKeys map[string]bool) []*sarif.Run {
 	var filteredRuns []*sarif.Run
 
