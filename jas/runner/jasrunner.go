@@ -128,12 +128,8 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 
 func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
-	currentLogger := log.GetLogger()
-	wrappedTask := func(threadId int) error {
-		log.SetLoggerForGoroutine(currentLogger)
-		defer log.ClearLoggerForGoroutine()
-		return task(threadId)
-	}
+	// Wrap task to propagate logger to worker goroutines (for isolated parallel logging)
+	wrappedTask := utils.WrapTaskWithLoggerPropagation(task)
 	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(wrappedTask, func(err error) {
 		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), allowSkippingErrors)
 	}); addTaskErr != nil {

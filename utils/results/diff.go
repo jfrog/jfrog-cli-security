@@ -1,33 +1,21 @@
 package results
 
 import (
-	"path/filepath"
-	"strings"
-
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
-// UnifyScaAndJasResults merges SCA and JAS diff results into a single SecurityCommandResults.
-func UnifyScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *SecurityCommandResults {
-	gitContext := scaResults.GitContext
-	if gitContext == nil {
-		gitContext = jasDiffResults.GitContext
-	}
-
+// MergeScaAndJasResults merges SCA results with JAS diff results into a single SecurityCommandResults.
+// SCA results provide the base (including ScaResults and GitContext), JAS results provide the JAS findings.
+func MergeScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *SecurityCommandResults {
 	unifiedResults := &SecurityCommandResults{
-		ResultsMetaData: ResultsMetaData{
-			EntitledForJas:   jasDiffResults.EntitledForJas,
-			SecretValidation: jasDiffResults.SecretValidation,
-			CmdType:          jasDiffResults.CmdType,
-			XrayVersion:      jasDiffResults.XrayVersion,
-			XscVersion:       jasDiffResults.XscVersion,
-			MultiScanId:      jasDiffResults.MultiScanId,
-			StartTime:        jasDiffResults.StartTime,
-			ResultContext:    jasDiffResults.ResultContext,
-			GitContext:       gitContext,
-		},
+		ResultsMetaData: jasDiffResults.ResultsMetaData,
+	}
+	// Prefer SCA's GitContext (contains PR upload path info)
+	if scaResults.GitContext != nil {
+		unifiedResults.GitContext = scaResults.GitContext
 	}
 
 	for _, scaTarget := range scaResults.Targets {
@@ -72,16 +60,7 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 	log.Debug("[DIFF] Comparing", len(sourceResults.Targets), "source targets against", len(targetResults.Targets), "target targets")
 
 	diffResults := &SecurityCommandResults{
-		ResultsMetaData: ResultsMetaData{
-			EntitledForJas:   sourceResults.EntitledForJas,
-			SecretValidation: sourceResults.SecretValidation,
-			CmdType:          sourceResults.CmdType,
-			XrayVersion:      sourceResults.XrayVersion,
-			XscVersion:       sourceResults.XscVersion,
-			MultiScanId:      sourceResults.MultiScanId,
-			StartTime:        sourceResults.StartTime,
-			ResultContext:    sourceResults.ResultContext,
-		},
+		ResultsMetaData: sourceResults.ResultsMetaData,
 	}
 
 	for _, sourceTarget := range sourceResults.Targets {
@@ -146,8 +125,6 @@ func filterExistingFindings(allTargetJasResults []*JasScansResults, sourceJasRes
 		}
 	}
 
-	log.Debug("[DIFF] Built target fingerprint set with", len(targetKeys), "unique keys")
-
 	sourceSecrets := countSarifResults(sourceJasResults.JasVulnerabilities.SecretsScanResults) +
 		countSarifResults(sourceJasResults.JasViolations.SecretsScanResults)
 	sourceIac := countSarifResults(sourceJasResults.JasVulnerabilities.IacScanResults) +
@@ -159,18 +136,18 @@ func filterExistingFindings(allTargetJasResults []*JasScansResults, sourceJasRes
 
 	filteredJasResults := &JasScansResults{}
 
-	filteredJasResults.JasVulnerabilities.SecretsScanResults = filterSarifRuns(
+	filteredJasResults.JasVulnerabilities.SecretsScanResults = filterNewSarifFindings(
 		sourceJasResults.JasVulnerabilities.SecretsScanResults, targetKeys)
-	filteredJasResults.JasVulnerabilities.IacScanResults = filterSarifRuns(
+	filteredJasResults.JasVulnerabilities.IacScanResults = filterNewSarifFindings(
 		sourceJasResults.JasVulnerabilities.IacScanResults, targetKeys)
-	filteredJasResults.JasVulnerabilities.SastScanResults = filterSarifRuns(
+	filteredJasResults.JasVulnerabilities.SastScanResults = filterNewSarifFindings(
 		sourceJasResults.JasVulnerabilities.SastScanResults, targetKeys)
 
-	filteredJasResults.JasViolations.SecretsScanResults = filterSarifRuns(
+	filteredJasResults.JasViolations.SecretsScanResults = filterNewSarifFindings(
 		sourceJasResults.JasViolations.SecretsScanResults, targetKeys)
-	filteredJasResults.JasViolations.IacScanResults = filterSarifRuns(
+	filteredJasResults.JasViolations.IacScanResults = filterNewSarifFindings(
 		sourceJasResults.JasViolations.IacScanResults, targetKeys)
-	filteredJasResults.JasViolations.SastScanResults = filterSarifRuns(
+	filteredJasResults.JasViolations.SastScanResults = filterNewSarifFindings(
 		sourceJasResults.JasViolations.SastScanResults, targetKeys)
 
 	diffSecrets := countSarifResults(filteredJasResults.JasVulnerabilities.SecretsScanResults) +
@@ -198,14 +175,14 @@ func countSarifResults(runs []*sarif.Run) int {
 
 func extractFingerprints(run *sarif.Run, targetKeys map[string]bool) {
 	for _, result := range run.Results {
-		if result.Fingerprints != nil {
-			key := getResultFingerprint(result)
+		if sarifutils.IsFingerprintsExists(result) {
+			key := getSastFingerprint(result)
 			if key != "" {
 				targetKeys[key] = true
 			}
 		} else {
 			for _, location := range result.Locations {
-				key := getRelativeLocationFileName(location, run.Invocations) + getLocationSnippetText(location)
+				key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
 				targetKeys[key] = true
 			}
 		}
@@ -215,13 +192,16 @@ func extractFingerprints(run *sarif.Run, targetKeys map[string]bool) {
 func extractLocationsOnly(run *sarif.Run, targetKeys map[string]bool) {
 	for _, result := range run.Results {
 		for _, location := range result.Locations {
-			key := getRelativeLocationFileName(location, run.Invocations) + getLocationSnippetText(location)
+			key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
 			targetKeys[key] = true
 		}
 	}
 }
 
-func getResultFingerprint(result *sarif.Result) string {
+// getSastFingerprint extracts the SAST fingerprint used for diff matching.
+// Note: Uses "precise_sink_and_sink_function" key (from Analyzer Manager for diff purposes),
+// which differs from jasutils.SastFingerprintKey ("significant_full_path") used elsewhere.
+func getSastFingerprint(result *sarif.Result) string {
 	if result.Fingerprints != nil {
 		if value, ok := result.Fingerprints["precise_sink_and_sink_function"]; ok {
 			return value
@@ -230,67 +210,24 @@ func getResultFingerprint(result *sarif.Result) string {
 	return ""
 }
 
-func getLocationSnippetText(location *sarif.Location) string {
-	if location.PhysicalLocation != nil && location.PhysicalLocation.Region != nil &&
-		location.PhysicalLocation.Region.Snippet != nil && location.PhysicalLocation.Region.Snippet.Text != nil {
-		return *location.PhysicalLocation.Region.Snippet.Text
-	}
-	return ""
-}
-
-func getRelativeLocationFileName(location *sarif.Location, invocations []*sarif.Invocation) string {
-	wd := ""
-	if len(invocations) > 0 {
-		wd = getInvocationWorkingDirectory(invocations[0])
-	}
-	filePath := getLocationFileName(location)
-	if filePath != "" {
-		return extractRelativePath(filePath, wd)
-	}
-	return ""
-}
-
-func getInvocationWorkingDirectory(invocation *sarif.Invocation) string {
-	if invocation != nil && invocation.WorkingDirectory != nil && invocation.WorkingDirectory.URI != nil {
-		return *invocation.WorkingDirectory.URI
-	}
-	return ""
-}
-
-func getLocationFileName(location *sarif.Location) string {
-	if location != nil && location.PhysicalLocation != nil && location.PhysicalLocation.ArtifactLocation != nil && location.PhysicalLocation.ArtifactLocation.URI != nil {
-		return *location.PhysicalLocation.ArtifactLocation.URI
-	}
-	return ""
-}
-
-func extractRelativePath(resultPath string, projectRoot string) string {
-	resultPath = strings.TrimPrefix(resultPath, "file:///private")
-	resultPath = strings.TrimPrefix(resultPath, "file:///")
-	projectRoot = strings.TrimPrefix(projectRoot, "file:///private")
-	projectRoot = strings.TrimPrefix(projectRoot, "file:///")
-	projectRoot = strings.TrimPrefix(projectRoot, "/")
-
-	relativePath := strings.ReplaceAll(resultPath, projectRoot, "")
-	trimSlash := strings.TrimPrefix(relativePath, string(filepath.Separator))
-	return strings.TrimPrefix(trimSlash, "/")
-}
-
-func filterSarifRuns(sourceRuns []*sarif.Run, targetKeys map[string]bool) []*sarif.Run {
+// filterNewSarifFindings removes findings from sourceRuns that already exist in targetKeys.
+// For SAST results with fingerprints, matches by fingerprint.
+// For Secrets/IaC results, matches by file location + snippet text.
+func filterNewSarifFindings(sourceRuns []*sarif.Run, targetKeys map[string]bool) []*sarif.Run {
 	var filteredRuns []*sarif.Run
 
 	for _, run := range sourceRuns {
 		var filteredResults []*sarif.Result
 
 		for _, result := range run.Results {
-			if result.Fingerprints != nil {
-				if !targetKeys[getResultFingerprint(result)] {
+			if sarifutils.IsFingerprintsExists(result) {
+				if !targetKeys[getSastFingerprint(result)] {
 					filteredResults = append(filteredResults, result)
 				}
 			} else {
 				var filteredLocations []*sarif.Location
 				for _, location := range result.Locations {
-					key := getRelativeLocationFileName(location, run.Invocations) + getLocationSnippetText(location)
+					key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
 					if !targetKeys[key] {
 						filteredLocations = append(filteredLocations, location)
 					}

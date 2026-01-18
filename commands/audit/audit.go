@@ -628,9 +628,12 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
+	// Capture current logger (may be a BufferedLogger for isolated parallel logging).
+	// Worker goroutines need this propagated so their logs are captured in the same buffer.
 	currentLogger := log.GetLogger()
 	jasTask := createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner)
 	wrappedJasTask := func(threadId int) error {
+		// Propagate parent's logger to this worker goroutine for isolated log capture
 		log.SetLoggerForGoroutine(currentLogger)
 		defer log.ClearLoggerForGoroutine()
 		return jasTask(threadId)

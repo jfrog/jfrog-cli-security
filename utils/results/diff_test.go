@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,7 +144,7 @@ func TestFilterSarifRuns_LocationBased(t *testing.T) {
 			}
 
 			// Filter source runs
-			filteredRuns := filterSarifRuns(tc.sourceRuns, targetKeys)
+			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
 
 			// Count results
 			resultCount := countSarifResults(filteredRuns)
@@ -251,7 +252,7 @@ func TestFilterSarifRuns_FingerprintBased(t *testing.T) {
 			}
 
 			// Filter source runs
-			filteredRuns := filterSarifRuns(tc.sourceRuns, targetKeys)
+			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
 
 			// Count results
 			resultCount := countSarifResults(filteredRuns)
@@ -348,55 +349,17 @@ func TestFilterSarifRuns_WithSnippets(t *testing.T) {
 				extractLocationsOnly(run, targetKeys)
 			}
 
-			filteredRuns := filterSarifRuns(tc.sourceRuns, targetKeys)
+			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
 			resultCount := countSarifResults(filteredRuns)
 			assert.Equal(t, tc.expectedCount, resultCount)
 		})
 	}
 }
 
-func TestExtractRelativePath(t *testing.T) {
-	testCases := []struct {
-		name        string
-		resultPath  string
-		projectRoot string
-		expected    string
-	}{
-		{
-			name:        "simple relative path",
-			resultPath:  "/tmp/project/src/file.js",
-			projectRoot: "/tmp/project",
-			expected:    "src/file.js",
-		},
-		{
-			name:        "file prefix removal",
-			resultPath:  "file:///tmp/project/src/file.js",
-			projectRoot: "/tmp/project",
-			expected:    "src/file.js",
-		},
-		{
-			name:        "private prefix removal (macOS)",
-			resultPath:  "file:///private/var/folders/tmp/project/src/file.js",
-			projectRoot: "/var/folders/tmp/project",
-			expected:    "src/file.js",
-		},
-		{
-			name:        "empty project root",
-			resultPath:  "src/file.js",
-			projectRoot: "",
-			expected:    "src/file.js",
-		},
-	}
+// Note: Tests for extractRelativePath, getLocationSnippetText, getLocationFileName, and
+// getInvocationWorkingDirectory have been removed as these now use sarifutils functions.
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := extractRelativePath(tc.resultPath, tc.projectRoot)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
-func TestGetResultFingerprint(t *testing.T) {
+func TestGetSastFingerprint(t *testing.T) {
 	testCases := []struct {
 		name     string
 		result   *sarif.Result
@@ -429,122 +392,7 @@ func TestGetResultFingerprint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getResultFingerprint(tc.result)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
-func TestGetLocationSnippetText(t *testing.T) {
-	testCases := []struct {
-		name     string
-		location *sarif.Location
-		expected string
-	}{
-		{
-			name: "has snippet",
-			location: &sarif.Location{
-				PhysicalLocation: &sarif.PhysicalLocation{
-					Region: &sarif.Region{
-						Snippet: &sarif.ArtifactContent{Text: strPtr("password = 'secret'")},
-					},
-				},
-			},
-			expected: "password = 'secret'",
-		},
-		{
-			name: "no snippet",
-			location: &sarif.Location{
-				PhysicalLocation: &sarif.PhysicalLocation{
-					Region: &sarif.Region{},
-				},
-			},
-			expected: "",
-		},
-		{
-			name: "nil region",
-			location: &sarif.Location{
-				PhysicalLocation: &sarif.PhysicalLocation{},
-			},
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := getLocationSnippetText(tc.location)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
-func TestGetLocationFileName(t *testing.T) {
-	testCases := []struct {
-		name     string
-		location *sarif.Location
-		expected string
-	}{
-		{
-			name: "has file name",
-			location: &sarif.Location{
-				PhysicalLocation: &sarif.PhysicalLocation{
-					ArtifactLocation: &sarif.ArtifactLocation{URI: strPtr("src/main.js")},
-				},
-			},
-			expected: "src/main.js",
-		},
-		{
-			name: "nil artifact location",
-			location: &sarif.Location{
-				PhysicalLocation: &sarif.PhysicalLocation{},
-			},
-			expected: "",
-		},
-		{
-			name:     "nil location",
-			location: nil,
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := getLocationFileName(tc.location)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
-func TestGetInvocationWorkingDirectory(t *testing.T) {
-	testCases := []struct {
-		name       string
-		invocation *sarif.Invocation
-		expected   string
-	}{
-		{
-			name: "has working directory",
-			invocation: &sarif.Invocation{
-				WorkingDirectory: &sarif.ArtifactLocation{URI: strPtr("/tmp/project")},
-			},
-			expected: "/tmp/project",
-		},
-		{
-			name: "nil working directory",
-			invocation: &sarif.Invocation{
-				WorkingDirectory: nil,
-			},
-			expected: "",
-		},
-		{
-			name:       "nil invocation",
-			invocation: nil,
-			expected:   "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := getInvocationWorkingDirectory(tc.invocation)
+			result := getSastFingerprint(tc.result)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -622,8 +470,8 @@ func TestFilterSarifRuns_RealSecretsData(t *testing.T) {
 	require.NotEmpty(t, sourceReport.Runs, "Source should have runs")
 
 	// Verify both files contain the same secret content (snippet)
-	targetSnippet := getLocationSnippetText(targetReport.Runs[0].Results[0].Locations[0])
-	sourceSnippet := getLocationSnippetText(sourceReport.Runs[0].Results[0].Locations[0])
+	targetSnippet := sarifutils.GetLocationSnippetText(targetReport.Runs[0].Results[0].Locations[0])
+	sourceSnippet := sarifutils.GetLocationSnippetText(sourceReport.Runs[0].Results[0].Locations[0])
 	assert.Equal(t, targetSnippet, sourceSnippet, "Both files should have the same secret snippet")
 	assert.Equal(t, "password: jnvkjcxnjvxnvk22222", targetSnippet)
 
@@ -633,11 +481,11 @@ func TestFilterSarifRuns_RealSecretsData(t *testing.T) {
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
 				// Use just filename (last path component) + snippet for matching
-				fileName := getLocationFileName(location)
+				fileName := sarifutils.GetLocationFileName(location)
 				if fileName != "" {
 					fileName = filepath.Base(fileName)
 				}
-				key := fileName + getLocationSnippetText(location)
+				key := fileName + sarifutils.GetLocationSnippetText(location)
 				targetKeys[key] = true
 			}
 		}
@@ -649,11 +497,11 @@ func TestFilterSarifRuns_RealSecretsData(t *testing.T) {
 		for _, result := range run.Results {
 			var filteredLocations []*sarif.Location
 			for _, location := range result.Locations {
-				fileName := getLocationFileName(location)
+				fileName := sarifutils.GetLocationFileName(location)
 				if fileName != "" {
 					fileName = filepath.Base(fileName)
 				}
-				key := fileName + getLocationSnippetText(location)
+				key := fileName + sarifutils.GetLocationSnippetText(location)
 				if !targetKeys[key] {
 					filteredLocations = append(filteredLocations, location)
 				}
