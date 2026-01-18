@@ -204,6 +204,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 }
 
 func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
+
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
@@ -220,10 +221,12 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t,
 		filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues"),
-		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey}},
+		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey, WithVuln: true}},
 		xrayVersion, xscVersion, policy.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Violations: 12},
+			Total: &validations.TotalCount{Vulnerabilities: 12, Violations: 12},
+			// Validate we have vulnerabilities for each scan type (to make sure if violations are issue when fail or not related and issue from other places before)
+			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
