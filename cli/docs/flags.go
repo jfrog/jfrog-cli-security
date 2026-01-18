@@ -195,7 +195,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds, AddSastRules,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
