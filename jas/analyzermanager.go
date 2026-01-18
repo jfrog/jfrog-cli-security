@@ -37,6 +37,7 @@ const (
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
 	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
+	newFlowEnvVariable                        = "AM_DUMMY_MODE"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
 	unsupportedOsExitCode                     = 55
