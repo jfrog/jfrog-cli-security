@@ -16,7 +16,7 @@ import (
 
 const (
 	cmd            = "mcp-sast"
-	mcpEntitlement = "local_sast_mcp"
+	McpEntitlement = "local_sast_mcp"
 )
 
 type McpCommand struct {
@@ -128,11 +128,16 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 }
 
 func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
-	err_ := jas.DownloadAnalyzerManagerIfNeeded(0)
-	if err_ != nil {
+	return RunAmWithPipesAndTimeout(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
+}
+
+// RunAmWithPipesAndTimeout downloads the analyzer manager if needed and runs the command with pipes
+func RunAmWithPipesAndTimeout(envVars map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+	err := jas.DownloadAnalyzerManagerIfNeeded(0)
+	if err != nil {
 		log.Error(fmt.Sprintf("Failed to download Analyzer Manager: %v", err))
 	}
-	return RunAmMcpWithPipes(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
+	return RunAmMcpWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)
 }
 
 func (mcpCmd *McpCommand) Run() (err error) {
@@ -140,7 +145,7 @@ func (mcpCmd *McpCommand) Run() (err error) {
 	if err != nil {
 		return err
 	}
-	if entitled, err := isEntitledForSourceMCP(mcpCmd.ServerDetails); err != nil {
+	if entitled, err := IsEntitledForSourceMCP(mcpCmd.ServerDetails); err != nil {
 		return err
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
@@ -148,7 +153,8 @@ func (mcpCmd *McpCommand) Run() (err error) {
 	return mcpCmd.runWithTimeout(0, cmd, am_env)
 }
 
-func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
+// IsEntitledForSourceMCP checks if the user is entitled to use the local SAST MCP feature
+func IsEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
 	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return
@@ -157,5 +163,5 @@ func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool,
 	if err != nil {
 		return
 	}
-	return xray.IsEntitled(xrayManager, xrayVersion, mcpEntitlement)
+	return xray.IsEntitled(xrayManager, xrayVersion, McpEntitlement)
 }

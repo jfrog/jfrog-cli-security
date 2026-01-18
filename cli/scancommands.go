@@ -24,6 +24,7 @@ import (
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
+	sastServerDocs "github.com/jfrog/jfrog-cli-security/cli/docs/sastserver"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
@@ -37,6 +38,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/sast_server"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -124,6 +126,13 @@ func getAuditAndScansCommands() []components.Command {
 			Name:        "source-mcp",
 			Description: mcpDocs.GetDescription(),
 			Action:      SourceMcpCmd,
+			Hidden:      true,
+		},
+		{
+			Name:        "sast-server",
+			Description: sastServerDocs.GetDescription(),
+			Arguments:   sastServerDocs.GetArguments(),
+			Action:      SastServerCmd,
 			Hidden:      true,
 		},
 		{
@@ -215,6 +224,22 @@ func SourceMcpCmd(c *components.Context) error {
 		ErrorPipe:     os.Stderr,
 	}
 	return mcp_cmd.Run()
+}
+
+func SastServerCmd(c *components.Context) error {
+	serverDetails, err := CreateServerDetailsFromFlags(c)
+	if err != nil {
+		return err
+	}
+
+	sastServerCmd := sast_server.SastServerCommand{
+		ServerDetails: serverDetails,
+		Arguments:     c.Arguments,
+		InputPipe:     os.Stdin,
+		OutputPipe:    os.Stdout,
+		ErrorPipe:     os.Stderr,
+	}
+	return sastServerCmd.Run()
 }
 
 func EnrichCmd(c *components.Context) error {
