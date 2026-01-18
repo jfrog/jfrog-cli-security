@@ -81,8 +81,9 @@ type AuditBasicParams struct {
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
-	solutionFilePath                 string
-	useIncludedBuilds                bool
+	solutionFilePath  string
+	logCollector      *LogCollector
+	useIncludedBuilds bool
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -342,6 +343,15 @@ func (abp *AuditBasicParams) SolutionFilePath() string {
 func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *AuditBasicParams {
 	abp.solutionFilePath = solutionFilePath
 	return abp
+}
+
+func (abp *AuditBasicParams) SetLogCollector(collector *LogCollector) *AuditBasicParams {
+	abp.logCollector = collector
+	return abp
+}
+
+func (abp *AuditBasicParams) GetLogCollector() *LogCollector {
+	return abp.logCollector
 }
 
 func (abp *AuditBasicParams) UseIncludedBuilds() bool { return abp.useIncludedBuilds }

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/jfrog/gofrog/parallel"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"sync"
 )
 
@@ -13,6 +14,18 @@ type SecurityParallelRunner struct {
 	JasWg         sync.WaitGroup // Verify that downloading analyzer manager and running all scanners are done
 
 	onScanEndFunc func()
+}
+
+// WrapTaskWithLoggerPropagation wraps a parallel task to propagate the current goroutine's logger
+// to worker goroutines. This is needed when using BufferedLogger for isolated parallel logging -
+// worker goroutines need to inherit the parent's logger so their logs are captured in the same buffer.
+func WrapTaskWithLoggerPropagation(task parallel.TaskFunc) parallel.TaskFunc {
+	currentLogger := log.GetLogger()
+	return func(threadId int) error {
+		log.SetLoggerForGoroutine(currentLogger)
+		defer log.ClearLoggerForGoroutine()
+		return task(threadId)
+	}
 }
 
 func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {
