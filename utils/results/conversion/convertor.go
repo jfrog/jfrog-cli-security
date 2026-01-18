@@ -159,7 +159,11 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parse the SCA results from the enriched SBOM
 	if params.IncludeVulnerabilities && targetScansResults.ScaResults.Sbom.Vulnerabilities != nil {
-		if err = parser.ParseCVEs(targetScansResults.ScaResults.Sbom, targetScansResults.JasResults.ApplicabilityScanResults); err != nil {
+		var applicableRuns []*sarif.Run
+		if targetScansResults.JasResults != nil {
+			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+		}
+		if err = parser.ParseCVEs(targetScansResults.ScaResults.Sbom, applicableRuns); err != nil {
 			return
 		}
 	}
