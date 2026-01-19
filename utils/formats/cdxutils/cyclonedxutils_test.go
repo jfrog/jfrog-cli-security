@@ -826,8 +826,8 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			},
 			skipRoot: true,
 			expected: []cyclonedx.Dependency{
-				{Ref: "root1"},
-				{Ref: "root2"},
+				{Ref: "root1", Dependencies: &[]string{"root2"}},
+				{Ref: "root2", Dependencies: &[]string{"direct1"}},
 			},
 		},
 	}
