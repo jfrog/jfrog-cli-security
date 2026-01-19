@@ -131,6 +131,38 @@ func getTestCasesForExtractPoliciesFromMsg() []struct {
 			},
 			expect: nil,
 		},
+		{
+			name: "on-demand in progress",
+			errResp: &ErrorsResp{
+				Errors: []ErrorResp{
+					{
+						Status:  403,
+						Message: "Package test:1.0.0 download was blocked by JFrog Packages Curation service due to the package not being found in catalog, curation on-demand scan in progress.",
+					},
+				},
+			},
+			expect: []Policy{
+				{
+					Explanation: BlockingReasonOnDemand,
+				},
+			},
+		},
+		{
+			name: "package not found in catalog",
+			errResp: &ErrorsResp{
+				Errors: []ErrorResp{
+					{
+						Status:  403,
+						Message: "package test:1.0.0 download was blocked by jfrog packages curation service due to the package not being found in catalog",
+					},
+				},
+			},
+			expect: []Policy{
+				{
+					Explanation: BlockingReasonNotFound,
+				},
+			},
+		},
 	}
 	return tests
 }
