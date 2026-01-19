@@ -68,8 +68,8 @@ func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(scaResponse services
 	return tc.simpleJsonConvertor.DeprecatedParseLicenses(scaResponse)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
-	return tc.simpleJsonConvertor.ParseSbomLicenses(components, dependencies...)
+func (tc *CmdResultsTableConverter) ParseSbomLicenses(sbom *cyclonedx.BOM) (err error) {
+	return tc.simpleJsonConvertor.ParseSbomLicenses(sbom)
 }
 
 func (tc *CmdResultsTableConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) (err error) {

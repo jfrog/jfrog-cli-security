@@ -32,11 +32,14 @@ const (
 	// Indicates that the component is a root component in the BOM
 	RootRelation ComponentRelation = "root"
 	// Indicates that the component is a direct dependency of another component
-	DirectRelation ComponentRelation = "direct_dependency"
+	DirectRelation ComponentRelation = "direct"
 	// Indicates that the component is a transitive dependency of another component
-	TransitiveRelation ComponentRelation = "transitive_dependency"
+	TransitiveRelation ComponentRelation = "transitive"
 	// Undefined relation
 	UnknownRelation ComponentRelation = ""
+
+	// JFrog specific properties
+	JfrogRelationProperty = "jfrog:dependency:type"
 )
 
 type ComponentRelation string
@@ -96,6 +99,17 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
+func GetJfrogRelationProperty(component *cyclonedx.Component) ComponentRelation {
+	if component == nil || component.Properties == nil || len(*component.Properties) == 0 {
+		return UnknownRelation
+	}
+	property := GetProperty(component.Properties, JfrogRelationProperty)
+	if property == nil || property.Value == "" {
+		return UnknownRelation
+	}
+	return ComponentRelation(property.Value)
+}
+
 func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRoot bool) ComponentRelation {
 	if bom == nil || bom.Components == nil {
 		return UnknownRelation
@@ -104,6 +118,10 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRo
 	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
 		// The component is not found in the BOM components or not library, return UnknownRelation
 		return UnknownRelation
+	}
+	// Check if the component has a JFrog specific relation property
+	if relation := GetJfrogRelationProperty(component); relation != UnknownRelation {
+		return relation
 	}
 	dependencies := []cyclonedx.Dependency{}
 	if bom.Dependencies != nil {

@@ -241,8 +241,8 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 				if target.ScaResults.Sbom.Dependencies != nil {
 					dependencies = *target.ScaResults.Sbom.Dependencies
 				}
-				directComponents = results.GetDirectDependenciesAsComponentRows(component, *target.ScaResults.Sbom.Components, dependencies)
 				impactPaths = results.BuildImpactPath(component, *target.ScaResults.Sbom.Components, dependencies...)
+				directComponents = results.ExtractComponentDirectComponentsInBOM(target.ScaResults.Sbom, component, impactPaths)
 				break
 			}
 		}

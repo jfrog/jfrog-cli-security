@@ -66,7 +66,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	DeprecatedParseLicenses(scaResponse services.ScanResponse) error
 	// Parse SCA content to the current scan target
 	ParseSbom(sbom *cyclonedx.BOM) error
-	ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error
+	ParseSbomLicenses(sbom *cyclonedx.BOM) error
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(secrets ...[]*sarif.Run) error
@@ -169,11 +169,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Must be called last for cyclonedxparser to be able to attach the licenses to all the components
 	if params.IncludeLicenses && targetScansResults.ScaResults.Sbom.Components != nil {
-		dependencies := []cyclonedx.Dependency{}
-		if targetScansResults.ScaResults.Sbom.Dependencies != nil {
-			dependencies = append(dependencies, *targetScansResults.ScaResults.Sbom.Dependencies...)
-		}
-		if err = parser.ParseSbomLicenses(*targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
+		if err = parser.ParseSbomLicenses(targetScansResults.ScaResults.Sbom); err != nil {
 			return
 		}
 	}
