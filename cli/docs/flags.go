@@ -332,7 +332,7 @@ var flagsMap = map[string]components.Flag{
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
-	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "Set to true to audit cached packages. This is also required when using Curation on-demand, as packages are cached."),
+	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
