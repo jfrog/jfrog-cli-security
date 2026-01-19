@@ -701,6 +701,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
+	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
 	return curationAuditCommand, nil
 }
 
