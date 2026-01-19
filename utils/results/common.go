@@ -1393,7 +1393,7 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	// The component is a transitive dependency, go over path from start until we find the first direct dependency relation
 	for _, path := range impactPaths {
 		for _, pathComponent := range path {
-			if relation := cdxutils.GetComponentRelation(bom, pathComponent.Id, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
+			if relation := cdxutils.GetComponentRelation(bom, pathComponent.Id, true); relation == cdxutils.DirectRelation {
 				// Found the first direct dependency in the path, add it to the direct components and stop processing this path
 				directComponents = append(directComponents, pathComponent)
 				break

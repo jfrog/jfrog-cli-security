@@ -809,6 +809,27 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 				// file1 is not included because it's not a library type
 			},
 		},
+		{
+			name: "Multiple roots with jfrog:dependency:type property",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 2", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(DirectRelation)}}},
+					{BOMRef: "trans1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"root2"}},
+					{Ref: "root2", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"trans1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "root1"},
+				{Ref: "root2"},
+			},
+		},
 	}
 
 	for _, tt := range tests {

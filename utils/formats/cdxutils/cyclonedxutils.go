@@ -196,6 +196,20 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 	if bom == nil || bom.Components == nil || len(*bom.Components) == 0 {
 		return
 	}
+	// First, let collect all Jfrog defined root components if exists
+	for _, comp := range *bom.Components {
+		if GetJfrogRelationProperty(&comp) == RootRelation {
+			if compDepEntry := SearchDependencyEntry(bom.Dependencies, comp.BOMRef); compDepEntry != nil {
+				roots = append(roots, *compDepEntry)
+			} else {
+				roots = append(roots, cyclonedx.Dependency{Ref: comp.BOMRef})
+			}
+		}
+	}
+	if len(roots) > 0 {
+		// Jfrog defined roots found, return them
+		return
+	}
 	// Create a Set to track all references that are listed in `dependsOn`
 	refs := datastructures.MakeSet[string]()
 	dependedRefs := datastructures.MakeSet[string]()
