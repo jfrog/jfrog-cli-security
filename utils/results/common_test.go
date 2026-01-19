@@ -606,25 +606,25 @@ func TestGetDirectComponents(t *testing.T) {
 		{
 			name:                        "one direct component",
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack:1.2.3"}}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack", Version: "1.2.3"}},
-			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack", Version: "1.2.3"}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack:1.2.3", Name: "jfrog:pack", Version: "1.2.3"}},
+			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Id: "gav://jfrog:pack:1.2.3", Name: "jfrog:pack", Version: "1.2.3"}}},
 		},
 		{
 			name:                        "one direct component with target",
 			target:                      filepath.Join("root", "dir", "file"),
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"}}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
-			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack2", Version: "1.2.3"}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
+			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3"}}},
 		},
 		{
 			name:        "multiple direct components",
 			target:      filepath.Join("root", "dir", "file"),
 			impactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack21:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}, {services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack22:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{
-				{Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
-				{Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
 			},
-			expectedConvImpactPaths: [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack21", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}, {{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack22", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}},
+			expectedConvImpactPaths: [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}, {{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}},
 		},
 	}
 
