@@ -1,50 +1,50 @@
 package main
 
 import (
-	"strconv"
-	"strings"
-	"testing"
+// "strconv"
+// "strings"
+// "testing"
 
-	// "path/filepath"
+// "path/filepath"
 
-	// "github.com/stretchr/testify/assert"
-	// securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	// "github.com/jfrog/jfrog-cli-security/tests/validations"
+// "github.com/stretchr/testify/assert"
+// securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+// "github.com/jfrog/jfrog-cli-security/tests/validations"
 
-	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+// "github.com/jfrog/jfrog-cli-core/v2/common/format"
+// securityTests "github.com/jfrog/jfrog-cli-security/tests"
+// securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 )
 
-type maliciousScanCommandTestParams struct {
-	WorkingDirsToScan []string
-	Format            format.OutputFormat
-	Threads           int
-	MinSeverity       string
-}
+// type maliciousScanCommandTestParams struct {
+// 	WorkingDirsToScan []string
+// 	Format            format.OutputFormat
+// 	Threads           int
+// 	MinSeverity       string
+// }
 
-func getMaliciousScanCmdArgs(params maliciousScanCommandTestParams) (args []string) {
-	args = []string{"malicious-scan"}
-	if len(params.WorkingDirsToScan) > 0 {
-		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
-	}
-	if params.Format != "" {
-		args = append(args, "--format="+string(params.Format))
-	}
-	if params.Threads > 0 {
-		args = append(args, "--threads="+strconv.Itoa(params.Threads))
-	}
-	if params.MinSeverity != "" {
-		args = append(args, "--min-severity="+params.MinSeverity)
-	}
-	return args
-}
+// func getMaliciousScanCmdArgs(params maliciousScanCommandTestParams) (args []string) {
+// 	args = []string{"malicious-scan"}
+// 	if len(params.WorkingDirsToScan) > 0 {
+// 		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
+// 	}
+// 	if params.Format != "" {
+// 		args = append(args, "--format="+string(params.Format))
+// 	}
+// 	if params.Threads > 0 {
+// 		args = append(args, "--threads="+strconv.Itoa(params.Threads))
+// 	}
+// 	if params.MinSeverity != "" {
+// 		args = append(args, "--min-severity="+params.MinSeverity)
+// 	}
+// 	return args
+// }
 
-func runMaliciousScan(t *testing.T, params maliciousScanCommandTestParams) (string, error) {
-	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
-	defer cleanUp()
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, getMaliciousScanCmdArgs(params)...)
-}
+// func runMaliciousScan(t *testing.T, params maliciousScanCommandTestParams) (string, error) {
+// 	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+// 	defer cleanUp()
+// 	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, getMaliciousScanCmdArgs(params)...)
+// }
 
 // func TestMaliciousScan(t *testing.T) {
 // 	testCases := []struct {
