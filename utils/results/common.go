@@ -1403,18 +1403,6 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	return
 }
 
-func GetParentsAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
-	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
-		directComponents = append(directComponents, formats.ComponentRow{
-			Id:       parent.BOMRef,
-			Name:     parent.Name,
-			Version:  parent.Version,
-			Location: CdxEvidenceToLocation(parent),
-		})
-	}
-	return
-}
-
 func CdxEvidenceToLocation(component cyclonedx.Component) (location *formats.Location) {
 	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil

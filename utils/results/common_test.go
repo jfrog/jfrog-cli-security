@@ -703,29 +703,6 @@ func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
 			},
 		},
 		{
-			name: "Component is transitive - path starts with direct (no root in path)",
-			bom: &cyclonedx.BOM{
-				Components: &[]cyclonedx.Component{
-					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
-					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Version: "2.0.0"},
-					{BOMRef: "transitive1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
-				},
-				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "root", Dependencies: &[]string{"direct1"}},
-					{Ref: "direct1", Dependencies: &[]string{"transitive1"}},
-				},
-			},
-			component: cyclonedx.Component{BOMRef: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
-			impactPaths: [][]formats.ComponentRow{{
-				{Id: "root", Name: "Root Component", Version: "1.0.0"},
-				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
-				{Id: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
-			}},
-			expectedDirects: []formats.ComponentRow{
-				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
-			},
-		},
-		{
 			name: "Deep transitive - returns first direct in path",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
@@ -764,12 +741,16 @@ func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
 					{BOMRef: "directA", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct A", Version: "2.0.0"},
 					{BOMRef: "directB", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct B", Version: "2.1.0"},
+					{BOMRef: "directC", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct C", Version: "2.2.0"},
 					{BOMRef: "transitive1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
+					{BOMRef: "transitive2", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 2", Version: "3.1.0"},
+					{BOMRef: "transitive3", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 3", Version: "3.2.0"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "root", Dependencies: &[]string{"directA", "directB"}},
-					{Ref: "directA", Dependencies: &[]string{"transitive1"}},
+					{Ref: "root", Dependencies: &[]string{"directA", "directB", "directC"}},
+					{Ref: "directA", Dependencies: &[]string{"transitive1", "transitive3"}},
 					{Ref: "directB", Dependencies: &[]string{"transitive1"}},
+					{Ref: "directC", Dependencies: &[]string{"transitive2"}},
 				},
 			},
 			component: cyclonedx.Component{BOMRef: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
