@@ -131,7 +131,7 @@ func TestDockerCurationAudit(t *testing.T) {
 	assert.Equal(t, "ganodndentcom/drupal", results[0].PackageName)
 	assert.Equal(t, curation.BlockingReasonPolicy, results[0].BlockingReason)
 	require.NotEmpty(t, results[0].Policy, "Expected at least one policy violation")
-	assert.Equal(t, "Malicious package", results[0].Policy[0].Condition)
+	assert.Equal(t, "Image is not Docker Hub official", results[0].Policy[0].Condition)
 }
 
 func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
