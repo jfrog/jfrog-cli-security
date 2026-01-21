@@ -292,9 +292,9 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	// Set up isolated logging if a log collector is provided
+	// Set up isolated logging if a BufferedLogger is provided for parallel log capture
 	if collector := auditParams.GetLogCollector(); collector != nil {
-		log.SetLoggerForGoroutine(collector.Logger())
+		log.SetLoggerForGoroutine(collector)
 		defer log.ClearLoggerForGoroutine()
 	}
 	// Prepare the command for the scan.
@@ -628,16 +628,9 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	// Capture current logger (may be a BufferedLogger for isolated parallel logging).
-	// Worker goroutines need this propagated so their logs are captured in the same buffer.
-	currentLogger := log.GetLogger()
 	jasTask := createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner)
-	wrappedJasTask := func(threadId int) error {
-		// Propagate parent's logger to this worker goroutine for isolated log capture
-		log.SetLoggerForGoroutine(currentLogger)
-		defer log.ClearLoggerForGoroutine()
-		return jasTask(threadId)
-	}
+	// Wrap task to propagate parent's logger for isolated parallel logging
+	wrappedJasTask := utils.WrapTaskWithLoggerPropagation(jasTask)
 	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(wrappedJasTask, func(taskErr error) {
 		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
 	}); jasErr != nil {

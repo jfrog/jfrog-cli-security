@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -82,7 +83,7 @@ type AuditBasicParams struct {
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
 	solutionFilePath  string
-	logCollector      *LogCollector
+	logCollector      *log.BufferedLogger
 	useIncludedBuilds bool
 }
 
@@ -345,12 +346,12 @@ func (abp *AuditBasicParams) SetSolutionFilePath(solutionFilePath string) *Audit
 	return abp
 }
 
-func (abp *AuditBasicParams) SetLogCollector(collector *LogCollector) *AuditBasicParams {
+func (abp *AuditBasicParams) SetLogCollector(collector *log.BufferedLogger) *AuditBasicParams {
 	abp.logCollector = collector
 	return abp
 }
 
-func (abp *AuditBasicParams) GetLogCollector() *LogCollector {
+func (abp *AuditBasicParams) GetLogCollector() *log.BufferedLogger {
 	return abp.logCollector
 }
 

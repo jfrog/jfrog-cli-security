@@ -75,7 +75,7 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 			}
 		}
 
-		diffJasResults := filterExistingFindings(allTargetJasResults, sourceTarget.JasResults)
+		diffJasResults := excludeExistingFindingsInTargets(sourceTarget.JasResults, allTargetJasResults...)
 
 		diffTarget := &TargetResults{
 			ScanTarget: sourceTarget.ScanTarget,
@@ -88,49 +88,20 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 	return diffResults
 }
 
-// filterExistingFindings removes findings from source that already exist in target.
-func filterExistingFindings(allTargetJasResults []*JasScansResults, sourceJasResults *JasScansResults) *JasScansResults {
+// excludeExistingFindingsInTargets removes findings from source that already exist in any of the target results.
+// Returns a new JasScansResults containing only findings that are NEW in source (not present in targets).
+func excludeExistingFindingsInTargets(sourceJasResults *JasScansResults, targetJasResultsToExclude ...*JasScansResults) *JasScansResults {
 	if sourceJasResults == nil {
 		return nil
 	}
 
-	if len(allTargetJasResults) == 0 {
+	if len(targetJasResultsToExclude) == 0 {
 		return sourceJasResults
 	}
 
-	targetKeys := make(map[string]bool)
+	targetKeys := extractAllJasResultKeys(targetJasResultsToExclude...)
 
-	for _, targetJasResults := range allTargetJasResults {
-		if targetJasResults == nil {
-			continue
-		}
-
-		for _, targetRun := range targetJasResults.GetVulnerabilitiesResults(jasutils.Secrets) {
-			extractLocationsOnly(targetRun, targetKeys)
-		}
-		for _, targetRun := range targetJasResults.GetViolationsResults(jasutils.Secrets) {
-			extractLocationsOnly(targetRun, targetKeys)
-		}
-		for _, targetRun := range targetJasResults.GetVulnerabilitiesResults(jasutils.IaC) {
-			extractLocationsOnly(targetRun, targetKeys)
-		}
-		for _, targetRun := range targetJasResults.GetViolationsResults(jasutils.IaC) {
-			extractLocationsOnly(targetRun, targetKeys)
-		}
-		for _, targetRun := range targetJasResults.GetVulnerabilitiesResults(jasutils.Sast) {
-			extractFingerprints(targetRun, targetKeys)
-		}
-		for _, targetRun := range targetJasResults.GetViolationsResults(jasutils.Sast) {
-			extractFingerprints(targetRun, targetKeys)
-		}
-	}
-
-	sourceSecrets := countSarifResults(sourceJasResults.JasVulnerabilities.SecretsScanResults) +
-		countSarifResults(sourceJasResults.JasViolations.SecretsScanResults)
-	sourceIac := countSarifResults(sourceJasResults.JasVulnerabilities.IacScanResults) +
-		countSarifResults(sourceJasResults.JasViolations.IacScanResults)
-	sourceSast := countSarifResults(sourceJasResults.JasVulnerabilities.SastScanResults) +
-		countSarifResults(sourceJasResults.JasViolations.SastScanResults)
+	sourceSecrets, sourceIac, sourceSast := countJasFindings(sourceJasResults)
 
 	log.Debug("[DIFF] Source findings before diff - Secrets:", sourceSecrets, "| IaC:", sourceIac, "| SAST:", sourceSast)
 
@@ -150,17 +121,26 @@ func filterExistingFindings(allTargetJasResults []*JasScansResults, sourceJasRes
 	filteredJasResults.JasViolations.SastScanResults = filterNewSarifFindings(
 		sourceJasResults.JasViolations.SastScanResults, targetKeys)
 
-	diffSecrets := countSarifResults(filteredJasResults.JasVulnerabilities.SecretsScanResults) +
-		countSarifResults(filteredJasResults.JasViolations.SecretsScanResults)
-	diffIac := countSarifResults(filteredJasResults.JasVulnerabilities.IacScanResults) +
-		countSarifResults(filteredJasResults.JasViolations.IacScanResults)
-	diffSast := countSarifResults(filteredJasResults.JasVulnerabilities.SastScanResults) +
-		countSarifResults(filteredJasResults.JasViolations.SastScanResults)
+	diffSecrets, diffIac, diffSast := countJasFindings(filteredJasResults)
 
 	log.Info("[DIFF] New findings after diff - Secrets:", diffSecrets, "| IaC:", diffIac, "| SAST:", diffSast)
 	log.Info("[DIFF] Filtered out - Secrets:", sourceSecrets-diffSecrets, "| IaC:", sourceIac-diffIac, "| SAST:", sourceSast-diffSast)
 
 	return filteredJasResults
+}
+
+// countJasFindings returns the count of (secrets, iac, sast) findings in the JAS results.
+func countJasFindings(jasResults *JasScansResults) (secrets, iac, sast int) {
+	if jasResults == nil {
+		return
+	}
+	secrets = countSarifResults(jasResults.JasVulnerabilities.SecretsScanResults) +
+		countSarifResults(jasResults.JasViolations.SecretsScanResults)
+	iac = countSarifResults(jasResults.JasVulnerabilities.IacScanResults) +
+		countSarifResults(jasResults.JasViolations.IacScanResults)
+	sast = countSarifResults(jasResults.JasVulnerabilities.SastScanResults) +
+		countSarifResults(jasResults.JasViolations.SastScanResults)
+	return
 }
 
 func countSarifResults(runs []*sarif.Run) int {
@@ -173,41 +153,62 @@ func countSarifResults(runs []*sarif.Run) int {
 	return count
 }
 
-func extractFingerprints(run *sarif.Run, targetKeys map[string]bool) {
-	for _, result := range run.Results {
-		if sarifutils.IsFingerprintsExists(result) {
-			key := getSastFingerprint(result)
-			if key != "" {
-				targetKeys[key] = true
+// extractAllJasResultKeys extracts unique identifiers from all JAS results for diff comparison.
+// For Secrets/IaC: uses file path + snippet as key (location-based matching).
+// For SAST: uses fingerprint when available, falls back to location-based matching.
+func extractAllJasResultKeys(jasResults ...*JasScansResults) map[string]bool {
+	targetKeys := make(map[string]bool)
+	for _, jasResult := range jasResults {
+		if jasResult == nil {
+			continue
+		}
+		// Secrets and IaC use location-based matching
+		extractLocationsOnly(targetKeys,
+			jasResult.GetVulnerabilitiesResults(jasutils.Secrets)...)
+		extractLocationsOnly(targetKeys,
+			jasResult.GetViolationsResults(jasutils.Secrets)...)
+		extractLocationsOnly(targetKeys,
+			jasResult.GetVulnerabilitiesResults(jasutils.IaC)...)
+		extractLocationsOnly(targetKeys,
+			jasResult.GetViolationsResults(jasutils.IaC)...)
+		// SAST uses fingerprint-based matching when available
+		extractFingerprints(targetKeys,
+			jasResult.GetVulnerabilitiesResults(jasutils.Sast)...)
+		extractFingerprints(targetKeys,
+			jasResult.GetViolationsResults(jasutils.Sast)...)
+	}
+	return targetKeys
+}
+
+// extractFingerprints extracts SAST fingerprints (or falls back to locations) for diff matching.
+func extractFingerprints(targetKeys map[string]bool, runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			if sarifutils.IsFingerprintsExists(result) {
+				key := sarifutils.GetSastDiffFingerprint(result)
+				if key != "" {
+					targetKeys[key] = true
+				}
+			} else {
+				for _, location := range result.Locations {
+					key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
+					targetKeys[key] = true
+				}
 			}
-		} else {
+		}
+	}
+}
+
+// extractLocationsOnly extracts location-based keys (file path + snippet) for diff matching.
+func extractLocationsOnly(targetKeys map[string]bool, runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
 			for _, location := range result.Locations {
 				key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
 				targetKeys[key] = true
 			}
 		}
 	}
-}
-
-func extractLocationsOnly(run *sarif.Run, targetKeys map[string]bool) {
-	for _, result := range run.Results {
-		for _, location := range result.Locations {
-			key := sarifutils.GetRelativeLocationFileName(location, run.Invocations) + sarifutils.GetLocationSnippetText(location)
-			targetKeys[key] = true
-		}
-	}
-}
-
-// getSastFingerprint extracts the SAST fingerprint used for diff matching.
-// Note: Uses "precise_sink_and_sink_function" key (from Analyzer Manager for diff purposes),
-// which differs from jasutils.SastFingerprintKey ("significant_full_path") used elsewhere.
-func getSastFingerprint(result *sarif.Result) string {
-	if result.Fingerprints != nil {
-		if value, ok := result.Fingerprints["precise_sink_and_sink_function"]; ok {
-			return value
-		}
-	}
-	return ""
 }
 
 // filterNewSarifFindings removes findings from sourceRuns that already exist in targetKeys.
@@ -221,7 +222,7 @@ func filterNewSarifFindings(sourceRuns []*sarif.Run, targetKeys map[string]bool)
 
 		for _, result := range run.Results {
 			if sarifutils.IsFingerprintsExists(result) {
-				if !targetKeys[getSastFingerprint(result)] {
+				if !targetKeys[sarifutils.GetSastDiffFingerprint(result)] {
 					filteredResults = append(filteredResults, result)
 				}
 			} else {
