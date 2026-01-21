@@ -73,8 +73,11 @@ func RunScaScan(strategy SbomScanStrategy, params ScaScanParams) (generalError e
 // For Audit scans, we run the scan in parallel using the SecurityParallelRunner.
 func runScaScanWithRunner(strategy SbomScanStrategy, params ScaScanParams) (generalError error) {
 	targetResult := params.ScanResults
+	scaTask := createScaScanTaskWithRunner(params.Runner, strategy, params)
+	// Wrap task to propagate logger to worker goroutines (for isolated parallel logging)
+	wrappedScaTask := utils.WrapTaskWithLoggerPropagation(scaTask)
 	// Create sca scan task
-	if _, taskCreationErr := params.Runner.Runner.AddTaskWithError(createScaScanTaskWithRunner(params.Runner, strategy, params), func(err error) {
+	if _, taskCreationErr := params.Runner.Runner.AddTaskWithError(wrappedScaTask, func(err error) {
 		_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), params.AllowPartialResults)
 	}); taskCreationErr != nil {
 		_ = targetResult.AddTargetError(fmt.Errorf("failed to create SCA scan task: %s", taskCreationErr.Error()), params.AllowPartialResults)
