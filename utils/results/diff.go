@@ -32,6 +32,25 @@ func MergeScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *
 			AppsConfigModule: scaTarget.AppsConfigModule,
 			ScaResults:       scaTarget.ScaResults,
 			JasResults:       scaTarget.JasResults,
+			ResultsStatus:    scaTarget.ResultsStatus, // Preserve SCA scan status
+		}
+
+		// Merge JAS status codes if JAS scans were performed
+		// Note: ContextualAnalysis is part of SCA, not JAS, so we don't override it here
+		if jasTarget != nil {
+			// JAS status codes take precedence (they include the JAS scan results)
+			if jasTarget.ResultsStatus.SastScanStatusCode != nil {
+				unifiedTarget.ResultsStatus.SastScanStatusCode = jasTarget.ResultsStatus.SastScanStatusCode
+			}
+			if jasTarget.ResultsStatus.IacScanStatusCode != nil {
+				unifiedTarget.ResultsStatus.IacScanStatusCode = jasTarget.ResultsStatus.IacScanStatusCode
+			}
+			if jasTarget.ResultsStatus.SecretsScanStatusCode != nil {
+				unifiedTarget.ResultsStatus.SecretsScanStatusCode = jasTarget.ResultsStatus.SecretsScanStatusCode
+			}
+			if jasTarget.ResultsStatus.MaliciousScanStatusCode != nil {
+				unifiedTarget.ResultsStatus.MaliciousScanStatusCode = jasTarget.ResultsStatus.MaliciousScanStatusCode
+			}
 		}
 
 		if jasTarget != nil && jasTarget.JasResults != nil {
