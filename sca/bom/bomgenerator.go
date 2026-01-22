@@ -69,7 +69,29 @@ func getDiffSbom(sbom *cyclonedx.BOM, params SbomGeneratorParams) *cyclonedx.BOM
 		return sbom
 	}
 	log.Debug(fmt.Sprintf("Excluding %s components from %s SBOM", params.TargetResultToCompare.Target, params.Target.Target))
-	return cdxutils.Exclude(*sbom, *params.TargetResultToCompare.ScaResults.Sbom.Components...)
+	
+	// DEBUG: Dump both SBOMs to files for comparison
+	if err := utils.DumpCdxContentToFile(sbom, "/tmp", "source-sbom-before-diff", 0); err != nil {
+		log.Warn("Failed to dump source SBOM:", err)
+	} else {
+		log.Debug("Dumped source SBOM to /tmp/source-sbom-before-diff_0.json")
+	}
+	if err := utils.DumpCdxContentToFile(params.TargetResultToCompare.ScaResults.Sbom, "/tmp", "target-sbom-to-compare", 0); err != nil {
+		log.Warn("Failed to dump target SBOM:", err)
+	} else {
+		log.Debug("Dumped target SBOM to /tmp/target-sbom-to-compare_0.json")
+	}
+	
+	filteredSbom := cdxutils.Exclude(*sbom, *params.TargetResultToCompare.ScaResults.Sbom.Components...)
+	
+	// DEBUG: Dump filtered result
+	if err := utils.DumpCdxContentToFile(filteredSbom, "/tmp", "source-sbom-after-diff", 0); err != nil {
+		log.Warn("Failed to dump filtered SBOM:", err)
+	} else {
+		log.Debug("Dumped filtered SBOM to /tmp/source-sbom-after-diff_0.json")
+	}
+	
+	return filteredSbom
 }
 
 func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
