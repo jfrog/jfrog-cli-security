@@ -97,8 +97,9 @@ func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *Se
 		diffJasResults := excludeExistingFindingsInTargets(sourceTarget.JasResults, allTargetJasResults...)
 
 		diffTarget := &TargetResults{
-			ScanTarget: sourceTarget.ScanTarget,
-			JasResults: diffJasResults,
+			ScanTarget:    sourceTarget.ScanTarget,
+			JasResults:    diffJasResults,
+			ResultsStatus: sourceTarget.ResultsStatus, // Preserve JAS scan status codes
 		}
 
 		diffResults.Targets = append(diffResults.Targets, diffTarget)
