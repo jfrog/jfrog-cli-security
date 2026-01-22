@@ -48,8 +48,13 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		}
 	}()
 
-	// Calculate npm dependencies
-	dependenciesMap, err := biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall)
+	var dependenciesMap map[string]*biutils.DependencyInfo
+	cvsEnabled := params.IsCurationCmd
+	if cvsEnabled {
+		dependenciesMap, _, err = biutils.CalculateDependenciesMapWithCvs(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall)
+	} else {
+		dependenciesMap, err = biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall)
+	}
 	if err != nil {
 		log.Info("Used npm version:", npmVersion.GetVersion())
 		return
