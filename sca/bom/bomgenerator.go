@@ -69,29 +69,7 @@ func getDiffSbom(sbom *cyclonedx.BOM, params SbomGeneratorParams) *cyclonedx.BOM
 		return sbom
 	}
 	log.Debug(fmt.Sprintf("Excluding %s components from %s SBOM", params.TargetResultToCompare.Target, params.Target.Target))
-	
-	// DEBUG: Dump both SBOMs to files for comparison
-	debugDir := "/Users/eyalk/Desktop/team-projects/jfrog-cli-security"
-	if filePath, err := utils.DumpCdxContentToFile(sbom, debugDir, "debug-source-sbom-before-diff", 0); err != nil {
-		log.Warn("Failed to dump source SBOM:", err)
-	} else {
-		log.Debug(fmt.Sprintf("Dumped source SBOM to %s", filePath))
-	}
-	if filePath, err := utils.DumpCdxContentToFile(params.TargetResultToCompare.ScaResults.Sbom, debugDir, "debug-target-sbom-to-compare", 0); err != nil {
-		log.Warn("Failed to dump target SBOM:", err)
-	} else {
-		log.Debug(fmt.Sprintf("Dumped target SBOM to %s", filePath))
-	}
-	
 	filteredSbom := cdxutils.Exclude(*sbom, *params.TargetResultToCompare.ScaResults.Sbom.Components...)
-	
-	// DEBUG: Dump filtered result
-	if filePath, err := utils.DumpCdxContentToFile(filteredSbom, debugDir, "debug-source-sbom-after-diff", 0); err != nil {
-		log.Warn("Failed to dump filtered SBOM:", err)
-	} else {
-		log.Debug(fmt.Sprintf("Dumped filtered SBOM to %s", filePath))
-	}
-	
 	return filteredSbom
 }
 
