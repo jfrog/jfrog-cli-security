@@ -132,6 +132,7 @@ func getAuditAndScansCommands() []components.Command {
 			Name:        "sast-server",
 			Description: sastServerDocs.GetDescription(),
 			Arguments:   sastServerDocs.GetArguments(),
+			Flags:       sastServerDocs.GetFlags(),
 			Action:      SastServerCmd,
 			Hidden:      true,
 		},
@@ -232,9 +233,14 @@ func SastServerCmd(c *components.Context) error {
 		return err
 	}
 
+	port := c.GetStringFlagValue("port")
+	if port == "" {
+		return pluginsCommon.PrintHelpAndReturnError("port is required", c)
+	}
+	arguments := []string{"--port", port}
 	sastServerCmd := sast_server.SastServerCommand{
 		ServerDetails: serverDetails,
-		Arguments:     c.Arguments,
+		Arguments:     arguments,
 		InputPipe:     os.Stdin,
 		OutputPipe:    os.Stdout,
 		ErrorPipe:     os.Stderr,

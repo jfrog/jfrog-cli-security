@@ -9,5 +9,11 @@ func GetDescription() string {
 }
 
 func GetArguments() []components.Argument {
-	return []components.Argument{{Name: "Source path", Description: `Specifies the local file system path of source code to analyze.`}}
+	return []components.Argument{}
+}
+
+func GetFlags() []components.Flag {
+	return []components.Flag{
+		components.NewStringFlag("port", "Specifies the port to run the SAST server on."),
+	}
 }
