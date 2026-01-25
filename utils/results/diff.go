@@ -72,9 +72,9 @@ func MergeScaAndJasResults(scaResults, jasDiffResults *SecurityCommandResults) *
 	return unifiedResults
 }
 
-// CompareJasResults computes the diff between target and source JAS results.
+// FilterNewJasFindings filters source JAS results to exclude findings that exist in target.
 // Returns only NEW findings in source that don't exist in target.
-func CompareJasResults(targetResults, sourceResults *SecurityCommandResults) *SecurityCommandResults {
+func FilterNewJasFindings(targetResults, sourceResults *SecurityCommandResults) *SecurityCommandResults {
 	log.Info("[DIFF] Starting JAS diff calculation")
 	log.Debug("[DIFF] Comparing", len(sourceResults.Targets), "source targets against", len(targetResults.Targets), "target targets")
 

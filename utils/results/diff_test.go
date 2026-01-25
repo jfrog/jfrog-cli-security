@@ -15,7 +15,7 @@ func strPtr(s string) *string {
 	return &s
 }
 
-func TestFilterSarifRuns_LocationBased(t *testing.T) {
+func TestFilterNewSarifFindings_LocationBased(t *testing.T) {
 	testCases := []struct {
 		name          string
 		targetRuns    []*sarif.Run
@@ -139,9 +139,7 @@ func TestFilterSarifRuns_LocationBased(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Build target keys from target runs
 			targetKeys := make(map[string]bool)
-			for _, run := range tc.targetRuns {
-				extractLocationsOnly(run, targetKeys)
-			}
+			extractLocationsOnly(targetKeys, tc.targetRuns...)
 
 			// Filter source runs
 			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
@@ -166,7 +164,7 @@ func TestFilterSarifRuns_LocationBased(t *testing.T) {
 	}
 }
 
-func TestFilterSarifRuns_FingerprintBased(t *testing.T) {
+func TestFilterNewSarifFindings_FingerprintBased(t *testing.T) {
 	testCases := []struct {
 		name          string
 		targetRuns    []*sarif.Run
@@ -247,9 +245,7 @@ func TestFilterSarifRuns_FingerprintBased(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Build target keys from target runs using fingerprints
 			targetKeys := make(map[string]bool)
-			for _, run := range tc.targetRuns {
-				extractFingerprints(run, targetKeys)
-			}
+			extractFingerprints(targetKeys, tc.targetRuns...)
 
 			// Filter source runs
 			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
@@ -261,7 +257,7 @@ func TestFilterSarifRuns_FingerprintBased(t *testing.T) {
 	}
 }
 
-func TestFilterSarifRuns_WithSnippets(t *testing.T) {
+func TestFilterNewSarifFindings_WithSnippets(t *testing.T) {
 	testCases := []struct {
 		name          string
 		targetRuns    []*sarif.Run
@@ -345,9 +341,7 @@ func TestFilterSarifRuns_WithSnippets(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			targetKeys := make(map[string]bool)
-			for _, run := range tc.targetRuns {
-				extractLocationsOnly(run, targetKeys)
-			}
+			extractLocationsOnly(targetKeys, tc.targetRuns...)
 
 			filteredRuns := filterNewSarifFindings(tc.sourceRuns, targetKeys)
 			resultCount := countSarifResults(filteredRuns)
@@ -392,7 +386,7 @@ func TestGetSastFingerprint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getSastFingerprint(tc.result)
+			result := sarifutils.GetSastDiffFingerprint(tc.result)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -451,7 +445,7 @@ func TestCountSarifResults(t *testing.T) {
 // Note: The test files have different working directories (temp folders),
 // so without normalizing paths the diff will show 1 "new" finding.
 // This test verifies the SARIF parsing and filtering logic works correctly.
-func TestFilterSarifRuns_RealSecretsData(t *testing.T) {
+func TestFilterNewSarifFindings_RealSecretsData(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "tests", "testdata", "other", "diff-scan")
 
 	targetSarifBytes, err := os.ReadFile(filepath.Join(testDataDir, "target.sarif"))
