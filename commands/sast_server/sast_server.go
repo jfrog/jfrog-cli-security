@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const (
@@ -22,7 +22,7 @@ type SastServerCommand struct {
 }
 
 func (sastCmd *SastServerCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
-	return source_mcp.RunAmWithPipesAndTimeout(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
+	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
 }
 
 func (sastCmd *SastServerCommand) Run() (err error) {
@@ -30,10 +30,22 @@ func (sastCmd *SastServerCommand) Run() (err error) {
 	if err != nil {
 		return err
 	}
-	if entitled, err := source_mcp.IsEntitledForSourceMCP(sastCmd.ServerDetails); err != nil {
+	if entitled, err := isEntitledForSastServer(sastCmd.ServerDetails); err != nil {
 		return err
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
 	}
 	return sastCmd.runWithTimeout(0, cmd, am_env)
+}
+
+func isEntitledForSastServer(serverDetails *config.ServerDetails) (entitled bool, err error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return
+	}
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return
+	}
+	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }

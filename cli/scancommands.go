@@ -22,6 +22,7 @@ import (
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+
 	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	sastServerDocs "github.com/jfrog/jfrog-cli-security/cli/docs/sastserver"
@@ -131,7 +132,6 @@ func getAuditAndScansCommands() []components.Command {
 		{
 			Name:        "sast-server",
 			Description: sastServerDocs.GetDescription(),
-			Arguments:   sastServerDocs.GetArguments(),
 			Flags:       sastServerDocs.GetFlags(),
 			Action:      SastServerCmd,
 			Hidden:      true,
