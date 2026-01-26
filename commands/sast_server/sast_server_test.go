@@ -45,7 +45,7 @@ func TestRunSastServerHappyFlow(t *testing.T) {
 	}
 
 	err = sast_cmd.runWithTimeout(5, "sast-server", am_env)
-	require.NoError(t, err) // returns error because it was terminated upon timeout
+	require.NoError(t, err)
 	require.Contains(t, error_buffer.String(), "serving at port")
 	require.Contains(t, output_buffer.String(), "")
 }
