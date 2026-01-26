@@ -14,12 +14,16 @@ import (
 )
 
 func getFreePort() (int, error) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err = listener.Close(); err != nil {
+		return 0, err
+	}
+	return port, nil
 }
 
 func TestRunSastServerHappyFlow(t *testing.T) {
