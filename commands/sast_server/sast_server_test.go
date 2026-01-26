@@ -2,6 +2,7 @@ package sast_server
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"strconv"
 	"testing"
@@ -19,9 +20,15 @@ func getFreePort() (int, error) {
 		return 0, err
 	}
 
-	port := listener.Addr().(*net.TCPAddr).Port
+	port := 0
+	if tcpaddr, ok := listener.Addr().(*net.TCPAddr); ok {
+		port = tcpaddr.Port
+	}
 	if err = listener.Close(); err != nil {
 		return 0, err
+	}
+	if port == 0 {
+		return 0, errors.New("failed to get port from listener address")
 	}
 	return port, nil
 }
