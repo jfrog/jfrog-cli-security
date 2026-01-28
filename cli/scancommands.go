@@ -233,7 +233,7 @@ func SastServerCmd(c *components.Context) error {
 		return err
 	}
 
-	port := c.GetStringFlagValue("port")
+	port := c.GetStringFlagValue(flags.Port)
 	if port == "" {
 		return pluginsCommon.PrintHelpAndReturnError("port is required", c)
 	}
