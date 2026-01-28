@@ -222,6 +222,9 @@ var commandFlags = map[string][]string{
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
 	},
+	SastServer: {
+		Port,
+	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
 		Url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
