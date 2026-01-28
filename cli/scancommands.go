@@ -132,7 +132,7 @@ func getAuditAndScansCommands() []components.Command {
 		{
 			Name:        "sast-server",
 			Description: sastServerDocs.GetDescription(),
-			Flags:       sastServerDocs.GetFlags(),
+			Flags:       flags.GetCommandFlags(flags.SastServer),
 			Action:      SastServerCmd,
 			Hidden:      true,
 		},
