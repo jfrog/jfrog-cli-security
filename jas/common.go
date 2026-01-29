@@ -474,8 +474,8 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
-	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
+	envVars := map[string]string{utils.JfMsiEnvVariable: msi, newFlowEnvVariable: strconv.FormatBool(newFlow)}
 	if gitRepoUrl != "" {
 		envVars[gitRepoEnvVariable] = gitRepoUrl
 	}
