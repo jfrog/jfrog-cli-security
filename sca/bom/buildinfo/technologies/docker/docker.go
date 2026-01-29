@@ -223,6 +223,9 @@ func findDigestForPlatform(imageName, targetOS, targetArch string) (string, erro
 	buildxCmd := exec.Command("docker", "buildx", "imagetools", "inspect", imageName, "--raw")
 	buildxOutput, buildxErr := buildxCmd.CombinedOutput()
 	if buildxErr != nil {
+		if strings.Contains(string(buildxOutput), "curation service") {
+			return extractDigestFromBlockedMessage(string(buildxOutput)), nil
+		}
 		return "", fmt.Errorf("docker buildx imagetools inspect failed: %s", strings.TrimSpace(string(buildxOutput)))
 	}
 

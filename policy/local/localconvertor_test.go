@@ -214,10 +214,10 @@ func createScaTestViolation(id, component string, vioType violationutils.Violati
 			Type:       cyclonedx.ComponentTypeLibrary,
 			Name:       component,
 		},
-		DirectComponents: []formats.ComponentRow{{Name: component}},
+		DirectComponents: []formats.ComponentRow{{Id: component, Name: component}},
 		ImpactPaths: [][]formats.ComponentRow{{
-			{Name: "root"},
-			{Name: component},
+			{Id: "root", Name: "root"},
+			{Id: component, Name: component},
 		}},
 	}
 }

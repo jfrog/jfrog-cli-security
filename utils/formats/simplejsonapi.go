@@ -138,6 +138,7 @@ func (l Location) ToString() string {
 }
 
 type ComponentRow struct {
+	Id       string    `json:"id,omitempty"`
 	Name     string    `json:"name"`
 	Version  string    `json:"version"`
 	Location *Location `json:"location,omitempty"`

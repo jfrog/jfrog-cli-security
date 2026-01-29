@@ -86,15 +86,19 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaVulnerabilities(desc
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(sbom *cyclonedx.BOM) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	if len(components) == 0 {
+	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
 		return
 	}
+	dependencies := []cyclonedx.Dependency{}
+	if sbom.Dependencies != nil {
+		dependencies = append(dependencies, *sbom.Dependencies...)
+	}
 	// Iterate through the components and collect licenses
-	for _, component := range components {
+	for _, component := range *sbom.Components {
 		if component.Licenses == nil || len(*component.Licenses) == 0 {
 			// No licenses found for this component, continue to the next one
 			continue
@@ -109,6 +113,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclone
 			if name == "" {
 				name = license.License.ID
 			}
+			impactPaths := results.BuildImpactPath(component, *sbom.Components, dependencies...)
 			sjc.current.Licenses = append(sjc.current.Licenses, formats.LicenseRow{
 				LicenseKey:  license.License.ID,
 				LicenseName: name,
@@ -116,9 +121,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclone
 					ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 					ImpactedDependencyVersion: compVersion,
 					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
-					Components:                results.GetDirectDependenciesAsComponentRows(component, components, dependencies),
+					Components:                results.ExtractComponentDirectComponentsInBOM(sbom, component, impactPaths),
 				},
-				ImpactPaths: results.BuildImpactPath(component, components, dependencies...),
+				ImpactPaths: impactPaths,
 			})
 		}
 	}
@@ -135,6 +140,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM,
 			if enrichedSbom.Dependencies != nil {
 				dependencies = append(dependencies, *enrichedSbom.Dependencies...)
 			}
+			impactPaths := results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...)
 			// Convert the CycloneDX vulnerability to a simple JSON vulnerability row
 			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, sjc.createVulnerabilityOrViolationRowFromCdx(
 				vulnerability.ID,
@@ -143,8 +149,8 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM,
 				applicability,
 				vulnerability,
 				component,
-				results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies),
-				results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...),
+				results.ExtractComponentDirectComponentsInBOM(enrichedSbom, component, impactPaths),
+				impactPaths,
 				fixedVersions,
 				// TODO: implement JfrogResearchInformation conversion
 				nil,
