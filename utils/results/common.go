@@ -262,7 +262,12 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
 			compName, compVersion, _ := techutils.SplitComponentIdRaw(componentId)
-			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target)}
+			componentsMap[componentId] = formats.ComponentRow{
+				Id:       componentId,
+				Name:     compName,
+				Version:  compVersion,
+				Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target),
+			}
 		}
 
 		// Convert the impact path
@@ -270,6 +275,7 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		for _, pathNode := range impactPath {
 			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentIdRaw(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
+				Id:       pathNode.ComponentId,
 				Name:     nodeCompName,
 				Version:  nodeCompVersion,
 				Location: getComponentLocation(pathNode.FullPath),
@@ -291,8 +297,10 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclone
 		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		// Add the affected component at the end of the impact path
 		impactedPath = append(impactedPath, formats.ComponentRow{
-			Name:    affectedComponent.Name,
-			Version: affectedComponent.Version,
+			Id:       affectedComponent.BOMRef,
+			Name:     affectedComponent.Name,
+			Version:  affectedComponent.Version,
+			Location: CdxEvidenceToLocation(affectedComponent),
 		})
 		// Add the impact path to the list of impact paths
 		impactPathsRows = append(impactPathsRows, impactedPath)
@@ -305,8 +313,10 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
 		{
-			Name:    component.Name,
-			Version: component.Version,
+			Id:       component.BOMRef,
+			Name:     component.Name,
+			Version:  component.Version,
+			Location: CdxEvidenceToLocation(component),
 		},
 	}
 	// Add the parent components to the impact path
@@ -1374,13 +1384,26 @@ func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVe
 	return
 }
 
-func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
-	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclonedx.Component, impactPaths [][]formats.ComponentRow) (directComponents []formats.ComponentRow) {
+	if relation := cdxutils.GetComponentRelation(bom, component.BOMRef, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
+		// The component is a root or direct dependency, no parents to extract, return the component itself
 		directComponents = append(directComponents, formats.ComponentRow{
-			Name:     parent.Name,
-			Version:  parent.Version,
-			Location: CdxEvidenceToLocation(parent),
+			Id:       component.BOMRef,
+			Name:     component.Name,
+			Version:  component.Version,
+			Location: CdxEvidenceToLocation(component),
 		})
+		return
+	}
+	// The component is a transitive dependency, go over path from start until we find the first direct dependency relation
+	for _, path := range impactPaths {
+		for _, pathComponent := range path {
+			if relation := cdxutils.GetComponentRelation(bom, pathComponent.Id, true); relation == cdxutils.DirectRelation {
+				// Found the first direct dependency in the path, add it to the direct components and stop processing this path
+				directComponents = append(directComponents, pathComponent)
+				break
+			}
+		}
 	}
 	return
 }

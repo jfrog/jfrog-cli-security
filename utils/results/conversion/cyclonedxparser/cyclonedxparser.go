@@ -124,7 +124,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbom(sbom *cyclonedx.BOM) (err err
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(_ *cyclonedx.BOM) (err error) {
 	// In CycloneDX, licenses are part of the components and dependencies, so we don't need to parse them separately.
 	return nil
 }

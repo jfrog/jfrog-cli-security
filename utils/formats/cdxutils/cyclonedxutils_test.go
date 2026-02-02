@@ -65,6 +65,76 @@ func TestSearchDependencyEntry(t *testing.T) {
 	}
 }
 
+func TestGetJfrogRelationProperty(t *testing.T) {
+	tests := []struct {
+		name      string
+		component *cyclonedx.Component
+		expected  ComponentRelation
+	}{
+		{
+			name:      "Component with nil properties",
+			component: &cyclonedx.Component{BOMRef: "comp1", Properties: nil},
+			expected:  UnknownRelation,
+		},
+		{
+			name:      "Component with empty properties",
+			component: &cyclonedx.Component{BOMRef: "comp1", Properties: &[]cyclonedx.Property{}},
+			expected:  UnknownRelation,
+		},
+		{
+			name: "Component without jfrog:dependency:type property",
+			component: &cyclonedx.Component{
+				BOMRef:     "comp1",
+				Properties: &[]cyclonedx.Property{{Name: "other:property", Value: "value"}},
+			},
+			expected: UnknownRelation,
+		},
+		{
+			name: "Component with empty jfrog:dependency:type value",
+			component: &cyclonedx.Component{
+				BOMRef:     "comp1",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: ""}},
+			},
+			expected: UnknownRelation,
+		},
+		{
+			name: "Component with root relation",
+			component: &cyclonedx.Component{
+				BOMRef:     "root",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}},
+			},
+			expected: RootRelation,
+		},
+		{
+			name: "Component with direct relation",
+			component: &cyclonedx.Component{
+				BOMRef: "comp1",
+				Properties: &[]cyclonedx.Property{
+					{Name: "some:other:property", Value: "value1"},
+					{Name: JfrogRelationProperty, Value: string(DirectRelation)},
+					{Name: "another:property", Value: "value2"},
+				},
+			},
+			expected: DirectRelation,
+		},
+		{
+			name: "Component with transitive relation",
+			component: &cyclonedx.Component{
+				BOMRef:     "trans1",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(TransitiveRelation)}},
+			},
+			expected: TransitiveRelation,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetJfrogRelationProperty(tt.component)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestGetComponentRelation(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -807,6 +877,27 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 				{Ref: "standalone1"},
 				{Ref: "standalone2"},
 				// file1 is not included because it's not a library type
+			},
+		},
+		{
+			name: "Multiple roots with jfrog:dependency:type property",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 2", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(DirectRelation)}}},
+					{BOMRef: "trans1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"root2"}},
+					{Ref: "root2", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"trans1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "root1", Dependencies: &[]string{"root2"}},
+				{Ref: "root2", Dependencies: &[]string{"direct1"}},
 			},
 		},
 	}

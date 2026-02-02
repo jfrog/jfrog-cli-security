@@ -606,25 +606,25 @@ func TestGetDirectComponents(t *testing.T) {
 		{
 			name:                        "one direct component",
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack:1.2.3"}}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack", Version: "1.2.3"}},
-			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack", Version: "1.2.3"}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack:1.2.3", Name: "jfrog:pack", Version: "1.2.3"}},
+			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Id: "gav://jfrog:pack:1.2.3", Name: "jfrog:pack", Version: "1.2.3"}}},
 		},
 		{
 			name:                        "one direct component with target",
 			target:                      filepath.Join("root", "dir", "file"),
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"}}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
-			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack2", Version: "1.2.3"}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
+			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3"}}},
 		},
 		{
 			name:        "multiple direct components",
 			target:      filepath.Join("root", "dir", "file"),
 			impactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack21:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}, {services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack22:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{
-				{Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
-				{Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
 			},
-			expectedConvImpactPaths: [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack21", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}, {{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack22", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}},
+			expectedConvImpactPaths: [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}, {{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}},
 		},
 	}
 
@@ -633,6 +633,199 @@ func TestGetDirectComponents(t *testing.T) {
 			actualComponentRows, actualConvImpactPaths := getDirectComponentsAndImpactPaths(test.target, test.impactPaths)
 			assert.ElementsMatch(t, test.expectedDirectComponentRows, actualComponentRows)
 			assert.ElementsMatch(t, test.expectedConvImpactPaths, actualConvImpactPaths)
+		})
+	}
+}
+
+func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
+	tests := []struct {
+		name            string
+		bom             *cyclonedx.BOM
+		component       cyclonedx.Component
+		impactPaths     [][]formats.ComponentRow
+		expectedDirects []formats.ComponentRow
+	}{
+		{
+			name: "Component is root dependency - returns component itself",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1", Version: "1.0.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			component:   cyclonedx.Component{BOMRef: "root", Name: "Root Component", Version: "1.0.0"},
+			impactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "Root Component", Version: "1.0.0"}}},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "root", Name: "Root Component", Version: "1.0.0"},
+			},
+		},
+		{
+			name: "Component is direct dependency - returns component itself",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Version: "2.0.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"direct1"}},
+				},
+			},
+			component:   cyclonedx.Component{BOMRef: "direct1", Name: "Direct 1", Version: "2.0.0"},
+			impactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "Root Component", Version: "1.0.0"}, {Id: "direct1", Name: "Direct 1", Version: "2.0.0"}}},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
+			},
+		},
+		{
+			name: "Component is transitive - returns first direct from impact path",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Version: "2.0.0"},
+					{BOMRef: "transitive1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"transitive1"}},
+				},
+			},
+			component: cyclonedx.Component{BOMRef: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+			impactPaths: [][]formats.ComponentRow{{
+				{Id: "root", Name: "Root Component", Version: "1.0.0"},
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
+				{Id: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+			}},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
+			},
+		},
+		{
+			name: "Deep transitive - returns first direct in path",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 1", Version: "1.0.0", Properties: &[]cyclonedx.Property{{Name: "jfrog:dependency:type", Value: "root"}}},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 2", Version: "1.0.0", Properties: &[]cyclonedx.Property{{Name: "jfrog:dependency:type", Value: "root"}}},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Version: "2.0.0"},
+					{BOMRef: "trans1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
+					{BOMRef: "trans2", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 2", Version: "4.0.0"},
+					{BOMRef: "deepTrans", Type: cyclonedx.ComponentTypeLibrary, Name: "Deep Transitive", Version: "5.0.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"root2"}},
+					{Ref: "root2", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"trans1"}},
+					{Ref: "trans1", Dependencies: &[]string{"trans2"}},
+					{Ref: "trans2", Dependencies: &[]string{"deepTrans"}},
+				},
+			},
+			component: cyclonedx.Component{BOMRef: "deepTrans", Name: "Deep Transitive", Version: "5.0.0"},
+			impactPaths: [][]formats.ComponentRow{{
+				{Id: "root1", Name: "Root 1", Version: "1.0.0"},
+				{Id: "root2", Name: "Root 2", Version: "1.0.0"},
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
+				{Id: "trans1", Name: "Transitive 1", Version: "3.0.0"},
+				{Id: "trans2", Name: "Transitive 2", Version: "4.0.0"},
+				{Id: "deepTrans", Name: "Deep Transitive", Version: "5.0.0"},
+			}},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0"},
+			},
+		},
+		{
+			name: "Component is transitive with multiple impact paths - returns first direct from each path",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{BOMRef: "directA", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct A", Version: "2.0.0"},
+					{BOMRef: "directB", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct B", Version: "2.1.0"},
+					{BOMRef: "directC", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct C", Version: "2.2.0"},
+					{BOMRef: "transitive1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
+					{BOMRef: "transitive2", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 2", Version: "3.1.0"},
+					{BOMRef: "transitive3", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 3", Version: "3.2.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"directA", "directB", "directC"}},
+					{Ref: "directA", Dependencies: &[]string{"transitive1", "transitive3"}},
+					{Ref: "directB", Dependencies: &[]string{"transitive1"}},
+					{Ref: "directC", Dependencies: &[]string{"transitive2"}},
+				},
+			},
+			component: cyclonedx.Component{BOMRef: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+			impactPaths: [][]formats.ComponentRow{
+				{
+					{Id: "root", Name: "Root Component", Version: "1.0.0"},
+					{Id: "directA", Name: "Direct A", Version: "2.0.0"},
+					{Id: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+				},
+				{
+					{Id: "root", Name: "Root Component", Version: "1.0.0"},
+					{Id: "directB", Name: "Direct B", Version: "2.1.0"},
+					{Id: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+				},
+			},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "directA", Name: "Direct A", Version: "2.0.0"},
+				{Id: "directB", Name: "Direct B", Version: "2.1.0"},
+			},
+		},
+		{
+			name: "Component with evidence location - location preserved in result",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{
+						BOMRef:  "direct1",
+						Type:    cyclonedx.ComponentTypeLibrary,
+						Name:    "Direct 1",
+						Version: "2.0.0",
+						Evidence: &cyclonedx.Evidence{
+							Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}},
+						},
+					},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"direct1"}},
+				},
+			},
+			component: cyclonedx.Component{
+				BOMRef:  "direct1",
+				Name:    "Direct 1",
+				Version: "2.0.0",
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}},
+				},
+			},
+			impactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "Root Component", Version: "1.0.0"}, {Id: "direct1", Name: "Direct 1", Version: "2.0.0"}}},
+			expectedDirects: []formats.ComponentRow{
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0", Location: &formats.Location{File: "package.json"}},
+			},
+		},
+		{
+			name: "Component not in impact paths - return empty",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component", Version: "1.0.0"},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Version: "2.0.0"},
+					{BOMRef: "transitive1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1", Version: "3.0.0"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"transitive1"}},
+				},
+			},
+			component:       cyclonedx.Component{BOMRef: "transitive1", Name: "Transitive 1", Version: "3.0.0"},
+			impactPaths:     [][]formats.ComponentRow{},
+			expectedDirects: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actualDirects := ExtractComponentDirectComponentsInBOM(test.bom, test.component, test.impactPaths)
+			assert.ElementsMatch(t, test.expectedDirects, actualDirects)
 		})
 	}
 }
