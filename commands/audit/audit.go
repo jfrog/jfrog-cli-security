@@ -343,6 +343,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
+		xrayplugin.WithSpecificTechnologies(params.Technologies()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
