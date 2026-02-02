@@ -239,11 +239,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-A",
 							Name:     "component-A",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-A", Name: "component-A"}}},
 				},
 				{
 					Summary: "summary-1",
@@ -254,11 +255,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-B",
 							Name:     "component-B",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-B", Name: "component-B"}}},
 				},
 				{
 					Summary: "summary-2",
@@ -269,11 +271,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-B",
 							Name:     "component-B",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-B", Name: "component-B"}}},
 				},
 			},
 		},
@@ -309,11 +312,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-A",
 							Name:     "component-A",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-A", Name: "component-A"}}},
 				},
 				{
 					Summary:    "summary-1",
@@ -331,11 +335,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-B",
 							Name:     "component-B",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-B", Name: "component-B"}}},
 				},
 				{
 					Summary:    "summary-2",
@@ -360,11 +365,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-B",
 							Name:     "component-B",
 							Location: &formats.Location{File: "descriptor.json"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-B", Name: "component-B"}}},
 				},
 			},
 		},
@@ -414,11 +420,12 @@ func TestPrepareSimpleJsonLicenses(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
+							Id:       "component-B",
 							Name:     "component-B",
 							Location: &formats.Location{File: "target"},
 						}},
 					},
-					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ImpactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "root"}, {Id: "component-B", Name: "component-B"}}},
 				},
 			},
 		},

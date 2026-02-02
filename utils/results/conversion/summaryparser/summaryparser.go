@@ -176,7 +176,7 @@ func (sc *CmdResultsSummaryConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(_ *cyclonedx.BOM) (err error) {
 	// Not supported in the summary
 	return
 }

@@ -324,7 +324,7 @@ func (sc *CmdResultsSarifConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbomLicenses(_ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
 	return
 }
@@ -349,14 +349,15 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, appli
 func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
 	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
 		// Prepare the required fields
-		directDependencies := getDirectDependenciesForSarif(component, enrichedSbom)
-		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
-		if e != nil {
-			return
-		}
 		dependencies := []cyclonedx.Dependency{}
 		if enrichedSbom.Dependencies != nil {
 			dependencies = append(dependencies, *enrichedSbom.Dependencies...)
+		}
+		impactPaths := results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...)
+		directDependencies := results.ExtractComponentDirectComponentsInBOM(enrichedSbom, component, impactPaths)
+		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
+		if e != nil {
+			return
 		}
 		compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
 		createAndAddScaIssue(scaParseParams{
@@ -374,19 +375,10 @@ func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.B
 			AddFixedVersionProperty: true,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directDependencies,
-			ImpactPaths:             results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...),
+			ImpactPaths:             impactPaths,
 		}, sarifResults, rules)
 		return
 	}
-}
-
-func getDirectDependenciesForSarif(component cyclonedx.Component, enrichedSbom *cyclonedx.BOM) (directDependencies []formats.ComponentRow) {
-	// Extract the direct dependencies
-	dependencies := []cyclonedx.Dependency{}
-	if enrichedSbom.Dependencies != nil {
-		dependencies = append(dependencies, *enrichedSbom.Dependencies...)
-	}
-	return results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies)
 }
 
 func prepareCdxInfoForSarif(vulnerability cyclonedx.Vulnerability, severity severityutils.Severity, applicability *formats.Applicability, directDependencies []formats.ComponentRow, fixedVersion *[]cyclonedx.AffectedVersions) (applicabilityStatus jasutils.ApplicabilityStatus, maxCveScore string, cves []formats.CveRow, fixedVersions []string, markdownDescription string, err error) {
