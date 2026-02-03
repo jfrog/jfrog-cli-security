@@ -332,6 +332,7 @@ func ScanCmd(c *components.Context) error {
 		SetThreads(threads).
 		SetSpec(specFile).
 		SetOutputFormat(format).
+		SetOutputDir(c.GetStringFlagValue(flags.OutputDir)).
 		SetProject(getProject(c)).
 		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
@@ -778,6 +779,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetOutputFormat(format).
+		SetOutputDir(c.GetStringFlagValue(flags.OutputDir)).
 		SetProject(getProject(c)).
 		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
