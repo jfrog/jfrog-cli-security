@@ -58,6 +58,10 @@ const (
 	directRelation   = "direct"
 	indirectRelation = "indirect"
 
+	// TransitiveDepMarker is the extra segment added to version for transitive blocked packages with cvs
+	// e.g., "5.1.6:TRANSITIVE" -> when split by ":", the third element indicates transitive, which we use it to know when to set the parent to "Unknown"
+	TransitiveDepMarker = "TRANSITIVE"
+
 	BlockMessageKey  = "jfrog packages curation"
 	NotBeingFoundKey = "not being found"
 	IsOnDemand       = "on-demand"
@@ -792,6 +796,10 @@ func (nc *treeAnalyzer) fillGraphRelations(node *xrayUtils.GraphNode, preProcess
 	packagesStatus *[]*PackageStatus, parent, parentVersion string, visited *datastructures.Set[string], isRoot bool) {
 	for _, child := range node.Nodes {
 		packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, child, nc.downloadUrls, nc.url, nc.repo)
+
+		// Check if this is a transitive blocked package (has :TRANSITIVE marker in ID)
+		isTransitiveBlocked := nc.tech == techutils.Npm && strings.Contains(child.Id, ":"+TransitiveDepMarker)
+
 		if isRoot {
 			parent = name
 			parentVersion = version
@@ -814,8 +822,14 @@ func (nc *treeAnalyzer) fillGraphRelations(node *xrayUtils.GraphNode, preProcess
 				if isPkgStatus {
 					pkgStatusClone := *pkgStatusCast
 					pkgStatusClone.DepRelation = relation
-					pkgStatusClone.ParentName = parent
-					pkgStatusClone.ParentVersion = parentVersion
+					// For transitive blocked packages, set parent to "Unknown"
+					if isTransitiveBlocked {
+						pkgStatusClone.ParentName = "Unknown"
+						pkgStatusClone.ParentVersion = "Unknown"
+					} else {
+						pkgStatusClone.ParentName = parent
+						pkgStatusClone.ParentVersion = parentVersion
+					}
 					*packagesStatus = append(*packagesStatus, &pkgStatusClone)
 				}
 			}
