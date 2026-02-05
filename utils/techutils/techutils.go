@@ -849,8 +849,8 @@ func ToXrayComponentId(packageType, componentName, componentVersion string) stri
 }
 
 func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
-	for tech, cdxType := range technologiesData {
-		if (cdxType.packageType != "" && cdxType.packageType == cdxPackageType) || (cdxType.packageType == "" && tech.String() == cdxPackageType) {
+	for tech, techData := range technologiesData {
+		if (techData.packageType != "" && techData.packageType == cdxPackageType) || (techData.packageType == "" && tech.String() == cdxPackageType) {
 			return tech
 		}
 	}
@@ -859,18 +859,18 @@ func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
 }
 
 func ToCdxPackageType(packageType string) string {
-	for tech, cdxType := range technologiesData {
-		if (cdxType.xrayPackageType != "" && cdxType.xrayPackageType == packageType) || (cdxType.xrayPackageType == "" && tech.String() == packageType) {
-			return cdxType.packageType
+	for tech, techData := range technologiesData {
+		if (techData.xrayPackageType != "" && techData.xrayPackageType == packageType) || (techData.xrayPackageType == "" && tech.String() == packageType) {
+			return tech.GetPackageType()
 		}
 	}
 	return packageType
 }
 
 func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
-	for tech, cdxType := range technologiesData {
-		if (cdxType.packageType != "" && cdxType.packageType == cdxPackageType) || (cdxType.packageType == "" && tech.String() == cdxPackageType) {
-			return cdxType.xrayPackageType
+	for tech, techData := range technologiesData {
+		if (techData.packageType != "" && techData.packageType == cdxPackageType) || (techData.packageType == "" && tech.String() == cdxPackageType) {
+			return tech.GetXrayPackageType()
 		}
 	}
 	return cdxPackageType
