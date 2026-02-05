@@ -829,9 +829,9 @@ func SplitComponentId(componentId string) (string, string, string) {
 }
 
 func ConvertXrayPackageType(xrayPackageType string) string {
-	for tech, cdxType := range technologiesData {
-		if (cdxType.xrayPackageType != "" && cdxType.xrayPackageType == xrayPackageType) || (cdxType.xrayPackageType == "" && tech.String() == xrayPackageType) {
-			return cdxType.packageType
+	for tech, techData := range technologiesData {
+		if (techData.xrayPackageType != "" && techData.xrayPackageType == xrayPackageType) || (techData.xrayPackageType == "" && tech.String() == xrayPackageType) {
+			return tech.GetPackageType()
 		}
 	}
 	return xrayPackageType
