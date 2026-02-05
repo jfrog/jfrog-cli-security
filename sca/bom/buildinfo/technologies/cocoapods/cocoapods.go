@@ -219,7 +219,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	}
 	versionMap[packageName] = VersionForMainModule
 	rootNode := &xrayUtils.GraphNode{
-		Id:    techutils.Cocoapods.GetPackageTypeId() + packageInfo,
+		Id:    techutils.Cocoapods.GetXrayPackageTypeId() + packageInfo,
 		Nodes: []*xrayUtils.GraphNode{},
 	}
 	// Parse the dependencies into Xray dependency tree format
@@ -235,12 +235,12 @@ func parsePodDependenciesList(currNode *xrayUtils.GraphNode, dependenciesGraph m
 		return
 	}
 	uniqueDepsSet.Add(currNode.Id)
-	pkgName := strings.Split(strings.TrimPrefix(currNode.Id, techutils.Cocoapods.GetPackageTypeId()), ":")[0]
+	pkgName := strings.Split(strings.TrimPrefix(currNode.Id, techutils.Cocoapods.GetXrayPackageTypeId()), ":")[0]
 	currDepChildren := dependenciesGraph[pkgName]
 	for _, childName := range currDepChildren {
 		fullChildName := fmt.Sprintf("%s:%s", childName, versionMap[childName])
 		childNode := &xrayUtils.GraphNode{
-			Id:     techutils.Cocoapods.GetPackageTypeId() + fullChildName,
+			Id:     techutils.Cocoapods.GetXrayPackageTypeId() + fullChildName,
 			Nodes:  []*xrayUtils.GraphNode{},
 			Parent: currNode,
 		}

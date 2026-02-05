@@ -616,7 +616,7 @@ func GetUniqueKey(vulnerableDependency, vulnerableVersion, xrayID string, fixVer
 // Found use of a badCode inside the node_modules from a different package, report applicable.
 func shouldDisqualifyEvidence(components map[string]services.Component, evidenceFilePath string) (disqualify bool) {
 	for key := range components {
-		if !strings.HasPrefix(key, techutils.Npm.GetPackageTypeId()) {
+		if !strings.HasPrefix(key, techutils.Npm.GetXrayPackageTypeId()) {
 			return
 		}
 		dependencyName, _, _ := techutils.SplitComponentIdRaw(key)
