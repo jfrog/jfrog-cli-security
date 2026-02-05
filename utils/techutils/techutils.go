@@ -166,6 +166,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Gradle: {
 		formal:             "Gradle",
+		packageType:        Maven.String(),
 		xrayPackageType:    Gav,
 		indicators:         []string{"build.gradle", "build.gradle.kts"},
 		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
@@ -831,6 +832,10 @@ func SplitComponentId(componentId string) (string, string, string) {
 }
 
 func XrayPackageTypeToCdxPackageType(xrayPackageType string) string {
+	if xrayPackageType == Gav {
+		// We prefer maven over gradle for GAV packages, it could be both
+		return Maven.GetPackageType()
+	}
 	for tech, techData := range technologiesData {
 		if (techData.xrayPackageType != "" && techData.xrayPackageType == xrayPackageType) || (techData.xrayPackageType == "" && tech.String() == xrayPackageType) {
 			return tech.GetPackageType()
@@ -840,7 +845,7 @@ func XrayPackageTypeToCdxPackageType(xrayPackageType string) string {
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
-	if packageType == "gav" {
+	if packageType == Gav {
 		componentName = strings.ReplaceAll(componentName, "/", ":")
 	}
 	if componentVersion == "" {
@@ -851,6 +856,10 @@ func ToXrayComponentId(packageType, componentName, componentVersion string) stri
 }
 
 func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
+	if cdxPackageType == Npm.String() || cdxPackageType == Maven.String() || cdxPackageType == Pypi {
+		// Conflicted with other technologies
+		return NoTech
+	}
 	for tech, techData := range technologiesData {
 		if (techData.packageType != "" && techData.packageType == cdxPackageType) || (techData.packageType == "" && tech.String() == cdxPackageType) {
 			return tech
