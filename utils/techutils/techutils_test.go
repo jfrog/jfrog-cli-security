@@ -713,7 +713,7 @@ func TestTechnologyToLanguage(t *testing.T) {
 	}
 }
 
-func TestToCdxPackageType(t *testing.T) {
+func TestXrayPackageTypeToCdxPackageType(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -726,7 +726,7 @@ func TestToCdxPackageType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.expected, ToCdxPackageType(tt.input), "ToCdxPackageType(%v) == %v", tt.input, tt.expected)
+			assert.Equalf(t, tt.expected, XrayPackageTypeToCdxPackageType(tt.input), "XrayPackageTypeToCdxPackageType(%v) == %v", tt.input, tt.expected)
 		})
 	}
 }

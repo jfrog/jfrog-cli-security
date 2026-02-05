@@ -906,10 +906,18 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 		Type:       cyclonedx.ComponentTypeLibrary,
 		Name:       compName,
 		Version:    compVersion,
-		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
+		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.XrayPackageTypeToCdxPackageType(compType)),
 	}
 	component.Properties = cdxutils.AppendProperties(component.Properties, properties...)
 	return
+}
+
+func FormalTechOrCdxCompType(cdxCompType string) string {
+	tech := techutils.CdxPackageTypeToTechnology(cdxCompType)
+	if tech != techutils.NoTech {
+		return tech.ToFormal()
+	}
+	return cdxCompType
 }
 
 func CreateScaComponentFromBinaryNode(node *xrayUtils.BinaryGraphNode) (component cyclonedx.Component) {

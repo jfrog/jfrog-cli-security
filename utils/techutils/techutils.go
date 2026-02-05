@@ -59,12 +59,12 @@ const (
 	Swift     Technology = "swift"
 	Gem       Technology = "ruby"
 	// Not Supported by build-info BOM generator
-	Docker Technology = "docker"
-	Oci    Technology = "oci"
-	// Rpm    Technology = "rpm"
-	// Deb    Technology = "deb"
-	// Composer Technology = "composer"
-	// Alpine Technology = "alpine"
+	Docker   Technology = "docker"
+	Oci      Technology = "oci"
+	Rpm      Technology = "rpm"
+	Deb      Technology = "deb"
+	Composer Technology = "composer"
+	Alpine   Technology = "alpine"
 	// TODO: replace with Generic
 	NoTech Technology = ""
 	// Generic Technology = "generic"
@@ -93,6 +93,10 @@ var AllTechnologiesStrings = []string{
 	Swift.String(),
 	NoTech.String(),
 	Gem.String(),
+	Rpm.String(),
+	Deb.String(),
+	Composer.String(),
+	Alpine.String(),
 }
 
 func ToTechnology(tech string) Technology {
@@ -293,13 +297,11 @@ var technologiesData = map[Technology]TechData{
 		formal:      "Docker",
 		projectType: project.Docker,
 	},
-	Oci: {},
-	// Rpm: { formal: "RPM"},
-	// Deb: { formal: "Debian"},
-	// Generic: { formal: "Generic"},
-	// Composer: { formal: "Composer"},
-	// Alpine: { formal: "Alpine"},
-
+	Oci:      {},
+	Rpm:      {formal: "RPM"},
+	Deb:      {formal: "Debian"},
+	Composer: {formal: "Composer"},
+	Alpine:   {formal: "Alpine"},
 }
 
 var (
@@ -825,10 +827,10 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 
 func SplitComponentId(componentId string) (string, string, string) {
 	compName, compVersion, packageType := SplitComponentIdRaw(componentId)
-	return compName, compVersion, ConvertXrayPackageType(packageType)
+	return compName, compVersion, XrayPackageTypeToCdxPackageType(packageType)
 }
 
-func ConvertXrayPackageType(xrayPackageType string) string {
+func XrayPackageTypeToCdxPackageType(xrayPackageType string) string {
 	for tech, techData := range technologiesData {
 		if (techData.xrayPackageType != "" && techData.xrayPackageType == xrayPackageType) || (techData.xrayPackageType == "" && tech.String() == xrayPackageType) {
 			return tech.GetPackageType()
@@ -856,15 +858,6 @@ func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
 	}
 	// If the package type is not found in the map, return NoTech
 	return NoTech
-}
-
-func ToCdxPackageType(packageType string) string {
-	for tech, techData := range technologiesData {
-		if (techData.xrayPackageType != "" && techData.xrayPackageType == packageType) || (techData.xrayPackageType == "" && tech.String() == packageType) {
-			return tech.GetPackageType()
-		}
-	}
-	return packageType
 }
 
 func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
@@ -935,10 +928,10 @@ func PurlToXrayComponentId(purl string) (xrayComponentId string) {
 
 func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
-	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
+	return ToPackageUrl(compName, compVersion, XrayPackageTypeToCdxPackageType(compType))
 }
 
 func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
-	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
+	return ToPackageRef(compName, compVersion, XrayPackageTypeToCdxPackageType(compType))
 }
