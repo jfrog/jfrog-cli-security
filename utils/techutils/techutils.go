@@ -62,7 +62,7 @@ const (
 	Docker   Technology = "docker"
 	Oci      Technology = "oci"
 	Rpm      Technology = "rpm"
-	Deb      Technology = "deb"
+	Debian   Technology = "deb"
 	Composer Technology = "composer"
 	Alpine   Technology = "alpine"
 	NoTech   Technology = ""
@@ -92,7 +92,7 @@ var AllTechnologiesStrings = []string{
 	NoTech.String(),
 	Gem.String(),
 	Rpm.String(),
-	Deb.String(),
+	Debian.String(),
 	Composer.String(),
 	Alpine.String(),
 }
@@ -298,7 +298,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Oci:      {},
 	Rpm:      {formal: "RPM"},
-	Deb:      {formal: "Debian"},
+	Debian:   {formal: "Debian"},
 	Composer: {formal: "Composer"},
 	Alpine:   {formal: "Alpine"},
 }
