@@ -708,7 +708,7 @@ func TestTechnologyToLanguage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.language, TechnologyToLanguage(tt.technology), "TechnologyToLanguage(%v) == %v", tt.technology, tt.language)
+			assert.Equalf(t, tt.language, tt.technology.GetLanguage(), "TechnologyToLanguage(%v) == %v", tt.technology, tt.language)
 		})
 	}
 }

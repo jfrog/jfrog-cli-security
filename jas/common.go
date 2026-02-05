@@ -490,7 +490,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, wat
 	}
 	technology := technologies[0]
 	envVars[JfPackageManagerEnvVariable] = technology.String()
-	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
+	envVars[JfLanguageEnvVariable] = string(technology.GetLanguage())
 	return envVars
 
 }

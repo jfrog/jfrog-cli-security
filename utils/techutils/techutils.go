@@ -24,6 +24,22 @@ import (
 )
 
 const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
+const Pypi = "pypi"
+
+type CodeLanguage string
+
+const (
+	JavaScript CodeLanguage = "javascript"
+	Python     CodeLanguage = "python"
+	GoLang     CodeLanguage = "go"
+	Java       CodeLanguage = "java"
+	CSharp     CodeLanguage = "C#"
+	CPP        CodeLanguage = "C++"
+	Ruby       CodeLanguage = "ruby"
+	// package can have multiple languages
+	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
+)
 
 type Technology string
 
@@ -47,7 +63,6 @@ const (
 	NoTech    Technology = ""
 	Gem       Technology = "ruby"
 )
-const Pypi = "pypi"
 
 var AllTechnologiesStrings = []string{
 	Maven.String(),
@@ -92,39 +107,6 @@ func IsValidTechnology(tech string) bool {
 	return false
 }
 
-type CodeLanguage string
-
-const (
-	JavaScript CodeLanguage = "javascript"
-	Python     CodeLanguage = "python"
-	GoLang     CodeLanguage = "go"
-	Java       CodeLanguage = "java"
-	CSharp     CodeLanguage = "C#"
-	CPP        CodeLanguage = "C++"
-	Ruby       CodeLanguage = "ruby"
-	// CocoapodsLang package can have multiple languages
-	CocoapodsLang CodeLanguage = "Any"
-	SwiftLang     CodeLanguage = "Any"
-)
-
-// Associates a technology with project type (used in config commands for the package-managers).
-// Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
-var TechToProjectType = map[Technology]project.ProjectType{
-	Maven:     project.Maven,
-	Gradle:    project.Gradle,
-	Npm:       project.Npm,
-	Yarn:      project.Yarn,
-	Go:        project.Go,
-	Pip:       project.Pip,
-	Pipenv:    project.Pipenv,
-	Poetry:    project.Poetry,
-	Nuget:     project.Nuget,
-	Dotnet:    project.Dotnet,
-	Cocoapods: project.Cocoapods,
-	Swift:     project.Swift,
-	Gem:       project.Ruby,
-}
-
 var packageTypes = map[string]string{
 	"gav":      "Maven",
 	"maven":    "Maven",
@@ -144,16 +126,15 @@ var packageTypes = map[string]string{
 }
 
 // The identifier of the package type used in cdx.
-// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
+// https://github.com/package-url/purl-spec/blob/main/docs/types.md
 var cdxPurlPackageTypes = map[string]string{
-	"gav":      "maven",
 	"docker":   "docker",
 	"rpm":      "rpm",
 	"deb":      "deb",
 	"nuget":    "nuget",
 	"generic":  "generic",
 	"npm":      "npm",
-	"pypi":     "pypi",
+	"pypi":     "pip",
 	"composer": "composer",
 	"go":       "golang",
 	"alpine":   "alpine",
@@ -183,6 +164,10 @@ type TechData struct {
 	packageVersionOperator string
 	// The package installation command of a package
 	packageInstallationCommand string
+	// The project type of the technology if exists
+	projectType project.ProjectType
+	// The language of the technology
+	language CodeLanguage
 }
 
 // Given a file content, returns true if the content is an indicator of the technology.
@@ -193,10 +178,14 @@ var technologiesData = map[Technology]TechData{
 		indicators:         []string{"pom.xml"},
 		packageDescriptors: []string{"pom.xml"},
 		execCommand:        "mvn",
+		projectType:        project.Maven,
+		language:           Java,
 	},
 	Gradle: {
 		indicators:         []string{"build.gradle", "build.gradle.kts"},
 		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
+		projectType:        project.Gradle,
+		language:           Java,
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
@@ -205,6 +194,8 @@ var technologiesData = map[Technology]TechData{
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
 		packageInstallationCommand: "install",
+		projectType:                project.Npm,
+		language:                   JavaScript,
 	},
 	Pnpm: {
 		indicators:                 []string{"pnpm-lock.yaml"},
@@ -213,18 +204,24 @@ var technologiesData = map[Technology]TechData{
 		packageVersionOperator:     "@",
 		packageTypeId:              "npm://",
 		packageInstallationCommand: "update",
+		projectType:                project.Npm,
+		language:                   JavaScript,
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
 		exclude:                []string{"pnpm-lock.yaml"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
+		projectType:            project.Yarn,
+		language:               JavaScript,
 	},
 	Go: {
 		indicators:                 []string{"go.mod"},
 		packageDescriptors:         []string{"go.mod"},
 		packageVersionOperator:     "@v",
 		packageInstallationCommand: "get",
+		projectType:                project.Go,
+		language:                   GoLang,
 	},
 	Pip: {
 		packageType:        Pypi,
@@ -232,6 +229,8 @@ var technologiesData = map[Technology]TechData{
 		validators:         map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
 		packageDescriptors: []string{"setup.py", "requirements.txt", "pyproject.toml"},
 		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
+		projectType:        project.Pip,
+		language:           Python,
 	},
 	Pipenv: {
 		packageType:                Pypi,
@@ -239,6 +238,8 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors:         []string{"Pipfile"},
 		packageVersionOperator:     "==",
 		packageInstallationCommand: "install",
+		projectType:                project.Pipenv,
+		language:                   Python,
 	},
 	Poetry: {
 		packageType:                Pypi,
@@ -247,6 +248,8 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors:         []string{"pyproject.toml"},
 		packageInstallationCommand: "add",
 		packageVersionOperator:     "==",
+		projectType:                project.Poetry,
+		language:                   Python,
 	},
 	Nuget: {
 		indicators:         []string{".sln", ".csproj"},
@@ -257,35 +260,48 @@ var technologiesData = map[Technology]TechData{
 		packageInstallationCommand: "add",
 		// packageName -v packageVersion
 		packageVersionOperator: " -v ",
+		projectType:            project.Nuget,
+		language:               CSharp,
 	},
 	Dotnet: {
 		indicators:         []string{".sln", ".csproj"},
 		packageDescriptors: []string{".sln", ".csproj"},
 		formal:             ".NET",
+		projectType:        project.Dotnet,
+		language:           CSharp,
 	},
-	Docker: {},
-	Oci:    {},
+	Docker: {
+		projectType: project.Docker,
+	},
+	Oci: {},
 	Conan: {
 		indicators:         []string{"conanfile.txt", "conanfile.py"},
 		packageDescriptors: []string{"conanfile.txt", "conanfile.py"},
 		formal:             "Conan",
+		language:           CPP,
 	},
 	Cocoapods: {
 		indicators:         []string{"Podfile", "Podfile.lock"},
 		packageDescriptors: []string{"Podfile", "Podfile.lock"},
 		formal:             "Cocoapods",
 		packageTypeId:      "cocoapods://",
+		projectType:        project.Cocoapods,
+		language:           CocoapodsLang,
 	},
 	Swift: {
 		indicators:         []string{"Package.swift", "Package.resolved"},
 		packageDescriptors: []string{"Package.swift", "Package.resolved"},
 		formal:             "Swift",
 		packageTypeId:      "swift://",
+		projectType:        project.Swift,
+		language:           SwiftLang,
 	},
 	Gem: {
 		indicators:         []string{"Gemfile"},
 		packageDescriptors: []string{"Gemfile"},
 		formal:             "gem",
+		projectType:        project.Ruby,
+		language:           Ruby,
 	},
 }
 
@@ -314,23 +330,8 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 	}
 }
 
-func TechnologyToLanguage(technology Technology) CodeLanguage {
-	languageMap := map[Technology]CodeLanguage{
-		Npm:       JavaScript,
-		Pip:       Python,
-		Poetry:    Python,
-		Pipenv:    Python,
-		Go:        GoLang,
-		Maven:     Java,
-		Gradle:    Java,
-		Nuget:     CSharp,
-		Dotnet:    CSharp,
-		Yarn:      JavaScript,
-		Pnpm:      JavaScript,
-		Cocoapods: CocoapodsLang,
-		Swift:     SwiftLang,
-	}
-	return languageMap[technology]
+func (tech Technology) GetLanguage() CodeLanguage {
+	return technologiesData[tech].language
 }
 
 func (tech Technology) ToFormal() string {
@@ -363,6 +364,10 @@ func (tech Technology) GetPackageTypeId() string {
 		return fmt.Sprintf("%s://", tech.GetPackageType())
 	}
 	return technologiesData[tech].packageTypeId
+}
+
+func (tech Technology) GetProjectType() project.ProjectType {
+	return technologiesData[tech].projectType
 }
 
 func (tech Technology) GetPackageDescriptor() []string {

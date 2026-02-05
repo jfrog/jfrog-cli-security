@@ -45,7 +45,7 @@ func GetResolutionRepoIfExists(tech techutils.Technology) (details *ArtifactoryD
 
 // Searches for the configuration file based on the technology type. If found, it extracts the resolver repository from it.
 func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *project.RepositoryConfig, err error) {
-	configFilePath, exists, err := project.GetProjectConfFilePath(techutils.TechToProjectType[tech])
+	configFilePath, exists, err := project.GetProjectConfFilePath(tech.GetProjectType())
 	if err != nil {
 		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 		return
@@ -54,7 +54,7 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 		// Nuget and Dotnet are identified similarly in the detection process. To prevent redundancy, Dotnet is filtered out earlier in the process, focusing solely on detecting Nuget.
 		// Consequently, it becomes necessary to verify the presence of dotnet.yaml when Nuget detection occurs.
 		if tech == techutils.Nuget {
-			configFilePath, exists, err = project.GetProjectConfFilePath(techutils.TechToProjectType[techutils.Dotnet])
+			configFilePath, exists, err = project.GetProjectConfFilePath(techutils.Dotnet.GetProjectType())
 			if err != nil {
 				err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 				return
