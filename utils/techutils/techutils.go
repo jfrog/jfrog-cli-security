@@ -65,9 +65,7 @@ const (
 	Deb      Technology = "deb"
 	Composer Technology = "composer"
 	Alpine   Technology = "alpine"
-	// TODO: replace with Generic
-	NoTech Technology = ""
-	// Generic Technology = "generic"
+	NoTech   Technology = ""
 )
 
 // Alternative package types for some technologies

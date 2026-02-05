@@ -984,7 +984,7 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"pnpm", "npm://@scope/package:1.0.0", "pkg:npm/%40scope/package@1.0.0"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/%40scope/package@1.0.0"},
 		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3/xpp3_min@1.1.4c"},
 		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
 	}
