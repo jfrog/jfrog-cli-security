@@ -912,7 +912,10 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 	return
 }
 
-func FormalTechOrCdxCompType(cdxCompType string) string {
+func FormalTechOrCdxCompType(cdxCompType string, pretty bool) string {
+	if !pretty {
+		return cdxCompType
+	}
 	tech := techutils.CdxPackageTypeToTechnology(cdxCompType)
 	if tech != techutils.NoTech {
 		return tech.ToFormal()

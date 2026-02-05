@@ -125,7 +125,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
 			Component:   compName,
 			Version:     compVersion,
-			PackageType: results.FormalTechOrCdxCompType(compType),
+			PackageType: results.FormalTechOrCdxCompType(compType, tc.pretty),
 			Relation:    relationStr,
 			// For sorting
 			RelationPriority: relationPriority,
