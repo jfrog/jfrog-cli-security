@@ -415,6 +415,7 @@ func TestGetJasEnvVars(t *testing.T) {
 func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	tests := []struct {
 		name           string
+		newFlow        bool
 		msi            string
 		gitRepoUrl     string
 		projectKey     string
@@ -430,19 +431,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfPackageManagerEnvVariable: string(techutils.Maven),
 				JfLanguageEnvVariable:       string(techutils.Java),
 				utils.JfMsiEnvVariable:      "msi",
+				newFlowEnvVariable:          "false",
 			},
 		},
 		{
 			name:           "Multiple technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
 		},
 		{
 			name:           "Zero technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
 		},
 		{
 			name:         "With git repo url",
@@ -454,6 +456,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.JavaScript),
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
+				newFlowEnvVariable:          "false",
 			},
 		},
 		{
@@ -468,6 +471,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
 				projectEnvVariable:          "projectKey",
+				newFlowEnvVariable:          "false",
 			},
 		},
 		{
@@ -482,12 +486,25 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
 				watchesEnvVariable:          "watch1,watch2",
+				newFlowEnvVariable:          "false",
+			},
+		},
+		{
+			name:         "With new flow enabled",
+			newFlow:      true,
+			msi:          "msi",
+			technologies: []techutils.Technology{techutils.Go},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Go),
+				JfLanguageEnvVariable:       string(techutils.Go),
+				utils.JfMsiEnvVariable:      "msi",
+				newFlowEnvVariable:          "true",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }
