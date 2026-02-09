@@ -395,6 +395,15 @@ func (tech Technology) isIndicator(path string) (bool, error) {
 	return false, nil
 }
 
+func IsTechnologyDescriptor(path string) Technology {
+	for tech, _ := range technologiesData {
+		if tech.isDescriptor(path) {
+			return tech
+		}
+	}
+	return NoTech
+}
+
 func DetectedTechnologiesList() (technologies []string) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
