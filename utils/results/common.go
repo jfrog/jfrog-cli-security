@@ -258,10 +258,10 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		if _, exist := componentsMap[componentId]; !exist {
 			compName, compVersion, _ := techutils.SplitComponentIdRaw(componentId)
 			componentsMap[componentId] = formats.ComponentRow{
-				Id:       componentId,
-				Name:     compName,
-				Version:  compVersion,
-				Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target),
+				Id:                componentId,
+				Name:              compName,
+				Version:           compVersion,
+				PreferredLocation: getComponentLocation(impactPath[impactPathIndex].FullPath, target),
 			}
 		}
 
@@ -270,10 +270,10 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		for _, pathNode := range impactPath {
 			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentIdRaw(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
-				Id:       pathNode.ComponentId,
-				Name:     nodeCompName,
-				Version:  nodeCompVersion,
-				Location: getComponentLocation(pathNode.FullPath),
+				Id:                pathNode.ComponentId,
+				Name:              nodeCompName,
+				Version:           nodeCompVersion,
+				PreferredLocation: getComponentLocation(pathNode.FullPath),
 			})
 		}
 		impactPathsRows = append(impactPathsRows, compImpactPathRows)
@@ -292,10 +292,10 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclone
 		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		// Add the affected component at the end of the impact path
 		impactedPath = append(impactedPath, formats.ComponentRow{
-			Id:       affectedComponent.BOMRef,
-			Name:     affectedComponent.Name,
-			Version:  affectedComponent.Version,
-			Location: CdxEvidenceToLocation(affectedComponent),
+			Id:        affectedComponent.BOMRef,
+			Name:      affectedComponent.Name,
+			Version:   affectedComponent.Version,
+			Evidences: CdxEvidencesToLocations(affectedComponent),
 		})
 		// Add the impact path to the list of impact paths
 		impactPathsRows = append(impactPathsRows, impactedPath)
@@ -308,10 +308,10 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
 		{
-			Id:       component.BOMRef,
-			Name:     component.Name,
-			Version:  component.Version,
-			Location: CdxEvidenceToLocation(component),
+			Id:        component.BOMRef,
+			Name:      component.Name,
+			Version:   component.Version,
+			Evidences: CdxEvidencesToLocations(component),
 		},
 	}
 	// Add the parent components to the impact path
@@ -1383,10 +1383,10 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	if relation := cdxutils.GetComponentRelation(bom, component.BOMRef, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
 		// The component is a root or direct dependency, no parents to extract, return the component itself
 		directComponents = append(directComponents, formats.ComponentRow{
-			Id:       component.BOMRef,
-			Name:     component.Name,
-			Version:  component.Version,
-			Location: CdxEvidenceToLocation(component),
+			Id:        component.BOMRef,
+			Name:      component.Name,
+			Version:   component.Version,
+			Evidences: CdxEvidencesToLocations(component),
 		})
 		return
 	}
@@ -1403,19 +1403,50 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	return
 }
 
-func CdxEvidenceToLocation(component cyclonedx.Component) (location *formats.Location) {
+func CdxEvidencesToPreferredLocation(component cyclonedx.Component) (location *formats.Location) {
 	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil
 	}
+	if len(*component.Evidence.Occurrences) == 1 {
+		return &formats.Location{
+			File: (*component.Evidence.Occurrences)[0].Location,
+		}
+	}
+	// We need to pick the preferred location from the evidences (we prefer descriptors over lock files)
+	for _, occurrence := range *component.Evidence.Occurrences {
+		if techutils.IsTechnologyDescriptor(occurrence.Location) != techutils.NoTech {
+			return &formats.Location{
+				File: occurrence.Location,
+			}
+		}
+	}
 	// We take the first location as the main location
-	if len(*component.Evidence.Occurrences) > 1 {
-		log.Debug(fmt.Sprintf("Multiple locations found for component %s evidence, using the first one as location", component.Name))
+	log.Debug(fmt.Sprintf("Multiple locations found for component %s evidence, using the first one as location", component.Name))
+	return &formats.Location{
+		File: (*component.Evidence.Occurrences)[0].Location,
 	}
-	loc := (*component.Evidence.Occurrences)[0]
-	location = &formats.Location{
-		File: loc.Location,
+}
+
+func CdxEvidencesToLocations(component cyclonedx.Component) (evidences []formats.Location) {
+	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
+		return nil
 	}
-	return location
+	for _, occurrence := range *component.Evidence.Occurrences {
+		evidences = append(evidences, formats.Location{File: occurrence.Location})
+	}
+	return
+}
+
+func GetBestLocation(component formats.ComponentRow) string {
+	if component.PreferredLocation != nil {
+		return strings.TrimSpace(component.PreferredLocation.File)
+	}
+	for _, evidence := range component.Evidences {
+		if strings.TrimSpace(evidence.File) != "" {
+			return strings.TrimSpace(evidence.File)
+		}
+	}
+	return ""
 }
 
 func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *formats.Applicability) (cveRows []formats.CveRow) {

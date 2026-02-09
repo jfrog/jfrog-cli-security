@@ -626,7 +626,7 @@ func AppendComponentIfUnique(target []formats.ComponentRow, source []formats.Com
 	directComponents := make(map[string]formats.ComponentRow)
 	for i := range target {
 		// Remove location information
-		target[i].Location = nil
+		target[i].PreferredLocation = nil
 		// Add to the map if not exists
 		key := getComponentKey(target[i])
 		if _, exists := directComponents[key]; !exists {
@@ -635,7 +635,7 @@ func AppendComponentIfUnique(target []formats.ComponentRow, source []formats.Com
 	}
 	for i := range source {
 		// Remove location information
-		source[i].Location = nil
+		source[i].PreferredLocation = nil
 		// Add to the map if not exists
 		key := getComponentKey(source[i])
 		if _, exists := directComponents[key]; !exists {

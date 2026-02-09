@@ -138,10 +138,13 @@ func (l Location) ToString() string {
 }
 
 type ComponentRow struct {
-	Id       string    `json:"id,omitempty"`
-	Name     string    `json:"name"`
-	Version  string    `json:"version"`
-	Location *Location `json:"location,omitempty"`
+	Id      string `json:"id,omitempty"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	// Shown the preferred location of the component from the evidences.
+	PreferredLocation *Location `json:"location,omitempty"`
+	// Evidences is a list of locations that the component was found in.
+	Evidences []Location `json:"evidences,omitempty"`
 }
 
 type CveRow struct {

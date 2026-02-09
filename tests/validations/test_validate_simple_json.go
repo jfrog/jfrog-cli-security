@@ -226,11 +226,14 @@ func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expect
 
 func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.ComponentRow) {
 	ValidateContent(t, exactMatch,
-		PointerValidation[formats.Location]{Expected: expected.Location, Actual: actual.Location, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
+		PointerValidation[formats.Location]{Expected: expected.PreferredLocation, Actual: actual.PreferredLocation, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
 	)
-	if expected.Location != nil {
-		ValidateContent(t, exactMatch, StringValidation{Expected: expected.Location.File, Actual: actual.Location.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
+	if expected.PreferredLocation != nil {
+		ValidateContent(t, exactMatch, StringValidation{Expected: expected.PreferredLocation.File, Actual: actual.PreferredLocation.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
+	ValidateContent(t, exactMatch,
+		ListValidation[formats.Location]{Expected: expected.Evidences, Actual: actual.Evidences, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Evidences mismatch", issueId, expected.Name, expected.Version)},
+	)
 }
 
 func getComponent(name, version string, content []formats.ComponentRow) *formats.ComponentRow {
