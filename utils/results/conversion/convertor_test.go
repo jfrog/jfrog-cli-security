@@ -428,11 +428,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
+						{Name: "jake", Version: "10.8.7", PreferredLocation: &formats.Location{File: "package.json"}},
 						{Name: "async", Version: "3.2.4"},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "jake", Version: "10.8.7", Location: &formats.Location{File: "package.json"}},
+						{Name: "jake", Version: "10.8.7", PreferredLocation: &formats.Location{File: "package.json"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
@@ -468,10 +468,10 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+						{Name: "lodash", Version: "4.17.0", PreferredLocation: &formats.Location{File: "package.json"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+						{Name: "lodash", Version: "4.17.0", PreferredLocation: &formats.Location{File: "package.json"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
@@ -509,10 +509,10 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "froghome", Version: "1.0.0"},
-						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+						{Name: "lodash", Version: "4.17.0", PreferredLocation: &formats.Location{File: "package.json"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "lodash", Version: "4.17.0", Location: &formats.Location{File: "package.json"}},
+						{Name: "lodash", Version: "4.17.0", PreferredLocation: &formats.Location{File: "package.json"}},
 					},
 				},
 			},
@@ -757,11 +757,11 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 					},
 					ImpactPaths: [][]formats.ComponentRow{{
 						{Name: "platform.jfrog.io/swamp-docker/swamp", Version: "latest"},
-						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
-						{Name: "debian:bookworm:libssl3", Version: "3.0.13-1~deb12u1", Location: &formats.Location{File: "libssl3:3.0.13-1~deb12u1"}},
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", PreferredLocation: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
+						{Name: "debian:bookworm:libssl3", Version: "3.0.13-1~deb12u1", PreferredLocation: &formats.Location{File: "libssl3:3.0.13-1~deb12u1"}},
 					}},
 					DirectComponents: []formats.ComponentRow{
-						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", Location: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
+						{Name: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar", Version: "", PreferredLocation: &formats.Location{File: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"}},
 					},
 				},
 				ContextualAnalysis: &formats.Applicability{
