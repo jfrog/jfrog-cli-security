@@ -141,7 +141,7 @@ type ComponentRow struct {
 	Id      string `json:"id,omitempty"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
-	// Deprecated: Use Evidences instead. Shown the preferred location of the component from the evidences.
+	// Shown the preferred location of the component from the evidences.
 	PreferredLocation *Location `json:"location,omitempty"`
 	// Evidences is a list of locations that the component was found in.
 	Evidences []Location `json:"evidences,omitempty"`

@@ -396,7 +396,7 @@ func (tech Technology) isIndicator(path string) (bool, error) {
 }
 
 func IsTechnologyDescriptor(path string) Technology {
-	for tech, _ := range technologiesData {
+	for tech := range technologiesData {
 		if tech.isDescriptor(path) {
 			return tech
 		}
