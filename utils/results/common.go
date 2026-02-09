@@ -258,10 +258,10 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		if _, exist := componentsMap[componentId]; !exist {
 			compName, compVersion, _ := techutils.SplitComponentIdRaw(componentId)
 			componentsMap[componentId] = formats.ComponentRow{
-				Id:       componentId,
-				Name:     compName,
-				Version:  compVersion,
-				Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target),
+				Id:                componentId,
+				Name:              compName,
+				Version:           compVersion,
+				PreferredLocation: getComponentLocation(impactPath[impactPathIndex].FullPath, target),
 			}
 		}
 
@@ -270,10 +270,10 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		for _, pathNode := range impactPath {
 			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentIdRaw(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
-				Id:       pathNode.ComponentId,
-				Name:     nodeCompName,
-				Version:  nodeCompVersion,
-				Location: getComponentLocation(pathNode.FullPath),
+				Id:                pathNode.ComponentId,
+				Name:              nodeCompName,
+				Version:           nodeCompVersion,
+				PreferredLocation: getComponentLocation(pathNode.FullPath),
 			})
 		}
 		impactPathsRows = append(impactPathsRows, compImpactPathRows)
@@ -1383,11 +1383,11 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	if relation := cdxutils.GetComponentRelation(bom, component.BOMRef, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
 		// The component is a root or direct dependency, no parents to extract, return the component itself
 		directComponents = append(directComponents, formats.ComponentRow{
-			Id:        component.BOMRef,
-			Name:      component.Name,
-			Version:   component.Version,
-			Location:  CdxEvidencesToPreferredLocation(component),
-			Evidences: CdxEvidencesToLocations(component),
+			Id:                component.BOMRef,
+			Name:              component.Name,
+			Version:           component.Version,
+			PreferredLocation: CdxEvidencesToPreferredLocation(component),
+			Evidences:         CdxEvidencesToLocations(component),
 		})
 		return
 	}

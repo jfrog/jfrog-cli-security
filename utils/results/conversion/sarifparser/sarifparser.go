@@ -662,8 +662,8 @@ func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDesc
 
 func getComponentSarifLocation(cmtType utils.CommandType, component formats.ComponentRow) *sarif.Location {
 	filePath := ""
-	if component.Location != nil {
-		filePath = component.Location.File
+	if component.PreferredLocation != nil {
+		filePath = component.PreferredLocation.File
 	}
 	if strings.TrimSpace(filePath) == "" {
 		// For tech that we don't support fetching the package descriptor related to the component

@@ -189,8 +189,8 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 	if potentialComponents != nil {
 		components := *potentialComponents
 		for i := range components {
-			if components[i].Location != nil {
-				components[i].Location.File = filepath.FromSlash(components[i].Location.File)
+			if components[i].PreferredLocation != nil {
+				components[i].PreferredLocation.File = filepath.FromSlash(components[i].PreferredLocation.File)
 			}
 		}
 	}
@@ -198,8 +198,8 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		impactPaths := *potentialImpactPaths
 		for i := range impactPaths {
 			for j := range impactPaths[i] {
-				if impactPaths[i][j].Location != nil {
-					impactPaths[i][j].Location.File = filepath.FromSlash(impactPaths[i][j].Location.File)
+				if impactPaths[i][j].PreferredLocation != nil {
+					impactPaths[i][j].PreferredLocation.File = filepath.FromSlash(impactPaths[i][j].PreferredLocation.File)
 				}
 			}
 		}
@@ -207,8 +207,8 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 	if potentialImpactedDependencyDetails != nil {
 		impactedDependencyDetails := *potentialImpactedDependencyDetails
 		for i := range impactedDependencyDetails.Components {
-			if impactedDependencyDetails.Components[i].Location != nil {
-				impactedDependencyDetails.Components[i].Location.File = filepath.FromSlash(impactedDependencyDetails.Components[i].Location.File)
+			if impactedDependencyDetails.Components[i].PreferredLocation != nil {
+				impactedDependencyDetails.Components[i].PreferredLocation.File = filepath.FromSlash(impactedDependencyDetails.Components[i].PreferredLocation.File)
 			}
 		}
 	}
