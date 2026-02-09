@@ -613,7 +613,7 @@ func TestGetDirectComponents(t *testing.T) {
 			name:                        "one direct component with target",
 			target:                      filepath.Join("root", "dir", "file"),
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"}}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3", PreferredLocation: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
 			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack2:1.2.3", Name: "jfrog:pack2", Version: "1.2.3"}}},
 		},
 		{
@@ -621,8 +621,8 @@ func TestGetDirectComponents(t *testing.T) {
 			target:      filepath.Join("root", "dir", "file"),
 			impactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack21:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}, {services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack22:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{
-				{Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
-				{Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3", PreferredLocation: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3", PreferredLocation: &formats.Location{File: filepath.Join("root", "dir", "file")}},
 			},
 			expectedConvImpactPaths: [][]formats.ComponentRow{{{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack21:1.2.3", Name: "jfrog:pack21", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}, {{Id: "gav://jfrog:pack1:1.2.3", Name: "jfrog:pack1", Version: "1.2.3"}, {Id: "gav://jfrog:pack22:1.2.3", Name: "jfrog:pack22", Version: "1.2.3"}, {Id: "gav://jfrog:pack3:1.2.3", Name: "jfrog:pack3", Version: "1.2.3"}}},
 		},
@@ -800,7 +800,7 @@ func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
 			},
 			impactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "Root Component", Version: "1.0.0"}, {Id: "direct1", Name: "Direct 1", Version: "2.0.0"}}},
 			expectedDirects: []formats.ComponentRow{
-				{Id: "direct1", Name: "Direct 1", Version: "2.0.0", Location: &formats.Location{File: "package.json"}},
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0", Evidences: []formats.Location{{File: "package.json"}}},
 			},
 		},
 		{
@@ -2866,6 +2866,112 @@ func TestExtractCdxDependenciesCves(t *testing.T) {
 			directCves, indirectCves := ExtractCdxDependenciesCves(test.bom)
 			assert.ElementsMatch(t, test.expectedDirectCves, directCves)
 			assert.ElementsMatch(t, test.expectedIndirectCves, indirectCves)
+		})
+	}
+}
+
+func TestGetBestLocation(t *testing.T) {
+	tests := []struct {
+		name      string
+		component formats.ComponentRow
+		expected  string
+	}{
+		{
+			name: "Component with no location",
+		},
+		{
+			name:      "Component with preferred location",
+			component: formats.ComponentRow{PreferredLocation: &formats.Location{File: "package.json"}},
+			expected:  "package.json",
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: formats.ComponentRow{Evidences: []formats.Location{{File: "package.json"}, {File: "package-lock.json"}}},
+			expected:  "package.json",
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: formats.ComponentRow{Evidences: []formats.Location{{File: "requirements.txt"}, {File: "requirements.lock"}}},
+			expected:  "requirements.txt",
+		},
+		{
+			name:      "Component with preferred location and evidences",
+			component: formats.ComponentRow{PreferredLocation: &formats.Location{File: "package.json"}, Evidences: []formats.Location{{File: "package-lock.json"}}},
+			expected:  "package.json",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, GetBestLocation(test.component))
+		})
+	}
+}
+
+func TestCdxEvidencesToPreferredLocation(t *testing.T) {
+	tests := []struct {
+		name      string
+		component cyclonedx.Component
+		expected  *formats.Location
+	}{
+		{
+			name:      "Component with no location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with preferred location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}, {Location: "package-lock.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "requirements.txt"}, {Location: "requirements.lock"}}}},
+			expected:  &formats.Location{File: "requirements.txt"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, CdxEvidencesToPreferredLocation(test.component))
+		})
+	}
+}
+
+func TestCdxEvidencesToLocations(t *testing.T) {
+	tests := []struct {
+		name      string
+		component cyclonedx.Component
+		expected  []formats.Location
+	}{
+		{
+			name: "Component with no location",
+		},
+		{
+			name:      "Component with preferred location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  []formats.Location{{File: "package.json"}},
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}, {Location: "package-lock.json"}}}},
+			expected:  []formats.Location{{File: "package.json"}, {File: "package-lock.json"}},
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "requirements.txt"}, {Location: "requirements.lock"}}}},
+			expected:  []formats.Location{{File: "requirements.txt"}, {File: "requirements.lock"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, CdxEvidencesToLocations(test.component))
 		})
 	}
 }
