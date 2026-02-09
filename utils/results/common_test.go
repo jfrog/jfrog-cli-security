@@ -800,7 +800,7 @@ func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
 			},
 			impactPaths: [][]formats.ComponentRow{{{Id: "root", Name: "Root Component", Version: "1.0.0"}, {Id: "direct1", Name: "Direct 1", Version: "2.0.0"}}},
 			expectedDirects: []formats.ComponentRow{
-				{Id: "direct1", Name: "Direct 1", Version: "2.0.0", PreferredLocation: &formats.Location{File: "package.json"}},
+				{Id: "direct1", Name: "Direct 1", Version: "2.0.0", Evidences: []formats.Location{{File: "package.json"}}},
 			},
 		},
 		{

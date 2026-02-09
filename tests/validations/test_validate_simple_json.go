@@ -231,6 +231,9 @@ func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expecte
 	if expected.PreferredLocation != nil {
 		ValidateContent(t, exactMatch, StringValidation{Expected: expected.PreferredLocation.File, Actual: actual.PreferredLocation.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
+	if ValidateContent(t, exactMatch,
+		ListValidation[formats.Location]{Expected: expected.Evidences, Actual: actual.Evidences, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Evidences mismatch", issueId, expected.Name, expected.Version)}) {
+	}
 }
 
 func getComponent(name, version string, content []formats.ComponentRow) *formats.ComponentRow {

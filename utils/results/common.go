@@ -1383,11 +1383,10 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 	if relation := cdxutils.GetComponentRelation(bom, component.BOMRef, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
 		// The component is a root or direct dependency, no parents to extract, return the component itself
 		directComponents = append(directComponents, formats.ComponentRow{
-			Id:                component.BOMRef,
-			Name:              component.Name,
-			Version:           component.Version,
-			PreferredLocation: CdxEvidencesToPreferredLocation(component),
-			Evidences:         CdxEvidencesToLocations(component),
+			Id:        component.BOMRef,
+			Name:      component.Name,
+			Version:   component.Version,
+			Evidences: CdxEvidencesToLocations(component),
 		})
 		return
 	}
@@ -1436,6 +1435,18 @@ func CdxEvidencesToLocations(component cyclonedx.Component) (evidences []formats
 		evidences = append(evidences, formats.Location{File: occurrence.Location})
 	}
 	return
+}
+
+func GetBestLocation(component formats.ComponentRow) string {
+	if component.PreferredLocation != nil {
+		return strings.TrimSpace(component.PreferredLocation.File)
+	}
+	for _, evidence := range component.Evidences {
+		if strings.TrimSpace(evidence.File) != "" {
+			return strings.TrimSpace(evidence.File)
+		}
+	}
+	return ""
 }
 
 func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *formats.Applicability) (cveRows []formats.CveRow) {

@@ -661,14 +661,14 @@ func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDesc
 }
 
 func getComponentSarifLocation(cmtType utils.CommandType, component formats.ComponentRow) *sarif.Location {
-	filePath := ""
-	if component.PreferredLocation != nil {
-		filePath = component.PreferredLocation.File
-	}
-	if strings.TrimSpace(filePath) == "" {
+	// Physical location
+	filePath := results.GetBestLocation(component)
+	if filePath == "" {
 		// For tech that we don't support fetching the package descriptor related to the component
 		filePath = "Package-Descriptor"
 	}
+	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filepath.ToSlash(filePath))))
+	// Logical locations if supported
 	var logicalLocations []*sarif.LogicalLocation
 	if cmtType == utils.DockerImage {
 		// Docker image - extract layer hash from component name
@@ -681,7 +681,6 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI(filepath.ToSlash(filePath))))
 	if len(logicalLocations) > 0 {
 		location.WithLogicalLocations(logicalLocations)
 	}
