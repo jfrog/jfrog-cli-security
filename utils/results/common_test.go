@@ -2869,3 +2869,109 @@ func TestExtractCdxDependenciesCves(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBestLocation(t *testing.T) {
+	tests := []struct {
+		name      string
+		component formats.ComponentRow
+		expected  string
+	}{
+		{
+			name: "Component with no location",
+		},
+		{
+			name:      "Component with preferred location",
+			component: formats.ComponentRow{PreferredLocation: &formats.Location{File: "package.json"}},
+			expected:  "package.json",
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: formats.ComponentRow{Evidences: []formats.Location{{File: "package.json"}, {File: "package-lock.json"}}},
+			expected:  "package.json",
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: formats.ComponentRow{Evidences: []formats.Location{{File: "requirements.txt"}, {File: "requirements.lock"}}},
+			expected:  "requirements.txt",
+		},
+		{
+			name:      "Component with preferred location and evidences",
+			component: formats.ComponentRow{PreferredLocation: &formats.Location{File: "package.json"}, Evidences: []formats.Location{{File: "package-lock.json"}}},
+			expected:  "package.json",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, GetBestLocation(test.component))
+		})
+	}
+}
+
+func TestCdxEvidencesToPreferredLocation(t *testing.T) {
+	tests := []struct {
+		name      string
+		component cyclonedx.Component
+		expected  *formats.Location
+	}{
+		{
+			name:      "Component with no location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with preferred location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}, {Location: "package-lock.json"}}}},
+			expected:  &formats.Location{File: "package.json"},
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "requirements.txt"}, {Location: "requirements.lock"}}}},
+			expected:  &formats.Location{File: "requirements.txt"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, CdxEvidencesToPreferredLocation(test.component))
+		})
+	}
+}
+
+func TestCdxEvidencesToLocations(t *testing.T) {
+	tests := []struct {
+		name      string
+		component cyclonedx.Component
+		expected  []formats.Location
+	}{
+		{
+			name: "Component with no location",
+		},
+		{
+			name:      "Component with preferred location",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}}}},
+			expected:  []formats.Location{{File: "package.json"}},
+		},
+		{
+			name:      "Component with evidences (npm)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "package.json"}, {Location: "package-lock.json"}}}},
+			expected:  []formats.Location{{File: "package.json"}, {File: "package-lock.json"}},
+		},
+		{
+			name:      "Component with evidences (pip)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "requirements.txt"}, {Location: "requirements.lock"}}}},
+			expected:  []formats.Location{{File: "requirements.txt"}, {File: "requirements.lock"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, CdxEvidencesToLocations(test.component))
+		})
+	}
+}
