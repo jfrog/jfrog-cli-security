@@ -176,7 +176,7 @@ var commandFlags = map[string][]string{
 	XrScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
 	},
 	Enrich: {
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
@@ -189,7 +189,7 @@ var commandFlags = map[string][]string{
 	},
 	DockerScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
 	},
 	Audit: {
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,

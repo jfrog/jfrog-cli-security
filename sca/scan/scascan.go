@@ -160,7 +160,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 			return err
 		}
 		log.Info(utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), startTime, params.ThreadId))
-		return dumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
+		return DumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 	}
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
 	bomWithVulnerabilities, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
@@ -192,7 +192,7 @@ func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
 // TODO: remove this function once the new flow is fully implemented.
-func dumpScanResponseToFileIfNeeded(results services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType, threadId int) (err error) {
+func DumpScanResponseToFileIfNeeded(results services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType, threadId int) (err error) {
 	if scanResultsOutputDir == "" {
 		return
 	}

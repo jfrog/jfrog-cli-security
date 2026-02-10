@@ -145,12 +145,7 @@ func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 		jas.WithEnvVars(
 			false,
 			jas.NotDiffScanEnvValue,
-			jas.GetAnalyzerManagerXscEnvVars(
-				"",
-				"",
-				cmd.project,
-				nil,
-			),
+			jas.GetAnalyzerManagerXscEnvVars(false, "", "", cmd.project, nil),
 		),
 		jas.WithMinSeverity(cmd.minSeverityFilter),
 	}
