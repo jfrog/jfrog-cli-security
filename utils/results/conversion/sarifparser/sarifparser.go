@@ -79,6 +79,8 @@ type currentTargetRuns struct {
 	iacCurrentRun       *sarif.Run
 	sastCurrentRun      *sarif.Run
 	maliciousCurrentRun *sarif.Run
+	// Scan IDs from SCA scan responses
+	scaScanIds []string
 }
 
 // Parse parameters for the SCA result
@@ -149,6 +151,14 @@ func (sc *CmdResultsSarifConverter) flush() {
 	}
 	// Flush Sca if needed
 	if sc.currentTargetConvertedRuns.scaCurrentRun != nil {
+		// Add scan IDs to run properties if available
+		if len(sc.currentTargetConvertedRuns.scaScanIds) > 0 {
+			if sc.currentTargetConvertedRuns.scaCurrentRun.Properties == nil {
+				sc.currentTargetConvertedRuns.scaCurrentRun.Properties = sarif.NewPropertyBag()
+			}
+			// Add scan IDs as a comma-separated string
+			sc.currentTargetConvertedRuns.scaCurrentRun.Properties.Add(sarifutils.ScanIdSarifPropertyKey, strings.Join(sc.currentTargetConvertedRuns.scaScanIds, ","))
+		}
 		sc.current.Runs = append(sc.current.Runs, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.ScaScan), sc.currentTargetConvertedRuns.scaCurrentRun)...)
 	}
 	// Flush secrets if needed
@@ -306,9 +316,20 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
 		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
 	}
+	// Collect scan ID from the response
+	if scanResponse.ScanId != "" {
+		sc.currentTargetConvertedRuns.scaScanIds = utils.UniqueUnion(sc.currentTargetConvertedRuns.scaScanIds, scanResponse.ScanId)
+	}
 	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, descriptors, scanResponse.Vulnerabilities, sc.entitledForJas, results.CollectRuns(applicableScan...)...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
+	}
+	// Add hostedViewerURI to results if we have a base URL and scan ID
+	if sc.baseJfrogUrl != "" && scanResponse.ScanId != "" {
+		hostedViewerURI := fmt.Sprintf("%sui/onDemandScanning/%s", sc.baseJfrogUrl, scanResponse.ScanId)
+		for _, result := range sarifResults {
+			result.WithHostedViewerURI(hostedViewerURI)
+		}
 	}
 	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
@@ -341,6 +362,14 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, appli
 	err = results.ForEachScaBomVulnerability(sc.currentTargetConvertedRuns.currentTarget, enrichedSbom, sc.entitledForJas, results.CollectRuns(applicableScan...), addCdxScaVulnerability(sc.currentCmdType, enrichedSbom, &sarifResults, &sarifRules))
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
+	}
+	// Add hostedViewerURI to results if we have a base URL and scan IDs
+	if sc.baseJfrogUrl != "" && len(sc.currentTargetConvertedRuns.scaScanIds) > 0 {
+		// Use the first scan ID for the hosted viewer URI
+		hostedViewerURI := fmt.Sprintf("%sui/onDemandScanning/%s", sc.baseJfrogUrl, sc.currentTargetConvertedRuns.scaScanIds[0])
+		for _, result := range sarifResults {
+			result.WithHostedViewerURI(hostedViewerURI)
+		}
 	}
 	sc.addResultsToCurrentRun(ScaRun, maps.Values(sarifRules), sarifResults...)
 	return
