@@ -161,7 +161,7 @@ func TestHideSecret(t *testing.T) {
 		{secret: "123", expectedOutput: "***"},
 		{secret: "123456789", expectedOutput: "123************"},
 		// jfrog-ignore: test case
-		{secret: "3478hfnkjhvd848446gghgfh", expectedOutput: "347************"},
+		{secret: "3478hfnkjhvd848446gghgfh", expectedOutput: "347************"}, // #nosec G101 -- This is a false positive
 	}
 
 	for _, test := range tests {
