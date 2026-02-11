@@ -332,7 +332,9 @@ func PrintVulnerabilitiesTable(tables formats.ResultsTables, cmdType utils.Comma
 		)
 	}
 	emptyTableMessage := "✨ No vulnerable dependencies were found ✨"
-	if !techDetected {
+	// For build scan, the scan runs server-side so an empty table always means 0 vulnerabilities.
+	// Only show the package-manager message for non-build flows where no tech was detected locally.
+	if !techDetected && cmdType != utils.Build {
 		emptyTableMessage = coreutils.PrintYellow("🔧 Couldn't determine a package manager or build tool used by this project 🔧")
 	}
 	return coreutils.PrintTable(tables.SecurityVulnerabilitiesTable, "Vulnerable Dependencies", emptyTableMessage, printExtended)
