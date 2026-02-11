@@ -115,9 +115,9 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-static-sca-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-static-sca-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
