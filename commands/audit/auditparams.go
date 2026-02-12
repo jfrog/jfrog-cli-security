@@ -22,6 +22,7 @@ type AuditParams struct {
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
+	isSingleTarget    bool
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
@@ -190,6 +191,15 @@ func (params *AuditParams) SetResultsContext(resultsContext results.ResultContex
 func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditParams {
 	params.scanResultsOutputDir = outputDir
 	return params
+}
+
+func (params *AuditParams) SetIsSingleTarget(isSingleTarget bool) *AuditParams {
+	params.isSingleTarget = isSingleTarget
+	return params
+}
+
+func (params *AuditParams) IsSingleTarget() bool {
+	return params.isSingleTarget
 }
 
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {

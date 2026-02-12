@@ -87,7 +87,7 @@ func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCve
 	}
 }
 
-func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (asm *ApplicabilityScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = asm.createConfigFile(module, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns, asm.scanner.Exclusions...); err != nil {
 		return
 	}

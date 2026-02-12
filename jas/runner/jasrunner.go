@@ -26,9 +26,11 @@ type JasRunnerParams struct {
 	Runner        *utils.SecurityParallelRunner
 	ServerDetails *config.ServerDetails
 	Scanner       *jas.JasScanner
-	// Module flags
+	// Module / Target flags
 	Module        jfrogappsconfig.Module
 	ConfigProfile *services.ConfigProfile
+	TargetCount   int
+	ScanResults   *results.TargetResults
 	// Scan flags
 	AllowPartialResults bool
 	ScansToPerform      []utils.SubScanType
@@ -45,8 +47,6 @@ type JasRunnerParams struct {
 	SignedDescriptions bool
 	SastRules          string
 	// Outputs
-	TargetCount     int
-	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
 

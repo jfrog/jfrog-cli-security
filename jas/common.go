@@ -148,9 +148,9 @@ func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string) (
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
-		log.Warn("Please note the 'jfrog-apps-config.yml' is soon to be deprecated. Please consider using flags, environment variables, or centrally via the JFrog platform.")
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
+		log.Warn("Please note the 'jfrog-apps-config.yml' is soon to be deprecated. Please consider using flags, environment variables, or centrally via the JFrog platform.")
 		// jfrog-apps-config.yml exist in the workspace
 		for i := range jfrogAppsConfig.Modules {
 			// converting to absolute path before starting the scan flow
@@ -175,12 +175,13 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 }
 
 type ScannerCmd interface {
-	Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
+	DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
+	// Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 }
 
 func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	func() {
-		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.Run(module); err != nil {
+		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module); err != nil {
 			return
 		}
 	}()

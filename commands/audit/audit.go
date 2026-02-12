@@ -176,12 +176,9 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func getRelatedWorkingDirs(auditCmd *AuditCommand) (workingDirs []string, isRecursiveScan bool, err error) {
-	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
-		if len(auditCmd.workingDirs) > 1 {
-			return nil, false, errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
-		}
-		// OLD logic:
+func getTargetsInfo(auditCmd *AuditCommand) (workingDirs []string, isRecursiveScan, isSingleTarget bool, err error) {
+	if isNewFlow(auditCmd.bomGenerator) {
+		isSingleTarget = true
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
@@ -195,8 +192,15 @@ func getRelatedWorkingDirs(auditCmd *AuditCommand) (workingDirs []string, isRecu
 	return
 }
 
+func isNewFlow(bomGenerator bom.SbomGenerator) bool {
+	if _, ok := bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		return true
+	}
+	return false
+}
+
 func (auditCmd *AuditCommand) Run() (err error) {
-	workingDirs, isRecursiveScan, err := getRelatedWorkingDirs(auditCmd)
+	workingDirs, isRecursiveScan, isSingleTarget, err := getTargetsInfo(auditCmd)
 	if err != nil {
 		return
 	}
@@ -222,9 +226,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetRtResultRepository(auditCmd.rtResultRepository).
 		SetUploadCdxResults(auditCmd.uploadCdxResults).
 		SetWorkingDirs(workingDirs).
+		SetIsSingleTarget(isSingleTarget).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
-		SetGraphBasicParams(auditCmd.AuditBasicParams).
+		SetGraphBasicParams(auditCmd.AuditBasicParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())).
 		SetResultsContext(CreateAuditResultsContext(
 			serverDetails,
 			auditCmd.GetXrayVersion(),
@@ -239,8 +244,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
-	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).
+		SetStartTime(startTime).
+		SetMultiScanId(multiScanId)
 
 	auditResults := RunAudit(auditParams)
 
@@ -439,6 +445,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	logScanTargetsInfo(cmdResults)
 }
 
+// TODO: change
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
 	// Print the scan targets
 	if len(cmdResults.Targets) == 1 {
@@ -478,7 +485,28 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	return
 }
 
+//TODO: change
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
+	if params.IsSingleTarget() {
+		// NEW logic:
+		scanTarget := results.ScanTarget{Exclude: params.Exclusions()}
+		dirs := []string{}
+		for _, dir := range params.workingDirs {
+			if !fileutils.IsPathExists(dir, false) {
+				log.Warn("The working directory", dir, "doesn't exist. Skipping SCA scan...")
+				continue
+			}
+			dirs = append(dirs, dir)
+		}
+		if len(dirs) == 1 {
+			scanTarget.Target = dirs[0]
+		} else {
+			scanTarget.Include = dirs
+		}
+		cmdResults.NewScanResults(scanTarget)
+		return
+	}
+	// OLD logic:
 	for _, requestedDirectory := range params.workingDirs {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")

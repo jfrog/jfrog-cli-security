@@ -74,7 +74,7 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 	return
 }
 
-func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (ssm *SecretScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = ssm.createConfigFile(module, ssm.scanner.ScannersExclusions.SecretsExcludePatterns, ssm.scanner.Exclusions...); err != nil {
 		return
 	}

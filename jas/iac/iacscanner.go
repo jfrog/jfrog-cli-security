@@ -69,7 +69,7 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsTo
 	return
 }
 
-func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (iac *IacScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = iac.createConfigFile(module, iac.scanner.ScannersExclusions.IacExcludePatterns, iac.scanner.Exclusions...); err != nil {
 		return
 	}
