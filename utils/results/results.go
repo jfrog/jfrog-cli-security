@@ -212,6 +212,10 @@ type JasScanResults struct {
 type ScanTarget struct {
 	// Physical location of the target: Working directory (audit) / binary to scan (scan / docker scan)
 	Target string `json:"target,omitempty"`
+	// Optional field to provide the include patterns of the target
+	Include []string `json:"include,omitempty"`
+	// Optional field to provide the exclude patterns of the target
+	Exclude []string `json:"exclude,omitempty"`
 	// Logical name of the target (build name / module name / docker image name...)
 	Name string `json:"name,omitempty"`
 	// Optional field (not used only in build scan) to provide the technology of the target

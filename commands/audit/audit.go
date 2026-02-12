@@ -176,22 +176,30 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func (auditCmd *AuditCommand) Run() (err error) {
-	isRecursiveScan := false
+func getRelatedWorkingDirs(auditCmd *AuditCommand) (workingDirs []string, isRecursiveScan bool, err error) {
 	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
+			return nil, false, errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
+		// OLD logic:
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(auditCmd.workingDirs) == 0
 	}
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	workingDirs, err = coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
 	}
 	logScanPaths(workingDirs, isRecursiveScan)
+	return
+}
+
+func (auditCmd *AuditCommand) Run() (err error) {
+	workingDirs, isRecursiveScan, err := getRelatedWorkingDirs(auditCmd)
+	if err != nil {
+		return
+	}
 	serverDetails, err := auditCmd.ServerDetails()
 	if err != nil {
 		return
@@ -340,9 +348,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
 		// Xray-Scan-Plugin Bom Generator Options
-		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
-		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -421,6 +427,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
+				TotalTargets:         len(cmdResults.Targets),
 				AllowPartialResults:  params.AllowPartialResults(),
 				ScanResultsOutputDir: params.scanResultsOutputDir,
 				// Diff mode - SCA
@@ -493,11 +500,11 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
+				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech, Exclude: params.Exclusions()})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech})
+				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech, Exclude: params.Exclusions()})
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
 				}
