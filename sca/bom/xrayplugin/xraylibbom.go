@@ -15,7 +15,7 @@ import (
 )
 
 type XrayLibBomGenerator struct {
-	binaryPath     string
+	binaryPath string
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
