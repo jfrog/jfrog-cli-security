@@ -82,7 +82,7 @@ func (mal *MaliciousScanManager) Run(sourceRoot string) (vulnerabilitiesSarifRun
 		return
 	}
 	// Malicious code scans only return vulnerabilities, not violations
-	vulnerabilitiesSarifRuns, _, err = jas.ReadJasScanRunsFromFile(mal.resultsFileName, sourceRoot, malDocsUrlSuffix, mal.scanner.MinSeverity)
+	vulnerabilitiesSarifRuns, _, err = jas.ReadJasScanRunsFromFile(mal.resultsFileName, malDocsUrlSuffix, mal.scanner.MinSeverity, sourceRoot)
 	return
 }
 

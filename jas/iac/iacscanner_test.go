@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/require"
 
@@ -56,7 +57,7 @@ func TestNewIacScanManagerWithFilesToCompare(t *testing.T) {
 	assert.True(t, fileutils.IsPathExists(iacScanManager.resultsToCompareFileName, false))
 }
 
-func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+func TestIacScan_CreateDeprecatedConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
@@ -67,7 +68,37 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = iacScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
+	err = iacScanManager.deprecatedCreateConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
+
+	defer func() {
+		err = os.Remove(iacScanManager.configFileName)
+		assert.NoError(t, err)
+	}()
+
+	_, fileNotExistError := os.Stat(iacScanManager.configFileName)
+	assert.NoError(t, fileNotExistError)
+	fileContent, err := os.ReadFile(iacScanManager.configFileName)
+	assert.NoError(t, err)
+	assert.True(t, len(fileContent) > 0)
+}
+
+func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), 0)
+	require.NoError(t, err)
+
+	iacScanManager, err := newIacScanManager(scanner, scannerTempDir)
+	require.NoError(t, err)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = iacScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}, []string{})
+	assert.NoError(t, err)
 
 	defer func() {
 		err = os.Remove(iacScanManager.configFileName)
@@ -93,7 +124,7 @@ func TestIacParseResults_EmptyResults(t *testing.T) {
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "no-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, violationResults, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, violationResults, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, iacDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
 		assert.Len(t, vulnerabilitiesResults, 1)
 		assert.Empty(t, vulnerabilitiesResults[0].Results)
@@ -116,7 +147,7 @@ func TestIacParseResults_ResultsContainIacViolations(t *testing.T) {
 	iacScanManager.resultsFileName = filepath.Join(tempDirPath, "contains-iac-issues.sarif")
 
 	// Act
-	vulnerabilitiesResults, violationResults, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, violationResults, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, iacDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
 		assert.Len(t, vulnerabilitiesResults, 1)
 		assert.Len(t, vulnerabilitiesResults[0].Results, 4)

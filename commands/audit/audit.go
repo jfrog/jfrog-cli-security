@@ -485,7 +485,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	return
 }
 
-//TODO: change
+// TODO: change
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	if params.IsSingleTarget() {
 		// NEW logic:
@@ -561,10 +561,7 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	// TODO: remove "isNewFlow" once the old flow is fully deprecated.
-	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
-		isNewFlow = false
-	}
+	isNewFlow := isNewFlow(auditParams.bomGenerator)
 	// Add the scans to the parallel runner
 	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
@@ -654,7 +651,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner), func(taskErr error) {
+	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, isNewFlow), func(taskErr error) {
 		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
@@ -663,7 +660,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 }
 
 func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanResults *results.SecurityCommandResults,
-	serverDetails *config.ServerDetails, auditParams *AuditParams, scanner *jas.JasScanner) parallel.TaskFunc {
+	serverDetails *config.ServerDetails, auditParams *AuditParams, scanner *jas.JasScanner, isNewFlow bool) parallel.TaskFunc {
 	return func(threadId int) (generalError error) {
 		defer func() {
 			auditParallelRunner.JasWg.Done()
@@ -684,15 +681,18 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
 			if targetResult.AppsConfigModule == nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
-				continue
+				if !isNewFlow {
+					log.Debug(fmt.Sprintf("can't find apps config module for path %s", targetResult.Target))
+				} else {
+					_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
+					continue
+				}
 			}
-			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
 				Runner:                 auditParallelRunner,
 				ServerDetails:          serverDetails,
 				Scanner:                scanner,
-				Module:                 appsConfigModule,
+				Module:                 targetResult.AppsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),

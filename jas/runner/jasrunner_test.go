@@ -65,7 +65,7 @@ func TestJasRunner(t *testing.T) {
 	assert.NoError(t, AddJasScannersTasks(testParams))
 }
 
-func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
+func TestJasRunner_Module_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
@@ -76,7 +76,25 @@ func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
 			DirectDependenciesCves:   directCves,
 			IndirectDependenciesCves: indirectCves,
 			ScanType:                 applicability.ApplicabilityScannerType,
-			Module:                   jfrogAppsConfigForTest.Modules[0],
+			Module:                   &jfrogAppsConfigForTest.Modules[0],
+		},
+		scanner,
+	)
+	// Expect error:
+	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
+}
+
+func TestJasRunner_Target_AnalyzerManagerReturnsError(t *testing.T) {
+	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
+
+	scanner, _ := jas.NewJasScanner(&jas.FakeServerDetails)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"})
+	_, err := applicability.RunApplicabilityScan(
+		applicability.ContextualAnalysisScanParams{
+			DirectDependenciesCves:   directCves,
+			IndirectDependenciesCves: indirectCves,
+			ScanType:                 applicability.ApplicabilityScannerType,
+			Target:                   results.ScanTarget{Target: "target"},
 		},
 		scanner,
 	)

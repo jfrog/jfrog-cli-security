@@ -69,11 +69,18 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogAppsConfig.Module{}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.False(t, ShouldSkipScanner(&module, jasutils.IaC))
 
 	module = jfrogAppsConfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
-	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
+	assert.False(t, ShouldSkipScanner(&module, jasutils.IaC))
+	assert.True(t, ShouldSkipScanner(&module, jasutils.Sast))
+
+	// no module
+	assert.False(t, ShouldSkipScanner(nil, jasutils.IaC))
+	assert.False(t, ShouldSkipScanner(nil, jasutils.Sast))
+	assert.False(t, ShouldSkipScanner(nil, jasutils.Secrets))
+	assert.False(t, ShouldSkipScanner(nil, jasutils.MaliciousCode))
+	assert.False(t, ShouldSkipScanner(nil, jasutils.Applicability))
 }
 
 var getSourceRootsCases = []struct {
@@ -628,7 +635,7 @@ func TestProcessSarifRuns(t *testing.T) {
 		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file2")), 0, 0, 0, 0, "snippet", "rule1", "error"),
 	))
 
-	processSarifRuns(dummyReport.Runs, wd, "docs URL", severityutils.High)
+	processSarifRuns(dummyReport.Runs, "docs URL", severityutils.High, wd)
 	run := dummyReport.Runs[0]
 
 	// Check Invocation added.

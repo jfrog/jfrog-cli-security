@@ -163,7 +163,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 	}
 }
 
-func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+func TestApplicabilityScan_CreateDeprecatedConfigFile_VerifyFileWasCreated(t *testing.T) {
 	// Arrange
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
@@ -175,8 +175,32 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = applicabilityManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
+	err = applicabilityManager.deprecatedCreateConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
 	assert.NoError(t, err)
+
+	defer func() {
+		err = os.Remove(applicabilityManager.configFileName)
+		assert.NoError(t, err)
+	}()
+
+	_, fileNotExistError := os.Stat(applicabilityManager.configFileName)
+	assert.NoError(t, fileNotExistError)
+	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
+	assert.NoError(t, err)
+	assert.True(t, len(fileContent) > 0)
+}
+
+func TestApplicabilityScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
+	require.NoError(t, err)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}, []string{}))
 
 	defer func() {
 		err = os.Remove(applicabilityManager.configFileName)
@@ -236,7 +260,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			applicabilityManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", tc.fileName)
-			vulnerabilitiesResults, _, innerErr := jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, applicabilityDocsUrlSuffix, scanner.MinSeverity)
+			vulnerabilitiesResults, _, innerErr := jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, applicabilityDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 			if assert.NoError(t, innerErr) && assert.NotNil(t, vulnerabilitiesResults) {
 				assert.Len(t, vulnerabilitiesResults, 1)
 				assert.Len(t, vulnerabilitiesResults[0].Results, tc.expectedResults)

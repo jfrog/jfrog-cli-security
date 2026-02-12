@@ -591,7 +591,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		Runner:          jasFileProducerConsumer,
 		ServerDetails:   scanCmd.serverDetails,
 		Scanner:         scanner,
-		Module:          module,
+		Module:          &module,
 		TargetOutputDir: scanCmd.outputDir,
 		ScansToPerform:  scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
