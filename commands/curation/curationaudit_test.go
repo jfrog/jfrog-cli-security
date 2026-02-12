@@ -1044,7 +1044,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
 					w.Header().Add("content-type", "text/html")
-					//#nosec G705 -- mock server serves controlled test-resource file content only, not user input
+					// #nosec G705 -- mock server serves controlled test-resource file content only, not user input
 					_, err = w.Write(f)
 					require.NoError(t, err)
 					return
