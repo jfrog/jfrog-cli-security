@@ -20,6 +20,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 )
 
+const minimumXrayVersionForProjectPath = "3.133.0"
+
 func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices.EventType, serviceDetails *config.ServerDetails, projectPath string) *xscservices.XscAnalyticsGeneralEvent {
 	curOs, curArch := getOsAndArch()
 	event := xscservices.XscAnalyticsGeneralEvent{
@@ -42,6 +44,13 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	if !shouldReportEvents(xscVersion) {
 		log.Debug("Analytics metrics are disabled, skip sending event request to XSC")
 		return
+	}
+	if event.ProjectPath != "" {
+		// Validate project path supported by Xray version
+		if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, minimumXrayVersionForProjectPath); e != nil {
+			log.Verbose(fmt.Sprintf("Project path is not supported by Xray version %s, skip sending project path to XSC", xrayVersion))
+			event.ProjectPath = ""
+		}
 	}
 	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails, xray.WithScopedProjectKey(projectKey))
 	if err != nil {
