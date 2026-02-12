@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 )
 
-func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices.EventType, serviceDetails *config.ServerDetails) *xscservices.XscAnalyticsGeneralEvent {
+func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices.EventType, serviceDetails *config.ServerDetails, projectPath string) *xscservices.XscAnalyticsGeneralEvent {
 	curOs, curArch := getOsAndArch()
 	event := xscservices.XscAnalyticsGeneralEvent{
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
@@ -32,6 +32,7 @@ func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices
 			OsArchitecture:         curArch,
 			JpdVersion:             serviceDetails.ServerId,
 			AnalyzerManagerVersion: jas.GetAnalyzerManagerVersion(),
+			ProjectPath:            projectPath,
 		},
 	}
 	return &event
