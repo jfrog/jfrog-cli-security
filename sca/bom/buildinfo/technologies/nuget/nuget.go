@@ -279,6 +279,7 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	if err != nil {
 		return err
 	}
+	// #nosec G702 -- executable restricted to dotnet/nuget via validateInputCommand; args are project paths and known flags
 	command := exec.Command(executable, args...)
 	command.Dir = wd
 	if params.IsCurationCmd {
