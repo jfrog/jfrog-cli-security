@@ -307,11 +307,7 @@ func validateInputCommand(completeCommandArgs []string) (string, []string, error
 	if base := filepath.Base(executable); base != dotnetToolType && base != nugetToolType {
 		return "", nil, errorutils.CheckErrorf("invalid install command executable: %q (allowed: %s, %s)", executable, dotnetToolType, nugetToolType)
 	}
-	args := []string{}
-	for _, arg := range completeCommandArgs[1:] {
-		args = append(args, arg)
-	}
-	return executable, args, nil
+	return executable, completeCommandArgs[1:], nil
 }
 
 func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils.GraphNode, allUniqueDeps []string) {
