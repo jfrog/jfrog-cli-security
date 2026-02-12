@@ -12,4 +12,6 @@ type Config struct {
 	Version string `json:"version,omitempty"`
 	// [Optional] Patterns (git ignore like) to ignore when scanning the target.
 	IgnorePatterns []string `json:"ignorePatterns,omitempty"`
+	// [Optional] Specific directories to scan.
+	IncludeDirs []string `json:"includeDirs,omitempty"`
 }

@@ -18,6 +18,7 @@ import (
 type XrayLibBomGenerator struct {
 	binaryPath     string
 	ignorePatterns []string
+	includeDirs    []string
 	totalTargets   int
 }
 
@@ -45,6 +46,14 @@ func WithIgnorePatterns(ignorePatterns []string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.ignorePatterns = ignorePatterns
+		}
+	}
+}
+
+func WithIncludeDirs(includeDirs []string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.includeDirs = includeDirs
 		}
 	}
 }
@@ -114,6 +123,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target resu
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
+		IncludeDirs:    sbg.includeDirs,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
