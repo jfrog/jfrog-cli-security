@@ -275,8 +275,12 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	}
 
 	// We include the flag that allows resolution from an Artifactory server, if it exists.
-	completeCommandArgs = append(completeCommandArgs, commandExtraArgs...)
-	command := exec.Command(completeCommandArgs[0], completeCommandArgs[1:]...)
+	executable, args, err := validateInputCommand(append(completeCommandArgs, commandExtraArgs...))
+	if err != nil {
+		return err
+	}
+	// #nosec G702 -- executable restricted to dotnet/nuget via validateInputCommand; args are project paths and known flags
+	command := exec.Command(executable, args...)
 	command.Dir = wd
 	if params.IsCurationCmd {
 		command.Env, err = getEnvVariablesForCurationAudit()
@@ -295,6 +299,15 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 		err = errorutils.CheckErrorf("'dotnet restore' command failed: %s - %s", err.Error(), output)
 	}
 	return
+}
+
+// Validates the executable is either dotnet or nuget to prevent command injection (G702)
+func validateInputCommand(completeCommandArgs []string) (string, []string, error) {
+	executable := completeCommandArgs[0]
+	if base := filepath.Base(executable); base != dotnetToolType && base != nugetToolType {
+		return "", nil, errorutils.CheckErrorf("invalid install command executable: %q (allowed: %s, %s)", executable, dotnetToolType, nugetToolType)
+	}
+	return executable, completeCommandArgs[1:], nil
 }
 
 func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils.GraphNode, allUniqueDeps []string) {
