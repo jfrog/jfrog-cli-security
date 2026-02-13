@@ -286,54 +286,64 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 }
 
 func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
-	impactPathsRows = [][]formats.ComponentRow{}
-	componentAppearances := map[string]int8{}
-
-	log.Info("Building impact paths for component:", affectedComponent.Name, affectedComponent.Version)
-	if affectedComponent.Version == "snippet" && affectedComponent.Components != nil {
-		log.Info("Component is a snippet with sub-components, building impact paths for sub-components")
-		for _, subComp := range *affectedComponent.Components {
-			impactedPath := buildImpactPathForSubComponent(subComp, componentAppearances, components, dependencies...)
-			// Add the affected component at the end of the impact path
-			impactedPath = append(impactedPath, formats.ComponentRow{
-				Id:        affectedComponent.BOMRef,
-				Name:      affectedComponent.Name,
-				Version:   affectedComponent.Version,
-				Evidences: CdxEvidencesToLocations(affectedComponent),
-			})
-			// Add the impact path to the list of impact paths
-			impactPathsRows = append(impactPathsRows, impactedPath)
-
-		}
-	} else {
-		log.Info("Component is a regular component, building impact paths for parent components")
-		for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
-			impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
-			// Add the affected component at the end of the impact path
-			impactedPath = append(impactedPath, formats.ComponentRow{
-				Id:        affectedComponent.BOMRef,
-				Name:      affectedComponent.Name,
-				Version:   affectedComponent.Version,
-				Evidences: CdxEvidencesToLocations(affectedComponent),
-			})
-			// Add the impact path to the list of impact paths
-			impactPathsRows = append(impactPathsRows, impactedPath)
-		}
+	log.Verbose("Building impact paths for component:", affectedComponent.Name, affectedComponent.Version)
+	if isSnippetComponent(affectedComponent) {
+		log.Debug("Component is a snippet with sub-components, building impact paths for sub-components")
+		return buildSnippetImpactPaths(affectedComponent)
 	}
-	return
+	log.Debug("Component is a regular component, building impact paths for parent components")
+	componentAppearances := map[string]int8{}
+	return buildComponentParentsImpactPaths(affectedComponent, componentAppearances, components, dependencies...)
 }
 
-func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
-	componentAppearances[component.BOMRef]++
-	// Build the impact path for the component
-	impactPath = []formats.ComponentRow{
-		{
+func isSnippetComponent(component cyclonedx.Component) bool {
+	return component.Version == "snippet" && component.Components != nil
+}
+
+func buildSnippetImpactPaths(component cyclonedx.Component) (impactPaths [][]formats.ComponentRow) {
+	if component.Components == nil {
+		// snippet component has no sub components
+		log.Warn(fmt.Sprintf("Snippet component %s has no sub components", component.BOMRef))
+		return
+	}
+	for _, subComp := range *component.Components {
+		// Build the impact path for the snippet sub component
+		impactPaths = append(impactPaths, []formats.ComponentRow{
+			{
+				Id:        component.BOMRef,
+				Name:      component.Name,
+				Version:   component.Version,
+				Evidences: CdxEvidencesToLocations(component, getExternalReferencesUrls(component)...),
+			},
+			{
+				Id:        subComp.BOMRef,
+				Name:      subComp.Name,
+				Version:   subComp.Version,
+				Evidences: CdxEvidencesToLocations(subComp, getExternalReferencesUrls(subComp)...),
+			},
+		})
+	}
+	return impactPaths
+}
+
+func buildComponentParentsImpactPaths(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPaths [][]formats.ComponentRow) {
+	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+		impactPath := buildParentImpactPathForComponent(parent, componentAppearances, components, dependencies...)
+		// Add the affected component at the end of the impact path
+		impactPath = append(impactPath, formats.ComponentRow{
 			Id:        component.BOMRef,
 			Name:      component.Name,
 			Version:   component.Version,
 			Evidences: CdxEvidencesToLocations(component),
-		},
+		})
+		// Add the impact path to the list of impact paths
+		impactPaths = append(impactPaths, impactPath)
 	}
+	return impactPaths
+}
+
+func buildParentImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	impactPath = createImpactPathsForComponent(component, componentAppearances)
 	// Add the parent components to the impact path
 	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
 		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
@@ -341,7 +351,7 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 			// If the component has already appeared too many times, skip it to avoid stack overflow.
 			continue
 		}
-		parentImpactPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
+		parentImpactPath := buildParentImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		if len(parentImpactPath) > 0 {
 			impactPath = append(parentImpactPath, impactPath...)
 		}
@@ -349,7 +359,7 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 	return
 }
 
-func buildImpactPathForSubComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+func createImpactPathsForComponent(component cyclonedx.Component, componentAppearances map[string]int8) (impactPath []formats.ComponentRow) {
 	componentAppearances[component.BOMRef]++
 	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
@@ -1461,21 +1471,31 @@ func CdxEvidencesToPreferredLocation(component cyclonedx.Component) (location *f
 	}
 }
 
-func CdxEvidencesToLocations(component cyclonedx.Component) (evidences []formats.Location) {
+func getExternalReferencesUrls(component cyclonedx.Component) (externalReferences []string) {
+	if component.ExternalReferences != nil && len(*component.ExternalReferences) > 0 {
+		for _, externalReference := range *component.ExternalReferences {
+			if externalReference.URL != "" {
+				externalReferences = append(externalReferences, externalReference.URL)
+			}
+		}
+	}
+	return externalReferences
+}
+
+func CdxEvidencesToLocations(component cyclonedx.Component, externalReferences ...string) (evidences []formats.Location) {
 	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil
 	}
 
-	externalReference := ""
-	if component.ExternalReferences != nil && len(*component.ExternalReferences) > 0 {
-		externalReference = (*component.ExternalReferences)[0].URL
-	}
-
 	for _, occurrence := range *component.Evidence.Occurrences {
+		startLine := 0
+		if occurrence.Line != nil {
+			startLine = *occurrence.Line
+		}
 		evidences = append(evidences, formats.Location{
-			File:              occurrence.Location,
-			StartLine:         *occurrence.Line,
-			ExternalReference: externalReference,
+			File:               occurrence.Location,
+			StartLine:          startLine,
+			ExternalReferences: externalReferences,
 		})
 	}
 	return
