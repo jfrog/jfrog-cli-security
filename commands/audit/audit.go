@@ -178,6 +178,7 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 
 func getTargetsInfo(auditCmd *AuditCommand) (workingDirs []string, isRecursiveScan, isSingleTarget bool, err error) {
 	if isNewFlow(auditCmd.bomGenerator) {
+		// In new flow, we always scan a single target. the SBOM lib can support multiple tech and directories. no need to detect them.
 		isSingleTarget = true
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
@@ -315,7 +316,8 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		return
 	}
 	// Process the scan results and run additional steps if needed.
-	return processScanResults(auditParams, cmdResults)
+	// return processScanResults(auditParams, cmdResults)
+	return cmdResults
 }
 
 func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
@@ -485,28 +487,39 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	return
 }
 
-// TODO: change
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	if params.IsSingleTarget() {
-		// NEW logic:
-		scanTarget := results.ScanTarget{Exclude: params.Exclusions()}
-		dirs := []string{}
-		for _, dir := range params.workingDirs {
-			if !fileutils.IsPathExists(dir, false) {
-				log.Warn("The working directory", dir, "doesn't exist. Skipping SCA scan...")
-				continue
-			}
-			dirs = append(dirs, dir)
-		}
-		if len(dirs) == 1 {
-			scanTarget.Target = dirs[0]
-		} else {
-			scanTarget.Include = dirs
-		}
-		cmdResults.NewScanResults(scanTarget)
+		createSingleScanTarget(cmdResults, params)
 		return
 	}
-	// OLD logic:
+	detectScaTargetsFromTechnologies(cmdResults, params)
+}
+
+func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *AuditParams) {
+	scanTarget := results.ScanTarget{Exclude: params.Exclusions()}
+	dirs := []string{}
+	for _, dir := range params.workingDirs {
+		if !fileutils.IsPathExists(dir, false) {
+			log.Warn("The working directory", dir, "doesn't exist. Skipping...")
+			continue
+		}
+		dirs = append(dirs, dir)
+	}
+	if len(dirs) == 1 {
+		scanTarget.Target = dirs[0]
+	} else {
+		cwd, err := coreutils.GetWorkingDirectory()
+		if err != nil {
+			log.Warn("Failed to get working directory. Skipping...")
+			return
+		}
+		scanTarget.Target = cwd
+		scanTarget.Include = dirs
+	}
+	cmdResults.NewScanResults(scanTarget)
+}
+
+func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	for _, requestedDirectory := range params.workingDirs {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
