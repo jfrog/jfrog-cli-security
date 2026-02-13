@@ -67,7 +67,7 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 }
 
 func runSecretsScan(secretScanManager *SecretScanManager, params SecretsScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.Module == nil {
+	if params.Module == nil || len(params.Target.Include) > 0 {
 		return secretScanManager.scanner.Run(secretScanManager, params.Target)
 	}
 	return secretScanManager.scanner.DeprecatedRun(secretScanManager, *params.Module)

@@ -3,6 +3,7 @@ package results
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -222,12 +223,16 @@ type ScanTarget struct {
 	Technology techutils.Technology `json:"technology,omitempty"`
 }
 
-func (st ScanTarget) Copy(newTarget string) ScanTarget {
-	return ScanTarget{Target: newTarget, Name: st.Name, Technology: st.Technology}
-}
-
 func (st ScanTarget) String() (str string) {
-	str = st.Target
+	if len(st.Include) > 0 {
+		relaivePaths := []string{}
+		for _, path := range st.Include {
+			relaivePaths = append(relaivePaths, utils.GetRelativePath(path, st.Target))
+		}
+		str = fmt.Sprintf("%s {%s}", st.Target, strings.Join(relaivePaths, ", "))
+	} else {
+		str = st.Target
+	}
 	if st.Name != "" {
 		str = st.Name
 	}

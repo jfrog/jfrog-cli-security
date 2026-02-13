@@ -447,21 +447,10 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	logScanTargetsInfo(cmdResults)
 }
 
-// TODO: change
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
 	// Print the scan targets
 	if len(cmdResults.Targets) == 1 {
-		outLog := "Performing scans on "
-		if cmdResults.Targets[0].Technology != techutils.NoTech {
-			outLog += fmt.Sprintf("%s ", cmdResults.Targets[0].Technology.String())
-		}
-		outLog += "project "
-		if cmdResults.Targets[0].Name != "" {
-			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Name)
-		} else {
-			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Target)
-		}
-		log.Info(outLog)
+		log.Info(fmt.Sprintf("Performing scans on project %s", cmdResults.Targets[0].String()))
 		return
 	}
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
