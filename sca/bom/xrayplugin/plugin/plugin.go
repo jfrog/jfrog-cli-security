@@ -25,6 +25,8 @@ const (
 	xrayLibPluginVersionEnvVariable = "JFROG_CLI_XRAY_LIB_PLUGIN_VERSION"
 	defaultXrayLibPluginVersion     = "0.0.3-43"
 
+	SnippetDetectionEnvVariable = "JFROG_XRAY_SNIPPET_SCAN_ENABLE"
+
 	xrayLibPluginRtRepository   = "xray-scan-lib"
 	XrayLibPluginExecutableName = "xray-scan-plugin"
 
@@ -71,7 +73,7 @@ type ScannerRPCServer struct {
 	Impl Scanner
 }
 
-func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) {
+func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (scanner Scanner, err error) {
 	// Create the plugin client with JFrog logger adapter
 	// This will align the plugin's logging with JFrog CLI's logging
 	var logStdErr io.Writer
@@ -83,7 +85,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
 		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
-		Cmd:             &exec.Cmd{Path: scangBinary},
+		Cmd:             &exec.Cmd{Path: scangBinary, Env: utils.ToCommandEnvVars(envVars)},
 		Managed:         true,
 		Stderr:          logStdErr,
 		Logger:          NewHclogToJfrogAdapter(),

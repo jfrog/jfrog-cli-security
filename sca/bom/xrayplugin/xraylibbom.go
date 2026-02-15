@@ -16,9 +16,10 @@ import (
 )
 
 type XrayLibBomGenerator struct {
-	binaryPath     string
-	ignorePatterns []string
-	totalTargets   int
+	binaryPath       string
+	snippetDetection bool
+	ignorePatterns   []string
+	totalTargets     int
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
@@ -45,6 +46,14 @@ func WithIgnorePatterns(ignorePatterns []string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.ignorePatterns = ignorePatterns
+		}
+	}
+}
+
+func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.snippetDetection = snippetDetection
 		}
 	}
 }
@@ -105,7 +114,7 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 
 func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	// Create a new plugin client
-	scanner, err := plugin.CreateScannerPluginClient(xrayLibBinary)
+	scanner, err := plugin.CreateScannerPluginClient(xrayLibBinary, sbg.getPluginEnvVars())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
@@ -119,6 +128,14 @@ func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target resu
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
+}
+
+func (sbg *XrayLibBomGenerator) getPluginEnvVars() map[string]string {
+	envVars := map[string]string{}
+	if sbg.snippetDetection {
+		envVars[plugin.SnippetDetectionEnvVariable] = "true"
+	}
+	return envVars
 }
 
 func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string, startTime time.Time) {

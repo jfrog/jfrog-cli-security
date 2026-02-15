@@ -840,21 +840,23 @@ func TestCreateResultsContext(t *testing.T) {
 		testCases := []struct {
 			name string
 
-			artifactoryRepoPath    string
-			httpCloneUrl           string
-			watches                []string
-			jfrogProjectKey        string
-			includeVulnerabilities bool
-			includeLicenses        bool
-			includeSbom            bool
+			artifactoryRepoPath     string
+			httpCloneUrl            string
+			watches                 []string
+			jfrogProjectKey         string
+			includeVulnerabilities  bool
+			includeLicenses         bool
+			includeSbom             bool
+			includeSnippetDetection bool
 
-			expectedArtifactoryRepoPath    string
-			expectedHttpCloneUrl           string
-			expectedWatches                []string
-			expectedJfrogProjectKey        string
-			expectedIncludeVulnerabilities bool
-			expectedIncludeLicenses        bool
-			expectedIncludeSbom            bool
+			expectedArtifactoryRepoPath     string
+			expectedHttpCloneUrl            string
+			expectedWatches                 []string
+			expectedJfrogProjectKey         string
+			expectedIncludeVulnerabilities  bool
+			expectedIncludeLicenses         bool
+			expectedIncludeSbom             bool
+			expectedIncludeSnippetDetection bool
 		}{
 			{
 				name:            "Only Vulnerabilities",
@@ -889,27 +891,34 @@ func TestCreateResultsContext(t *testing.T) {
 				expectedIncludeVulnerabilities: expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided,
 			},
 			{
-				name:                   "All",
-				httpCloneUrl:           validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
-				watches:                mockWatches,
-				jfrogProjectKey:        mockProjectKey,
-				includeVulnerabilities: true,
-				includeLicenses:        true,
-				includeSbom:            true,
+				name:                            "Snippet Detection - no violation context",
+				includeSnippetDetection:         true,
+				expectedIncludeSnippetDetection: false,
+			},
+			{
+				name:                    "All",
+				httpCloneUrl:            validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
+				watches:                 mockWatches,
+				jfrogProjectKey:         mockProjectKey,
+				includeVulnerabilities:  true,
+				includeLicenses:         true,
+				includeSbom:             true,
+				includeSnippetDetection: true,
 
-				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
-				expectedWatches:                mockWatches,
-				expectedJfrogProjectKey:        mockProjectKey,
-				expectedIncludeVulnerabilities: true,
-				expectedIncludeLicenses:        true,
-				expectedIncludeSbom:            true,
+				expectedHttpCloneUrl:            testCaseExpectedGitRepoHttpsCloneUrl,
+				expectedWatches:                 mockWatches,
+				expectedJfrogProjectKey:         mockProjectKey,
+				expectedIncludeVulnerabilities:  true,
+				expectedIncludeLicenses:         true,
+				expectedIncludeSbom:             true,
+				expectedIncludeSnippetDetection: true,
 			},
 		}
 		for _, testCase := range testCases {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
 				mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
-				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom)
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom, testCase.includeSnippetDetection)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
 				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
 				assert.Equal(t, testCase.expectedWatches, context.Watches)
@@ -917,6 +926,7 @@ func TestCreateResultsContext(t *testing.T) {
 				assert.Equal(t, testCase.expectedIncludeVulnerabilities, context.IncludeVulnerabilities)
 				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
 				assert.Equal(t, testCase.expectedIncludeSbom, context.IncludeSbom)
+				assert.Equal(t, testCase.expectedIncludeSnippetDetection, context.IncludeSnippetDetection)
 			})
 		}
 	}

@@ -82,6 +82,11 @@ func (gap *GitAuditParams) SetIncludeVulnerabilities(includeVulnerabilities bool
 	return gap
 }
 
+func (gap *GitAuditParams) SetIncludeSnippetDetection(includeSnippetDetection bool) *GitAuditParams {
+	gap.resultsContext.IncludeSnippetDetection = includeSnippetDetection
+	return gap
+}
+
 func (gap *GitAuditParams) SetScansToPerform(scansToPerform []utils.SubScanType) *GitAuditParams {
 	gap.scansToPerform = scansToPerform
 	return gap

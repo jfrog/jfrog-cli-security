@@ -89,6 +89,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		params.includeSbom,
+		params.resultsContext.IncludeSnippetDetection,
 	)
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
