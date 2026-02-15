@@ -5,6 +5,8 @@
 
 </div>
 
+
+
 | Branch |                                                                                                                                                                                            Status                                                                                                                                                                                            |
 |:------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
 | main | [![Test](https://github.com/jfrog/jfrog-cli-security/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/jfrog/jfrog-cli-security/actions/workflows/test.yml?query=branch%main) [![Static Analysis](https://github.com/jfrog/jfrog-cli-security/actions/workflows/analysis.yml/badge.svg?branch=main)](https://github.com/jfrog/jfrog-cli-security/actions/workflows/analysis.yml) |
