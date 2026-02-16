@@ -97,6 +97,8 @@ func GitAuditCmd(c *components.Context) error {
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
+	gitAuditCmd.SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
+	gitAuditCmd.SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
 	return err
