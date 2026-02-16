@@ -115,9 +115,9 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-static-sca-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-static-sca-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -262,8 +262,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 4, NotCovered: 5, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 10, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 4, NotCovered: 6, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},
@@ -290,8 +290,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 5, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 6, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 6, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},

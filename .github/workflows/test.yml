@@ -23,7 +23,7 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 40m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 40m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --ci.runId=${{ runner.os }}-sec-test --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
@@ -88,7 +88,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
   Audit_Command_Integration_Tests:
     name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
@@ -141,7 +141,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
 
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
@@ -170,7 +170,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory
     
   Xray_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Xray Commands Integration Tests"
@@ -224,7 +224,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
   
   Binary_Scan_Command_Integration_Tests:
     name: "[${{ matrix.os }}] Binary Scan Command Integration Tests"
@@ -253,7 +253,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
 
   Docker_Scan_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Docker Scan Commands Integration Tests"
@@ -282,7 +282,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan
 
   Other_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Commands Integration Tests"
@@ -311,7 +311,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich
  
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
@@ -340,4 +340,4 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git
