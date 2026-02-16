@@ -20,7 +20,7 @@ import (
 )
 
 func TestParseYarnDependenciesMap(t *testing.T) {
-	npmId := techutils.Npm.GetPackageTypeId()
+	npmId := techutils.Npm.GetXrayPackageTypeId()
 
 	testCases := []struct {
 		name               string
