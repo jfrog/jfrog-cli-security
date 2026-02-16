@@ -398,6 +398,13 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	if entitledForJas {
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
+	if params.resultsContext.IncludeSnippetDetection {
+		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), utils.SnippetDetectionMinVersion); err != nil {
+			// Snippet detection is not supported by the Xray version.
+			log.Warn(fmt.Sprintf("Snippet detection is not supported by the Xray version (%s). Snippet detection will not be included in the results.", params.GetXrayVersion()))
+			params.resultsContext.IncludeSnippetDetection = false
+		}
+	}
 	return
 }
 
