@@ -599,7 +599,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 				// No SCA scan results, return empty CVE lists.
 				return
 			}
-			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, *directDepsListFromVulnerabilities(graphScanResults))
+			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, directDepsListFromScanResponses(graphScanResults))
 		},
 		ScanResults: targetResults,
 	}
@@ -730,7 +730,7 @@ func getXrayRepoPathFromTarget(target string) (repoPath string) {
 	return target[:strings.LastIndex(target, "/")+1]
 }
 
-func directDepsListFromVulnerabilities(scanResult ...*services.ScanResponse) *[]string {
+func directDepsListFromScanResponses(scanResult ...*services.ScanResponse) []string {
 	depsList := []string{}
 	for _, result := range scanResult {
 		if result == nil {
@@ -744,8 +744,16 @@ func directDepsListFromVulnerabilities(scanResult ...*services.ScanResponse) *[]
 				}
 			}
 		}
+		for _, violation := range result.Violations {
+			dependencies := maps.Keys(violation.Components)
+			for _, dependency := range dependencies {
+				if !slices.Contains(depsList, dependency) {
+					depsList = append(depsList, dependency)
+				}
+			}
+		}
 	}
-	return &depsList
+	return depsList
 }
 
 func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {
