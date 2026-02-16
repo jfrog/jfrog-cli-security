@@ -912,6 +912,7 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 	return
 }
 
+// If pretty is true, return the formal technology name, otherwise return the cdx component type
 func FormalTechOrCdxCompType(cdxCompType string, pretty bool) string {
 	if !pretty {
 		return cdxCompType
