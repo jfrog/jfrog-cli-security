@@ -63,6 +63,7 @@ type ScanCommand struct {
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
 	outputFormat        format.OutputFormat
+	outputDir           string
 	minSeverityFilter   severityutils.Severity
 	fail                bool
 	printExtendedTable  bool
@@ -121,6 +122,11 @@ func (scanCmd *ScanCommand) SetProgress(progress ioUtils.ProgressMgr) {
 
 func (scanCmd *ScanCommand) SetThreads(threads int) *ScanCommand {
 	scanCmd.threads = threads
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetOutputDir(outputDir string) *ScanCommand {
+	scanCmd.outputDir = outputDir
 	return scanCmd
 }
 
@@ -248,6 +254,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
+		SetOutputDir(scanCmd.outputDir).
 		SetPlatformUrl(scanCmd.serverDetails.Url).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetSubScansPerformed(scanCmd.scansToPerform).
@@ -517,6 +524,13 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	}
 	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 	targetResults.Technology = techutils.ToTechnology(graphScanResults.ScannedPackageType)
+	// Dump scan response if requested
+	if scanCmd.outputDir == "" {
+		return
+	}
+	if e := scan.DumpScanResponseToFileIfNeeded(*graphScanResults, scanCmd.outputDir, utils.ScaScan, scanThreadId); e != nil {
+		log.Warn(fmt.Sprintf(clientutils.GetLogMsgPrefix(scanThreadId, false)+"Failed to dump SCA scan results for target %s: %s", targetResults.Target, e.Error()))
+	}
 	return
 }
 
@@ -550,6 +564,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 			secretValidation,
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(
+				false,
 				msi,
 				// Passing but empty since not supported for binary scans
 				scanCmd.resultsContext.GitRepoHttpsCloneUrl,
@@ -573,17 +588,18 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	}
 	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	jasParams := runner.JasRunnerParams{
-		Runner:         jasFileProducerConsumer,
-		ServerDetails:  scanCmd.serverDetails,
-		Scanner:        scanner,
-		Module:         module,
-		ScansToPerform: scanCmd.scansToPerform,
+		Runner:          jasFileProducerConsumer,
+		ServerDetails:   scanCmd.serverDetails,
+		Scanner:         scanner,
+		Module:          module,
+		TargetOutputDir: scanCmd.outputDir,
+		ScansToPerform:  scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
 			if graphScanResults == nil {
 				// No SCA scan results, return empty CVE lists.
 				return
 			}
-			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, *directDepsListFromVulnerabilities(graphScanResults))
+			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, directDepsListFromScanResponses(graphScanResults))
 		},
 		ScanResults: targetResults,
 	}
@@ -714,7 +730,7 @@ func getXrayRepoPathFromTarget(target string) (repoPath string) {
 	return target[:strings.LastIndex(target, "/")+1]
 }
 
-func directDepsListFromVulnerabilities(scanResult ...*services.ScanResponse) *[]string {
+func directDepsListFromScanResponses(scanResult ...*services.ScanResponse) []string {
 	depsList := []string{}
 	for _, result := range scanResult {
 		if result == nil {
@@ -728,8 +744,16 @@ func directDepsListFromVulnerabilities(scanResult ...*services.ScanResponse) *[]
 				}
 			}
 		}
+		for _, violation := range result.Violations {
+			dependencies := maps.Keys(violation.Components)
+			for _, dependency := range dependencies {
+				if !slices.Contains(depsList, dependency) {
+					depsList = append(depsList, dependency)
+				}
+			}
+		}
 	}
-	return &depsList
+	return depsList
 }
 
 func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {

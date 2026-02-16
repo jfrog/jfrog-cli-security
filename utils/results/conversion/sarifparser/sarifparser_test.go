@@ -39,9 +39,9 @@ func TestGetComponentSarifLocation(t *testing.T) {
 		{
 			name: "Component with location",
 			component: formats.ComponentRow{
-				Name:     "example-package",
-				Version:  "1.0.0",
-				Location: &formats.Location{File: filepath.Join("dir", "file.txt")},
+				Name:              "example-package",
+				Version:           "1.0.0",
+				PreferredLocation: &formats.Location{File: filepath.Join("dir", "file.txt")},
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
 				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("dir/file.txt")),

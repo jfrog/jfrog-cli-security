@@ -591,18 +591,14 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	repoKey := utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl)
-	if isNewFlow {
-		// Violations by git repo key In JAS by AM not needed in the new flow.
-		repoKey = ""
-	}
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
 			scanResults.SecretValidation,
 			jas.GetDiffScanTypeValue(auditParams.diffMode, auditParams.resultsToCompare),
 			jas.GetAnalyzerManagerXscEnvVars(
+				isNewFlow,
 				auditParams.GetMultiScanId(),
-				repoKey,
+				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,
 				scanResults.GetTechnologies()...,
