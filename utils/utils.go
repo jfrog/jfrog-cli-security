@@ -39,6 +39,7 @@ const (
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 	StaticScanMinVersion          = "3.133.0"
+	SnippetDetectionMinVersion    = "3.139.0"
 
 	XrayToolName = "JFrog Xray Scanner"
 

@@ -132,13 +132,6 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		IncludeSbom:             includeSbom,
 		IncludeSnippetDetection: includeSnippetDetection,
 	}
-	defer func() {
-		// Validate that the snippet detection is enabled only if violation context is provided.
-		if includeSnippetDetection && !context.HasViolationContext() {
-			log.Warn("Snippet detection is only supported when violation context is provided. Snippet detection will not be included in the results.")
-			context.IncludeSnippetDetection = false
-		}
-	}()
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
 		return

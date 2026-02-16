@@ -128,6 +128,22 @@ func isSnippetDetectionEnabled(c *components.Context) bool {
 	return strings.ToLower(os.Getenv(plugin.SnippetDetectionEnvVariable)) == "true"
 }
 
+func validateSnippetDetection(c *components.Context) (bool, error) {
+	isEnabled := isSnippetDetectionEnabled(c)
+	if !isEnabled {
+		return false, nil
+	}
+	subScans, err := getSubScansToPreform(c)
+	if err != nil {
+		return false, err
+	}
+	// Make sure SCA is requested or SBOM is requested
+	if !(utils.IsScanRequested(utils.SourceCode, utils.ScaScan, subScans...) || c.GetBoolFlagValue(flags.Sbom)) {
+		return false, errorutils.CheckErrorf("Snippet detection is only supported when SCA is requested or SBOM is requested")
+	}
+	return true, nil
+}
+
 func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, err error) {
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error

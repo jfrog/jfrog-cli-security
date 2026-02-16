@@ -68,7 +68,7 @@ func GitAuditCmd(c *components.Context) error {
 	} else {
 		gitAuditCmd.SetWatches(watches)
 	}
-	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).SetIncludeSnippetDetection(isSnippetDetectionEnabled(c))
+	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	// Set Scan params
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
@@ -94,11 +94,16 @@ func GitAuditCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	includeSnippetDetection, err := validateSnippetDetection(c)
+	if err != nil {
+		return err
+	}
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	gitAuditCmd.SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	gitAuditCmd.SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
+	gitAuditCmd.SetIncludeSnippetDetection(includeSnippetDetection)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
 	return err
