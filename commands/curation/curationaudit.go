@@ -756,7 +756,7 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return nil
 	}
 
-	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
+	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
 		return err
 	}
