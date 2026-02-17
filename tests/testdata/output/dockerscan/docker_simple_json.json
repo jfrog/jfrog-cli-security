@@ -4,7 +4,7 @@
       "severity": "Critical",
       "impactedPackageName": "debian:bookworm:libssl3",
       "impactedPackageVersion": "3.0.13-1~deb12u1",
-      "impactedPackageType": "Debian",
+      "impactedPackageType": "deb",
       "components": [
         {
           "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
@@ -60,7 +60,7 @@
       "severity": "Critical",
       "impactedPackageName": "debian:bookworm:openssl",
       "impactedPackageVersion": "3.0.13-1~deb12u1",
-      "impactedPackageType": "Debian",
+      "impactedPackageType": "deb",
       "components": [
         {
           "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
@@ -118,7 +118,7 @@
       "severity": "Unknown",
       "impactedPackageName": "debian:bookworm:libssl3",
       "impactedPackageVersion": "3.0.13-1~deb12u1",
-      "impactedPackageType": "Debian",
+      "impactedPackageType": "deb",
       "components": [
         {
           "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
@@ -186,7 +186,7 @@
       "severity": "Unknown",
       "impactedPackageName": "debian:bookworm:libssl3",
       "impactedPackageVersion": "3.0.13-1~deb12u1",
-      "impactedPackageType": "Debian",
+      "impactedPackageType": "deb",
       "components": [
         {
           "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",

@@ -102,9 +102,9 @@ func addIgnoreScriptsFlag(npmArgs []string) []string {
 func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *biutils.PackageInfo) (*xrayUtils.GraphNode, []string) {
 	treeMap := make(map[string]xray.DepTreeNode)
 	for _, dependency := range dependencies {
-		dependencyId := techutils.Npm.GetPackageTypeId() + dependency.Id
+		dependencyId := techutils.Npm.GetXrayPackageTypeId() + dependency.Id
 		for _, requestedByNode := range dependency.RequestedBy {
-			parent := techutils.Npm.GetPackageTypeId() + requestedByNode[0]
+			parent := techutils.Npm.GetXrayPackageTypeId() + requestedByNode[0]
 			depTreeNode, ok := treeMap[parent]
 			if ok {
 				depTreeNode.Children = appendUniqueChild(depTreeNode.Children, dependencyId)
@@ -114,7 +114,7 @@ func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *
 			treeMap[parent] = depTreeNode
 		}
 	}
-	graph, nodeMapTypes := xray.BuildXrayDependencyTree(treeMap, techutils.Npm.GetPackageTypeId()+packageInfo.BuildInfoModuleId())
+	graph, nodeMapTypes := xray.BuildXrayDependencyTree(treeMap, techutils.Npm.GetXrayPackageTypeId()+packageInfo.BuildInfoModuleId())
 	return graph, maps.Keys(nodeMapTypes)
 }
 

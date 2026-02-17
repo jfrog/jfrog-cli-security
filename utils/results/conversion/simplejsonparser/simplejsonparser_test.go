@@ -432,7 +432,7 @@ func TestPrepareSimpleJsonLicenses(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := PrepareSimpleJsonLicenses(tc.target, tc.licenses)
+			out, err := PrepareSimpleJsonLicenses(tc.target, tc.licenses, false)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})

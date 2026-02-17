@@ -197,7 +197,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray --ci.runId=${{ runner.os }}-sec-test
 
   Xsc_Integration_Tests:
     name: "[${{ matrix.os }}] XSC Integration Tests"
