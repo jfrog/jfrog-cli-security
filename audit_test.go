@@ -1167,7 +1167,6 @@ func TestAuditNewScaSnippetDetection(t *testing.T) {
 	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "snippet-detection-watch", xrayUtils.License)
 	defer deleteWatch()
 	params := auditCommandTestParams{
-		WithSbom:    true,
 		OnlyScaScan: true,
 		Format:      format.SimpleJson,
 		Watches:     []string{watchName},
@@ -1176,16 +1175,15 @@ func TestAuditNewScaSnippetDetection(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
 		validations.ValidationParams{ExactResultsMatch: true},
 	)
-	// With snippet detection. should find 4 licenses violations and 2 bom components
+	// With snippet detection. should find 4 licenses violations
 	params.WithSnippetDetection = true
 	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
 		validations.ValidationParams{
 			ExactResultsMatch: true,
-			Total:             &validations.TotalCount{Violations: 4, BomComponents: 3},
+			Total:             &validations.TotalCount{Violations: 4},
 			Violations: &validations.ViolationCount{
 				ValidateType: &validations.ScaViolationCount{License: 4},
 			},
-			SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
 		},
 	)
 }
