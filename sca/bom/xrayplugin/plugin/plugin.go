@@ -32,7 +32,6 @@ const (
 	pluginName                  = "scang"
 	xrayLibPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
 	xrayPluginLogsName          = "xrayPluginLogs"
-	xrayPluginLogPrefix         = "[Xray Scan Plugin] "
 )
 
 // Injected at build so needs to be variable
@@ -92,7 +91,7 @@ func createPluginStderrLogFile(logDir string) (io.Writer, string, error) {
 func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath string, err error) {
 	var stderrWriter io.Writer
 	if shouldOutputPluginLogs() {
-		stderrWriter = utils.NewPrefixWriter(os.Stderr, xrayPluginLogPrefix)
+		stderrWriter = utils.NewLineDecoratorWriter(os.Stderr, "{", "}")
 	} else {
 		logDir, dirErr := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, xrayPluginLogsName))
 		if dirErr != nil {

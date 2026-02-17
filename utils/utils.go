@@ -446,19 +446,25 @@ func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFil
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil
 }
 
-// PrefixWriter writes each line to the underlying writer with a prefix (e.g. "[Xray Scan Plugin] ").
-type PrefixWriter struct {
+// LineDecoratorWriter is a line decorator that writes each line to the underlying writer with an optional prefix and suffix.
+type LineDecoratorWriter struct {
 	w      io.Writer
 	prefix []byte
+	suffix []byte
 	buf    []byte
 }
 
-// NewPrefixWriter returns a writer that prefixes each line written to it with the given prefix.
-func NewPrefixWriter(w io.Writer, prefix string) *PrefixWriter {
-	return &PrefixWriter{w: w, prefix: []byte(prefix)}
+// NewLineDecoratorWriter returns a writer that decorates each line with the given prefix and suffix.
+// Use empty string for prefix or suffix to omit. E.g. NewLineDecoratorWriter(w, "{", "}") wraps each line as "{ line }".
+func NewLineDecoratorWriter(w io.Writer, prefix, suffix string) *LineDecoratorWriter {
+	return &LineDecoratorWriter{
+		w:      w,
+		prefix: []byte(prefix),
+		suffix: []byte(suffix),
+	}
 }
 
-func (p *PrefixWriter) Write(data []byte) (n int, err error) {
+func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
 	n = len(data)
 	p.buf = append(p.buf, data...)
 	for {
@@ -466,12 +472,19 @@ func (p *PrefixWriter) Write(data []byte) (n int, err error) {
 		if i < 0 {
 			return n, nil
 		}
-		line := p.buf[:i+1]
+		line := p.buf[:i+1] // includes \n
 		p.buf = p.buf[i+1:]
+		lineWithoutNewline := line[:len(line)-1]
 		if _, err = p.w.Write(p.prefix); err != nil {
 			return 0, err
 		}
-		if _, err = p.w.Write(line); err != nil {
+		if _, err = p.w.Write(lineWithoutNewline); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write(p.suffix); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write([]byte{'\n'}); err != nil {
 			return 0, err
 		}
 	}
