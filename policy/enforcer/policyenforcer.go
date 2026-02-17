@@ -234,7 +234,8 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 			continue
 		}
 		for _, component := range *target.ScaResults.Sbom.Components {
-			if strings.HasPrefix(component.BOMRef, ref) {
+			// XRAY-135509, CTLG-1290 Bug in Xray: the BOMRef is not always in the same case as the ref, so we need to check both
+			if strings.HasPrefix(component.BOMRef, ref) || strings.EqualFold(component.BOMRef, ref) {
 				// Found the relevant component
 				impactedComponent = &component
 				dependencies := []cyclonedx.Dependency{}
