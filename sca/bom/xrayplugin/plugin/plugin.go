@@ -73,38 +73,13 @@ type ScannerRPCServer struct {
 	Impl Scanner
 }
 
-func shouldOutputPluginLogs() bool {
-	return utils.IsCI() && log.Logger.GetLogLevel() == log.DEBUG
-}
-
-func createPluginStderrLogFile(logDir string) (io.Writer, string, error) {
-	p := filepath.Join(logDir, fmt.Sprintf("%s-%s.log", xrayPluginLogsName, utils.GetCurrentTimeUnix()))
-	f, err := os.Create(p)
-	if err != nil {
-		return nil, "", err
-	}
-	return f, p, nil
-}
-
 // CreateScannerPluginClient creates a plugin client. When not in CI and log level is DEBUG, plugin stderr is written
 // to a log file under JFrog home (logs/xrayPluginLogs/)
 func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath string, err error) {
-	var stderrWriter io.Writer
-	if shouldOutputPluginLogs() {
-		stderrWriter = utils.NewLineDecoratorWriter(os.Stderr, "{", "}")
-	} else {
-		logDir, dirErr := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, xrayPluginLogsName))
-		if dirErr != nil {
-			return nil, "", fmt.Errorf("failed to create plugin log directory: %w", dirErr)
-		}
-		stderrWriter, logPath, err = createPluginStderrLogFile(logDir)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to create plugin stderr log file: %w", err)
-		}
+	stderrWriter, logPath, err := getPluginLogger()
+	if err != nil {
+		return nil, "", err
 	}
-	// Create the plugin client. Stderr receives the plugin process's raw stderr
-	// (from the pipe). SyncStderr receives the plugin's os.Stderr after go-plugin
-	// replaces it—this is where jfrog-client-go log output goes. Stdout is discarded.
 	clientConfig := &goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
 		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
@@ -139,6 +114,37 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath str
 		return nil, "", fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
 	}
 	return scanPlugin, logPath, nil
+}
+
+func getPluginLogger() (writer io.Writer, logPath string, err error) {
+	if shouldOutputPluginLogs() {
+		writer = utils.NewLineDecoratorWriter(os.Stderr, "{", "}")
+		return
+	}
+	logDir, dirErr := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, xrayPluginLogsName))
+	if dirErr != nil {
+		err = fmt.Errorf("failed to create plugin log directory: %w", dirErr)
+		return
+	}
+	writer, logPath, err = createPluginStderrLogFile(logDir)
+	if err != nil {
+		err = fmt.Errorf("failed to create plugin stderr log file: %w", err)
+		return
+	}
+	return
+}
+
+func shouldOutputPluginLogs() bool {
+	return utils.IsCI() && log.Logger.GetLogLevel() == log.DEBUG
+}
+
+func createPluginStderrLogFile(logDir string) (io.Writer, string, error) {
+	p := filepath.Join(logDir, fmt.Sprintf("%s-%s.log", xrayPluginLogsName, utils.GetCurrentTimeUnix()))
+	f, err := os.Create(p)
+	if err != nil {
+		return nil, "", err
+	}
+	return f, p, nil
 }
 
 func (g *ScannerRPCClient) Scan(path string, config Config) (*cyclonedx.BOM, error) {
