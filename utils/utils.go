@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,4 +444,35 @@ func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFil
 		return false, fmt.Errorf("failed to calculate the local file checksum: %w", err)
 	}
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil
+}
+
+// PrefixWriter writes each line to the underlying writer with a prefix (e.g. "[Xray Scan Plugin] ").
+type PrefixWriter struct {
+	w      io.Writer
+	prefix []byte
+	buf    []byte
+}
+
+// NewPrefixWriter returns a writer that prefixes each line written to it with the given prefix.
+func NewPrefixWriter(w io.Writer, prefix string) *PrefixWriter {
+	return &PrefixWriter{w: w, prefix: []byte(prefix)}
+}
+
+func (p *PrefixWriter) Write(data []byte) (n int, err error) {
+	n = len(data)
+	p.buf = append(p.buf, data...)
+	for {
+		i := bytes.IndexByte(p.buf, '\n')
+		if i < 0 {
+			return n, nil
+		}
+		line := p.buf[:i+1]
+		p.buf = p.buf[i+1:]
+		if _, err = p.w.Write(p.prefix); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write(line); err != nil {
+			return 0, err
+		}
+	}
 }
