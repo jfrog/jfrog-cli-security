@@ -19,7 +19,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
@@ -116,7 +115,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-static-sca-policy", utils.Unknown, true, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-static-sca-policy", xrayUtils.Unknown, true, false)
 	defer cleanUpPolicy()
 	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-static-sca-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
@@ -154,7 +153,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	dummyCloneUrl := getDummyGitRepoUrl()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", xrayUtils.Unknown, true, false)
 	defer cleanUpPolicy()
 	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
@@ -174,21 +173,21 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	)
 
 	// Create an ignore rules for the git repo
-	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
+	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", xrayUtils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
 		CVEs:            []string{"any"}, Licenses: []string{"any"},
 		Watches: []string{watchName},
 	})
 	defer cleanUpCveIgnoreRule()
-	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
+	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", xrayUtils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
-		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
+		Exposures:       &xrayUtils.ExposuresFilterName{Categories: []xrayUtils.ExposureType{xrayUtils.SecretExposureType, xrayUtils.IacExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
-	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
+	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", xrayUtils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
-		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
+		Sast:            &xrayUtils.SastFilterName{Rule: []string{"any"}},
 		Watches:         []string{watchName},
 	})
 	defer cleanSastUpIgnoreRule()
@@ -213,7 +212,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	}
 
 	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", xrayUtils.Unknown, true, false)
 	defer cleanUpPolicy()
 	_, cleanUpWatch := securityTestUtils.CreateWatchOnProjectBuilds(t, policyName, "project-key-jas-violations-watch", xrayUtils.Security, *securityTests.JfrogTestProjectKey)
 	defer cleanUpWatch()
@@ -241,7 +240,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 
 	// Create policy and watch for the git repo so we will also get violations - This watch DO NOT skip not-applicable results
 	var firstPolicyCleaned, firstWatchCleaned bool
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "without-skip-non-applicable-policy", utils.Low, false, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "without-skip-non-applicable-policy", xrayUtils.Low, false, false)
 	defer func() {
 		if !firstPolicyCleaned {
 			cleanUpPolicy()
@@ -277,7 +276,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	firstPolicyCleaned = true
 
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
-	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
+	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", xrayUtils.Low, false, true)
 	defer skipCleanUpPolicy()
 	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, skipPolicyName, "skip-not-applicable-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer skipCleanUpWatch()
