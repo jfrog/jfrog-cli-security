@@ -1162,9 +1162,9 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 func TestAuditNewScaSnippetDetection(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.SnippetDetectionMinVersion)
 	// Create license policy and watch
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestLicensePolicy(t, "snippet-detection-policy", false, false, "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later")
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestLicensePolicy(t, "snippet-detection-policy", xrayUtils.Critical, false, false, "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later")
 	defer cleanUpPolicy()
-	watchName, deleteWatch := securityTestUtils.CreateWatchOnAllBuilds(t, policyName, "snippet-detection-watch", xrayUtils.License)
+	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "snippet-detection-watch", xrayUtils.License)
 	defer deleteWatch()
 	params := auditCommandTestParams{
 		WithSbom:    true,

@@ -321,15 +321,16 @@ func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayApi.
 	)
 }
 
-func CreateTestLicensePolicy(t *testing.T, policyName string, failBuild, allowedLicenses bool, licenses ...string) (string, func()) {
-	return CreateXrayPolicy(t, policyName, xrayApi.License,
-		xrayApi.PolicyRule{
-			Name:     "license_rule",
-			Criteria: *xrayApi.CreateLicensePolicyCriteria(allowedLicenses, true, false, licenses...),
-			Actions:  getBuildFailAction(failBuild),
-			Priority: 1,
+func CreateTestLicensePolicy(t *testing.T, policyName string, severity xrayApi.Severity, failBuild, allowedLicenses bool, licenses ...string) (string, func()) {
+	return CreateXrayPolicy(t, policyName, xrayApi.License, xrayApi.PolicyRule{
+		Name:     "license_rule",
+		Criteria: *xrayApi.CreateLicensePolicyCriteria(allowedLicenses, true, false, licenses...),
+		Actions: &xrayApi.PolicyAction{
+			FailBuild:      clientUtils.Pointer(failBuild),
+			CustomSeverity: severity,
 		},
-	)
+		Priority: 1,
+	})
 }
 
 func getBuildFailAction(failBuild bool) *xrayApi.PolicyAction {
