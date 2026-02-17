@@ -41,7 +41,7 @@ func setupIntegrationTests() (cleanUp func()) {
 	integrationUtils.InitTestCliDetails(cli.GetJfrogCliSecurityApp())
 	integrationUtils.AuthenticateArtifactory()
 	integrationUtils.AuthenticateXsc()
-	integrationUtils.CreateRequiredRepositories()
+	// integrationUtils.CreateRequiredRepositories()
 	homeResourcesCleanUp := integrationUtils.InitTestHomeResources()
 	return func() {
 		if homeResourcesCleanUp != nil {

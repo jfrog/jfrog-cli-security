@@ -20,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
@@ -117,7 +118,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-static-sca-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-static-sca-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-static-sca-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -155,7 +156,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "git-repo-ignore-rule-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -214,7 +215,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	_, cleanUpWatch := securityTestUtils.CreateWatchOnProjectBuilds(t, policyName, "project-key-jas-violations-watch", *securityTests.JfrogTestProjectKey)
+	_, cleanUpWatch := securityTestUtils.CreateWatchOnProjectBuilds(t, policyName, "project-key-jas-violations-watch", xrayUtils.Security, *securityTests.JfrogTestProjectKey)
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -246,7 +247,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			cleanUpPolicy()
 		}
 	}()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, policyName, "without-skip-not-applicable-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer func() {
 		if !firstWatchCleaned {
 			cleanUpWatch()
@@ -278,7 +279,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
-	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(dummyCloneUrl))
+	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchOnGitResources(t, skipPolicyName, "skip-not-applicable-watch", xrayUtils.Security, xscutils.GetGitRepoUrlKey(dummyCloneUrl))
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
