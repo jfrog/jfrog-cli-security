@@ -316,8 +316,7 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		return
 	}
 	// Process the scan results and run additional steps if needed.
-	// return processScanResults(auditParams, cmdResults)
-	return cmdResults
+	return processScanResults(auditParams, cmdResults)
 }
 
 func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {

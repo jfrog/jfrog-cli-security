@@ -225,11 +225,11 @@ type ScanTarget struct {
 
 func (st ScanTarget) String() (str string) {
 	if len(st.Include) > 0 {
-		relaivePaths := []string{}
+		relativePaths := []string{}
 		for _, path := range st.Include {
-			relaivePaths = append(relaivePaths, utils.GetRelativePath(path, st.Target))
+			relativePaths = append(relativePaths, utils.GetRelativePath(path, st.Target))
 		}
-		str = fmt.Sprintf("%s {%s}", st.Target, strings.Join(relaivePaths, ", "))
+		str = fmt.Sprintf("%s {%s}", st.Target, strings.Join(relativePaths, ", "))
 	} else {
 		str = st.Target
 	}
