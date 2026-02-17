@@ -108,7 +108,7 @@ func getCurationExpectedResponse(config *config.ServerDetails) []curation.Packag
 
 func TestDockerCurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
-	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" {
+	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		t.Skip("Skipping Docker curation test - container registry not configured")
 	}
 	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
