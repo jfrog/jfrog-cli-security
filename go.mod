@@ -146,3 +146,5 @@ require (
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+
+replace github.com/jfrog/build-info-go => github.com/basel1322/build-info-go v0.0.0-20260122103813-7e4f8c9950fc
