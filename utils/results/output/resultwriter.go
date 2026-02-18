@@ -188,7 +188,7 @@ func (rw *ResultsWriter) printSarif() (err error) {
 }
 
 func (rw *ResultsWriter) printCycloneDx() (err error) {
-	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
+	bom, err := rw.createResultsConvertor(false).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {
 		return
 	}

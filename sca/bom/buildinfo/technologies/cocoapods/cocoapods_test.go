@@ -35,14 +35,14 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
-		techutils.Cocoapods.GetPackageTypeId() + "AppAuth:1.7.5",
-		techutils.Cocoapods.GetPackageTypeId() + "AppAuth/Core:1.7.5",
-		techutils.Cocoapods.GetPackageTypeId() + "AppAuth/ExternalUserAgent:1.7.5",
-		techutils.Cocoapods.GetPackageTypeId() + "GoogleSignIn:6.2.4",
-		techutils.Cocoapods.GetPackageTypeId() + "GTMAppAuth:1.3.1",
-		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher/Core:2.3.0",
-		techutils.Cocoapods.GetPackageTypeId() + "nanopb:0.3.0",
-		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
+		techutils.Cocoapods.GetXrayPackageTypeId() + "AppAuth:1.7.5",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "AppAuth/Core:1.7.5",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "AppAuth/ExternalUserAgent:1.7.5",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "GoogleSignIn:6.2.4",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "GTMAppAuth:1.3.1",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "GTMSessionFetcher/Core:2.3.0",
+		techutils.Cocoapods.GetXrayPackageTypeId() + "nanopb:0.3.0",
+		techutils.Cocoapods.GetXrayPackageTypeId() + packageInfo,
 	}
 
 	auditBasicParams := technologies.BuildInfoBomGeneratorParams{ServerDetails: server}
@@ -51,7 +51,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 	assert.NotEmpty(t, rootNode)
 
-	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetPackageTypeId()+packageInfo)
+	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetXrayPackageTypeId()+packageInfo)
 	assert.Len(t, rootNode[0].Nodes, 2)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "nanopb:0.3.0")

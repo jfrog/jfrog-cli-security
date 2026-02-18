@@ -250,7 +250,7 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	buf := &bytes.Buffer{}
 	err = SettingsTemplate.Execute(buf, struct {
 		Username                 string
-		Password                 string
+		Password                 string // #nosec G117 -- required by settings.xml template; value written to local file only
 		RemoteRepositoryFullPath string
 	}{
 		Username:                 username,
