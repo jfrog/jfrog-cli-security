@@ -469,8 +469,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 }
 
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
-	deprecatedAppsConfig := params.DeprecatedAppsConfig()
-	if deprecatedAppsConfig == nil && !isNewFlow(params.bomGenerator) {
+	if params.DeprecatedAppsConfig() == nil && !isNewFlow(params.bomGenerator) {
 		// Load deprecated apps config information
 		jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(params.workingDirs)
 		if err != nil {
@@ -492,7 +491,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 	}
 	for _, targetResult := range cmdResults.Targets {
 		// Get the apps config module and assign it to the target result for JAS scans.
-		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, deprecatedAppsConfig)
+		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, params.DeprecatedAppsConfig())
 	}
 }
 
