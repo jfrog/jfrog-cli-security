@@ -15,7 +15,7 @@ type Vulnerabilities struct {
 
 type EnrichJson struct {
 	Vulnerability []struct {
-		BomRef string `json:"bom-ref,"`
+		BomRef string `json:"bom-ref,omitempty"`
 		Id     string `json:"id"`
 	} `json:"vulnerabilities"`
 }
