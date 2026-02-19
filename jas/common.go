@@ -281,15 +281,7 @@ func fillMissingRequiredInvocationInformation(run *sarif.Run, target string, inc
 		isExeSuccess = isExeSuccess || (invocation.ExecutionSuccessful != nil && *invocation.ExecutionSuccessful)
 	}
 	// Set the actual working directory to the invocation, not the analyzerManager directory
-	wd := sarif.NewArtifactLocation().WithURI(utils.ToURI(target))
-	if len(includeDirs) > 0 {
-		// Add properties to the working directory
-		properties := sarif.NewPropertyBag()
-		properties.Add("include", strings.Join(includeDirs, ","))
-		wd.Properties = properties
-	}
-	invocation := sarifutils.CreateNewInvocation().WithExecutionSuccessful(isExeSuccess).WithWorkingDirectory(wd)
-	run.Invocations = []*sarif.Invocation{invocation}
+	run.Invocations = []*sarif.Invocation{sarifutils.CreateNewInvocation(isExeSuccess, target, includeDirs...)}
 }
 
 func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {

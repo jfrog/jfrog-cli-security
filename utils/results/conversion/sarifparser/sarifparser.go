@@ -178,10 +178,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 		// For binary, the target is a file and not a directory
 		wd = filepath.Dir(wd)
 	}
-	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(wd))).
-		WithExecutionSuccessful(errorCount == 0),
-	)
+	run.Invocations = append(run.Invocations, sarifutils.CreateNewInvocation(errorCount == 0, wd, target.Include...))
 	return run
 }
 
