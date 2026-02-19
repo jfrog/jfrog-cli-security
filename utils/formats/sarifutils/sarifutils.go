@@ -886,6 +886,15 @@ func GetInvocationWorkingDirectory(invocation *sarif.Invocation) string {
 	return ""
 }
 
+func CreateNewInvocation() *sarif.Invocation {
+	invocation := sarif.NewInvocation()
+	invocation.NotificationConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
+	invocation.RuleConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
+	invocation.ToolConfigurationNotifications = make([]*sarif.Notification, 0)
+	invocation.ToolExecutionNotifications = make([]*sarif.Notification, 0)
+	return invocation
+}
+
 func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count int) {
 	for _, run := range runs {
 		for _, rule := range run.Tool.Driver.Rules {

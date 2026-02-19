@@ -280,30 +280,16 @@ func fillMissingRequiredInvocationInformation(run *sarif.Run, target string, inc
 	for _, invocation := range run.Invocations {
 		isExeSuccess = isExeSuccess || (invocation.ExecutionSuccessful != nil && *invocation.ExecutionSuccessful)
 	}
-	invocations := []*sarif.Invocation{}
-	workingDirs := []string{target}
+	// Set the actual working directory to the invocation, not the analyzerManager directory
+	wd := sarif.NewArtifactLocation().WithURI(utils.ToURI(target))
 	if len(includeDirs) > 0 {
-		workingDirs = includeDirs
+		// Add properties to the working directory
+		properties := sarif.NewPropertyBag()
+		properties.Add("include", strings.Join(includeDirs, ","))
+		wd.Properties = properties
 	}
-	for _, wd := range workingDirs {
-		// Set the actual working directory to the invocation, not the analyzerManager directory
-		invocation := sarif.NewInvocation().WithExecutionSuccessful(isExeSuccess).WithWorkingDirectory(sarif.NewArtifactLocation().WithURI(utils.ToURI(wd)))
-		// Make sure the invocation not omitted attributes are set (the lib reports them as required but spec says they are optional)
-		if len(invocation.NotificationConfigurationOverrides) == 0 {
-			invocation.NotificationConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
-		}
-		if len(invocation.RuleConfigurationOverrides) == 0 {
-			invocation.RuleConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
-		}
-		if len(invocation.ToolConfigurationNotifications) == 0 {
-			invocation.ToolConfigurationNotifications = make([]*sarif.Notification, 0)
-		}
-		if len(invocation.ToolExecutionNotifications) == 0 {
-			invocation.ToolExecutionNotifications = make([]*sarif.Notification, 0)
-		}
-		invocations = append(invocations, invocation)
-	}
-	run.Invocations = invocations
+	invocation := sarifutils.CreateNewInvocation().WithExecutionSuccessful(isExeSuccess).WithWorkingDirectory(wd)
+	run.Invocations = []*sarif.Invocation{invocation}
 }
 
 func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
