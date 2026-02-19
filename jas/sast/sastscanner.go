@@ -109,7 +109,7 @@ func (ssm *SastScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarif
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
 		return
 	}
-	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, sastDocsUrlSuffix, ssm.scanner.MinSeverity, target.Include...)
+	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, sastDocsUrlSuffix, ssm.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
 	if err != nil {
 		return
 	}
@@ -172,7 +172,7 @@ func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget,
 		Scans: []scanConfiguration{
 			{
 				Type:                   sastScannerType,
-				Roots:                  target.Include,
+				Roots:                  jas.GetRootsFromTarget(target),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				SastParameters: sastParameters{

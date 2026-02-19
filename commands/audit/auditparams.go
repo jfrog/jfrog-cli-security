@@ -3,6 +3,7 @@ package audit
 import (
 	"time"
 
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
@@ -18,11 +19,13 @@ import (
 )
 
 type AuditParams struct {
+	// Where to scan
+	appsConfig     *jfrogappsconfig.JFrogAppsConfig
+	workingDirs    []string
+	isSingleTarget bool
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext
-	workingDirs       []string
-	isSingleTarget    bool
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
@@ -271,6 +274,15 @@ func (params *AuditParams) ToXrayScanGraphParams() (scanGraphParams scangraph.Sc
 func (params *AuditParams) SetFilesToScan(filesToScan []string) *AuditParams {
 	params.filesToScan = filesToScan
 	return params
+}
+
+func (params *AuditParams) SetDeprecatedAppsConfig(appsConfig *jfrogappsconfig.JFrogAppsConfig) *AuditParams {
+	params.appsConfig = appsConfig
+	return params
+}
+
+func (params *AuditParams) DeprecatedAppsConfig() *jfrogappsconfig.JFrogAppsConfig {
+	return params.appsConfig
 }
 
 func (params *AuditParams) FilesToScan() []string {

@@ -192,6 +192,18 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, target results.ScanTarget) (vuln
 	return scannerCmd.Run(target)
 }
 
+func GetRootsFromTarget(target results.ScanTarget) []string {
+	if len(target.Include) > 0 {
+		return target.Include
+	}
+	return []string{target.Target}
+}
+
+func GetWorkingDirsFromTarget(target results.ScanTarget) []string {
+	wd := []string{target.Target}
+	return append(wd, target.Include...)
+}
+
 func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, workingDirs ...string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
 	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
@@ -396,6 +408,9 @@ func GetTestDataPath() string {
 }
 
 func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogappsconfig.Module {
+	if appConfig == nil || len(appConfig.Modules) == 0 {
+		return nil
+	}
 	for _, module := range appConfig.Modules {
 		if module.SourceRoot == root {
 			return &module

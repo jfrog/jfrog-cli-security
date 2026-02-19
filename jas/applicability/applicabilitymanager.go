@@ -116,7 +116,7 @@ func (asm *ApplicabilityScanManager) Run(target results.ScanTarget) (vulnerabili
 	if err = asm.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(asm.resultsFileName, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity, target.Include...)
+	return jas.ReadJasScanRunsFromFile(asm.resultsFileName, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
 }
 
 func (asm *ApplicabilityScanManager) cvesExists() bool {
@@ -147,7 +147,7 @@ func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.Sc
 	configFileContent := applicabilityScanConfig{
 		Scans: []scanConfiguration{
 			{
-				Roots:                target.Include,
+				Roots:                jas.GetRootsFromTarget(target),
 				Output:               asm.resultsFileName,
 				Type:                 asm.commandType,
 				GrepDisable:          false,

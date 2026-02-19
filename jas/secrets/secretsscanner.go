@@ -67,7 +67,7 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 }
 
 func runSecretsScan(secretScanManager *SecretScanManager, params SecretsScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.Module == nil || len(params.Target.Include) > 0 {
+	if params.Module == nil {
 		return secretScanManager.scanner.Run(secretScanManager, params.Target)
 	}
 	return secretScanManager.scanner.DeprecatedRun(secretScanManager, *params.Module)
@@ -108,7 +108,7 @@ func (ssm *SecretScanManager) Run(target results.ScanTarget) (vulnerabilitiesSar
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, secretsDocsUrlSuffix, ssm.scanner.MinSeverity, target.Include...)
+	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, secretsDocsUrlSuffix, ssm.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
 }
 
 type secretsScanConfig struct {
@@ -146,7 +146,7 @@ func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget,
 	configFileContent := secretsScanConfig{
 		Scans: []secretsScanConfiguration{
 			{
-				Roots:                  target.Include,
+				Roots:                  jas.GetRootsFromTarget(target),
 				Output:                 s.resultsFileName,
 				PathToResultsToCompare: s.resultsToCompareFileName,
 				Type:                   string(s.scanType),

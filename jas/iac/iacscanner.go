@@ -102,7 +102,7 @@ func (iac *IacScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifR
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, target.Include...)
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
 }
 
 type iacScanConfig struct {
@@ -140,7 +140,7 @@ func (iac *IacScanManager) createConfigFileForTarget(target results.ScanTarget, 
 	configFileContent := iacScanConfig{
 		Scans: []iacScanConfiguration{
 			{
-				Roots:                  target.Include,
+				Roots:                  jas.GetRootsFromTarget(target),
 				Output:                 iac.resultsFileName,
 				PathToResultsToCompare: iac.resultsToCompareFileName,
 				Type:                   iacScannerType,

@@ -83,6 +83,18 @@ func GetCurationNugetCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "nuget"), nil
 }
 
+func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
+	var fullPathsWorkingDirs []string
+	for _, wd := range workingDirs {
+		fullPathWd, err := filepath.Abs(wd)
+		if err != nil {
+			return nil, err
+		}
+		fullPathsWorkingDirs = append(fullPathsWorkingDirs, fullPathWd)
+	}
+	return fullPathsWorkingDirs, nil
+}
+
 func GetRelativePath(fullPathWd, baseWd string) string {
 	// Remove OS-specific file prefix
 	if strings.HasPrefix(fullPathWd, "file:///private") {
