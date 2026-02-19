@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -487,11 +488,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 	if params.IsSingleTarget() {
 		createSingleScanTarget(cmdResults, params, cwd)
 	} else {
-		detectScaTargetsFromTechnologies(cmdResults, params, params.workingDirs)
-	}
-	// If no scan targets were detected, we should still proceed with the scans.
-	if len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		cmdResults.NewScanResults(results.ScanTarget{Target: cwd, Exclude: params.Exclusions()})
+		detectScaTargetsFromTechnologies(cmdResults, params, cwd)
 	}
 	for _, targetResult := range cmdResults.Targets {
 		// Get the apps config module and assign it to the target result for JAS scans.
@@ -501,28 +498,45 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 
 func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	scanTarget := results.ScanTarget{Target: cwd, Exclude: params.Exclusions()}
-	dirs := []string{}
+	// Resolve working dirs to include
+	dirs := datastructures.MakeSet[string]()
 	for _, dir := range params.workingDirs {
 		if !fileutils.IsPathExists(dir, false) {
 			log.Warn("The working directory", dir, "doesn't exist. Skipping...")
 			continue
 		}
-		dirs = append(dirs, dir)
-	}
-	scanTarget.Include = dirs
-	if techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(cwd, true, params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), true, scanTarget.Exclude...)); err != nil {
-		log.Warn("Couldn't detect technologies in", cwd, "directory.", err.Error())
-	} else {
-		for tech, _ := range techToWorkingDirs {
-			scanTarget.Technology = tech
-			// We only support one technology per target for now. should be extended in the future.
-			break
+		// check path is not cwd
+		if dir == cwd {
+			continue
 		}
+		dirs.Add(dir)
+	}
+	scanTarget.Include = dirs.ToSlice()
+	// Detect technologies
+	detectedTechnologies := datastructures.MakeSet[techutils.Technology]()
+	for _, included := range jas.GetRootsFromTarget(scanTarget) {
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == cwd, params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), included == cwd, scanTarget.Exclude...))
+		if err != nil {
+			log.Warn("Couldn't detect technologies in", included, "directory.", err.Error())
+			continue
+		}
+		for tech := range techToWorkingDirs {
+			detectedTechnologies.Add(tech)
+		}
+	}
+	for _, tech := range detectedTechnologies.ToSlice() {
+		// TODO: We only support one technology per target for now. should be extended in the future.
+		scanTarget.Technology = tech
+		break
 	}
 	cmdResults.NewScanResults(scanTarget)
 }
 
-func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, potentialScanTargets []string) {
+func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
+	potentialScanTargets := []string{cwd}
+	if len(params.workingDirs) > 1 {
+		potentialScanTargets = params.workingDirs
+	}
 	for _, requestedDirectory := range potentialScanTargets {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
@@ -554,6 +568,10 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 				}
 			}
 		}
+	}
+	// If no scan targets were detected, we should still proceed with the scans.
+	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
+		cmdResults.NewScanResults(results.ScanTarget{Target: cwd, Exclude: params.Exclusions()})
 	}
 }
 
