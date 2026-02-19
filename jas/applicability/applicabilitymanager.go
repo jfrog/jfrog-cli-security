@@ -116,7 +116,7 @@ func (asm *ApplicabilityScanManager) Run(target results.ScanTarget) (vulnerabili
 	if err = asm.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(asm.resultsFileName, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
+	return jas.ReadJasScanRunsFromFile(asm.resultsFileName, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity, target.Target, target.Include...)
 }
 
 func (asm *ApplicabilityScanManager) cvesExists() bool {

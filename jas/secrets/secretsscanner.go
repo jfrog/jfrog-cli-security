@@ -108,7 +108,7 @@ func (ssm *SecretScanManager) Run(target results.ScanTarget) (vulnerabilitiesSar
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, secretsDocsUrlSuffix, ssm.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
+	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, secretsDocsUrlSuffix, ssm.scanner.MinSeverity, target.Target, target.Include...)
 }
 
 type secretsScanConfig struct {

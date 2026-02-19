@@ -204,7 +204,7 @@ func GetWorkingDirsFromTarget(target results.ScanTarget) []string {
 	return append(wd, target.Include...)
 }
 
-func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, workingDirs ...string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
 	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
 	if err != nil {
@@ -215,13 +215,13 @@ func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity 
 		return
 	}
 	if vulnFileExist {
-		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, informationUrlSuffix, minSeverity, workingDirs...)
+		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, informationUrlSuffix, minSeverity, target, includeDirs...)
 		if err != nil {
 			return
 		}
 	}
 	if violationsFileExist {
-		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, informationUrlSuffix, minSeverity, workingDirs...)
+		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, informationUrlSuffix, minSeverity, target, includeDirs...)
 	}
 	return
 }
@@ -236,18 +236,18 @@ func checkJasResultsFilesExist(vulnFileName, violationsFileName string) (vulnFil
 	return
 }
 
-func readJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, workingDirs ...string) (sarifRuns []*sarif.Run, err error) {
+func readJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
-	processSarifRuns(sarifRuns, informationUrlSuffix, minSeverity, workingDirs...)
+	processSarifRuns(sarifRuns, informationUrlSuffix, minSeverity, target, includeDirs...)
 	return
 }
 
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
-func processSarifRuns(sarifRuns []*sarif.Run, informationUrlSuffix string, minSeverity severityutils.Severity, workingDirs ...string) {
+func processSarifRuns(sarifRuns []*sarif.Run, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) {
 	for _, sarifRun := range sarifRuns {
-		fillMissingRequiredInvocationInformation(sarifRun, workingDirs...)
+		fillMissingRequiredInvocationInformation(sarifRun, target, includeDirs...)
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		addScoreToRunRules(sarifRun)
 		// Process results
@@ -275,12 +275,16 @@ func isValidVersion(version string) bool {
 	return unicode.IsDigit(firstChar)
 }
 
-func fillMissingRequiredInvocationInformation(run *sarif.Run, workingDirs ...string) {
+func fillMissingRequiredInvocationInformation(run *sarif.Run, target string, includeDirs ...string) {
 	isExeSuccess := false
 	for _, invocation := range run.Invocations {
 		isExeSuccess = isExeSuccess || (invocation.ExecutionSuccessful != nil && *invocation.ExecutionSuccessful)
 	}
 	invocations := []*sarif.Invocation{}
+	workingDirs := []string{target}
+	if len(includeDirs) > 0 {
+		workingDirs = includeDirs
+	}
 	for _, wd := range workingDirs {
 		// Set the actual working directory to the invocation, not the analyzerManager directory
 		invocation := sarif.NewInvocation().WithExecutionSuccessful(isExeSuccess).WithWorkingDirectory(sarif.NewArtifactLocation().WithURI(utils.ToURI(wd)))

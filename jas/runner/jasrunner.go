@@ -232,6 +232,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 				ThreadId:                     threadId,
 				TargetCount:                  params.TargetCount,
 				Module:                       params.Module,
+				Target:                       params.ScanResults.ScanTarget,
 			},
 			params.Scanner,
 		)

@@ -102,7 +102,7 @@ func (iac *IacScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifR
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, jas.GetWorkingDirsFromTarget(target)...)
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, target.Target, target.Include...)
 }
 
 type iacScanConfig struct {
