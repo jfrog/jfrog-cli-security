@@ -106,19 +106,15 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 		log.Debug(fmt.Sprintf("%sSkipping SCA for %s as requested by input...", logPrefix, params.ScanResults.Target))
 		return false, nil
 	}
+	if params.ScanResults == nil {
+		return false, errors.New("scan results are nil in SCA scan parameters")
+	}
 	// If the scan is turned off in the config profile, skip it.
 	if params.ConfigProfile != nil {
-		if len(params.ConfigProfile.Modules) < 1 {
-			// Verify Modules are not nil and contain at least one modules
-			return false, fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
-		}
-		if !params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
+		if !params.ScanResults.ScanTarget.IsScanRequestedByCentralConfig(utils.ScaScan) {
 			log.Debug(fmt.Sprintf("%sSkipping SCA as requested by '%s' config profile...", logPrefix, params.ConfigProfile.ProfileName))
 			return false, nil
 		}
-	}
-	if params.ScanResults == nil {
-		return false, errors.New("scan results are nil for target")
 	}
 	return hasDependenciesToScan(params.ScanResults, logPrefix), nil
 }

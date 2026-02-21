@@ -76,7 +76,7 @@ func TestJasRunner_Module_AnalyzerManagerReturnsError(t *testing.T) {
 			DirectDependenciesCves:   directCves,
 			IndirectDependenciesCves: indirectCves,
 			ScanType:                 applicability.ApplicabilityScannerType,
-			Module:                   &jfrogAppsConfigForTest.Modules[0],
+			Target:                   results.ScanTarget{Target: "target", DeprecatedAppsConfigModule: &jfrogAppsConfigForTest.Modules[0]},
 		},
 		scanner,
 	)

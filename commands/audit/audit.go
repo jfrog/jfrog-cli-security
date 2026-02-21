@@ -40,7 +40,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
@@ -215,7 +215,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		auditCmd.GetXrayVersion(),
 		auditCmd.GetXscVersion(),
 		serverDetails,
-		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+		xsc.CreateAnalyticsEvent(xscServices.CliProduct, xscServices.CliEventType, serverDetails),
 		auditCmd.projectKey,
 	)
 
@@ -489,10 +489,8 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 	} else {
 		detectScaTargetsFromTechnologies(cmdResults, params, cwd)
 	}
-	for _, targetResult := range cmdResults.Targets {
-		// Get the apps config module and assign it to the target result for JAS scans.
-		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, params.DeprecatedAppsConfig())
-	}
+	// Match central config modules to the scan targets
+	matchCentralConfigModules(cmdResults, params.GetConfigProfile())
 }
 
 func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
@@ -514,7 +512,7 @@ func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *
 	// Detect technologies
 	detectedTechnologies := datastructures.MakeSet[techutils.Technology]()
 	for _, included := range jas.GetRootsFromTarget(scanTarget) {
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == cwd, params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), included == cwd, scanTarget.Exclude...))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == cwd, params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), included == cwd, scanTarget.Exclude...))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", included, "directory.", err.Error())
 			continue
@@ -531,6 +529,23 @@ func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *
 	cmdResults.NewScanResults(scanTarget)
 }
 
+func matchCentralConfigModules(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
+	if centralProfile == nil {
+		return
+	}
+	if len(centralProfile.Modules) < 1 {
+		// Verify Modules are not nil and contain at least one modules
+		cmdResults.AddGeneralError(fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", centralProfile.ProfileName), false)
+		return
+	}
+	for _, targetResult := range cmdResults.Targets {
+		// TODO: support matching multiple config modules to the scan targets
+		// currently only supported one config module for all targets to configure in the UI
+		// PathFromRoot is always '.'
+		targetResult.CentralConfigModules = centralProfile.Modules
+	}
+}
+
 func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	potentialScanTargets := []string{cwd}
 	if len(params.workingDirs) > 1 {
@@ -542,7 +557,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			continue
 		}
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -557,11 +572,21 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech, Exclude: params.Exclusions()})
+				cmdResults.NewScanResults(results.ScanTarget{
+					Target:                     requestedDirectory,
+					Technology:                 tech,
+					Exclude:                    params.Exclusions(),
+					DeprecatedAppsConfigModule: jas.GetModule(requestedDirectory, params.DeprecatedAppsConfig()),
+				})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech, Exclude: params.Exclusions()})
+				targetResults := cmdResults.NewScanResults(results.ScanTarget{
+					Target:                     workingDir,
+					Technology:                 tech,
+					Exclude:                    params.Exclusions(),
+					DeprecatedAppsConfigModule: jas.GetModule(workingDir, params.DeprecatedAppsConfig()),
+				})
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
 				}
@@ -570,7 +595,11 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 	}
 	// If no scan targets were detected, we should still proceed with the scans.
 	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
-		cmdResults.NewScanResults(results.ScanTarget{Target: cwd, Exclude: params.Exclusions()})
+		cmdResults.NewScanResults(results.ScanTarget{
+			Target:                     cwd,
+			Exclude:                    params.Exclusions(),
+			DeprecatedAppsConfigModule: jas.GetModule(cwd, params.DeprecatedAppsConfig()),
+		})
 	}
 }
 
@@ -669,7 +698,6 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		jas.WithResultsToCompare(auditParams.resultsToCompare),
 	}
 	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
-	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.GetConfigProfile())
 
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
@@ -709,7 +737,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
-			if !isNewFlow && targetResult.AppsConfigModule == nil {
+			if !isNewFlow && targetResult.DeprecatedAppsConfigModule == nil {
 				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
 				continue
 			}
@@ -717,7 +745,6 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Runner:                 auditParallelRunner,
 				ServerDetails:          serverDetails,
 				Scanner:                scanner,
-				Module:                 targetResult.AppsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),

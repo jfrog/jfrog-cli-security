@@ -12,7 +12,6 @@ import (
 	"unicode"
 
 	"github.com/jfrog/gofrog/datastructures"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -30,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
@@ -50,17 +50,7 @@ type JasScanner struct {
 	DiffMode              bool
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
-	// This field contains scanner specific exclude patterns from Config Profile
-	ScannersExclusions SpecificScannersExcludePatterns
-	MinSeverity        severityutils.Severity
-}
-
-type SpecificScannersExcludePatterns struct {
-	ContextualAnalysisExcludePatterns []string
-	SastExcludePatterns               []string
-	SecretsExcludePatterns            []string
-	IacExcludePatterns                []string
-	MaliciousCodeExcludePatterns      []string
+	MinSeverity           severityutils.Severity
 }
 
 type JasScannerOption func(f *JasScanner) error
@@ -175,13 +165,13 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 }
 
 type ScannerCmd interface {
-	DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
+	DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 	Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 }
 
-func (a *JasScanner) DeprecatedRun(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (a *JasScanner) DeprecatedRun(scannerCmd ScannerCmd, module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	func() {
-		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module); err != nil {
+		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module, centralConfigExclusions); err != nil {
 			return
 		}
 	}()
@@ -401,13 +391,38 @@ func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogap
 	return nil
 }
 
-func ShouldSkipScanner(module *jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
-	if module == nil {
+func ShouldSkipScannerByConfigProfile(target results.ScanTarget, configProfile *xscServices.ConfigProfile, scanType utils.SubScanType, jasType jasutils.JasScanType) bool {
+	if configProfile == nil {
+		return false
+	}
+	log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", configProfile.ProfileName, jasType))
+	if !target.IsScanRequestedByCentralConfig(scanType) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, configProfile.ProfileName))
+		return true
+	}
+	// validate target is excluded by config profile exclude patterns
+	excludePatterns := configProfile.GeneralConfig.GeneralExcludePatterns
+	if len(excludePatterns) > 0 {
+		if utils.IsPathExcluded(target.Target, excludePatterns) {
+			log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by config profile exclude patterns...", jasType))
+			return true
+		}
+	}
+	return false
+}
+
+func ShouldSkipScannerByModule(target results.ScanTarget, scanType jasutils.JasScanType) bool {
+	if target.DeprecatedAppsConfigModule == nil {
 		return false
 	}
 	lowerScanType := strings.ToLower(string(scanType))
-	if slices.Contains(module.ExcludeScanners, lowerScanType) {
-		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+	if slices.Contains(target.DeprecatedAppsConfigModule.ExcludeScanners, lowerScanType) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", scanType))
+		return true
+	}
+	exclusions := target.GeDeprecatedAppsConfigModuleExclusions(scanType)
+	if len(exclusions) > 0 && utils.IsPathExcluded(target.Target, exclusions) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by local module config...", scanType))
 		return true
 	}
 	return false
@@ -428,7 +443,7 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 	return roots, nil
 }
 
-func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, centralConfigExclusions []string, cliExclusions ...string) []string {
+func GetJasExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, centralConfigExclusions []string, cliExclusions ...string) []string {
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	if len(cliExclusions) > 0 || len(centralConfigExclusions) > 0 {
 		// Adding exclusions from CLI requires to convert them to file exclude patterns
@@ -448,9 +463,16 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return uniqueExcludePatterns.ToSlice()
 }
 
-func GetExcludePatternsForTarget(target results.ScanTarget, centralConfigExclusions []string) []string {
+func GetJasExcludePatternsForTarget(target results.ScanTarget, centralConfigExclusions []string) []string {
+	if len(centralConfigExclusions) > 0 {
+		return centralConfigExclusions
+	}
+	if utils.ElementsEqual(target.Exclude, utils.DefaultScaExcludePatterns) {
+		// Default SCA exclude patterns, so we use the default JAS exclude patterns
+		return utils.DefaultJasExcludePatterns
+	}
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
-	uniqueExcludePatterns.AddElements(centralConfigExclusions...)
+	// Adding exclude patterns from the CLI requires to convert them to file exclude patterns
 	uniqueExcludePatterns.AddElements(convertToFilesExcludePatterns(target.Exclude)...)
 	return uniqueExcludePatterns.ToSlice()
 }
@@ -523,16 +545,6 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId i
 		return "", err
 	}
 	return scannerTempDir, nil
-}
-
-func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile *clientservices.ConfigProfile) {
-	if profile == nil {
-		return
-	}
-	scanner.ScannersExclusions.ContextualAnalysisExcludePatterns = profile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.SastExcludePatterns = profile.Modules[0].ScanConfig.SastScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
 }
 
 func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module *jfrogappsconfig.Module, targetCount int) string {

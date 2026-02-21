@@ -200,7 +200,7 @@ func TestApplicabilityScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}, []string{}))
+	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}))
 
 	defer func() {
 		err = os.Remove(applicabilityManager.configFileName)

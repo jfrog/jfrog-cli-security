@@ -444,3 +444,20 @@ func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFil
 	}
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil
 }
+
+func ElementsEqual[T comparable](slice1 []T, slice2 []T) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	for i := range slice1 {
+		if !slices.Contains(slice2, slice1[i]) {
+			return false
+		}
+	}
+	for i := range slice2 {
+		if !slices.Contains(slice1, slice2[i]) {
+			return false
+		}
+	}
+	return true
+}

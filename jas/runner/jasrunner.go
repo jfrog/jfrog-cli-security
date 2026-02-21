@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jfrog/gofrog/parallel"
-	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -27,7 +26,6 @@ type JasRunnerParams struct {
 	ServerDetails *config.ServerDetails
 	Scanner       *jas.JasScanner
 	// Module / Target flags
-	Module        *jfrogappsconfig.Module
 	ConfigProfile *services.ConfigProfile
 	TargetCount   int
 	ScanResults   *results.TargetResults
@@ -101,28 +99,13 @@ func addJasScanTaskIfNeeded(params JasRunnerParams, subScan utils.SubScanType, t
 		return
 	}
 	if params.ConfigProfile != nil {
-		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
-		enabled := false
-		switch jasType {
-		case jasutils.Secrets:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.SecretsScannerConfig.EnableSecretsScan
-		case jasutils.Sast:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
-		case jasutils.IaC:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
-		case jasutils.Applicability:
-			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+		if jas.ShouldSkipScannerByConfigProfile(params.ScanResults.ScanTarget, params.ConfigProfile, subScan, jasType) {
+			return
 		}
-		if enabled {
-			generalError = addJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
-		} else {
-			log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, params.ConfigProfile.ProfileName))
-		}
-		return
+		// If Config profile exists, we don't need to check for deprecated apps config module
+		return addJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 	}
-	if jas.ShouldSkipScanner(params.Module, jasType) {
-		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", subScan))
+	if jas.ShouldSkipScannerByModule(params.ScanResults.ScanTarget, jasType) {
 		return
 	}
 	return addJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
@@ -148,7 +131,6 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 			TargetCount:      params.TargetCount,
 			ScanType:         params.SecretsScanType,
 			ResultsToCompare: getSourceRunsToCompare(params, jasutils.Secrets),
-			Module:           params.Module,
 			Target:           params.ScanResults.ScanTarget,
 		}
 		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, secretsScanParams)
@@ -172,7 +154,6 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 			ThreadId:         threadId,
 			TargetCount:      params.TargetCount,
 			ResultsToCompare: getSourceRunsToCompare(params, jasutils.IaC),
-			Module:           params.Module,
 			Target:           params.ScanResults.ScanTarget,
 		}
 		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, iacScanParams)
@@ -198,7 +179,6 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 			SignedDescriptions: params.SignedDescriptions,
 			SastRules:          params.SastRules,
 			ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
-			Module:             params.Module,
 			Target:             params.ScanResults.ScanTarget,
 		}
 		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, sastScanParams)
@@ -231,7 +211,6 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
 				ThreadId:                     threadId,
 				TargetCount:                  params.TargetCount,
-				Module:                       params.Module,
 				Target:                       params.ScanResults.ScanTarget,
 			},
 			params.Scanner,

@@ -93,7 +93,7 @@ func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = secretScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}, []string{})
+	err = secretScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd})
 	assert.NoError(t, err)
 
 	defer func() {
@@ -179,8 +179,7 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	secretsScanParams := SecretsScanParams{
 		TargetCount: 1,
 		ScanType:    SecretsScannerType,
-		Module:      &jfrogAppsConfigForTest.Modules[0],
-		Target:      results.ScanTarget{Target: jfrogAppsConfigForTest.Modules[0].SourceRoot},
+		Target:      results.ScanTarget{Target: jfrogAppsConfigForTest.Modules[0].SourceRoot, DeprecatedAppsConfigModule: &jfrogAppsConfigForTest.Modules[0]},
 	}
 	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, secretsScanParams)
 	assert.Error(t, err)

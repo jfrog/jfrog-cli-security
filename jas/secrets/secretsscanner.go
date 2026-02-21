@@ -40,7 +40,6 @@ type SecretsScanParams struct {
 	TargetCount      int
 	ScanType         SecretsScanType
 	ResultsToCompare []*sarif.Run
-	Module           *jfrogappsconfig.Module
 	Target           results.ScanTarget
 }
 
@@ -58,7 +57,7 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.SecretsScan, params.ThreadId, params.Module, params.TargetCount))
+	log.Info(jas.GetStartJasScanLog(utils.SecretsScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
 	if vulnerabilitiesResults, violationsResults, err = runSecretsScan(secretScanManager, params); err != nil {
 		return
 	}
@@ -67,10 +66,10 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 }
 
 func runSecretsScan(secretScanManager *SecretScanManager, params SecretsScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.Module == nil {
+	if params.Target.DeprecatedAppsConfigModule == nil {
 		return secretScanManager.scanner.Run(secretScanManager, params.Target)
 	}
-	return secretScanManager.scanner.DeprecatedRun(secretScanManager, *params.Module)
+	return secretScanManager.scanner.DeprecatedRun(secretScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SecretsScan))
 }
 
 func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
@@ -91,8 +90,8 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 	return
 }
 
-func (ssm *SecretScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.deprecatedCreateConfigFile(module, ssm.scanner.ScannersExclusions.SecretsExcludePatterns, ssm.scanner.Exclusions...); err != nil {
+func (ssm *SecretScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = ssm.deprecatedCreateConfigFile(module, centralConfigExclusions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
@@ -102,7 +101,7 @@ func (ssm *SecretScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vuln
 }
 
 func (ssm *SecretScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFileForTarget(target, ssm.scanner.ScannersExclusions.SecretsExcludePatterns); err != nil {
+	if err = ssm.createConfigFileForTarget(target); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
@@ -135,14 +134,14 @@ func (s *SecretScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 				Output:                 s.resultsFileName,
 				PathToResultsToCompare: s.resultsToCompareFileName,
 				Type:                   string(s.scanType),
-				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Secrets, centralConfigExclusions, exclusions...),
+				SkippedDirs:            jas.GetJasExcludePatterns(module, module.Scanners.Secrets, centralConfigExclusions, exclusions...),
 			},
 		},
 	}
 	return jas.CreateScannersConfigFile(s.configFileName, configFileContent, jasutils.Secrets)
 }
 
-func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget, centralConfigExclusions []string) error {
+func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := secretsScanConfig{
 		Scans: []secretsScanConfiguration{
 			{
@@ -150,7 +149,7 @@ func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget,
 				Output:                 s.resultsFileName,
 				PathToResultsToCompare: s.resultsToCompareFileName,
 				Type:                   string(s.scanType),
-				SkippedDirs:            jas.GetExcludePatternsForTarget(target, centralConfigExclusions),
+				SkippedDirs:            jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.SecretsScan)),
 			},
 		},
 	}

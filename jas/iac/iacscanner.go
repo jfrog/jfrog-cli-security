@@ -33,7 +33,6 @@ type IacScanParams struct {
 	ThreadId         int
 	TargetCount      int
 	ResultsToCompare []*sarif.Run
-	Module           *jfrogappsconfig.Module
 	Target           results.ScanTarget
 }
 
@@ -51,7 +50,7 @@ func RunIacScan(scanner *jas.JasScanner, params IacScanParams) (vulnerabilitiesR
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.IacScan, params.ThreadId, params.Module, params.TargetCount))
+	log.Info(jas.GetStartJasScanLog(utils.IacScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
 	if vulnerabilitiesResults, violationsResults, err = runIacScan(iacScanManager, params); err != nil {
 		return
 	}
@@ -60,10 +59,10 @@ func RunIacScan(scanner *jas.JasScanner, params IacScanParams) (vulnerabilitiesR
 }
 
 func runIacScan(iacScanManager *IacScanManager, params IacScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.Module == nil {
+	if params.Target.DeprecatedAppsConfigModule == nil {
 		return iacScanManager.scanner.Run(iacScanManager, params.Target)
 	}
-	return iacScanManager.scanner.DeprecatedRun(iacScanManager, *params.Module)
+	return iacScanManager.scanner.DeprecatedRun(iacScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.IacScan))
 }
 
 func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *IacScanManager, err error) {
@@ -85,8 +84,8 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsTo
 	return
 }
 
-func (iac *IacScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = iac.deprecatedCreateConfigFile(module, iac.scanner.ScannersExclusions.IacExcludePatterns, iac.scanner.Exclusions...); err != nil {
+func (iac *IacScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = iac.deprecatedCreateConfigFile(module, centralConfigExclusions, iac.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
@@ -96,7 +95,7 @@ func (iac *IacScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnera
 }
 
 func (iac *IacScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = iac.createConfigFileForTarget(target, iac.scanner.ScannersExclusions.IacExcludePatterns); err != nil {
+	if err = iac.createConfigFileForTarget(target); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
@@ -129,14 +128,14 @@ func (iac *IacScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mod
 				Output:                 iac.resultsFileName,
 				PathToResultsToCompare: iac.resultsToCompareFileName,
 				Type:                   iacScannerType,
-				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
+				SkippedDirs:            jas.GetJasExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
 			},
 		},
 	}
 	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, jasutils.IaC)
 }
 
-func (iac *IacScanManager) createConfigFileForTarget(target results.ScanTarget, centralConfigExclusions []string) error {
+func (iac *IacScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := iacScanConfig{
 		Scans: []iacScanConfiguration{
 			{
@@ -144,7 +143,7 @@ func (iac *IacScanManager) createConfigFileForTarget(target results.ScanTarget, 
 				Output:                 iac.resultsFileName,
 				PathToResultsToCompare: iac.resultsToCompareFileName,
 				Type:                   iacScannerType,
-				SkippedDirs:            jas.GetExcludePatternsForTarget(target, centralConfigExclusions),
+				SkippedDirs:            jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.IacScan)),
 			},
 		},
 	}

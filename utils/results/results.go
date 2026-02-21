@@ -177,7 +177,6 @@ func shouldUpdateStatus(currentStatus, newStatus *int) bool {
 
 type TargetResults struct {
 	ScanTarget
-	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
 	ScaResults    *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults    *JasScansResults `json:"jas_scans,omitempty"`
@@ -220,7 +219,12 @@ type ScanTarget struct {
 	// Logical name of the target (build name / module name / docker image name...)
 	Name string `json:"name,omitempty"`
 	// Optional field (not used only in build scan) to provide the technology of the target
+	// TODO: convert to list of technologies
 	Technology techutils.Technology `json:"technology,omitempty"`
+	// Optional field to provide the deprecated apps config module for the target
+	DeprecatedAppsConfigModule *jfrogappsconfig.Module `json:"deprecated_apps_config_module,omitempty"`
+	// Optional field to provide the central config modules for the target
+	CentralConfigModules []xscServices.Module `json:"central_config_modules,omitempty"`
 }
 
 func (st ScanTarget) String() (str string) {
@@ -242,6 +246,78 @@ func (st ScanTarget) String() (str string) {
 	}
 	str += fmt.Sprintf(" [%s]", tech)
 	return
+}
+
+func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) bool {
+	for _, module := range st.CentralConfigModules {
+		switch scanType {
+		case utils.ScaScan:
+			if module.ScanConfig.ScaScannerConfig.EnableScaScan {
+				return true
+			}
+		case utils.ContextualAnalysisScan:
+			if module.ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && module.ScanConfig.ScaScannerConfig.EnableScaScan {
+				return true
+			}
+		case utils.IacScan:
+			if module.ScanConfig.IacScannerConfig.EnableIacScan {
+				return true
+			}
+		case utils.SecretsScan:
+			if module.ScanConfig.SecretsScannerConfig.EnableSecretsScan {
+				return true
+			}
+		case utils.SastScan:
+			if module.ScanConfig.SastScannerConfig.EnableSastScan {
+				return true
+			}
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
+	exclusions := datastructures.MakeSet[string]()
+	for _, module := range st.CentralConfigModules {
+		switch scanType {
+		case utils.ScaScan:
+			exclusions.AddElements(module.ScanConfig.ScaScannerConfig.ExcludePatterns...)
+		case utils.ContextualAnalysisScan:
+			exclusions.AddElements(module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
+		case utils.IacScan:
+			exclusions.AddElements(module.ScanConfig.IacScannerConfig.ExcludePatterns...)
+		case utils.SecretsScan:
+			exclusions.AddElements(module.ScanConfig.SecretsScannerConfig.ExcludePatterns...)
+		case utils.SastScan:
+			exclusions.AddElements(module.ScanConfig.SastScannerConfig.ExcludePatterns...)
+		}
+	}
+	return exclusions.ToSlice()
+}
+
+func (st ScanTarget) GeDeprecatedAppsConfigModuleExclusions(scanType jasutils.JasScanType) []string {
+	if st.DeprecatedAppsConfigModule == nil {
+		return nil
+	}
+	exclusions := datastructures.MakeSet[string]()
+	exclusions.AddElements(st.DeprecatedAppsConfigModule.ExcludePatterns...)
+	switch scanType {
+	case jasutils.Secrets:
+		if st.DeprecatedAppsConfigModule.Scanners.Secrets != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Secrets.ExcludePatterns...)
+		}
+	case jasutils.Sast:
+		if st.DeprecatedAppsConfigModule.Scanners.Sast != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Sast.ExcludePatterns...)
+		}
+	case jasutils.IaC:
+		if st.DeprecatedAppsConfigModule.Scanners.Iac != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Iac.ExcludePatterns...)
+		}
+	}
+	return exclusions.ToSlice()
 }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {

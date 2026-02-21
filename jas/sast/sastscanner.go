@@ -38,7 +38,6 @@ type SastScanParams struct {
 	SignedDescriptions bool
 	SastRules          string
 	ResultsToCompare   []*sarif.Run
-	Module             *jfrogappsconfig.Module
 	Target             results.ScanTarget
 }
 
@@ -52,7 +51,7 @@ func RunSastScan(scanner *jas.JasScanner, params SastScanParams) (vulnerabilitie
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Module, params.TargetCount))
+	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
 	if vulnerabilitiesResults, violationsResults, err = runSastScan(sastScanManager, params); err != nil {
 		return
 	}
@@ -61,10 +60,10 @@ func RunSastScan(scanner *jas.JasScanner, params SastScanParams) (vulnerabilitie
 }
 
 func runSastScan(sastScanManager *SastScanManager, params SastScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.Module == nil {
+	if params.Target.DeprecatedAppsConfigModule == nil {
 		return sastScanManager.scanner.Run(sastScanManager, params.Target)
 	}
-	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Module)
+	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SastScan))
 }
 
 func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, sastRules string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
@@ -86,8 +85,8 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 	return
 }
 
-func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.deprecatedCreateConfigFile(module, ssm.signedDescriptions, ssm.scanner.ScannersExclusions.SastExcludePatterns, ssm.scanner.Exclusions...); err != nil {
+func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = ssm.deprecatedCreateConfigFile(module, ssm.signedDescriptions, centralConfigExclusions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -103,7 +102,7 @@ func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulner
 }
 
 func (ssm *SastScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFileForTarget(target, ssm.scanner.ScannersExclusions.SastExcludePatterns); err != nil {
+	if err = ssm.createConfigFileForTarget(target); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -159,7 +158,7 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
-				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
+				ExcludePatterns: jas.GetJasExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
 				UserRules:       ssm.sastRules,
 			},
 		},
@@ -167,7 +166,7 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, jasutils.Sast)
 }
 
-func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget, centralConfigExclusions []string) error {
+func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
@@ -178,7 +177,7 @@ func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget,
 				SastParameters: sastParameters{
 					SignedDescriptions: ssm.signedDescriptions,
 				},
-				ExcludePatterns: jas.GetExcludePatternsForTarget(target, centralConfigExclusions),
+				ExcludePatterns: jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.SastScan)),
 				UserRules:       ssm.sastRules,
 			},
 		},

@@ -45,7 +45,6 @@ type ContextualAnalysisScanParams struct {
 	ThirdPartyContextualAnalysis bool
 	ThreadId                     int
 	TargetCount                  int
-	Module                       *jfrogappsconfig.Module
 	Target                       results.ScanTarget
 }
 
@@ -65,7 +64,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.ContextualAnalysisScan, params.ThreadId, params.Module, params.TargetCount))
+	log.Info(jas.GetStartJasScanLog(utils.ContextualAnalysisScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
 	if results, err = runApplicabilityScan(applicabilityScanManager, params); err != nil {
 		return
 	}
@@ -77,13 +76,13 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 }
 
 func runApplicabilityScan(applicabilityScanManager *ApplicabilityScanManager, params ContextualAnalysisScanParams) (vulnerabilitiesSarifRuns []*sarif.Run, err error) {
-	if params.Module == nil {
+	if params.Target.DeprecatedAppsConfigModule == nil {
 		// Applicability scan does not produce violations.
 		vulnerabilitiesSarifRuns, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Target)
 		return
 	}
 	// Applicability scan does not produce violations.
-	vulnerabilitiesSarifRuns, _, err = applicabilityScanManager.scanner.DeprecatedRun(applicabilityScanManager, *params.Module)
+	vulnerabilitiesSarifRuns, _, err = applicabilityScanManager.scanner.DeprecatedRun(applicabilityScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.ContextualAnalysisScan))
 	return
 }
 
@@ -99,8 +98,8 @@ func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCve
 	}
 }
 
-func (asm *ApplicabilityScanManager) DeprecatedRun(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = asm.deprecatedCreateConfigFile(module, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns, asm.scanner.Exclusions...); err != nil {
+func (asm *ApplicabilityScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = asm.deprecatedCreateConfigFile(module, centralConfigExclusions, asm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
@@ -110,7 +109,7 @@ func (asm *ApplicabilityScanManager) DeprecatedRun(module jfrogappsconfig.Module
 }
 
 func (asm *ApplicabilityScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = asm.createConfigFileForTarget(target, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns); err != nil {
+	if err = asm.createConfigFileForTarget(target); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
@@ -138,8 +137,8 @@ type scanConfiguration struct {
 	ScanType             string   `yaml:"scantype"`
 }
 
-func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.ScanTarget, centralConfigExclusions []string) error {
-	excludePatterns := jas.GetExcludePatternsForTarget(target, centralConfigExclusions)
+func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.ScanTarget) error {
+	excludePatterns := jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.ContextualAnalysisScan))
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
 		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)
@@ -165,7 +164,7 @@ func (asm *ApplicabilityScanManager) deprecatedCreateConfigFile(module jfrogapps
 	if err != nil {
 		return err
 	}
-	excludePatterns := jas.GetExcludePatterns(module, nil, centralConfigExclusions, exclusions...)
+	excludePatterns := jas.GetJasExcludePatterns(module, nil, centralConfigExclusions, exclusions...)
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
 		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)

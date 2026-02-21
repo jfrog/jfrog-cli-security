@@ -97,7 +97,7 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = iacScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}, []string{})
+	err = iacScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd})
 	assert.NoError(t, err)
 
 	defer func() {

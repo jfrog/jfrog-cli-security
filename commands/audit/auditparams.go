@@ -225,7 +225,7 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 	bomParams = technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:         params.GetXrayVersion(),
 		Progress:            params.Progress(),
-		ExclusionPattern:    technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
+		ExclusionPattern:    technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
 		AllowPartialResults: params.AllowPartialResults(),
 		// Artifactory repository info
 		ServerDetails:          serverDetails,

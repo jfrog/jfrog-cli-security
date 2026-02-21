@@ -69,18 +69,18 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogAppsConfig.Module{}
-	assert.False(t, ShouldSkipScanner(&module, jasutils.IaC))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
 
 	module = jfrogAppsConfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(&module, jasutils.IaC))
-	assert.True(t, ShouldSkipScanner(&module, jasutils.Sast))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
+	assert.True(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.Sast))
 
 	// no module
-	assert.False(t, ShouldSkipScanner(nil, jasutils.IaC))
-	assert.False(t, ShouldSkipScanner(nil, jasutils.Sast))
-	assert.False(t, ShouldSkipScanner(nil, jasutils.Secrets))
-	assert.False(t, ShouldSkipScanner(nil, jasutils.MaliciousCode))
-	assert.False(t, ShouldSkipScanner(nil, jasutils.Applicability))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.IaC))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Sast))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Secrets))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.MaliciousCode))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Applicability))
 }
 
 var getSourceRootsCases = []struct {
@@ -129,12 +129,12 @@ var getExcludePatternsCases = []struct {
 	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"exclude-dir-1", "exclude-dir-2"}}},
 }
 
-func TestGetExcludePatterns(t *testing.T) {
+func TestGetJasExcludePatterns(t *testing.T) {
 	module := jfrogAppsConfig.Module{ExcludePatterns: []string{"exclude-root"}}
 	for _, testCase := range getExcludePatternsCases {
 		t.Run("", func(t *testing.T) {
 			scanner := testCase.scanner
-			actualExcludePatterns := GetExcludePatterns(module, scanner, []string{})
+			actualExcludePatterns := GetJasExcludePatterns(module, scanner, []string{})
 			if scanner == nil {
 				assert.ElementsMatch(t, module.ExcludePatterns, actualExcludePatterns)
 				return
