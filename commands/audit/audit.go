@@ -548,7 +548,7 @@ func matchCentralConfigModules(cmdResults *results.SecurityCommandResults, centr
 
 func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	potentialScanTargets := []string{cwd}
-	if len(params.workingDirs) > 1 {
+	if len(params.workingDirs) > 0 {
 		potentialScanTargets = params.workingDirs
 	}
 	for _, requestedDirectory := range potentialScanTargets {
@@ -596,9 +596,9 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 	// If no scan targets were detected, we should still proceed with the scans.
 	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
 		cmdResults.NewScanResults(results.ScanTarget{
-			Target:                     cwd,
+			Target:                     potentialScanTargets[0],
 			Exclude:                    params.Exclusions(),
-			DeprecatedAppsConfigModule: jas.GetModule(cwd, params.DeprecatedAppsConfig()),
+			DeprecatedAppsConfigModule: jas.GetModule(potentialScanTargets[0], params.DeprecatedAppsConfig()),
 		})
 	}
 }
