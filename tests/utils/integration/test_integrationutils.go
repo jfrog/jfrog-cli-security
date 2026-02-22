@@ -115,7 +115,6 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
-	testUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 30, "Remediation API not available yet in test platform. (412 Precondition Failed), Remediation requires dependencies feature enabled")
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 

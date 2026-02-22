@@ -1003,14 +1003,14 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 6, Licenses: 8},
+		Total:             &validations.TotalCount{Vulnerabilities: 6, Violations: 3, Licenses: 8},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
-		// SAST violations require git-repo watch to be created, so only SCA and Secrets violations are expected here
+		// JAS violations require git-repo watch to be created, so only SCA violations are expected here
 		Violations: &validations.ViolationCount{
-			ValidateScan: &validations.ScanCount{Sca: 3, Secrets: 1}, ValidateType: &validations.ScaViolationCount{Security: 3},
+			ValidateScan: &validations.ScanCount{Sca: 3}, ValidateType: &validations.ScaViolationCount{Security: 3},
 		},
 	})
 }
@@ -1024,8 +1024,8 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 3, BomComponents: 6 /*components*/ + 3 /*modules*/, Licenses: 2},
-		SbomComponents:    &validations.SbomCount{Direct: 6, Root: 3 /*issue in bom generation*/},
+		Total:             &validations.TotalCount{Vulnerabilities: 3, BomComponents: 6 /*components*/ + 3 /*modules*/, Licenses: 3},
+		SbomComponents:    &validations.SbomCount{Transitive: 2, Direct: 4, Root: 3 /*issue in bom generation*/},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
@@ -1058,14 +1058,16 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{BomComponents: 1 /*root*/ + 1 /*direct*/ + 3 /*transitive*/},
-		SbomComponents:    &validations.SbomCount{Direct: 4 /** issue in sbom generation, are not discovered as transitive **/, Root: 1},
-		Vulnerabilities:   &validations.VulnerabilityCount{},
+		Total:             &validations.TotalCount{Vulnerabilities: 4, BomComponents: 1 /*root*/ + 2 /*direct*/ + 2 /*transitive*/, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Direct: 2, Transitive: 2, Root: 1},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 4},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3},
+		},
 	})
 }
 
 func TestAuditNewScaCycloneDxYarn(t *testing.T) {
-	// TODO: yarn not working....
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
 		WithSbom: true,
@@ -1106,11 +1108,11 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 9, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		Total:             &validations.TotalCount{Vulnerabilities: 11, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
 		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 9},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 5},
+			ValidateScan:                &validations.ScanCount{Sca: 11},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 7},
 		},
 	})
 }
@@ -1123,11 +1125,11 @@ func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 8, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		Total:             &validations.TotalCount{Vulnerabilities: 10, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
 		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 8},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 4},
+			ValidateScan:                &validations.ScanCount{Sca: 10},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 6},
 		},
 	})
 }
@@ -1140,11 +1142,11 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
-		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
+		Total:             &validations.TotalCount{Vulnerabilities: 4, BomComponents: 3 /*components*/ + 1 /*root*/, Licenses: 2},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 3},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 4},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3, MissingContext: 1},
 		},
 	})
 }
