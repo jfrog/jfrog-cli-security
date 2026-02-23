@@ -204,7 +204,6 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 }
 
 func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
-
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
