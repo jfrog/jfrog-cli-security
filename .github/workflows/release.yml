@@ -30,6 +30,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # fetch all branches so we can checkout main and merge dev
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
