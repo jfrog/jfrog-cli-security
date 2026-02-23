@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -36,6 +37,8 @@ const (
 		classpath files('%s')
 	}
 }
+
+apply plugin: com.jfrog.GradleDepTreeSettings
 
 allprojects {
 	repositories { %s
@@ -102,8 +105,14 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 	if err != nil {
 		return
 	}
+
+	depsRepoName := gdt.depsRepo
+	if gdt.isCurationCmd && depsRepoName != "" {
+		depsRepoName = path.Join("api/curation/audit", depsRepoName)
+	}
+
 	var releasesRepo string
-	releasesRepo, gdt.depsRepo, err = getRemoteRepos(gdt.depsRepo, gdt.server)
+	releasesRepo, gdt.depsRepo, err = getRemoteRepos(depsRepoName, gdt.server)
 	if err != nil {
 		return
 	}
