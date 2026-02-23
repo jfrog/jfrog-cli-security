@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 )
 
-const minimumXrayVersionForProjectPath = "3.133.0"
+const minimumXrayVersionForProjectPath = "3.141.0"
 
 func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices.EventType, serviceDetails *config.ServerDetails, projectPath string) *xscservices.XscAnalyticsGeneralEvent {
 	curOs, curArch := getOsAndArch()
