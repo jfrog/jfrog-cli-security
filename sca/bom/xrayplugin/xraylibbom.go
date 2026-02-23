@@ -127,7 +127,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target resu
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
-		ScanPasses:     plugin.TechToPasses(sbg.specificTechs),
+		Ecosystems:     sbg.specificTechs,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
