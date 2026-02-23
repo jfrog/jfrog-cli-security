@@ -711,7 +711,7 @@ func getFixedVersionString(fixedVersions []string) string {
 func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (string, error) {
 	var formattedDirectDependencies strings.Builder
 	for _, dependency := range directDependencies {
-		if _, err := formattedDirectDependencies.WriteString(fmt.Sprintf("`%s %s`<br/>", dependency.Name, dependency.Version)); err != nil {
+		if _, err := fmt.Fprintf(&formattedDirectDependencies, "`%s %s`<br/>", dependency.Name, dependency.Version); err != nil {
 			return "", err
 		}
 	}

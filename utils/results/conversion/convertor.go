@@ -131,7 +131,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		}
 	}
 	if params.HasViolationContext || cmdResults.HasViolationContext() {
-		if err = parseViolations(parser, cmdResults.Violations); err != nil {
+		if err = parseViolations(parser, cmdResults.Violations, cmdResults.Targets); err != nil {
 			return
 		}
 	}
@@ -222,8 +222,9 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	return parser.ParseMalicious(targetResults.JasResults.JasVulnerabilities.MaliciousScanResults)
 }
 
-func parseViolations[T interface{}](parser ResultsStreamFormatParser[T], violations *violationutils.Violations) (err error) {
-	if violations == nil {
+func parseViolations[T interface{}](parser ResultsStreamFormatParser[T], violations *violationutils.Violations, targets []*results.TargetResults) (err error) {
+	if violations == nil || len(targets) == 0 {
+		// When there are no targets, there are no violations to parse
 		return
 	}
 	// Parsing JAS Violations results
