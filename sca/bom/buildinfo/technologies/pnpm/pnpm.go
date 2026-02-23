@@ -180,7 +180,7 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 
 // Return npm://<name>:<version> of a dependency
 func getDependencyId(depName, version string) string {
-	return techutils.Npm.GetPackageTypeId() + depName + ":" + version
+	return techutils.Npm.GetXrayPackageTypeId() + depName + ":" + version
 }
 
 func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result *map[string]xray.DepTreeNode) {

@@ -616,7 +616,7 @@ func GetUniqueKey(vulnerableDependency, vulnerableVersion, xrayID string, fixVer
 // Found use of a badCode inside the node_modules from a different package, report applicable.
 func shouldDisqualifyEvidence(components map[string]services.Component, evidenceFilePath string) (disqualify bool) {
 	for key := range components {
-		if !strings.HasPrefix(key, techutils.Npm.GetPackageTypeId()) {
+		if !strings.HasPrefix(key, techutils.Npm.GetXrayPackageTypeId()) {
 			return
 		}
 		dependencyName, _, _ := techutils.SplitComponentIdRaw(key)
@@ -906,10 +906,22 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 		Type:       cyclonedx.ComponentTypeLibrary,
 		Name:       compName,
 		Version:    compVersion,
-		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
+		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.XrayPackageTypeToCdxPackageType(compType)),
 	}
 	component.Properties = cdxutils.AppendProperties(component.Properties, properties...)
 	return
+}
+
+// If pretty is true, return the formal technology name, otherwise return the cdx component type
+func FormalTechOrCdxCompType(cdxCompType string, pretty bool) string {
+	if !pretty {
+		return cdxCompType
+	}
+	tech := techutils.CdxPackageTypeToTechnology(cdxCompType)
+	if tech != techutils.NoTech {
+		return tech.ToFormal()
+	}
+	return cdxCompType
 }
 
 func CreateScaComponentFromBinaryNode(node *xrayUtils.BinaryGraphNode) (component cyclonedx.Component) {
