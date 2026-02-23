@@ -168,7 +168,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			name:                        "nuget single 5.0  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single5.0"),
 			installCommand:              "nuget restore", // todo test in ci with nuget restore
-			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin', pending fix XRAY-128186",
+			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin'. xbuild tool is deprecated use msbuild instead, pending fix XRAY-128186",
 			successfulTreeBuiltExpected: true,
 		},
 		{
@@ -180,7 +180,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			name:                        "nuget multi  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "multi"),
 			installCommand:              "nuget restore", // todo test in ci with nuget restore
-			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin', pending fix XRAY-128186",
+			skipMsg:                     "CI fails on 'dotnet restore' - MSBuild auto-detection: using msbuild version '' from '/opt/homebrew/bin'. xbuild tool is deprecated use msbuild instead, pending fix XRAY-128186",
 			successfulTreeBuiltExpected: true,
 		},
 		{
@@ -203,7 +203,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-01-2026", 30, test.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 60, test.skipMsg)
 			}
 			// Create and change directory to test workspace
 			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
