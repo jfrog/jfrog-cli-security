@@ -1,10 +1,13 @@
 package conversion
 
 import (
+	"slices"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
@@ -12,7 +15,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/tableparser"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -37,14 +39,14 @@ type ResultConvertParams struct {
 	IsMultipleRoots *bool
 	// The requested scans to be included in the results, if empty all scans will be included
 	RequestedScans []utils.SubScanType
-	// Create local license violations if repo context was not provided and a license is not in this list
-	AllowedLicenses []string
 	// Output will contain only the unique violations determined by the GetUniqueKey function (SimpleJson only)
 	SimplifiedOutput bool
 	// Convert the results to a pretty format if supported (Table and SimpleJson only)
 	Pretty bool
 	// The JFrog platform URL to be used in the results (Sarif only - GitHub integration)
 	PlatformUrl string
+	// A list of target names to include in the output, if empty all targets will be included
+	IncludeTargets []string
 }
 
 func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConvertor {
@@ -54,24 +56,25 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 // Parse a stream of results and convert them to the desired format T
 type ResultsStreamFormatParser[T interface{}] interface {
 	// Reset the convertor to start converting a new command results
-	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) error
+	Reset(metadata results.ResultsMetaData, statusCodes results.ResultsStatus, multipleTargets bool) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewTargetResults(target results.ScanTarget, errors ...error) error
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
 	// Missing attributes:
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
-	DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
-	DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
+	DeprecatedParseScaVulnerabilities(descriptors []string, scaResponse services.ScanResponse, applicableScan ...[]*sarif.Run) error
+	DeprecatedParseLicenses(scaResponse services.ScanResponse) error
 	// Parse SCA content to the current scan target
-	ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) error
-	ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error
-	ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	ParseSbom(sbom *cyclonedx.BOM) error
+	ParseSbomLicenses(sbom *cyclonedx.BOM) error
+	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
-	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
-	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
-	ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) error
-	// Parse JFrog violations to the current scan target
-	ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	ParseSecrets(secrets ...[]*sarif.Run) error
+	ParseIacs(iacs ...[]*sarif.Run) error
+	ParseSast(sast ...[]*sarif.Run) error
+	ParseMalicious(malicious ...[]*sarif.Run) error
+	// Parse JFrog violations to the format if supported
+	ParseViolations(violations violationutils.Violations) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }
@@ -102,50 +105,52 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityC
 }
 
 func parseCommandResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdResults *results.SecurityCommandResults) (converted T, err error) {
-	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
 	if params.IsMultipleRoots != nil {
 		multipleTargets = *params.IsMultipleRoots
 	}
-	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets, cmdResults.GitContext, cmdResults.GeneralError); err != nil {
+	if err = parser.Reset(cmdResults.ResultsMetaData, cmdResults.GetStatusCodes(), multipleTargets); err != nil {
 		return
 	}
 	for _, targetScansResults := range cmdResults.Targets {
+		if len(params.IncludeTargets) > 0 && !slices.Contains(params.IncludeTargets, targetScansResults.Target) {
+			// Skip this target as it's not in the include list
+			continue
+		}
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
-		if params.IncludeSbom {
-			if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.Sbom); err != nil {
-				return
-			}
+		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults); err != nil {
+			return
 		}
-		if utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.RequestedScans...) && targetScansResults.ScaResults != nil {
-			if err = parseScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
-				return
-			}
-		}
-		if !jasEntitled {
+		if !cmdResults.EntitledForJas {
 			continue
 		}
-		if err = parseJasResults(params, parser, targetScansResults, cmdResults.CmdType); err != nil {
+		if err = parseJasResults(params, parser, targetScansResults); err != nil {
+			return
+		}
+	}
+	if params.HasViolationContext || cmdResults.HasViolationContext() {
+		if err = parseViolations(parser, cmdResults.Violations, cmdResults.Targets); err != nil {
 			return
 		}
 	}
 	return parser.Get()
 }
 
-func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
-	if targetScansResults.ScaResults == nil {
+func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdType utils.CommandType, targetScansResults *results.TargetResults) (err error) {
+	// Parse SBOM content first to prepare for parsing SCA results
+	if params.IncludeSbom && targetScansResults.ScaResults != nil {
+		if err = parser.ParseSbom(targetScansResults.ScaResults.Sbom); err != nil {
+			return
+		}
+	}
+	if targetScansResults.ScaResults == nil || !utils.IsScanRequested(cmdType, utils.ScaScan, params.RequestedScans...) {
 		// Nothing to parse, no SCA results
 		return
 	}
-	// Prepare attributes for parsing SCA results
-	var applicableRuns []results.ScanResult[[]*sarif.Run]
-	if jasEntitled && targetScansResults.JasResults != nil {
-		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
-	}
 	// If no enriched SBOM was provided, we can't parse new flow
-	if err = parseDeprecatedScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
+	if err = parseDeprecatedScaResults(params, parser, targetScansResults); err != nil {
 		return
 	}
 	if targetScansResults.ScaResults.Sbom == nil {
@@ -154,65 +159,42 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parse the SCA results from the enriched SBOM
 	if params.IncludeVulnerabilities && targetScansResults.ScaResults.Sbom.Vulnerabilities != nil {
-		vulnerabilityScan := results.ScanResult[*cyclonedx.BOM]{
-			Scan:       targetScansResults.ScaResults.Sbom,
-			StatusCode: targetScansResults.ScaResults.ScanStatusCode,
+		var applicableRuns []*sarif.Run
+		if targetScansResults.JasResults != nil {
+			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
 		}
-		if err = parser.ParseCVEs(targetScansResults.ScanTarget, vulnerabilityScan, applicableRuns...); err != nil {
-			return
-		}
-	}
-	// Parse SCA violations
-	if params.HasViolationContext && len(targetScansResults.ScaResults.Violations) > 0 {
-		if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+		if err = parser.ParseCVEs(targetScansResults.ScaResults.Sbom, applicableRuns); err != nil {
 			return
 		}
 	}
 	// Must be called last for cyclonedxparser to be able to attach the licenses to all the components
 	if params.IncludeLicenses && targetScansResults.ScaResults.Sbom.Components != nil {
-		dependencies := []cyclonedx.Dependency{}
-		if targetScansResults.ScaResults.Sbom.Dependencies != nil {
-			dependencies = append(dependencies, *targetScansResults.ScaResults.Sbom.Dependencies...)
-		}
-		if err = parser.ParseSbomLicenses(targetScansResults.ScanTarget, *targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
+		if err = parser.ParseSbomLicenses(targetScansResults.ScaResults.Sbom); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
+func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults) (err error) {
 	if targetScansResults.ScaResults == nil {
 		// Nothing to parse, no SCA results
 		return
 	}
-	// Prepare attributes for parsing SCA results
-	var applicableRuns []results.ScanResult[[]*sarif.Run]
-	if jasEntitled && targetScansResults.JasResults != nil {
+	applicableRuns := []*sarif.Run{}
+	if targetScansResults.JasResults != nil {
 		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
 	}
 	// Parse deprecated SCA results
 	for _, scaResults := range targetScansResults.ScaResults.DeprecatedXrayResults {
 		if params.IncludeVulnerabilities {
-			if err = parser.DeprecatedParseScaIssues(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, false, scaResults, applicableRuns...); err != nil {
+			if err = parser.DeprecatedParseScaVulnerabilities(targetScansResults.ScaResults.Descriptors, scaResults, applicableRuns); err != nil {
 				return
-			}
-		}
-		if params.HasViolationContext {
-			if err = parser.DeprecatedParseScaIssues(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, true, scaResults, applicableRuns...); err != nil {
-				return
-			}
-		} else if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
-			// If no violations were found, check if there are licenses that are not allowed
-			if scaResults.Scan.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
-				if err = parser.DeprecatedParseScaIssues(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, true, scaResults); err != nil {
-					return
-				}
 			}
 		}
 		// Must be called last for cyclonedxparser to be able to attach the licenses to the components
 		if params.IncludeLicenses {
-			if err = parser.DeprecatedParseLicenses(targetScansResults.ScanTarget, scaResults); err != nil {
+			if err = parser.DeprecatedParseLicenses(scaResults); err != nil {
 				return
 			}
 		}
@@ -220,53 +202,34 @@ func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser
 	return
 }
 
-func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults, cmdType utils.CommandType) (err error) {
-	if targetResults.JasResults == nil {
+func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults) (err error) {
+	if targetResults.JasResults == nil || !params.IncludeVulnerabilities {
 		return
 	}
 	// Parsing JAS Secrets results
-	if err = parseJasScanResults(params, targetResults, cmdType, utils.SecretsScan, func(violations bool) error {
-		scanResults := targetResults.JasResults.JasVulnerabilities.SecretsScanResults
-		if violations {
-			scanResults = targetResults.JasResults.JasViolations.SecretsScanResults
-		}
-		return parser.ParseSecrets(targetResults.ScanTarget, violations, scanResults)
-	}); err != nil {
+	if err = parser.ParseSecrets(targetResults.JasResults.JasVulnerabilities.SecretsScanResults); err != nil {
 		return
 	}
 	// Parsing JAS IAC results
-	if err = parseJasScanResults(params, targetResults, cmdType, utils.IacScan, func(violations bool) error {
-		scanResults := targetResults.JasResults.JasVulnerabilities.IacScanResults
-		if violations {
-			scanResults = targetResults.JasResults.JasViolations.IacScanResults
-		}
-		return parser.ParseIacs(targetResults.ScanTarget, violations, scanResults)
-	}); err != nil {
+	if err = parser.ParseIacs(targetResults.JasResults.JasVulnerabilities.IacScanResults); err != nil {
 		return
 	}
 	// Parsing JAS SAST results
-	return parseJasScanResults(params, targetResults, cmdType, utils.SastScan, func(violations bool) error {
-		scanResults := targetResults.JasResults.JasVulnerabilities.SastScanResults
-		if violations {
-			scanResults = targetResults.JasResults.JasViolations.SastScanResults
-		}
-		return parser.ParseSast(targetResults.ScanTarget, violations, scanResults)
-	})
+	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+		return
+	}
+	// Parsing JAS Malicious Code results
+	return parser.ParseMalicious(targetResults.JasResults.JasVulnerabilities.MaliciousScanResults)
 }
 
-func parseJasScanResults(params ResultConvertParams, targetResults *results.TargetResults, cmdType utils.CommandType, subScanType utils.SubScanType, parseJasFunc func(violations bool) error) (err error) {
-	if !utils.IsScanRequested(cmdType, subScanType, params.RequestedScans...) || targetResults.JasResults == nil {
+func parseViolations[T interface{}](parser ResultsStreamFormatParser[T], violations *violationutils.Violations, targets []*results.TargetResults) (err error) {
+	if violations == nil || len(targets) == 0 {
+		// When there are no targets, there are no violations to parse
 		return
 	}
-	if params.IncludeVulnerabilities {
-		// Parse vulnerabilities
-		if err = parseJasFunc(false); err != nil {
-			return
-		}
-	}
-	if !params.HasViolationContext {
+	// Parsing JAS Violations results
+	if err = parser.ParseViolations(*violations); err != nil {
 		return
 	}
-	// Parse violations
-	return parseJasFunc(true)
+	return
 }

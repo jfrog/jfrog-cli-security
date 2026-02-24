@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -39,33 +40,45 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
+func GetSarifActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
+	results, err := sarif.FromString(content)
+	assert.NoError(t, err, "Failed to unmarshal content to sarif report.")
+	return toActualValuesSarif(results)
+}
+
+func toActualValuesSarif(content *sarif.Report) (actualValues ValidationCountActualValues) {
+	// SCA
+	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations = countScaResults(content)
+	actualValues.Vulnerabilities += actualValues.ScaVulnerabilities
+	actualValues.Violations += actualValues.ScaViolations
+
+	// Secrets
+	actualValues.SecretsVulnerabilities, actualValues.InactiveSecretsVulnerabilities, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countSecretsResults(content)
+	actualValues.Vulnerabilities += actualValues.SecretsVulnerabilities
+	actualValues.Violations += actualValues.SecretsViolations
+
+	// IAC
+	actualValues.IacVulnerabilities, actualValues.IacViolations = countJasResults(sarifutils.GetRunsByToolName(content, IacToolName))
+	actualValues.Vulnerabilities += actualValues.IacVulnerabilities
+	actualValues.Violations += actualValues.IacViolations
+
+	// SAST
+	actualValues.SastVulnerabilities, actualValues.SastViolations = countJasResults(sarifutils.GetRunsByToolName(content, SastToolName))
+	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
+	actualValues.Violations += actualValues.SastViolations
+
+	// Violations run
+	actualValues.Violations, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations, actualValues.SastViolations, actualValues.IacViolations, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countViolations(sarifutils.GetRunsByToolName(content, sarifparser.PolicyEnforcerToolName))
+
+	return
+}
+
 // Validate sarif report according to the expected counts in the validation params.
 // Actual content should be a *sarif.Report in the validation params.
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sarif.Report) {
-	actualValues := validationCountActualValues{}
-
-	// SCA
-	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations = countScaResults(report)
-	actualValues.Vulnerabilities += actualValues.ScaVulnerabilities
-	actualValues.Violations += actualValues.ScaViolations
-
-	// Secrets
-	actualValues.SecretsVulnerabilities, actualValues.InactiveSecretsVulnerabilities, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countSecretsResults(report)
-	actualValues.Vulnerabilities += actualValues.SecretsVulnerabilities
-	actualValues.Violations += actualValues.SecretsViolations
-
-	// IAC
-	actualValues.IacVulnerabilities, actualValues.IacViolations = countJasResults(sarifutils.GetRunsByToolName(report, IacToolName))
-	actualValues.Vulnerabilities += actualValues.IacVulnerabilities
-	actualValues.Violations += actualValues.IacViolations
-
-	// SAST
-	actualValues.SastVulnerabilities, actualValues.SastViolations = countJasResults(sarifutils.GetRunsByToolName(report, SastToolName))
-	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
-	actualValues.Violations += actualValues.SastViolations
-
+	actualValues := toActualValuesSarif(report)
 	if params.Total != nil {
 		// Not supported in the summary output
 		params.Total.Licenses = 0
@@ -96,45 +109,64 @@ func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabi
 
 			// Get the applicability status in the result properties (convert to string) and add count to the appropriate category
 			if result.Properties != nil {
-				applicabilityProperty := result.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey]
-				if applicability, ok := applicabilityProperty.(string); ok {
-					switch applicability {
-					case jasutils.Applicable.String():
-						if isViolations {
-							applicableViolationsResults++
-						} else {
-							applicableVulnerabilitiesResults++
-						}
-					case jasutils.NotApplicable.String():
-						if isViolations {
-							notApplicableViolationsResults++
-						} else {
-							notApplicableVulnerabilitiesResults++
-						}
-					case jasutils.ApplicabilityUndetermined.String():
-						if isViolations {
-							undeterminedViolationsResults++
-						} else {
-							undeterminedVulnerabilitiesResults++
-						}
-					case jasutils.NotCovered.String():
-						if isViolations {
-							notCoveredViolationsResults++
-						} else {
-							notCoveredVulnerabilitiesResults++
-						}
-					case jasutils.MissingContext.String():
-						if isViolations {
-							missingContextViolationsResults++
-						} else {
-							missingContextVulnerabilitiesResults++
-						}
+				switch getResultApplicabilityStatus(result) {
+				case jasutils.Applicable:
+					if isViolations {
+						applicableViolationsResults++
+					} else {
+						applicableVulnerabilitiesResults++
+					}
+				case jasutils.NotApplicable:
+					if isViolations {
+						notApplicableViolationsResults++
+					} else {
+						notApplicableVulnerabilitiesResults++
+					}
+				case jasutils.ApplicabilityUndetermined:
+					if isViolations {
+						undeterminedViolationsResults++
+					} else {
+						undeterminedVulnerabilitiesResults++
+					}
+				case jasutils.NotCovered:
+					if isViolations {
+						notCoveredViolationsResults++
+					} else {
+						notCoveredVulnerabilitiesResults++
+					}
+				case jasutils.MissingContext:
+					if isViolations {
+						missingContextViolationsResults++
+					} else {
+						missingContextVulnerabilitiesResults++
 					}
 				}
 			}
 		}
 	}
 	return
+}
+
+func getResultApplicabilityStatus(result *sarif.Result) jasutils.ApplicabilityStatus {
+	switch sarifutils.GetResultProperty(jasutils.ApplicabilitySarifPropertyKey, result) {
+	case jasutils.Applicable.String():
+		return jasutils.Applicable
+	case jasutils.NotApplicable.String():
+		return jasutils.NotApplicable
+	case jasutils.ApplicabilityUndetermined.String():
+		return jasutils.ApplicabilityUndetermined
+	case jasutils.NotCovered.String():
+		return jasutils.NotCovered
+	case jasutils.MissingContext.String():
+		return jasutils.MissingContext
+	default:
+		return jasutils.NotScanned
+	}
+}
+
+func getResultViolationType(result *sarif.Result) violationutils.ViolationIssueType {
+	violationTypeStr := sarifutils.GetResultViolationType(result)
+	return violationutils.ViolationIssueType(violationTypeStr)
 }
 
 func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnerabilities, violations, inactiveViolations int) {
@@ -177,6 +209,48 @@ func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 				violations++
 			} else {
 				vulnerabilities++
+			}
+		}
+	}
+	return
+}
+
+func countViolations(policyRuns []*sarif.Run) (total, sca, sec, lic, applic, undetermined, notCover, notApplic, missingCtx, sast, iac, secrets, inactive int) {
+	for _, run := range policyRuns {
+		for _, result := range run.Results {
+			total++
+			switch getResultViolationType(result) {
+			case violationutils.CveViolationType:
+				sca++
+				sec++
+			case violationutils.LicenseViolationType:
+				sca++
+				lic++
+			case violationutils.OperationalRiskType:
+				sca++
+				// No operational risk violations in sarif yet
+			case violationutils.SastViolationType:
+				sast++
+			case violationutils.IacViolationType:
+				iac++
+			case violationutils.SecretsViolationType:
+				secrets++
+			}
+			// Get the applicability status in the result properties (convert to string) and add count to the appropriate category
+			switch getResultApplicabilityStatus(result) {
+			case jasutils.Applicable:
+				applic++
+			case jasutils.NotApplicable:
+				notApplic++
+			case jasutils.ApplicabilityUndetermined:
+				undetermined++
+			case jasutils.NotCovered:
+				notCover++
+			case jasutils.MissingContext:
+				missingCtx++
+			}
+			if tokenStatus := sarifutils.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.String() {
+				inactive++
 			}
 		}
 	}

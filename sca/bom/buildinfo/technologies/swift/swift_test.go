@@ -33,15 +33,15 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	assert.NoError(t, err)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.2.0",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-numerics:1.0.2",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio-http2:1.19.0",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-atomics:1.2.0",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-collections:1.1.4",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-system:1.4.0",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-http-types:1.0.2",
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
-		techutils.Swift.GetPackageTypeId() + packageInfo,
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-algorithms:1.2.0",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-numerics:1.0.2",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-nio-http2:1.19.0",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-atomics:1.2.0",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-collections:1.1.4",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-system:1.4.0",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-http-types:1.0.2",
+		techutils.Swift.GetXrayPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
+		techutils.Swift.GetXrayPackageTypeId() + packageInfo,
 	}
 
 	params := technologies.BuildInfoBomGeneratorParams{ServerDetails: server}
@@ -50,7 +50,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 	assert.NotEmpty(t, rootNode)
 
-	assert.Equal(t, rootNode[0].Id, techutils.Swift.GetPackageTypeId()+packageInfo)
+	assert.Equal(t, rootNode[0].Id, techutils.Swift.GetXrayPackageTypeId()+packageInfo)
 	assert.Len(t, rootNode[0].Nodes, 11)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "github.com/apple/swift-algorithms:1.2.0")

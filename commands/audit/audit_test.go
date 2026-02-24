@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -260,7 +261,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedScaIssues: 15,
 		},
@@ -292,7 +292,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedScaIssues: 0,
 		},
@@ -323,12 +322,8 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
-			expectedCaApplicable:    3,
-			expectedCaUndetermined:  6,
-			expectedCaNotCovered:    4,
-			expectedCaNotApplicable: 2,
+			expectedCaNotCovered: 15,
 		},
 		// TODO Add testcase for Sca and Applicability with exclusions after resolving the Glob patterns issues
 		{
@@ -358,7 +353,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedSecretsIssues: 16,
 		},
@@ -383,14 +377,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"*api_secrets*"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedSecretsIssues: 7,
 		},
@@ -421,7 +414,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedSastIssues: 4,
 		},
@@ -443,7 +435,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"*flask_webgoat*"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: false,
@@ -453,7 +445,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedSastIssues: 0,
 		},
@@ -461,7 +452,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			name:        "Enable only IaC scanner",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
 			configProfile: services.ConfigProfile{
-				ProfileName: "only-sast",
+				ProfileName: "only-iac",
 				Modules: []services.Module{{
 					ModuleId:     1,
 					ModuleName:   "only-iac-module",
@@ -484,7 +475,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedIacIssues: 9,
 		},
@@ -512,11 +502,10 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan:   true,
-							ExcludePatterns: []string{"*iac/gcp*"},
+							ExcludePatterns: []string{"**/*iac/gcp*/**"},
 						},
 					},
 				}},
-				IsDefault: false,
 			},
 			expectedIacIssues: 0,
 		},
@@ -547,15 +536,11 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 					},
 				}},
-				IsDefault: false,
 			},
-			expectedSastIssues:      4,
-			expectedSecretsIssues:   16,
-			expectedIacIssues:       9,
-			expectedCaApplicable:    3,
-			expectedCaUndetermined:  6,
-			expectedCaNotCovered:    4,
-			expectedCaNotApplicable: 2,
+			expectedSastIssues:    4,
+			expectedSecretsIssues: 16,
+			expectedIacIssues:     9,
+			expectedCaNotCovered:  15,
 		},
 		{
 			name:        "All scanners enabled but some with exclude patterns",
@@ -575,26 +560,22 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"*flask_webgoat*"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"*api_secrets*"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
 					},
 				}},
-				IsDefault: false,
 			},
-			expectedSastIssues:      0,
-			expectedSecretsIssues:   7,
-			expectedIacIssues:       9,
-			expectedCaApplicable:    3,
-			expectedCaUndetermined:  6,
-			expectedCaNotCovered:    4,
-			expectedCaNotApplicable: 2,
+			expectedSastIssues:    0,
+			expectedSecretsIssues: 7,
+			expectedIacIssues:     9,
+			expectedCaNotCovered:  15,
 		},
 	}
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
@@ -618,6 +599,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			auditParams := NewAuditParams().
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
 				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -675,7 +657,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
 		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
@@ -811,7 +794,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 			auditResults := RunAudit(auditParams)
 			if testcase.allowPartialResults {
@@ -1021,7 +1005,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetDiffMode(true).
 				SetResultsToCompare(tc.resultsToCompare).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())

@@ -60,6 +60,7 @@ type SpecificScannersExcludePatterns struct {
 	SastExcludePatterns               []string
 	SecretsExcludePatterns            []string
 	IacExcludePatterns                []string
+	MaliciousCodeExcludePatterns      []string
 }
 
 type JasScannerOption func(f *JasScanner) error
@@ -420,27 +421,29 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 	return roots, nil
 }
 
-func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
-	if len(exclusions) > 0 {
-		return filterUniqueAndConvertToFilesExcludePatterns(exclusions)
+func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, centralConfigExclusions []string, cliExclusions ...string) []string {
+	uniqueExcludePatterns := datastructures.MakeSet[string]()
+	if len(cliExclusions) > 0 || len(centralConfigExclusions) > 0 {
+		// Adding exclusions from CLI requires to convert them to file exclude patterns
+		uniqueExcludePatterns.AddElements(convertToFilesExcludePatterns(cliExclusions)...)
+		// Adding exclusions from centralized config, no need to convert
+		uniqueExcludePatterns.AddElements(centralConfigExclusions...)
+		return uniqueExcludePatterns.ToSlice()
 	}
-
 	// Adding exclusions from jfrog-apps-config IF no exclusions provided from other source (flags, env vars, config profile)
-	excludePatterns := module.ExcludePatterns
+	uniqueExcludePatterns.AddElements(module.ExcludePatterns...)
 	if scanner != nil {
-		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
+		uniqueExcludePatterns.AddElements(scanner.ExcludePatterns...)
 	}
-	if len(excludePatterns) == 0 {
+	if uniqueExcludePatterns.Size() == 0 {
 		return utils.DefaultJasExcludePatterns
 	}
-	return excludePatterns
+	return uniqueExcludePatterns.ToSlice()
 }
 
 // This function convert every exclude pattern to a file exclude pattern form.
 // Checks are being made since some of the exclude patters we get here might already be in a file exclude pattern
-// Additionally, we keep patterns without duplications
-func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
-	uniqueExcludePatterns := datastructures.MakeSet[string]()
+func convertToFilesExcludePatterns(excludePatterns []string) (converted []string) {
 	for _, excludePattern := range excludePatterns {
 		if !strings.HasPrefix(excludePattern, "**/") {
 			excludePattern = "**/" + excludePattern
@@ -448,9 +451,9 @@ func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []st
 		if !strings.HasSuffix(excludePattern, "/**") {
 			excludePattern += "/**"
 		}
-		uniqueExcludePatterns.Add(excludePattern)
+		converted = append(converted, excludePattern)
 	}
-	return uniqueExcludePatterns.ToSlice()
+	return converted
 }
 
 func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
@@ -471,8 +474,8 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
-	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
+	envVars := map[string]string{utils.JfMsiEnvVariable: msi, newFlowEnvVariable: strconv.FormatBool(newFlow)}
 	if gitRepoUrl != "" {
 		envVars[gitRepoEnvVariable] = gitRepoUrl
 	}
@@ -487,7 +490,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, wat
 	}
 	technology := technologies[0]
 	envVars[JfPackageManagerEnvVariable] = technology.String()
-	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
+	envVars[JfLanguageEnvVariable] = string(technology.GetLanguage())
 	return envVars
 
 }
@@ -516,4 +519,14 @@ func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile
 	scanner.ScannersExclusions.SastExcludePatterns = profile.Modules[0].ScanConfig.SastScannerConfig.ExcludePatterns
 	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
 	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
+}
+
+func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module jfrogappsconfig.Module, targetCount int) string {
+	outLog := goclientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan", scanType.ToTextString())
+	if targetCount != 1 {
+		outLog += fmt.Sprintf(" on target '%s'...", module.SourceRoot)
+	} else {
+		outLog += "..."
+	}
+	return outLog
 }

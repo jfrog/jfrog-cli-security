@@ -22,6 +22,7 @@ type SimpleJsonResults struct {
 	SecretsViolations         []SourceCodeRow               `json:"secretsViolations"`
 	IacsViolations            []SourceCodeRow               `json:"iacViolations"`
 	SastViolations            []SourceCodeRow               `json:"sastViolations"`
+	MaliciousVulnerabilities  []SourceCodeRow               `json:"maliciousCode"`
 	Errors                    []SimpleJsonError             `json:"errors"`
 	Statuses                  ScanStatus                    `json:"scansStatus"`
 	MultiScanId               string                        `json:"multiScanId,omitempty"`
@@ -34,6 +35,7 @@ type ScanStatus struct {
 	IacStatusCode           *int `json:"iacScanStatusCode,omitempty"`
 	SecretsStatusCode       *int `json:"secretsScanStatusCode,omitempty"`
 	ApplicabilityStatusCode *int `json:"ContextualAnalysisScanStatusCode,omitempty"`
+	MaliciousStatusCode     *int `json:"MaliciousStatusCode,omitempty"`
 }
 
 type ViolationContext struct {
@@ -45,6 +47,8 @@ type ViolationContext struct {
 	Policies []string `json:"policies,omitempty"`
 	// Value of fail_pr rule that can be applied to a policy. Indicates if the violation should fail the PR
 	FailPr bool `json:"fail_pull_request,omitempty"`
+	// Value of fail_build rule that can be applied to a policy. Indicates if the violation should fail the build
+	FailBuild bool `json:"fail_build,omitempty"`
 }
 
 type SeverityDetails struct {
@@ -134,9 +138,13 @@ func (l Location) ToString() string {
 }
 
 type ComponentRow struct {
-	Name     string    `json:"name"`
-	Version  string    `json:"version"`
-	Location *Location `json:"location,omitempty"`
+	Id      string `json:"id,omitempty"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	// Shown the preferred location of the component from the evidences.
+	PreferredLocation *Location `json:"location,omitempty"`
+	// Evidences is a list of locations that the component was found in.
+	Evidences []Location `json:"evidences,omitempty"`
 }
 
 type CveRow struct {

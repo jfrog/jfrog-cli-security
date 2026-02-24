@@ -189,8 +189,11 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 	if potentialComponents != nil {
 		components := *potentialComponents
 		for i := range components {
-			if components[i].Location != nil {
-				components[i].Location.File = filepath.FromSlash(components[i].Location.File)
+			if components[i].PreferredLocation != nil {
+				components[i].PreferredLocation.File = filepath.FromSlash(components[i].PreferredLocation.File)
+			}
+			for j := range components[i].Evidences {
+				components[i].Evidences[j].File = filepath.FromSlash(components[i].Evidences[j].File)
 			}
 		}
 	}
@@ -198,8 +201,11 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		impactPaths := *potentialImpactPaths
 		for i := range impactPaths {
 			for j := range impactPaths[i] {
-				if impactPaths[i][j].Location != nil {
-					impactPaths[i][j].Location.File = filepath.FromSlash(impactPaths[i][j].Location.File)
+				if impactPaths[i][j].PreferredLocation != nil {
+					impactPaths[i][j].PreferredLocation.File = filepath.FromSlash(impactPaths[i][j].PreferredLocation.File)
+				}
+				for k := range impactPaths[i][j].Evidences {
+					impactPaths[i][j].Evidences[k].File = filepath.FromSlash(impactPaths[i][j].Evidences[k].File)
 				}
 			}
 		}
@@ -207,8 +213,11 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 	if potentialImpactedDependencyDetails != nil {
 		impactedDependencyDetails := *potentialImpactedDependencyDetails
 		for i := range impactedDependencyDetails.Components {
-			if impactedDependencyDetails.Components[i].Location != nil {
-				impactedDependencyDetails.Components[i].Location.File = filepath.FromSlash(impactedDependencyDetails.Components[i].Location.File)
+			if impactedDependencyDetails.Components[i].PreferredLocation != nil {
+				impactedDependencyDetails.Components[i].PreferredLocation.File = filepath.FromSlash(impactedDependencyDetails.Components[i].PreferredLocation.File)
+			}
+			for j := range impactedDependencyDetails.Components[i].Evidences {
+				impactedDependencyDetails.Components[i].Evidences[j].File = filepath.FromSlash(impactedDependencyDetails.Components[i].Evidences[j].File)
 			}
 		}
 	}
@@ -341,26 +350,37 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	}
 }
 
-// If gitResources is empty, the watch will be created with all builds.
-func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+func CreateWatchOnProjectBuilds(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayApi.WatchBuildAll
+		watchParams.ProjectKey = projectKey
+		watchParams.Builds.Type = xrayApi.WatchBuildAll
+		return watchParams
+	})
+}
+
+func CreateWatchOnGitResources(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+		watchParams.GitRepositories.Resources = gitResources
+		return watchParams
+	})
+}
+
+func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, repos ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+		watchParams.Repositories.Type = xrayApi.WatchRepositoriesByName
+		for _, repo := range repos {
+			watchParams.Repositories.Repositories[repo] = xrayApi.NewWatchRepositoryByName(repo)
+		}
+		if len(repos) == 0 {
+			watchParams.Repositories.Type = xrayApi.WatchRepositoriesAll
 		}
 		return watchParams
 	})
 }
 
-func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
+func CreateWatchOnAllBuilds(t *testing.T, policyName, watchName string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
-		watchParams.ProjectKey = projectKey
-		if len(gitResources) > 0 {
-			watchParams.GitRepositories.Resources = gitResources
-		} else {
-			watchParams.Builds.Type = xrayApi.WatchBuildAll
-		}
+		watchParams.Builds.Type = xrayApi.WatchBuildAll
 		return watchParams
 	})
 }
@@ -385,7 +405,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateWatchOnAllBuilds(t, policyParams.Name, watchName)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
@@ -445,6 +465,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
 			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
 		}
+		return nil
 	}
 	return jas.DownloadAnalyzerManagerIfNeeded(0)
 }

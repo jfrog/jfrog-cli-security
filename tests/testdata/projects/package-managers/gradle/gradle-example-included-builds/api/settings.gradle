@@ -1,0 +1,5 @@
+rootProject.name = 'api'
+//include 'proj'
+
+include ':shared'
+project(':shared').projectDir=file("$rootDir/../shared")

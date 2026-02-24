@@ -187,17 +187,21 @@ func (rw *ResultsWriter) printSarif() (err error) {
 	return utils.DumpSarifContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 }
 
-func (rw *ResultsWriter) printCycloneDx() error {
-	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
+func (rw *ResultsWriter) printCycloneDx() (err error) {
+	bom, err := rw.createResultsConvertor(false).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {
-		return err
+		return
 	}
 	outputBytes, err := utils.GetAsJsonBytes(bom, true, true)
 	if err != nil {
-		return err
+		return
 	}
 	log.Output(string(outputBytes))
-	return utils.DumpFullBOMContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+	if rw.outputDir == "" {
+		return
+	}
+	_, err = utils.DumpCdxJsonContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+	return
 }
 
 func (rw *ResultsWriter) getOutputFileName() string {
@@ -260,6 +264,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
 		return
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.MaliciousCodeScan, jasutils.MaliciousCode); err != nil {
+		return
+	}
 	if len(rw.tableNotes) > 0 {
 		printMessages(rw.tableNotes)
 	}
@@ -267,22 +274,21 @@ func (rw *ResultsWriter) printTables() (err error) {
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
-	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
-		return
-	}
-	if rw.showViolations || rw.commandResults.HasViolationContext() {
-		if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
-			return
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
+		if rw.showViolations || rw.commandResults.HasViolationContext() {
+			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
+				return
+			}
 		}
-	}
-	if rw.commandResults.IncludesVulnerabilities() {
-		if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
-			return
+		if rw.commandResults.IncludesVulnerabilities() {
+			if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+				return
+			}
 		}
-	}
-	if rw.commandResults.IncludesLicenses() {
-		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
-			return
+		if rw.commandResults.IncludesLicenses() {
+			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
+				return
+			}
 		}
 	}
 	if !rw.commandResults.IncludeSbom() {
@@ -324,7 +330,9 @@ func PrintVulnerabilitiesTable(tables formats.ResultsTables, cmdType utils.Comma
 		)
 	}
 	emptyTableMessage := "✨ No vulnerable dependencies were found ✨"
-	if !techDetected {
+	// For build scan, the scan runs server-side so an empty table always means 0 vulnerabilities.
+	// Only show the package-manager message for non-build flows where no tech was detected locally.
+	if !techDetected && cmdType != utils.Build {
 		emptyTableMessage = coreutils.PrintYellow("🔧 Couldn't determine a package manager or build tool used by this project 🔧")
 	}
 	return coreutils.PrintTable(tables.SecurityVulnerabilitiesTable, "Vulnerable Dependencies", emptyTableMessage, printExtended)
@@ -409,6 +417,12 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 			return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
 				"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
 		}
+	case jasutils.MaliciousCode:
+		if !violations {
+			return coreutils.PrintTable(tables.MaliciousVulnerabilitiesTable, "Malicious Code Detection",
+				"✨ No Malicious Code vulnerabilities were found ✨", false)
+		}
+
 	}
 	return nil
 }

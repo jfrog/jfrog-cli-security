@@ -32,11 +32,14 @@ const (
 	// Indicates that the component is a root component in the BOM
 	RootRelation ComponentRelation = "root"
 	// Indicates that the component is a direct dependency of another component
-	DirectRelation ComponentRelation = "direct_dependency"
+	DirectRelation ComponentRelation = "direct"
 	// Indicates that the component is a transitive dependency of another component
-	TransitiveRelation ComponentRelation = "transitive_dependency"
+	TransitiveRelation ComponentRelation = "transitive"
 	// Undefined relation
 	UnknownRelation ComponentRelation = ""
+
+	// JFrog specific properties
+	JfrogRelationProperty = "jfrog:dependency:type"
 )
 
 type ComponentRelation string
@@ -96,6 +99,17 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
+func GetJfrogRelationProperty(component *cyclonedx.Component) ComponentRelation {
+	if component == nil || component.Properties == nil || len(*component.Properties) == 0 {
+		return UnknownRelation
+	}
+	property := GetProperty(component.Properties, JfrogRelationProperty)
+	if property == nil || property.Value == "" {
+		return UnknownRelation
+	}
+	return ComponentRelation(property.Value)
+}
+
 func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRoot bool) ComponentRelation {
 	if bom == nil || bom.Components == nil {
 		return UnknownRelation
@@ -104,6 +118,10 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRo
 	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
 		// The component is not found in the BOM components or not library, return UnknownRelation
 		return UnknownRelation
+	}
+	// Check if the component has a JFrog specific relation property
+	if relation := GetJfrogRelationProperty(component); relation != UnknownRelation {
+		return relation
 	}
 	dependencies := []cyclonedx.Dependency{}
 	if bom.Dependencies != nil {
@@ -178,6 +196,20 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 	if bom == nil || bom.Components == nil || len(*bom.Components) == 0 {
 		return
 	}
+	// First, let collect all Jfrog defined root components if exists
+	for _, comp := range *bom.Components {
+		if GetJfrogRelationProperty(&comp) == RootRelation {
+			if compDepEntry := SearchDependencyEntry(bom.Dependencies, comp.BOMRef); compDepEntry != nil {
+				roots = append(roots, *compDepEntry)
+			} else {
+				roots = append(roots, cyclonedx.Dependency{Ref: comp.BOMRef})
+			}
+		}
+	}
+	if len(roots) > 0 {
+		// Jfrog defined roots found, return them
+		return
+	}
 	// Create a Set to track all references that are listed in `dependsOn`
 	refs := datastructures.MakeSet[string]()
 	dependedRefs := datastructures.MakeSet[string]()
@@ -214,7 +246,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
 func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
-	if strings.Contains(dependency.Ref, "generic:root") && skipDefaultRoot {
+	if strings.Contains(dependency.Ref, techutils.ToPackageRef("root", "", "")) && skipDefaultRoot {
 		// dummy root, the actual roots are the dependencies of this component.
 		roots = []cyclonedx.Dependency{}
 		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
@@ -260,6 +292,18 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	return
 }
 
+func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) (component *cyclonedx.Component) {
+	if components == nil || len(*components) == 0 {
+		return
+	}
+	for i, comp := range *components {
+		if techutils.PurlToXrayComponentId(comp.PackageURL) == techutils.PurlToXrayComponentId(purl) {
+			return &(*components)[i]
+		}
+	}
+	return
+}
+
 func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
 		BOMRef: GetFileRef(filePathOrUri),
@@ -275,11 +319,31 @@ func GetFileRef(filePathOrUri string) string {
 	if err != nil {
 		return uri
 	}
-	return wdRef
+	return fmt.Sprintf("file:%s", wdRef)
 }
 
 func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
+}
+
+func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersion []string) *[]cyclonedx.AffectedVersions {
+	if len(fixedVersion) == 0 {
+		return nil
+	}
+	affected := CreateScaImpactedAffects(affectedComponent, fixedVersion)
+	if affected.Range == nil {
+		return nil
+	}
+	notAffectedVersions := []cyclonedx.AffectedVersions{}
+	for _, version := range *affected.Range {
+		if version.Status == cyclonedx.VulnerabilityStatusNotAffected {
+			notAffectedVersions = append(notAffectedVersions, version)
+		}
+	}
+	if len(notAffectedVersions) == 0 {
+		return nil
+	}
+	return &notAffectedVersions
 }
 
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
@@ -289,12 +353,12 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
 		// Exclude the component from the dependencies
-		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, compToExclude.BOMRef)
+		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, bom.Components, compToExclude)
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
@@ -346,17 +410,17 @@ func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents 
 	return &filteredComponents
 }
 
-func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeComponents ...string) *[]cyclonedx.Dependency {
+func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[]cyclonedx.Component, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Dependency {
 	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
 		return dependencies
 	}
-	excludeRefs := datastructures.MakeSet[string]()
-	for _, compRef := range excludeComponents {
-		excludeRefs.Add(compRef)
+	excludePurls := datastructures.MakeSet[string]()
+	for _, component := range excludeComponents {
+		excludePurls.Add(techutils.PurlToXrayComponentId(component.PackageURL))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludeRefs.Exists(dep.Ref) {
+		if excludePurls.Exists(GetTrimmedPurlByRef(dep.Ref, components)) {
 			// This dependency is excluded, skip it
 			continue
 		}
@@ -364,7 +428,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludeRefs.Exists(depRef) {
+				if !excludePurls.Exists(GetTrimmedPurlByRef(depRef, components)) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
@@ -377,6 +441,15 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		}
 	}
 	return &filteredDependencies
+}
+
+func GetTrimmedPurlByRef(dep string, components *[]cyclonedx.Component) string {
+	component := SearchComponentByRef(components, dep)
+	if component == nil {
+		// couldn't find component
+		return ""
+	}
+	return techutils.PurlToXrayComponentId(component.PackageURL)
 }
 
 func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {

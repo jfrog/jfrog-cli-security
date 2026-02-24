@@ -708,17 +708,18 @@ func TestTechnologyToLanguage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.language, TechnologyToLanguage(tt.technology), "TechnologyToLanguage(%v) == %v", tt.technology, tt.language)
+			assert.Equalf(t, tt.language, tt.technology.GetLanguage(), "TechnologyToLanguage(%v) == %v", tt.technology, tt.language)
 		})
 	}
 }
 
-func TestToCdxPackageType(t *testing.T) {
+func TestXrayPackageTypeToCdxPackageType(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
 		expected string
 	}{
+		{"npm to npm", "npm", "npm"},
 		{"gav to maven", "gav", "maven"},
 		{"docker to docker", "docker", "docker"},
 		{"go to golang", "go", "golang"},
@@ -726,7 +727,7 @@ func TestToCdxPackageType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.expected, ToCdxPackageType(tt.input), "ToCdxPackageType(%v) == %v", tt.input, tt.expected)
+			assert.Equalf(t, tt.expected, XrayPackageTypeToCdxPackageType(tt.input), "XrayPackageTypeToCdxPackageType(%v) == %v", tt.input, tt.expected)
 		})
 	}
 }
@@ -737,6 +738,7 @@ func TestCdxPackageTypeToXrayPackageType(t *testing.T) {
 		input    string
 		expected string
 	}{
+		{"npm to npm", "npm", "npm"},
 		{"maven to gav", "maven", "gav"},
 		{"docker to docker", "docker", "docker"},
 		{"golang to go", "golang", "go"},
@@ -860,6 +862,36 @@ func TestSplitPackageURL(t *testing.T) {
 	}
 }
 
+func TestCdxPackageTypeToTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected Technology
+	}{
+		// Conflicts with other technologies
+		{"npm to None", "npm", NoTech},
+		{"pnpm to None", "pnpm", NoTech},
+		{"maven to none", "maven", NoTech},
+		{"gradle to none", "gradle", NoTech},
+		{"pypi to none", "pypi", NoTech},
+		{"pip to none", "pip", NoTech},
+		{"pipenv to none", "pipenv", NoTech},
+		{"poetry to none", "poetry", NoTech},
+		// No conflicts with other technologies
+		{"nuget to nuget", "nuget", Nuget},
+		{"dotnet to dotnet", "dotnet", Dotnet},
+		{"yarn to yarn", "yarn", Yarn},
+		{"golang to golang", "golang", Go},
+		{"unknown to no tech", "foobar", NoTech},
+		{"docker to docker", "docker", Docker},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.expected, CdxPackageTypeToTechnology(tt.input), "CdxPackageTypeToTechnology(%v) == %v", tt.input, tt.expected)
+		})
+	}
+}
+
 func TestToPackageUrl(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -868,9 +900,11 @@ func TestToPackageUrl(t *testing.T) {
 		packageType string
 		expected    string
 	}{
-		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/@scope/package@1.0.0"},
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/%40scope/package@1.0.0"},
+		{"maven", "org.apache.commons/commons-lang3", "3.12.0", "maven", "pkg:maven/org.apache.commons/commons-lang3@3.12.0"},
+		{"gradle", "xpp3:xpp3_min", "1.1.4c", "gradle", "pkg:gradle/xpp3/xpp3_min@1.1.4c"},
 		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
-		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3:xpp3_min@1.1.4c"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3/xpp3_min@1.1.4c"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -888,11 +922,13 @@ func TestToPackageRef(t *testing.T) {
 		packageType string
 		expected    string
 	}{
-		{"npm scope with version", "@scope/package", "1.0.0", "npm", "npm:@scope/package:1.0.0"},
-		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish:v0.1.2"},
-		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min:1.1.4c"},
-		{"no version", "github.com/gophish/gophish", "", "golang", "golang:github.com/gophish/gophish"},
-		{"root", "root", "", "", "generic:root"},
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/%40scope/package@1.0.0"},
+		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3/xpp3_min@1.1.4c"},
+		{"maven", "org.apache.commons/commons-lang3", "3.12.0", "maven", "pkg:maven/org.apache.commons/commons-lang3@3.12.0"},
+		{"gradle", "xpp3:xpp3_min", "1.1.4c", "gradle", "pkg:gradle/xpp3/xpp3_min@1.1.4c"},
+		{"no version", "github.com/gophish/gophish", "", "golang", "pkg:golang/github.com/gophish/gophish"},
+		{"root", "root", "", "", "pkg:generic/root"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -930,9 +966,8 @@ func TestXrayComponentIdToPurl(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
-		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3:xpp3_min@1.1.4c"},
-		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3/xpp3_min@1.1.4c"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/%40scope/package@1.0.0"},
 		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
 	}
 	for _, tt := range tests {
@@ -949,10 +984,9 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
-		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min:1.1.4c"},
-		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
-		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish:v0.1.2"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/%40scope/package@1.0.0"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3/xpp3_min@1.1.4c"},
+		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

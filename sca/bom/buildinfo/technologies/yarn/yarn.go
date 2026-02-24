@@ -235,5 +235,5 @@ func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) (string, e
 	if err != nil {
 		return "", err
 	}
-	return techutils.Npm.GetPackageTypeId() + dependencyName + ":" + yarnDependency.Details.Version, nil
+	return techutils.Npm.GetXrayPackageTypeId() + dependencyName + ":" + yarnDependency.Details.Version, nil
 }

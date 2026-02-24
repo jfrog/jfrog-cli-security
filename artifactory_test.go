@@ -61,7 +61,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			resolveRepoName: securityTests.NugetRemoteRepo,
 			cacheRepoName:   securityTests.NugetRemoteRepo,
 			projectType:     project.Dotnet,
-			skipMsg:         "Dotnet restore fails, pending fix XRAY-128186",
+			skipMsg:         "Dotnet restore fails, error NU1301: Unable to load the service index for source. pending fix XRAY-128186",
 		},
 		{
 			testProjectPath: []string{"yarn", "yarn-v2"},
@@ -119,7 +119,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			if testCase.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, testCase.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 60, testCase.skipMsg)
 			}
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
 		})

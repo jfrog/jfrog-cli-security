@@ -23,7 +23,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.24.0"
+	defaultAnalyzerManagerVersion             = "1.30.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -37,6 +37,7 @@ const (
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
 	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
+	newFlowEnvVariable                        = "AM_DUMMY_MODE"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
 	unsupportedOsExitCode                     = 55

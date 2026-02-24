@@ -39,12 +39,14 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
-// Validate simple-json report results according to the expected counts in the validation params.
-// Actual content should be a formats.SimpleJsonResults in the validation params.
-// If Expected is provided, the validation will check if the Actual content matches the expected results.
-// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
-func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
-	actualValues := validationCountActualValues{
+func GetSimpleJsonActualValues(t *testing.T, content string) (actualValues ValidationCountActualValues) {
+	var results formats.SimpleJsonResults
+	assert.NoError(t, json.Unmarshal([]byte(content), &results), "Failed to unmarshal content to formats.SimpleJsonResults")
+	return toActualValuesSimpleJson(results)
+}
+
+func toActualValuesSimpleJson(results formats.SimpleJsonResults) (actualValues ValidationCountActualValues) {
+	actualValues = ValidationCountActualValues{
 		// Total
 		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities),
 		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations),
@@ -109,8 +111,15 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 			actualValues.MissingContextViolations++
 		}
 	}
+	return
+}
 
-	ValidateCount(t, "simple-json", params, actualValues)
+// Validate simple-json report results according to the expected counts in the validation params.
+// Actual content should be a formats.SimpleJsonResults in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
+func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
+	ValidateCount(t, "simple-json", params, toActualValuesSimpleJson(results))
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
@@ -217,11 +226,14 @@ func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expect
 
 func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.ComponentRow) {
 	ValidateContent(t, exactMatch,
-		PointerValidation[formats.Location]{Expected: expected.Location, Actual: actual.Location, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
+		PointerValidation[formats.Location]{Expected: expected.PreferredLocation, Actual: actual.PreferredLocation, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
 	)
-	if expected.Location != nil {
-		ValidateContent(t, exactMatch, StringValidation{Expected: expected.Location.File, Actual: actual.Location.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
+	if expected.PreferredLocation != nil {
+		ValidateContent(t, exactMatch, StringValidation{Expected: expected.PreferredLocation.File, Actual: actual.PreferredLocation.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
+	ValidateContent(t, exactMatch,
+		ListValidation[formats.Location]{Expected: expected.Evidences, Actual: actual.Evidences, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Evidences mismatch", issueId, expected.Name, expected.Version)},
+	)
 }
 
 func getComponent(name, version string, content []formats.ComponentRow) *formats.ComponentRow {

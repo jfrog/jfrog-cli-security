@@ -39,9 +39,9 @@ func TestGetComponentSarifLocation(t *testing.T) {
 		{
 			name: "Component with location",
 			component: formats.ComponentRow{
-				Name:     "example-package",
-				Version:  "1.0.0",
-				Location: &formats.Location{File: filepath.Join("dir", "file.txt")},
+				Name:              "example-package",
+				Version:           "1.0.0",
+				PreferredLocation: &formats.Location{File: filepath.Join("dir", "file.txt")},
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
 				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("dir/file.txt")),
@@ -642,7 +642,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchedRuns := patchRunsToPassIngestionRules("url/", tc.cmdType, tc.subScan, true, tc.isJasViolations, tc.target, tc.input...)
+			patchedRuns := patchSarifRuns(getSarifConvertParams(tc.cmdType, tc.subScan, &tc.target, tc.isJasViolations, true, "url/"), tc.input...)
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}

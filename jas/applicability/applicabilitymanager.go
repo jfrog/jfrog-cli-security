@@ -3,6 +3,7 @@ package applicability
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -17,7 +18,7 @@ import (
 
 const (
 	applicabilityScanCommand   = "ca"
-	applicabilityDocsUrlSuffix = "contextual-analysis"
+	applicabilityDocsUrlSuffix = "advanced-security/features-and-capabilities/contextual-analysis-of-cves"
 
 	ApplicabilityScannerType         ApplicabilityScanType = "analyze-applicability"
 	ApplicabilityDockerScanScanType  ApplicabilityScanType = "analyze-applicability-docker-scan"
@@ -42,6 +43,7 @@ type ContextualAnalysisScanParams struct {
 	ScanType                     ApplicabilityScanType
 	ThirdPartyContextualAnalysis bool
 	ThreadId                     int
+	TargetCount                  int
 	Module                       jfrogappsconfig.Module
 }
 
@@ -60,14 +62,15 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.ContextualAnalysisScan.ToTextString(), params.Module.SourceRoot))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.ContextualAnalysisScan, params.ThreadId, params.Module, params.TargetCount))
 	// Applicability scan does not produce violations.
 	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Module); err != nil {
 		return
 	}
 	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
 	if applicableCveCount > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false)+"Found", applicableCveCount, "applicable cves")
+		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false)+"Found", applicableCveCount, "applicable cves", fmt.Sprintf("(duration %s)", time.Since(startTime)))
 	}
 	return
 }
@@ -85,7 +88,7 @@ func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCve
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = asm.createConfigFile(module, append(asm.scanner.Exclusions, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns...)...); err != nil {
+	if err = asm.createConfigFile(module, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns, asm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
@@ -113,12 +116,12 @@ type scanConfiguration struct {
 	ScanType             string   `yaml:"scantype"`
 }
 
-func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
+func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module, centralConfigExclusions []string, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, nil)
 	if err != nil {
 		return err
 	}
-	excludePatterns := jas.GetExcludePatterns(module, nil, exclusions...)
+	excludePatterns := jas.GetExcludePatterns(module, nil, centralConfigExclusions, exclusions...)
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
 		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)

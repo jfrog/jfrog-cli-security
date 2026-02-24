@@ -62,7 +62,7 @@ func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = secretScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd})
+	err = secretScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
 	assert.NoError(t, err)
 
 	defer func() {
@@ -145,7 +145,7 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
-	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
+	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 1, 0)
 	assert.Error(t, err)
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Secrets, err), "failed to run Secrets scan")
 	assert.Nil(t, vulnerabilitiesResults)
@@ -160,8 +160,8 @@ func TestHideSecret(t *testing.T) {
 		{secret: "12", expectedOutput: "***"},
 		{secret: "123", expectedOutput: "***"},
 		{secret: "123456789", expectedOutput: "123************"},
-		// jfrog-ignore: test case
-		{secret: "3478hfnkjhvd848446gghgfh", expectedOutput: "347************"},
+		// jfrog-ignore: dummy token for test case
+		{secret: "3478hfnkjhvd848446gghgfh", expectedOutput: "347************"}, // #nosec G101 -- dummy token for test case
 	}
 
 	for _, test := range tests {

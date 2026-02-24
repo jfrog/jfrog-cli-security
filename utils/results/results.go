@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -20,25 +21,46 @@ import (
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
+const (
+	CmdStepSbom               = "SBOM Generation"
+	CmdStepSca                = "SCA Scan"
+	CmdStepContextualAnalysis = "Contextual Analysis Enrichment"
+	CmdStepIaC                = "IaC Scan"
+	CmdStepSecrets            = "Secret Detection Scan"
+	CmdStepSast               = "Static Application Security Testing (SAST)"
+	CmdStepMaliciousCode      = "Malicious Code"
+	CmdStepViolations         = "Violations Reporting"
+)
+
+type SecurityCommandStep string
+
 // SecurityCommandResults is a struct that holds the results of a security scan/audit command.
 type SecurityCommandResults struct {
+	errorsMutex  sync.Mutex `json:"-"`
+	targetsMutex sync.Mutex `json:"-"`
 	// General fields describing the command metadata
+	ResultsMetaData
+	// Results for each target in the command
+	Targets []*TargetResults `json:"targets"`
+	// Policy violations found in the command
+	Violations           *violationutils.Violations `json:"violations,omitempty"`
+	ViolationsStatusCode *int                       `json:"violations_status_code,omitempty"`
+}
+
+type ResultsMetaData struct {
 	XrayVersion      string                         `json:"xray_version"`
 	XscVersion       string                         `json:"xsc_version,omitempty"`
 	EntitledForJas   bool                           `json:"jas_entitled"`
-	SecretValidation bool                           `json:"secret_validation,omitempty"`
+	SecretValidation bool                           `json:"secret_validation"`
 	CmdType          utils.CommandType              `json:"command_type"`
 	ResultContext    ResultContext                  `json:"result_context,omitempty"`
 	GitContext       *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
 	StartTime        time.Time                      `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId string `json:"multi_scan_id,omitempty"`
-	// Results for each target in the command
-	Targets      []*TargetResults `json:"targets"`
-	targetsMutex sync.Mutex       `json:"-"`
+	MultiScanId        string `json:"multi_scan_id,omitempty"`
+	ResultsPlatformUrl string `json:"results_platform_url,omitempty"`
 	// GeneralError that occurred during the command execution
-	GeneralError error      `json:"general_error,omitempty"`
-	errorsMutex  sync.Mutex `json:"-"`
+	GeneralError error `json:"general_error,omitempty"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -70,24 +92,98 @@ func (rc *ResultContext) HasViolationContext() bool {
 	return len(rc.Watches) > 0 || len(rc.GitRepoHttpsCloneUrl) > 0 || len(rc.ProjectKey) > 0 || len(rc.RepoPath) > 0
 }
 
+type ResultsStatus struct {
+	SbomScanStatusCode           *int `json:"sbom,omitempty"`
+	ScaScanStatusCode            *int `json:"sca,omitempty"`
+	ContextualAnalysisStatusCode *int `json:"contextual_analysis,omitempty"`
+	SecretsScanStatusCode        *int `json:"secrets,omitempty"`
+	IacScanStatusCode            *int `json:"iac,omitempty"`
+	SastScanStatusCode           *int `json:"sast,omitempty"`
+	MaliciousScanStatusCode      *int `json:"malicious_code,omitempty"`
+	ViolationsStatusCode         *int `json:"violations,omitempty"`
+}
+
+func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
+	switch step {
+	case CmdStepSbom:
+		return isScanFailed(status.SbomScanStatusCode)
+	case CmdStepSca:
+		return isScanFailed(status.ScaScanStatusCode)
+	case CmdStepContextualAnalysis:
+		return isScanFailed(status.ContextualAnalysisStatusCode)
+	case CmdStepSecrets:
+		return isScanFailed(status.SecretsScanStatusCode)
+	case CmdStepIaC:
+		return isScanFailed(status.IacScanStatusCode)
+	case CmdStepSast:
+		return isScanFailed(status.SastScanStatusCode)
+	case CmdStepMaliciousCode:
+		return isScanFailed(status.MaliciousScanStatusCode)
+	case CmdStepViolations:
+		return isScanFailed(status.ViolationsStatusCode)
+	}
+	return false
+}
+
+func isScanFailed(statusCode *int) bool {
+	return statusCode != nil && *statusCode != 0
+}
+
+func (status *ResultsStatus) UpdateStatus(step SecurityCommandStep, statusCode *int) {
+	switch step {
+	case CmdStepSbom:
+		if shouldUpdateStatus(status.SbomScanStatusCode, statusCode) {
+			status.SbomScanStatusCode = statusCode
+		}
+	case CmdStepSca:
+		if shouldUpdateStatus(status.ScaScanStatusCode, statusCode) {
+			status.ScaScanStatusCode = statusCode
+		}
+	case CmdStepContextualAnalysis:
+		if shouldUpdateStatus(status.ContextualAnalysisStatusCode, statusCode) {
+			status.ContextualAnalysisStatusCode = statusCode
+		}
+	case CmdStepSecrets:
+		if shouldUpdateStatus(status.SecretsScanStatusCode, statusCode) {
+			status.SecretsScanStatusCode = statusCode
+		}
+	case CmdStepIaC:
+		if shouldUpdateStatus(status.IacScanStatusCode, statusCode) {
+			status.IacScanStatusCode = statusCode
+		}
+	case CmdStepSast:
+		if shouldUpdateStatus(status.SastScanStatusCode, statusCode) {
+			status.SastScanStatusCode = statusCode
+		}
+	case CmdStepMaliciousCode:
+		if shouldUpdateStatus(status.MaliciousScanStatusCode, statusCode) {
+			status.MaliciousScanStatusCode = statusCode
+		}
+	case CmdStepViolations:
+		if shouldUpdateStatus(status.ViolationsStatusCode, statusCode) {
+			status.ViolationsStatusCode = statusCode
+		}
+	}
+}
+
+// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
+func shouldUpdateStatus(currentStatus, newStatus *int) bool {
+	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
+		return true
+	}
+	return false
+}
+
 type TargetResults struct {
 	ScanTarget
 	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
-	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
-	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	ScaResults    *ScaScanResults  `json:"sca_scans,omitempty"`
+	JasResults    *JasScansResults `json:"jas_scans,omitempty"`
+	ResultsStatus ResultsStatus    `json:"status,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
-}
-
-type ScanResult[T interface{}] struct {
-	Scan       T   `json:"scan"`
-	StatusCode int `json:"status_code,omitempty"`
-}
-
-func (sr *ScanResult[T]) IsScanFailed() bool {
-	return sr.StatusCode != 0
 }
 
 type ScaScanResults struct {
@@ -95,23 +191,22 @@ type ScaScanResults struct {
 	Descriptors           []string `json:"descriptors,omitempty"`
 	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
 	// Sca scan results
-	DeprecatedXrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
+	DeprecatedXrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
-	Sbom           *cyclonedx.BOM       `json:"sbom,omitempty"`
-	Violations     []services.Violation `json:"violations,omitempty"`
-	ScanStatusCode int                  `json:"status_code,omitempty"`
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 }
 
 type JasScansResults struct {
-	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
-	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
-	ApplicabilityScanResults []ScanResult[[]*sarif.Run] `json:"contextual_analysis,omitempty"`
+	JasVulnerabilities       JasScanResults `json:"jas_vulnerabilities,omitempty"`
+	JasViolations            JasScanResults `json:"jas_violations,omitempty"`
+	ApplicabilityScanResults []*sarif.Run   `json:"contextual_analysis,omitempty"`
 }
 
 type JasScanResults struct {
-	SecretsScanResults []ScanResult[[]*sarif.Run] `json:"secrets,omitempty"`
-	IacScanResults     []ScanResult[[]*sarif.Run] `json:"iac,omitempty"`
-	SastScanResults    []ScanResult[[]*sarif.Run] `json:"sast,omitempty"`
+	SecretsScanResults   []*sarif.Run `json:"secrets,omitempty"`
+	IacScanResults       []*sarif.Run `json:"iac,omitempty"`
+	SastScanResults      []*sarif.Run `json:"sast,omitempty"`
+	MaliciousScanResults []*sarif.Run `json:"malicious_code,omitempty"`
 }
 
 type ScanTarget struct {
@@ -141,7 +236,7 @@ func (st ScanTarget) String() (str string) {
 }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
-	return &SecurityCommandResults{CmdType: cmdType, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
+	return &SecurityCommandResults{ResultsMetaData: ResultsMetaData{CmdType: cmdType}, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
 }
 
 func (r *SecurityCommandResults) SetStartTime(startTime time.Time) *SecurityCommandResults {
@@ -181,6 +276,11 @@ func (r *SecurityCommandResults) SetResultsContext(context ResultContext) *Secur
 
 func (r *SecurityCommandResults) SetGitContext(gitContext *xscServices.XscGitInfoContext) *SecurityCommandResults {
 	r.GitContext = gitContext
+	return r
+}
+
+func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
+	r.ResultsPlatformUrl = resultsPlatformUrl
 	return r
 }
 
@@ -314,6 +414,27 @@ func (r *SecurityCommandResults) HasFindings() bool {
 	return false
 }
 
+func (r *SecurityCommandResults) SetViolations(statusCode int, violations violationutils.Violations) *SecurityCommandResults {
+	r.Violations = &violations
+	r.ViolationsStatusCode = &statusCode
+	return r
+}
+
+func (r *SecurityCommandResults) GetStatusCodes() ResultsStatus {
+	status := ResultsStatus{ViolationsStatusCode: r.ViolationsStatusCode}
+	for _, targetResults := range r.Targets {
+		status.UpdateStatus(CmdStepSbom, targetResults.ResultsStatus.SbomScanStatusCode)
+		status.UpdateStatus(CmdStepSca, targetResults.ResultsStatus.ScaScanStatusCode)
+		status.UpdateStatus(CmdStepContextualAnalysis, targetResults.ResultsStatus.ContextualAnalysisStatusCode)
+		status.UpdateStatus(CmdStepSecrets, targetResults.ResultsStatus.SecretsScanStatusCode)
+		status.UpdateStatus(CmdStepIaC, targetResults.ResultsStatus.IacScanStatusCode)
+		status.UpdateStatus(CmdStepSast, targetResults.ResultsStatus.SastScanStatusCode)
+		status.UpdateStatus(CmdStepMaliciousCode, targetResults.ResultsStatus.MaliciousScanStatusCode)
+		status.UpdateStatus(CmdStepViolations, targetResults.ResultsStatus.ViolationsStatusCode)
+	}
+	return status
+}
+
 // --- Scan on a target ---
 
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
@@ -372,10 +493,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 	if sr.ScaResults == nil {
 		return
 	}
-	for _, scanResult := range sr.ScaResults.DeprecatedXrayResults {
-		results = append(results, scanResult.Scan)
-	}
-	return
+	return sr.ScaResults.DeprecatedXrayResults
 }
 
 func (sr *TargetResults) GetTechnologies() []techutils.Technology {
@@ -387,13 +505,12 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 		return technologiesSet.ToSlice()
 	}
 	for _, scaResult := range sr.ScaResults.DeprecatedXrayResults {
-		xrayScanResult := scaResult.Scan
-		for _, vulnerability := range xrayScanResult.Vulnerabilities {
+		for _, vulnerability := range scaResult.Vulnerabilities {
 			if tech := techutils.ToTechnology(vulnerability.Technology); tech != techutils.NoTech {
 				technologiesSet.Add(tech)
 			}
 		}
-		for _, violation := range xrayScanResult.Violations {
+		for _, violation := range scaResult.Violations {
 			if tech := techutils.ToTechnology(violation.Technology); tech != techutils.NoTech {
 				technologiesSet.Add(tech)
 			}
@@ -447,6 +564,41 @@ func (sr *TargetResults) AddTargetError(err error, allowSkippingError bool) erro
 	return err
 }
 
+func (sr *TargetResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {
+	if sr.JasResults != nil {
+		sr.JasResults.ApplicabilityScanResults = append(sr.JasResults.ApplicabilityScanResults, runs...)
+	}
+	sr.ResultsStatus.UpdateStatus(CmdStepContextualAnalysis, &exitCode)
+}
+
+func (sr *TargetResults) AddJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
+	switch scanType {
+	case jasutils.Secrets:
+		sr.ResultsStatus.UpdateStatus(CmdStepSecrets, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.SecretsScanResults = append(sr.JasResults.JasVulnerabilities.SecretsScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.SecretsScanResults = append(sr.JasResults.JasViolations.SecretsScanResults, violationsRuns...)
+		}
+	case jasutils.IaC:
+		sr.ResultsStatus.UpdateStatus(CmdStepIaC, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.IacScanResults = append(sr.JasResults.JasVulnerabilities.IacScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.IacScanResults = append(sr.JasResults.JasViolations.IacScanResults, violationsRuns...)
+		}
+	case jasutils.Sast:
+		sr.ResultsStatus.UpdateStatus(CmdStepSast, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.SastScanResults = append(sr.JasResults.JasVulnerabilities.SastScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.SastScanResults = append(sr.JasResults.JasViolations.SastScanResults, violationsRuns...)
+		}
+	case jasutils.MaliciousCode:
+		sr.ResultsStatus.UpdateStatus(CmdStepMaliciousCode, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.MaliciousScanResults = append(sr.JasResults.JasVulnerabilities.MaliciousScanResults, vulnerabilitiesRuns...)
+		}
+	}
+}
+
 func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
@@ -455,7 +607,7 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
+func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM, optionalStatusCodes ...int) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
@@ -464,24 +616,24 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
 		sr.ScaResults.Sbom = sbom
 		sr.ScaResults.IsMultipleRootProject = clientutils.Pointer(IsMultiProject(sbom))
 	}
+	for _, statusCode := range optionalStatusCodes {
+		sr.ResultsStatus.UpdateStatus(CmdStepSbom, &statusCode)
+	}
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) ScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) EnrichedSbomScanResults(statusCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
+	sr.SetSbom(enrichedSbom)
+	sr.ResultsStatus.UpdateStatus(CmdStepSca, &statusCode)
+	return sr.ScaResults
+}
+
+func (sr *TargetResults) ScaScanResults(statusCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	for _, response := range responses {
-		sr.ScaResults.DeprecatedXrayResults = append(sr.ScaResults.DeprecatedXrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
-	}
-	return sr.ScaResults
-}
-
-func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
-	// Update the existing BOM with the enriched BOM
-	sr.SetSbom(enrichedSbom)
-	sr.ScaResults.AddViolations(violations...)
-	sr.ScaResults.ScanStatusCode = errorCode
+	sr.ScaResults.DeprecatedXrayResults = append(sr.ScaResults.DeprecatedXrayResults, responses...)
+	sr.ResultsStatus.UpdateStatus(CmdStepSca, &statusCode)
 	return sr.ScaResults
 }
 
@@ -490,7 +642,7 @@ func (ssr *ScaScanResults) HasInformation() bool {
 		return true
 	}
 	for _, scanResults := range ssr.DeprecatedXrayResults {
-		if len(scanResults.Scan.Licenses) > 0 {
+		if len(scanResults.Licenses) > 0 {
 			return true
 		}
 	}
@@ -506,69 +658,27 @@ func (ssr *ScaScanResults) HasInformation() bool {
 
 func (ssr *ScaScanResults) HasFindings() bool {
 	for _, scanResults := range ssr.DeprecatedXrayResults {
-		if len(scanResults.Scan.Vulnerabilities) > 0 || len(scanResults.Scan.Violations) > 0 {
+		if len(scanResults.Vulnerabilities) > 0 || len(scanResults.Violations) > 0 {
 			return true
 		}
 	}
 	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
 }
 
-func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
-	if ssr.Violations == nil {
-		ssr.Violations = []services.Violation{}
-	}
-	ssr.Violations = append(ssr.Violations, violations...)
-	return ssr
-}
-
-func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {
-	jsr.ApplicabilityScanResults = append(jsr.ApplicabilityScanResults, ScanResult[[]*sarif.Run]{Scan: runs, StatusCode: exitCode})
-}
-
-func (jsr *JasScansResults) AddJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
-	switch scanType {
-	case jasutils.Secrets:
-		jsr.JasVulnerabilities.SecretsScanResults = append(jsr.JasVulnerabilities.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
-		jsr.JasViolations.SecretsScanResults = append(jsr.JasViolations.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
-	case jasutils.IaC:
-		jsr.JasVulnerabilities.IacScanResults = append(jsr.JasVulnerabilities.IacScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
-		jsr.JasViolations.IacScanResults = append(jsr.JasViolations.IacScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
-	case jasutils.Sast:
-		jsr.JasVulnerabilities.SastScanResults = append(jsr.JasVulnerabilities.SastScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
-		jsr.JasViolations.SastScanResults = append(jsr.JasViolations.SastScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
-	}
-}
-
 func (jsr *JasScansResults) GetApplicabilityScanResults() (results []*sarif.Run) {
-	for _, scan := range jsr.ApplicabilityScanResults {
-		results = append(results, scan.Scan...)
-	}
-	return
+	return jsr.ApplicabilityScanResults
 }
 
 func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Secrets:
-		for _, scan := range jsr.JasVulnerabilities.SecretsScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasVulnerabilities.SecretsScanResults
 	case jasutils.IaC:
-		for _, scan := range jsr.JasVulnerabilities.IacScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasVulnerabilities.IacScanResults
 	case jasutils.Sast:
-		for _, scan := range jsr.JasVulnerabilities.SastScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasVulnerabilities.SastScanResults
+	case jasutils.MaliciousCode:
+		return jsr.JasVulnerabilities.MaliciousScanResults
 	}
 	return
 }
@@ -576,26 +686,11 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Secrets:
-		for _, scan := range jsr.JasViolations.SecretsScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasViolations.SecretsScanResults
 	case jasutils.IaC:
-		for _, scan := range jsr.JasViolations.IacScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasViolations.IacScanResults
 	case jasutils.Sast:
-		for _, scan := range jsr.JasViolations.SastScanResults {
-			if scan.IsScanFailed() {
-				continue
-			}
-			results = append(results, scan.Scan...)
-		}
+		return jsr.JasViolations.SastScanResults
 	}
 	return
 }

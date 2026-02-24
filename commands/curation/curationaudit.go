@@ -37,6 +37,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -52,12 +53,14 @@ const (
 	blocked                = "blocked"
 	BlockingReasonPolicy   = "Policy violations"
 	BlockingReasonNotFound = "Package pending update"
+	BlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
 
 	directRelation   = "direct"
 	indirectRelation = "indirect"
 
 	BlockMessageKey  = "jfrog packages curation"
 	NotBeingFoundKey = "not being found"
+	IsOnDemand       = "on-demand"
 
 	extractPoliciesRegexTemplate = "({.*?})"
 
@@ -102,6 +105,7 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
+	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -200,23 +204,26 @@ type PackageStatusTable struct {
 }
 
 type treeAnalyzer struct {
-	rtManager            artifactory.ArtifactoryServicesManager
-	extractPoliciesRegex *regexp.Regexp
-	rtAuth               auth.ServiceDetails
-	httpClientDetails    httputils.HttpClientDetails
-	url                  string
-	repo                 string
-	tech                 techutils.Technology
-	parallelRequests     int
-	downloadUrls         map[string]string
+	rtManager             artifactory.ArtifactoryServicesManager
+	extractPoliciesRegex  *regexp.Regexp
+	rtAuth                auth.ServiceDetails
+	httpClientDetails     httputils.HttpClientDetails
+	url                   string
+	repo                  string
+	tech                  techutils.Technology
+	parallelRequests      int
+	downloadUrls          map[string]string
+	includeCachedPackages bool
 }
 
 type CurationAuditCommand struct {
-	PackageManagerConfig *project.RepositoryConfig
-	extractPoliciesRegex *regexp.Regexp
-	workingDirs          []string
-	OriginPath           string
-	parallelRequests     int
+	PackageManagerConfig  *project.RepositoryConfig
+	extractPoliciesRegex  *regexp.Regexp
+	workingDirs           []string
+	OriginPath            string
+	parallelRequests      int
+	dockerImageName       string
+	includeCachedPackages bool
 	audit.AuditParamsInterface
 }
 
@@ -250,6 +257,20 @@ func (ca *CurationAuditCommand) SetWorkingDirs(dirs []string) *CurationAuditComm
 
 func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditCommand {
 	ca.parallelRequests = threads
+	return ca
+}
+
+func (ca *CurationAuditCommand) DockerImageName() string {
+	return ca.dockerImageName
+}
+
+func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *CurationAuditCommand {
+	ca.dockerImageName = dockerImageName
+	return ca
+}
+
+func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages bool) *CurationAuditCommand {
+	ca.includeCachedPackages = includeCachedPackages
 	return ca
 }
 
@@ -350,6 +371,10 @@ func getPolicyAndConditionId(policy, condition string) string {
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := techutils.DetectedTechnologiesList()
+	if ca.DockerImageName() != "" {
+		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
+		techs = []string{techutils.Docker.String()}
+	}
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {
@@ -426,6 +451,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmOverwritePackageLock: true,
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
+		// Docker params
+		DockerImageName: ca.DockerImageName(),
 		// NuGet params
 		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
@@ -482,15 +509,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{
-		rtManager:            rtManager,
-		extractPoliciesRegex: ca.extractPoliciesRegex,
-		rtAuth:               rtAuth,
-		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
-		url:                  rtAuth.GetUrl(),
-		repo:                 ca.PackageManagerConfig.TargetRepo(),
-		tech:                 tech,
-		parallelRequests:     ca.parallelRequests,
-		downloadUrls:         depTreeResult.DownloadUrls,
+		rtManager:             rtManager,
+		extractPoliciesRegex:  ca.extractPoliciesRegex,
+		rtAuth:                rtAuth,
+		httpClientDetails:     rtAuth.CreateHttpClientDetails(),
+		url:                   rtAuth.GetUrl(),
+		repo:                  ca.PackageManagerConfig.TargetRepo(),
+		tech:                  tech,
+		parallelRequests:      ca.parallelRequests,
+		downloadUrls:          depTreeResult.DownloadUrls,
+		includeCachedPackages: ca.includeCachedPackages,
 	}
 
 	rootNodes := map[string]struct{}{}
@@ -718,7 +746,17 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
-	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
+	// If the technology is Docker, we need to get the repository config from the Docker image name
+	if tech == techutils.Docker {
+		repoConfig, err := docker.GetDockerRepositoryConfig(ca.DockerImageName())
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(repoConfig)
+		return nil
+	}
+
+	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
 		return err
 	}
@@ -838,7 +876,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		if resp != nil && resp.StatusCode >= 400 && resp.StatusCode != http.StatusForbidden {
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
-		if resp.StatusCode == http.StatusForbidden {
+		if resp.StatusCode == http.StatusForbidden || (nc.includeCachedPackages && resp.StatusCode == http.StatusOK) {
 			pkStatus, err := nc.getBlockedPackageDetails(packageUrl, name, version)
 			if err != nil {
 				return err
@@ -883,6 +921,8 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 			blockingReason := BlockingReasonPolicy
 			if strings.Contains(strings.ToLower(respError.Errors[0].Message), NotBeingFoundKey) {
 				blockingReason = BlockingReasonNotFound
+			} else if strings.Contains(strings.ToLower(respError.Errors[0].Message), IsOnDemand) {
+				blockingReason = BlockingReasonOnDemand
 			}
 			policies := nc.extractPoliciesFromMsg(respError)
 			return &PackageStatus{
@@ -905,21 +945,29 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 func (nc *treeAnalyzer) extractPoliciesFromMsg(respError *ErrorsResp) []Policy {
 	var policies []Policy
 	msg := respError.Errors[0].Message
-	allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
-	for _, match := range allMatches {
-		match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
-		polCond := strings.Split(match, ",")
-		if len(polCond) >= 2 {
-			pol := polCond[0]
-			cond := polCond[1]
+	lowerMsg := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lowerMsg, IsOnDemand):
+		policies = []Policy{{Explanation: BlockingReasonOnDemand}}
+	case strings.Contains(lowerMsg, NotBeingFoundKey):
+		policies = []Policy{{Explanation: BlockingReasonNotFound}}
+	default:
+		allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
+		for _, match := range allMatches {
+			match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
+			polCond := strings.Split(match, ",")
+			if len(polCond) >= 2 {
+				pol := polCond[0]
+				cond := polCond[1]
 
-			if len(polCond) == 4 {
-				exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
-				policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
-					Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
-				continue
+				if len(polCond) == 4 {
+					exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
+					policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
+						Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
+					continue
+				}
+				policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
 			}
-			policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
 		}
 	}
 	return policies
@@ -950,23 +998,39 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 	case techutils.Nuget:
 		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
 		return
+	case techutils.Docker:
+		downloadUrls, name, version = getDockerNameAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
 
 func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloadUrls []string, name, version string) {
-	if downloadUrlsMap != nil {
-		if dl, ok := downloadUrlsMap[id]; ok {
-			downloadUrls = []string{dl}
-		} else {
-			log.Warn(fmt.Sprintf("couldn't find download url for node id %s", id))
-		}
+	idWithoutPrefix := strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
+	parts := strings.Split(idWithoutPrefix, ":")
+	if len(parts) < 2 {
+		log.Debug(fmt.Sprintf("Package %s has unexpected format", id))
+		return
 	}
-	id = strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
-	allParts := strings.Split(id, ":")
-	if len(allParts) >= 2 {
-		name = allParts[0]
-		version = allParts[1]
+
+	name, version = parts[0], parts[1]
+
+	if downloadUrlsMap == nil {
+		return
+	}
+	if dl, ok := downloadUrlsMap[id]; ok {
+		downloadUrls = []string{dl}
+		return
+	}
+
+	// Python package names are case-insensitive and treat hyphens/underscores as equivalentl.
+	// The download URLs map uses normalized names, so we normalize the id to find a match.
+	normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(parts[0])), "-", "_")
+	normalizedId := python.PythonPackageTypeIdentifier + normalizedName + ":" + strings.TrimSpace(parts[1])
+	if dl, ok := downloadUrlsMap[normalizedId]; ok {
+		downloadUrls = []string{dl}
+	} else {
+		log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
 	}
 	return
 }
@@ -1119,6 +1183,39 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
+}
+
+func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	if id == "" {
+		return
+	}
+
+	id = strings.TrimPrefix(id, "docker://")
+
+	sha256Idx := strings.Index(id, ":sha256:")
+	tagIdx := strings.LastIndex(id, ":")
+
+	switch {
+	// Example: docker://nginx:sha256:abc123def456
+	case sha256Idx > 0:
+		name = id[:sha256Idx]
+		version = id[sha256Idx+1:]
+	// Example: docker://nginx:1.21
+	case tagIdx > 0:
+		name = id[:tagIdx]
+		version = id[tagIdx+1:]
+	// Example: docker://nginx (no tag specified, defaults to "latest")
+	default:
+		name = id
+		version = "latest"
+	}
+
+	if artiUrl != "" && repo != "" {
+		downloadUrls = []string{fmt.Sprintf("%s/api/docker/%s/v2/%s/manifests/%s",
+			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
+	}
+
+	return
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {

@@ -9,6 +9,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -120,7 +122,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	}
 	// If failBuild flag is true and also got fail build response from Xray
 	if bsc.failBuild && isFailBuildResponse {
-		return results.NewFailBuildError()
+		return policy.NewFailBuildError()
 	}
 	return
 }
@@ -161,6 +163,11 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	})
+
+	// Enrich violations with generated violations from local policies
+	if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
+		return false, err
+	}
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).

@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -25,6 +26,7 @@ const (
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
+	MaliciousScan        = "malicious-scan"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -57,6 +59,15 @@ const (
 	Secrets   = "secrets"
 	WithoutCA = "without-contextual-analysis"
 
+	auditSca        = auditPrefix + Sca
+	auditIac        = auditPrefix + Iac
+	auditSast       = auditPrefix + Sast
+	auditSecrets    = auditPrefix + Secrets
+	auditWithoutCA  = auditPrefix + WithoutCA
+	binarySca       = scanPrefix + Sca
+	binarySecrets   = scanPrefix + Secrets
+	binaryWithoutCA = scanPrefix + WithoutCA
+
 	// Sast related flags
 	AddSastRules = "add-sast-rules"
 )
@@ -64,8 +75,8 @@ const (
 const (
 	// Base flags keys
 	ServerId    = "server-id"
-	url         = "url"
-	xrayUrl     = "xray-url"
+	Url         = "url"
+	XrayUrl     = "xray-url"
 	user        = "user"
 	password    = "password"
 	accessToken = "access-token"
@@ -74,15 +85,16 @@ const (
 	InsecureTls = "insecure-tls"
 
 	// Generic command flags
-	SpecFlag    = "spec"
-	Threads     = "threads"
-	Recursive   = "recursive"
-	RegexpFlag  = "regexp"
-	AntFlag     = "ant"
-	Project     = "project"
-	Exclusions  = "exclusions"
-	IncludeDirs = "include-dirs"
-	UseWrapper  = "use-wrapper"
+	SpecFlag          = "spec"
+	Threads           = "threads"
+	Recursive         = "recursive"
+	RegexpFlag        = "regexp"
+	AntFlag           = "ant"
+	Project           = "project"
+	Exclusions        = "exclusions"
+	IncludeDirs       = "include-dirs"
+	UseWrapper        = "use-wrapper"
+	UseIncludedBuilds = "use-included-builds"
 )
 
 const (
@@ -105,6 +117,7 @@ const (
 	Watches             = "watches"
 	RepoPath            = "repo-path"
 	UploadRepoPath      = "rt-" + RepoPath
+	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
 	Fail                = "fail"
@@ -119,6 +132,7 @@ const (
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
 	StaticSca           = "static-sca"
+	malProjectKey       = Project
 	scanProjectKey      = scanPrefix + Project
 	uploadProjectKey    = UploadCdx + "-" + Project
 
@@ -139,8 +153,10 @@ const (
 	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
 	// Unique curation flags
-	CurationOutput = "curation-format"
-	SolutionPath   = "solution-path"
+	CurationOutput        = "curation-format"
+	DockerImageName       = "image"
+	SolutionPath          = "solution-path"
+	IncludeCachedPackages = "include-cached-packages"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -158,65 +174,70 @@ var commandFlags = map[string][]string{
 	XrCurl:        {ServerId},
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
-		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
+		Url, XrayUrl, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
 	},
 	Enrich: {
-		url, user, password, accessToken, ServerId, Threads, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
+	},
+	MaliciousScan: {
+		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs, malProjectKey,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
 	DockerScan: {
-		url, xrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
 	},
 	Audit: {
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
+		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds, AddSastRules,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
 	},
 	GitAudit: {
 		// Connection params
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
 		scanProjectKey, Watches, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
-		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
+		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable, OutputDir,
+		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, SolutionPath,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
-		url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
+		Url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
 	},
 	AuditGradle: {
-		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, scanProjectKey, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, scanProjectKey, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditNpm: {
-		url, user, password, accessToken, ServerId, DepType, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, DepType, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditGo: {
-		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPip: {
-		url, user, password, accessToken, ServerId, RequirementsFile, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		Url, user, password, accessToken, ServerId, RequirementsFile, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPipenv: {
-		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
+		Url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
 }
 
@@ -224,11 +245,11 @@ var commandFlags = map[string][]string{
 var flagsMap = map[string]components.Flag{
 	// Common commands flags
 	ServerId:    components.NewStringFlag(ServerId, "Server ID configured using the config command."),
-	url:         components.NewStringFlag(url, "JFrog URL."),
-	xrayUrl:     components.NewStringFlag(xrayUrl, "JFrog Xray URL."),
-	user:        components.NewStringFlag(user, "JFrog username."),
-	password:    components.NewStringFlag(password, "JFrog password."),
-	accessToken: components.NewStringFlag(accessToken, "JFrog access token."),
+	Url:         components.NewStringFlag(Url, "Specifies the URL of the JFrog platform."),
+	XrayUrl:     components.NewStringFlag(XrayUrl, "Specifies the URL of your Xray server."),
+	user:        components.NewStringFlag(user, "Specifies the user name of your JFrog platform."),
+	password:    components.NewStringFlag(password, "Specifies the user password of your JFrog platform."),
+	accessToken: components.NewStringFlag(accessToken, "Specifies the access token of your JFrog platform."),
 	Threads:     components.NewStringFlag(Threads, "The number of parallel threads used to scan the source code project.", components.WithIntDefaultValue(cliutils.Threads)),
 	// Xray flags
 	LicenseId: components.NewStringFlag(LicenseId, "Xray license ID.", components.SetMandatory(), components.WithHelpValue("Xray license ID")),
@@ -244,6 +265,7 @@ var flagsMap = map[string]components.Flag{
 	scanRegexp:       components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
 	scanAnt:          components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
 	scanProjectKey:   components.NewStringFlag(Project, "JFrog project key, to enable Xray to determine security violations accordingly. The command accepts this option only if the --repo-path and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	malProjectKey:    components.NewStringFlag(Project, "JFrog project key"),
 	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
 	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs, operational risk, and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
@@ -260,7 +282,7 @@ var flagsMap = map[string]components.Flag{
 	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values: Low, Medium, High, or Critical."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fix version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
-	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Number of retries for triggering the build scan in Xray in case of failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
+	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Defines how many times Xray retries triggering the build scan after a failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
 	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
 	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
@@ -269,6 +291,10 @@ var flagsMap = map[string]components.Flag{
 		UseWrapper,
 		"[Gradle, Maven] Set to true if you'd like to use the Gradle or Maven wrapper.",
 		components.WithBoolDefaultValue(true),
+	),
+	UseIncludedBuilds: components.NewBoolFlag(
+		UseIncludedBuilds,
+		"[Gradle] Set to true if you'd like to take into account included builds (composite builds) of gradle projects, in addition to including subprojects",
 	),
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
@@ -303,21 +329,30 @@ var flagsMap = map[string]components.Flag{
 	AnalyzerManagerCustomPath:     components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
 	XrayLibPluginBinaryCustomPath: components.NewStringFlag(XrayLibPluginBinaryCustomPath, "Defines the custom path to the xray-lib-plugin binary.", components.SetHiddenStrFlag()),
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
+	UploadRtRepoPath:              components.NewStringFlag(UploadRtRepoPath, fmt.Sprintf("Artifactory repository name or path to upload the scan results to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray. only relevant when using --%s", StaticSca), components.WithStrDefaultValue("cli-scan-results"), components.SetHiddenStrFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
-	Sca:                           components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
-	Iac:                           components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
-	Sast:                          components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
-	Secrets:                       components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
-	WithoutCA:                     components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
+	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
+	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
+	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+	auditSca:                      components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
+	auditIac:                      components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
+	auditSast:                     components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
+	auditSecrets:                  components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
+	auditWithoutCA:                components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
 
+	// Docker flags
+	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
+
 	// Git flags
-	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
-	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", contributors.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
-	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
+	ScmType:   components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", contributors.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
+	ScmApiUrl: components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	// jfrog-ignore: false positive, not hardcoded credentials
 	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s environment variable, or in the corresponding environment variables '%s'.", contributors.GenericGitTokenEnvVar, contributors.NewScmType().GetOptionalScmTypeTokenEnvVars()), components.SetMandatory()),
 	Owner:           components.NewStringFlag(Owner, "The format of the owner key depends on the Git provider: On GitHub and GitLab, the owner is typically an individual or an organization, On Bitbucket, the owner can also be a project. In the case of a private instance on Bitbucket, the individual or organization name should be prefixed with '~'.", components.SetMandatory()),
 	RepoName:        components.NewStringFlag(RepoName, "List of semicolon-separated(;) repositories names to analyze, If not provided all repositories related to the provided owner will be analyzed."),

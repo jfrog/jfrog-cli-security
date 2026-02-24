@@ -65,6 +65,76 @@ func TestSearchDependencyEntry(t *testing.T) {
 	}
 }
 
+func TestGetJfrogRelationProperty(t *testing.T) {
+	tests := []struct {
+		name      string
+		component *cyclonedx.Component
+		expected  ComponentRelation
+	}{
+		{
+			name:      "Component with nil properties",
+			component: &cyclonedx.Component{BOMRef: "comp1", Properties: nil},
+			expected:  UnknownRelation,
+		},
+		{
+			name:      "Component with empty properties",
+			component: &cyclonedx.Component{BOMRef: "comp1", Properties: &[]cyclonedx.Property{}},
+			expected:  UnknownRelation,
+		},
+		{
+			name: "Component without jfrog:dependency:type property",
+			component: &cyclonedx.Component{
+				BOMRef:     "comp1",
+				Properties: &[]cyclonedx.Property{{Name: "other:property", Value: "value"}},
+			},
+			expected: UnknownRelation,
+		},
+		{
+			name: "Component with empty jfrog:dependency:type value",
+			component: &cyclonedx.Component{
+				BOMRef:     "comp1",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: ""}},
+			},
+			expected: UnknownRelation,
+		},
+		{
+			name: "Component with root relation",
+			component: &cyclonedx.Component{
+				BOMRef:     "root",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}},
+			},
+			expected: RootRelation,
+		},
+		{
+			name: "Component with direct relation",
+			component: &cyclonedx.Component{
+				BOMRef: "comp1",
+				Properties: &[]cyclonedx.Property{
+					{Name: "some:other:property", Value: "value1"},
+					{Name: JfrogRelationProperty, Value: string(DirectRelation)},
+					{Name: "another:property", Value: "value2"},
+				},
+			},
+			expected: DirectRelation,
+		},
+		{
+			name: "Component with transitive relation",
+			component: &cyclonedx.Component{
+				BOMRef:     "trans1",
+				Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(TransitiveRelation)}},
+			},
+			expected: TransitiveRelation,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetJfrogRelationProperty(tt.component)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestGetComponentRelation(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -350,13 +420,13 @@ func TestGetComponentRelation(t *testing.T) {
 			name: "Root - skip generic root, actual roots are dependencies",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual-root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual-root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
 					{Ref: "actual-root1", Dependencies: &[]string{"comp1"}},
 					{Ref: "actual-root2", Dependencies: &[]string{}},
 				},
@@ -404,7 +474,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "File component",
 			path: "/path/to/file.txt",
 			expected: cyclonedx.Component{
-				BOMRef: "f5aa4f4f1380b71acc56750e9f8ff825",
+				BOMRef: "file:f5aa4f4f1380b71acc56750e9f8ff825",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/file.txt",
 			},
@@ -413,7 +483,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "Directory component",
 			path: "/path/to/directory/",
 			expected: cyclonedx.Component{
-				BOMRef: "0b02f93c6b83cab52b1024d1aebad31c",
+				BOMRef: "file:0b02f93c6b83cab52b1024d1aebad31c",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/directory/",
 			},
@@ -422,7 +492,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 			name: "file with special characters and spaces",
 			path: "/path/to/file with spaces.txt",
 			expected: cyclonedx.Component{
-				BOMRef: "b24231d78bc53506b3a74b40cf0e1e99",
+				BOMRef: "file:b24231d78bc53506b3a74b40cf0e1e99",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/file with spaces.txt",
 			},
@@ -678,13 +748,13 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			name: "BuildInfo - generic root with skipDefaultRoot=true",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
 					{BOMRef: "actual_root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
 					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 					{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				},
 			},
@@ -692,24 +762,24 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			expected: []cyclonedx.Dependency{
 				{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
 				{Ref: "actual_root2"},
-				{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
 			},
 		},
 		{
 			name: "BuildInfo - generic root with skipDefaultRoot=false",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
 					{BOMRef: "not_actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Not Actual Root 1"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 					{Ref: "not_actual_root1", Dependencies: &[]string{}},
 				},
 			},
 			skipRoot: false,
 			expected: []cyclonedx.Dependency{
-				{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+				{Ref: "pkg:generic/root", Dependencies: &[]string{"not_actual_root1"}},
 			},
 		},
 		{
@@ -807,6 +877,27 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 				{Ref: "standalone1"},
 				{Ref: "standalone2"},
 				// file1 is not included because it's not a library type
+			},
+		},
+		{
+			name: "Multiple roots with jfrog:dependency:type property",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 2", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(RootRelation)}}},
+					{BOMRef: "direct1", Type: cyclonedx.ComponentTypeLibrary, Name: "Direct 1", Properties: &[]cyclonedx.Property{{Name: JfrogRelationProperty, Value: string(DirectRelation)}}},
+					{BOMRef: "trans1", Type: cyclonedx.ComponentTypeLibrary, Name: "Transitive 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"root2"}},
+					{Ref: "root2", Dependencies: &[]string{"direct1"}},
+					{Ref: "direct1", Dependencies: &[]string{"trans1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "root1", Dependencies: &[]string{"root2"}},
+				{Ref: "root2", Dependencies: &[]string{"direct1"}},
 			},
 		},
 	}
@@ -1121,9 +1212,9 @@ func TestExclude(t *testing.T) {
 	bom := cyclonedx.NewBOM()
 	bom.Components = &[]cyclonedx.Component{
 		{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
-		{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 	}
 	bom.Dependencies = &[]cyclonedx.Dependency{
 		{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
@@ -1152,9 +1243,9 @@ func TestExclude(t *testing.T) {
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
@@ -1164,25 +1255,25 @@ func TestExclude(t *testing.T) {
 		},
 		{
 			name:    "Exclude single component with transitive dependencies",
-			exclude: []cyclonedx.Component{{BOMRef: "comp1"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp1", PackageURL: "pkg:comp1"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:comp3", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"comp3"}}},
 			},
 		},
 		{
 			name:    "Exclude single component existing both directly and transitively",
-			exclude: []cyclonedx.Component{{BOMRef: "comp3"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp3", PackageURL: "pkg:comp3"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:comp2", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
@@ -1192,15 +1283,41 @@ func TestExclude(t *testing.T) {
 		},
 		{
 			name:    "Exclude multiple components",
-			exclude: []cyclonedx.Component{{BOMRef: "comp2"}, {BOMRef: "comp3"}, {BOMRef: "exclude-me"}},
+			exclude: []cyclonedx.Component{{BOMRef: "comp2", PackageURL: "pkg:comp2"}, {BOMRef: "comp3", PackageURL: "pkg:comp3"}, {BOMRef: "exclude-me", PackageURL: "pkg:exclude-me"}},
 			bom:     *bom,
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+		},
+		{
+			name: "Exclude by same name+version while ignoring hash",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=4321", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", PackageURL: "pkg:npm/comp2@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
+				},
+			},
+			// Exclude the same name+version, with a hash that should be ignored
+			exclude: []cyclonedx.Component{{BOMRef: "comp1", PackageURL: "pkg:npm/comp1@1.0.0?hash=1234"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", PackageURL: "pkg:npm/comp3@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp3"}},
 				},
 			},
 		},

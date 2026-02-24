@@ -60,6 +60,8 @@ type ScanCount struct {
 	Iac int
 	// Expected number of Secrets issues
 	Secrets int
+	// Expected number of Malicious Code issues
+	MaliciousCode int
 }
 
 type SbomCount struct {
@@ -279,7 +281,7 @@ func ValidateContent(t *testing.T, exactMatch bool, validations ...Validation) b
 	return validationSuccess
 }
 
-type validationCountActualValues struct {
+type ValidationCountActualValues struct {
 	// Total counts
 	Vulnerabilities, Violations, Licenses, SbomComponents int
 	// Vulnerabilities counts
@@ -293,7 +295,7 @@ type validationCountActualValues struct {
 	RootComponents, DirectComponents, TransitiveComponents int
 }
 
-func ValidateCount(t *testing.T, outputType string, params ValidationParams, actual validationCountActualValues) {
+func ValidateCount(t *testing.T, outputType string, params ValidationParams, actual ValidationCountActualValues) {
 	ValidateTotalCount(t, outputType, params.ExactResultsMatch, params.Total, actual.Vulnerabilities, actual.Violations, actual.Licenses, actual.SbomComponents)
 	ValidateVulnerabilitiesCount(t, outputType, params.ExactResultsMatch, params.Vulnerabilities, actual)
 	ValidateViolationCount(t, outputType, params.ExactResultsMatch, params.Violations, actual)
@@ -312,7 +314,7 @@ func ValidateTotalCount(t *testing.T, outputType string, exactMatch bool, params
 	)
 }
 
-func ValidateVulnerabilitiesCount(t *testing.T, outputType string, exactMatch bool, params *VulnerabilityCount, actual validationCountActualValues) {
+func ValidateVulnerabilitiesCount(t *testing.T, outputType string, exactMatch bool, params *VulnerabilityCount, actual ValidationCountActualValues) {
 	if params == nil {
 		return
 	}
@@ -320,7 +322,7 @@ func ValidateVulnerabilitiesCount(t *testing.T, outputType string, exactMatch bo
 	ValidateApplicabilityStatusCount(t, outputType, false, exactMatch, params.ValidateApplicabilityStatus, actual.ApplicableVulnerabilities, actual.UndeterminedVulnerabilities, actual.NotCoveredVulnerabilities, actual.NotApplicableVulnerabilities, actual.MissingContextVulnerabilities, actual.InactiveSecretsVulnerabilities)
 }
 
-func ValidateViolationCount(t *testing.T, outputType string, exactMatch bool, params *ViolationCount, actual validationCountActualValues) {
+func ValidateViolationCount(t *testing.T, outputType string, exactMatch bool, params *ViolationCount, actual ValidationCountActualValues) {
 	if params == nil {
 		return
 	}

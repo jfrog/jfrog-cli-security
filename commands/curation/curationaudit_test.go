@@ -131,6 +131,38 @@ func getTestCasesForExtractPoliciesFromMsg() []struct {
 			},
 			expect: nil,
 		},
+		{
+			name: "on-demand in progress",
+			errResp: &ErrorsResp{
+				Errors: []ErrorResp{
+					{
+						Status:  403,
+						Message: "Package test:1.0.0 download was blocked by JFrog Packages Curation service due to the package not being found in catalog, curation on-demand scan in progress.",
+					},
+				},
+			},
+			expect: []Policy{
+				{
+					Explanation: BlockingReasonOnDemand,
+				},
+			},
+		},
+		{
+			name: "package not found in catalog",
+			errResp: &ErrorsResp{
+				Errors: []ErrorResp{
+					{
+						Status:  403,
+						Message: "package test:1.0.0 download was blocked by jfrog packages curation service due to the package not being found in catalog",
+					},
+				},
+			},
+			expect: []Policy{
+				{
+					Explanation: BlockingReasonNotFound,
+				},
+			},
+		},
 	}
 	return tests
 }
@@ -704,8 +736,10 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"pip":                                   filepath.Join("resources", "pip-resp"),
 				"pexpect":                               filepath.Join("resources", "pexpect-resp"),
 				"ptyprocess":                            filepath.Join("resources", "ptyprocess-resp"),
+				"typing-extensions":                     filepath.Join("resources", "typing-extensions-resp"),
 				"pexpect-4.8.0-py2.py3-none-any.whl":    filepath.Join("resources", "pexpect-4.8.0-py2.py3-none-any.whl"),
 				"ptyprocess-0.7.0-py2.py3-none-any.whl": filepath.Join("resources", "ptyprocess-0.7.0-py2.py3-none-any.whl"),
+				"typing_extensions-4.15.0-py3-none-any.whl": filepath.Join("resources", "typing_extensions-4.15.0-py3-none-any.whl"),
 			},
 			requestToFail: map[string]bool{
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
@@ -1010,6 +1044,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
 					w.Header().Add("content-type", "text/html")
+					// #nosec G705 -- mock server serves controlled test-resource file content only, not user input
 					_, err = w.Write(f)
 					require.NoError(t, err)
 					return
@@ -1185,6 +1220,62 @@ func Test_getGemNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func Test_getDockerNameAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "Basic docker image with tag",
+			id:               "docker://nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/1.21.0"},
+			wantName:         "nginx",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with registry prefix",
+			id:               "docker://registry.example.com/nginx:1.21.0",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/registry.example.com/nginx/manifests/1.21.0"},
+			wantName:         "registry.example.com/nginx",
+			wantVersion:      "1.21.0",
+		},
+		{
+			name:             "Docker image with sha256 digest",
+			id:               "docker://nginx:sha256:abc123def456",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/sha256:abc123def456"},
+			wantName:         "nginx",
+			wantVersion:      "sha256:abc123def456",
+		},
+		{
+			name:             "Docker image without version defaults to latest",
+			id:               "docker://nginx",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "docker-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/docker/docker-remote/v2/nginx/manifests/latest"},
+			wantName:         "nginx",
+			wantVersion:      "latest",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getDockerNameAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string

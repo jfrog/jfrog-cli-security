@@ -3,7 +3,6 @@ package techutils
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,6 +25,21 @@ import (
 
 const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
 
+type CodeLanguage string
+
+const (
+	JavaScript CodeLanguage = "javascript"
+	Python     CodeLanguage = "python"
+	GoLang     CodeLanguage = "go"
+	Java       CodeLanguage = "java"
+	CSharp     CodeLanguage = "C#"
+	CPP        CodeLanguage = "C++"
+	Ruby       CodeLanguage = "ruby"
+	// package can have multiple languages
+	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
+)
+
 type Technology string
 
 const (
@@ -40,15 +54,23 @@ const (
 	Poetry    Technology = "poetry"
 	Nuget     Technology = "nuget"
 	Dotnet    Technology = "dotnet"
-	Docker    Technology = "docker"
-	Oci       Technology = "oci"
 	Conan     Technology = "conan"
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
-	NoTech    Technology = ""
 	Gem       Technology = "ruby"
+	// Not Supported by build-info BOM generator
+	Docker   Technology = "docker"
+	Oci      Technology = "oci"
+	Rpm      Technology = "rpm"
+	Debian   Technology = "deb"
+	Composer Technology = "composer"
+	Alpine   Technology = "alpine"
+	NoTech   Technology = ""
 )
-const Pypi = "pypi"
+
+// Alternative package types for some technologies
+const Pypi = "pypi" // pip, pipenv, poetry
+const Gav = "gav"   // maven, gradle
 
 var AllTechnologiesStrings = []string{
 	Maven.String(),
@@ -69,6 +91,10 @@ var AllTechnologiesStrings = []string{
 	Swift.String(),
 	NoTech.String(),
 	Gem.String(),
+	Rpm.String(),
+	Debian.String(),
+	Composer.String(),
+	Alpine.String(),
 }
 
 func ToTechnology(tech string) Technology {
@@ -93,79 +119,14 @@ func IsValidTechnology(tech string) bool {
 	return false
 }
 
-type CodeLanguage string
-
-const (
-	JavaScript CodeLanguage = "javascript"
-	Python     CodeLanguage = "python"
-	GoLang     CodeLanguage = "go"
-	Java       CodeLanguage = "java"
-	CSharp     CodeLanguage = "C#"
-	CPP        CodeLanguage = "C++"
-	Ruby       CodeLanguage = "ruby"
-	// CocoapodsLang package can have multiple languages
-	CocoapodsLang CodeLanguage = "Any"
-	SwiftLang     CodeLanguage = "Any"
-)
-
-// Associates a technology with project type (used in config commands for the package-managers).
-// Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
-var TechToProjectType = map[Technology]project.ProjectType{
-	Maven:     project.Maven,
-	Gradle:    project.Gradle,
-	Npm:       project.Npm,
-	Yarn:      project.Yarn,
-	Go:        project.Go,
-	Pip:       project.Pip,
-	Pipenv:    project.Pipenv,
-	Poetry:    project.Poetry,
-	Nuget:     project.Nuget,
-	Dotnet:    project.Dotnet,
-	Cocoapods: project.Cocoapods,
-	Swift:     project.Swift,
-	Gem:       project.Ruby,
-}
-
-var packageTypes = map[string]string{
-	"gav":      "Maven",
-	"maven":    "Maven",
-	"gradle":   "Gradle",
-	"docker":   "Docker",
-	"rpm":      "RPM",
-	"deb":      "Debian",
-	"nuget":    "NuGet",
-	"generic":  "Generic",
-	"npm":      "npm",
-	"pip":      "Python",
-	"pypi":     "Python",
-	"composer": "Composer",
-	"go":       "Go",
-	"alpine":   "Alpine",
-	"rubygems": "Gem",
-}
-
-// The identifier of the package type used in cdx.
-// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
-var cdxPurlPackageTypes = map[string]string{
-	"gav":      "maven",
-	"docker":   "docker",
-	"rpm":      "rpm",
-	"deb":      "deb",
-	"nuget":    "nuget",
-	"generic":  "generic",
-	"npm":      "npm",
-	"pypi":     "pypi",
-	"composer": "composer",
-	"go":       "golang",
-	"alpine":   "alpine",
-	"swift":    "swift",
-}
-
 type TechData struct {
-	// The name of the package type used in this technology.
+	// Formal name of the technology (if not as the technology)
+	formal string
+	// The name of the package type used in this technology. (if not as the technology)
+	// https://github.com/package-url/purl-spec/blob/main/docs/types.md
 	packageType string
-	// The package type ID used in Xray.
-	packageTypeId string
+	// The package type used in Xray. (if not as the technology)
+	xrayPackageType string
 	// Suffixes of file/directory names that indicate if a project uses this technology.
 	// The name of at least one of the files/directories in the project's directory must end with one of these suffixes.
 	indicators []string
@@ -176,14 +137,16 @@ type TechData struct {
 	exclude []string
 	// The files that handle the project's dependencies.
 	packageDescriptors []string
-	// Formal name of the technology
-	formal string
 	// The executable name of the technology
 	execCommand string
 	// The operator for package versioning
 	packageVersionOperator string
 	// The package installation command of a package
 	packageInstallationCommand string
+	// The project type of the technology if exists
+	projectType project.ProjectType
+	// The language of the technology
+	language CodeLanguage
 }
 
 // Given a file content, returns true if the content is an indicator of the technology.
@@ -191,13 +154,22 @@ type ContentValidator func(content []byte) bool
 
 var technologiesData = map[Technology]TechData{
 	Maven: {
+		formal:             "Maven",
+		xrayPackageType:    Gav,
 		indicators:         []string{"pom.xml"},
 		packageDescriptors: []string{"pom.xml"},
 		execCommand:        "mvn",
+		projectType:        project.Maven,
+		language:           Java,
 	},
 	Gradle: {
+		formal:             "Gradle",
+		packageType:        Maven.String(),
+		xrayPackageType:    Gav,
 		indicators:         []string{"build.gradle", "build.gradle.kts"},
 		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
+		projectType:        project.Gradle,
+		language:           Java,
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
@@ -206,88 +178,129 @@ var technologiesData = map[Technology]TechData{
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
 		packageInstallationCommand: "install",
+		projectType:                project.Npm,
+		language:                   JavaScript,
 	},
 	Pnpm: {
+		packageType:                "npm",
+		xrayPackageType:            "npm",
 		indicators:                 []string{"pnpm-lock.yaml"},
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
-		packageTypeId:              "npm://",
 		packageInstallationCommand: "update",
+		projectType:                project.Npm,
+		language:                   JavaScript,
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
 		exclude:                []string{"pnpm-lock.yaml"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
+		projectType:            project.Yarn,
+		language:               JavaScript,
 	},
 	Go: {
+		packageType:                "golang",
 		indicators:                 []string{"go.mod"},
 		packageDescriptors:         []string{"go.mod"},
 		packageVersionOperator:     "@v",
 		packageInstallationCommand: "get",
+		projectType:                project.Go,
+		language:                   GoLang,
 	},
 	Pip: {
+		formal:             "Python",
 		packageType:        Pypi,
+		xrayPackageType:    Pypi,
 		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
 		validators:         map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
 		packageDescriptors: []string{"setup.py", "requirements.txt", "pyproject.toml"},
 		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
+		projectType:        project.Pip,
+		language:           Python,
 	},
 	Pipenv: {
+		formal:                     "Python",
 		packageType:                Pypi,
+		xrayPackageType:            Pypi,
 		indicators:                 []string{"Pipfile", "Pipfile.lock"},
 		packageDescriptors:         []string{"Pipfile"},
 		packageVersionOperator:     "==",
 		packageInstallationCommand: "install",
+		projectType:                project.Pipenv,
+		language:                   Python,
 	},
 	Poetry: {
+		formal:                     "Poetry",
 		packageType:                Pypi,
+		xrayPackageType:            Pypi,
 		indicators:                 []string{"pyproject.toml", "poetry.lock"},
 		validators:                 map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Poetry)},
 		packageDescriptors:         []string{"pyproject.toml"},
 		packageInstallationCommand: "add",
 		packageVersionOperator:     "==",
+		projectType:                project.Poetry,
+		language:                   Python,
 	},
 	Nuget: {
+		formal:             "NuGet",
 		indicators:         []string{".sln", ".csproj"},
 		packageDescriptors: []string{".sln", ".csproj"},
-		formal:             "NuGet",
 		// .NET CLI is used for NuGet projects
 		execCommand:                "dotnet",
 		packageInstallationCommand: "add",
 		// packageName -v packageVersion
 		packageVersionOperator: " -v ",
+		projectType:            project.Nuget,
+		language:               CSharp,
 	},
 	Dotnet: {
+		formal:             ".NET",
 		indicators:         []string{".sln", ".csproj"},
 		packageDescriptors: []string{".sln", ".csproj"},
-		formal:             ".NET",
+		projectType:        project.Dotnet,
+		language:           CSharp,
 	},
-	Docker: {},
-	Oci:    {},
 	Conan: {
+		formal:             "Conan",
 		indicators:         []string{"conanfile.txt", "conanfile.py"},
 		packageDescriptors: []string{"conanfile.txt", "conanfile.py"},
-		formal:             "Conan",
+		language:           CPP,
 	},
 	Cocoapods: {
+		formal:             "Cocoapods",
 		indicators:         []string{"Podfile", "Podfile.lock"},
 		packageDescriptors: []string{"Podfile", "Podfile.lock"},
-		formal:             "Cocoapods",
-		packageTypeId:      "cocoapods://",
+		projectType:        project.Cocoapods,
+		language:           CocoapodsLang,
 	},
 	Swift: {
+		formal:             "Swift",
 		indicators:         []string{"Package.swift", "Package.resolved"},
 		packageDescriptors: []string{"Package.swift", "Package.resolved"},
-		formal:             "Swift",
-		packageTypeId:      "swift://",
+		projectType:        project.Swift,
+		language:           SwiftLang,
 	},
 	Gem: {
+		formal:             "gem",
+		packageType:        "gem",
+		xrayPackageType:    "rubygems",
 		indicators:         []string{"Gemfile"},
 		packageDescriptors: []string{"Gemfile"},
-		formal:             "gem",
+		projectType:        project.Ruby,
+		language:           Ruby,
 	},
+	// Not Supported by build-info BOM generator
+	Docker: {
+		formal:      "Docker",
+		projectType: project.Docker,
+	},
+	Oci:      {},
+	Rpm:      {formal: "RPM"},
+	Debian:   {formal: "Debian"},
+	Composer: {formal: "Composer"},
+	Alpine:   {formal: "Alpine"},
 }
 
 var (
@@ -315,23 +328,8 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 	}
 }
 
-func TechnologyToLanguage(technology Technology) CodeLanguage {
-	languageMap := map[Technology]CodeLanguage{
-		Npm:       JavaScript,
-		Pip:       Python,
-		Poetry:    Python,
-		Pipenv:    Python,
-		Go:        GoLang,
-		Maven:     Java,
-		Gradle:    Java,
-		Nuget:     CSharp,
-		Dotnet:    CSharp,
-		Yarn:      JavaScript,
-		Pnpm:      JavaScript,
-		Cocoapods: CocoapodsLang,
-		Swift:     SwiftLang,
-	}
-	return languageMap[technology]
+func (tech Technology) GetLanguage() CodeLanguage {
+	return technologiesData[tech].language
 }
 
 func (tech Technology) ToFormal() string {
@@ -352,6 +350,13 @@ func (tech Technology) GetExecCommandName() string {
 	return technologiesData[tech].execCommand
 }
 
+func (tech Technology) GetXrayPackageType() string {
+	if technologiesData[tech].xrayPackageType == "" {
+		return tech.String()
+	}
+	return technologiesData[tech].xrayPackageType
+}
+
 func (tech Technology) GetPackageType() string {
 	if technologiesData[tech].packageType == "" {
 		return tech.String()
@@ -359,11 +364,12 @@ func (tech Technology) GetPackageType() string {
 	return technologiesData[tech].packageType
 }
 
-func (tech Technology) GetPackageTypeId() string {
-	if technologiesData[tech].packageTypeId == "" {
-		return fmt.Sprintf("%s://", tech.GetPackageType())
-	}
-	return technologiesData[tech].packageTypeId
+func (tech Technology) GetXrayPackageTypeId() string {
+	return fmt.Sprintf("%s://", tech.GetXrayPackageType())
+}
+
+func (tech Technology) GetProjectType() project.ProjectType {
+	return technologiesData[tech].projectType
 }
 
 func (tech Technology) GetPackageDescriptor() []string {
@@ -394,6 +400,15 @@ func (tech Technology) isIndicator(path string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func IsTechnologyDescriptor(path string) Technology {
+	for tech := range technologiesData {
+		if tech.isDescriptor(path) {
+			return tech
+		}
+	}
+	return NoTech
 }
 
 func DetectedTechnologiesList() (technologies []string) {
@@ -741,7 +756,7 @@ func DetectedTechnologiesToSlice(detected map[Technology]map[string][]string) []
 
 func ToTechnologies(args []string) (technologies []Technology) {
 	for _, argument := range args {
-		technologies = append(technologies, Technology(argument))
+		technologies = append(technologies, ToTechnology(argument))
 	}
 	return
 }
@@ -820,17 +835,26 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 
 func SplitComponentId(componentId string) (string, string, string) {
 	compName, compVersion, packageType := SplitComponentIdRaw(componentId)
-	return compName, compVersion, ConvertXrayPackageType(packageType)
+	return compName, compVersion, XrayPackageTypeToCdxPackageType(packageType)
 }
 
-func ConvertXrayPackageType(xrayPackageType string) string {
-	if xrayPackageType != "" && packageTypes[xrayPackageType] != "" {
-		return packageTypes[xrayPackageType]
+func XrayPackageTypeToCdxPackageType(xrayPackageType string) string {
+	if xrayPackageType == Gav {
+		// We prefer maven over gradle for GAV packages, it could be both
+		return Maven.GetPackageType()
+	}
+	for tech, techData := range technologiesData {
+		if (techData.xrayPackageType != "" && techData.xrayPackageType == xrayPackageType) || (techData.xrayPackageType == "" && tech.String() == xrayPackageType) {
+			return tech.GetPackageType()
+		}
 	}
 	return xrayPackageType
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	if packageType == Gav {
+		componentName = strings.ReplaceAll(componentName, "/", ":")
+	}
 	if componentVersion == "" {
 		// If the component version is empty, we return the component name only
 		return fmt.Sprintf("%s://%s", packageType, componentName)
@@ -839,29 +863,23 @@ func ToXrayComponentId(packageType, componentName, componentVersion string) stri
 }
 
 func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
-	for tech, cdxType := range cdxPurlPackageTypes {
-		if cdxType == cdxPackageType {
-			if tech == "gav" {
-				return Technology(cdxType)
-			}
-			return Technology(tech)
+	if cdxPackageType == Npm.String() || cdxPackageType == Maven.String() || cdxPackageType == Pypi {
+		// Conflicted with other technologies
+		return NoTech
+	}
+	for tech, techData := range technologiesData {
+		if (techData.packageType != "" && techData.packageType == cdxPackageType) || (techData.packageType == "" && tech.String() == cdxPackageType) {
+			return tech
 		}
 	}
 	// If the package type is not found in the map, return NoTech
 	return NoTech
 }
 
-func ToCdxPackageType(packageType string) string {
-	if cdxPackageType, exist := cdxPurlPackageTypes[packageType]; exist {
-		return cdxPackageType
-	}
-	return packageType
-}
-
 func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
-	for xrayPackageType, cdxType := range cdxPurlPackageTypes {
-		if cdxType == cdxPackageType {
-			return xrayPackageType
+	for tech, techData := range technologiesData {
+		if (techData.packageType != "" && techData.packageType == cdxPackageType) || (techData.packageType == "" && tech.String() == cdxPackageType) {
+			return tech.GetXrayPackageType()
 		}
 	}
 	return cdxPackageType
@@ -895,30 +913,27 @@ func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
 	return
 }
 
+// scheme:type/namespace/name@version?qualifiers#subpath -> pkg:type/namespace/name@version?properties
 func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
 	if packageType == "" {
 		packageType = "generic"
 	}
-	purl := packageurl.NewPackageURL(packageType, "", compName, version, properties, "").String()
-	// Unescape the output
-	output, err := url.QueryUnescape(purl)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
-		// Return the original output
-		return purl
+	// Replace ':' in compName and namespace with '/' to support groupId:artifactId format in Maven
+	compName = strings.ReplaceAll(compName, ":", "/")
+	// Check if compName contains a namespace
+	namespace := ""
+	if lastIndex := strings.LastIndex(compName, "/"); lastIndex != -1 {
+		namespace = compName[:lastIndex]
+		compName = compName[lastIndex+1:]
 	}
-	return
+	return packageurl.NewPackageURL(packageType, namespace, compName, version, properties, "").String()
 }
 
 func ToPackageRef(compName, version, packageType string) (output string) {
 	if packageType == "" {
 		packageType = "generic"
 	}
-	if version == "" {
-		// If the version is empty, we return the component name only
-		return fmt.Sprintf("%s:%s", packageType, compName)
-	}
-	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
+	return ToPackageUrl(compName, version, packageType)
 }
 
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id
@@ -929,10 +944,10 @@ func PurlToXrayComponentId(purl string) (xrayComponentId string) {
 
 func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
-	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
+	return ToPackageUrl(compName, compVersion, XrayPackageTypeToCdxPackageType(compType))
 }
 
 func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
-	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
+	return ToPackageRef(compName, compVersion, XrayPackageTypeToCdxPackageType(compType))
 }

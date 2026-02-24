@@ -3,13 +3,13 @@ package sast
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"golang.org/x/exp/maps"
@@ -18,7 +18,7 @@ import (
 const (
 	sastScannerType   = "sast"
 	sastScanCommand   = "zd"
-	sastDocsUrlSuffix = "sast"
+	sastDocsUrlSuffix = "advanced-security/features-and-capabilities/sast"
 )
 
 type SastScanManager struct {
@@ -31,7 +31,7 @@ type SastScanManager struct {
 	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, sastRules string, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, sastRules string, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), threadId); err != nil {
 		return
@@ -40,11 +40,12 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.SastScan.ToTextString(), module.SourceRoot))
+	startTime := time.Now()
+	log.Info(jas.GetStartJasScanLog(utils.SastScan, threadId, module, targetCount))
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...)))
+	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
 	return
 }
 
@@ -68,7 +69,7 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFile(module, ssm.signedDescriptions, append(ssm.scanner.Exclusions, ssm.scanner.ScannersExclusions.SastExcludePatterns...)...); err != nil {
+	if err = ssm.createConfigFile(module, ssm.signedDescriptions, ssm.scanner.ScannersExclusions.SastExcludePatterns, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -103,7 +104,7 @@ type sastParameters struct {
 	SignedDescriptions bool `yaml:"signed_descriptions,omitempty"`
 }
 
-func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, exclusions ...string) error {
+func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, centralConfigExclusions []string, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -124,7 +125,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
-				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, exclusions...),
+				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
 				UserRules:       ssm.sastRules,
 			},
 		},

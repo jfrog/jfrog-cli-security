@@ -93,6 +93,17 @@ func getXrayAndXscTestVersions(t *testing.T) (string, string, error) {
 	return xrayVersion.GetVersion(), xscVersion, err
 }
 
+func GetAndValidateXrayVersion(t *testing.T, minVersion string) string {
+	xrayVersion, err := testUtils.GetTestsXrayVersion()
+	if err != nil {
+		assert.NoError(t, err)
+		return ""
+	}
+	ver := xrayVersion.GetVersion()
+	testUtils.ValidateXrayVersion(t, ver, minVersion)
+	return ver
+}
+
 func InitAuditGeneralTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditGeneral {
 		t.Skip(getSkipTestMsg("Audit command general integration", "--test.audit"))
@@ -104,7 +115,7 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
-	testUtils.SkipTestIfDurationNotPassed(t, "22-10-2025", 30, "Catalog API not available yet in test platform.")
+	testUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 30, "Remediation API not available yet in test platform. (412 Precondition Failed), Remediation requires dependencies feature enabled")
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
@@ -259,7 +270,7 @@ func authenticateXray(xrayUrlOnly bool) string {
 		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
 	} else {
 		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
-		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.Url)
 	}
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken

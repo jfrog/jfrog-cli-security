@@ -23,7 +23,7 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 40m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
@@ -46,7 +46,7 @@ jobs:
           labels: "safe to test"
           
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -128,7 +128,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -159,7 +159,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -187,7 +187,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -197,7 +197,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray --ci.runId=${{ runner.os }}-sec-test
 
   Xsc_Integration_Tests:
     name: "[${{ matrix.os }}] XSC Integration Tests"
@@ -214,7 +214,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -242,7 +242,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -271,7 +271,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -300,7 +300,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
@@ -329,7 +329,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
-        uses: jfrog-fastci/fastci@main
+        uses: jfrog-fastci/fastci@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           fastci_otel_token: ${{ secrets.FASTCI_TOKEN }}
