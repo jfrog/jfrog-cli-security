@@ -281,26 +281,6 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 	}
 }
 
-func TestGradleCurationAuditMode(t *testing.T) {
-	params := &DepTreeParams{
-		IsCurationCmd: true,
-	}
-	manager := &gradleDepTreeManager{
-		DepTreeManager: NewDepTreeManager(params),
-		isCurationCmd:  params.IsCurationCmd,
-	}
-	assert.True(t, manager.isCurationCmd, "isCurationCmd should be true for curation commands")
-
-	paramsNonCuration := &DepTreeParams{
-		IsCurationCmd: false,
-	}
-	managerNonCuration := &gradleDepTreeManager{
-		DepTreeManager: NewDepTreeManager(paramsNonCuration),
-		isCurationCmd:  paramsNonCuration.IsCurationCmd,
-	}
-	assert.False(t, managerNonCuration.isCurationCmd, "isCurationCmd should be false for non-curation commands")
-}
-
 func TestCreateDepTreeScriptWithCuration(t *testing.T) {
 	manager := &gradleDepTreeManager{
 		DepTreeManager: DepTreeManager{
@@ -313,6 +293,7 @@ func TestCreateDepTreeScriptWithCuration(t *testing.T) {
 		},
 		isCurationCmd: true,
 	}
+	assert.True(t, manager.isCurationCmd)
 
 	tmpDir, err := manager.createDepTreeScriptAndGetDir()
 	assert.NoError(t, err)
@@ -326,4 +307,25 @@ func TestCreateDepTreeScriptWithCuration(t *testing.T) {
 
 	assert.Equal(t, fmt.Sprintf(expectedInitScriptWithCuration, gradleDepTreeJarPath, dummyToken), string(content))
 	assert.Contains(t, string(content), "api/curation/audit/deps-repo")
+}
+
+func TestCreateDepTreeScriptWithCurationEmptyRepo(t *testing.T) {
+	manager := &gradleDepTreeManager{
+		DepTreeManager: DepTreeManager{},
+		isCurationCmd:  true,
+	}
+	assert.True(t, manager.isCurationCmd)
+
+	tmpDir, err := manager.createDepTreeScriptAndGetDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, os.Remove(filepath.Join(tmpDir, gradleDepTreeInitFile)))
+	}()
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, gradleDepTreeInitFile))
+	assert.NoError(t, err)
+	gradleDepTreeJarPath := ioutils.DoubleWinPathSeparator(filepath.Join(tmpDir, gradleDepTreeJarFile))
+
+	assert.Equal(t, fmt.Sprintf(gradleDepTreeInitScript, "", gradleDepTreeJarPath, ""), string(content))
+	assert.NotContains(t, string(content), "api/curation/audit")
 }

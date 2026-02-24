@@ -106,13 +106,8 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 		return
 	}
 
-	depsRepoName := gdt.depsRepo
-	if gdt.isCurationCmd && depsRepoName != "" {
-		depsRepoName = path.Join("api/curation/audit", depsRepoName)
-	}
-
 	var releasesRepo string
-	releasesRepo, gdt.depsRepo, err = getRemoteRepos(depsRepoName, gdt.server)
+	releasesRepo, gdt.depsRepo, err = getRemoteRepos(gdt.depsRepo, gdt.server, gdt.isCurationCmd)
 	if err != nil {
 		return
 	}
@@ -130,10 +125,13 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 // depsRemoteRepo - name of the remote repository that proxies the relevant registry, e.g. maven central.
 // server - the Artifactory server details on which the repositories reside in.
 // Returns the constructed sections.
-func getRemoteRepos(depsRepo string, server *config.ServerDetails) (string, string, error) {
+func getRemoteRepos(depsRepo string, server *config.ServerDetails, isCurationCmd bool) (string, string, error) {
 	constructedReleasesRepo, err := constructReleasesRemoteRepo()
 	if err != nil {
 		return "", "", err
+	}
+	if isCurationCmd && depsRepo != "" {
+		depsRepo = path.Join("api/curation/audit", depsRepo)
 	}
 	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server)
 	if err != nil {
