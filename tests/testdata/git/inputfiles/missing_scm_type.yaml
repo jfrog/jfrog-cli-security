@@ -1,0 +1,6 @@
+git-servers-list:
+  - scm-api-url: "https://api.github.com"
+    token: "token"
+    owner: "owner"
+    repositories:
+      - "repo1"
