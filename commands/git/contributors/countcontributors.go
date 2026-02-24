@@ -110,6 +110,19 @@ type BasicGitServerParams struct {
 	Repositories []string `yaml:"repositories,omitempty"`
 }
 
+func (p *BasicGitServerParams) validate() error {
+	if p.ScmApiUrl == "" {
+		return fmt.Errorf("scm-api-url is missing in the input file")
+	}
+	if p.Token == "" {
+		return fmt.Errorf("token is missing in the input file")
+	}
+	if p.Owner == "" {
+		return fmt.Errorf("owner is missing in the input file")
+	}
+	return nil
+}
+
 type CountContributorsParams struct {
 	BasicGitServerParams
 	// Path to a file contains multiple git providers to analyze.
@@ -219,6 +232,9 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 	}
 	var contributors []VcsCountContributors
 	for _, param := range gitServersList.ServersList {
+		if err = param.validate(); err != nil {
+			return nil, err
+		}
 		p := CountContributorsParams{BasicGitServerParams: param, MonthsNum: cc.MonthsNum, DetailedSummery: cc.DetailedSummery}
 		vcsClient, err := vcsclient.NewClientBuilder(param.ScmType).ApiEndpoint(param.ScmApiUrl).Token(param.Token).Build()
 		if err != nil {
