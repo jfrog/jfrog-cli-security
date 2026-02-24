@@ -397,6 +397,14 @@ func TestCountContributorsCommand_InputFile(t *testing.T) {
 				expectedError:    "scm-api-url is missing in the input file",
 			},
 		},
+		{
+			name: "missing scm-type",
+			args: args{
+				inputFile:        "missing_scm_type.yaml",
+				gitServersNumber: 0,
+				expectedError:    "scm-type is missing in the input file",
+			},
+		},
 	}
 
 	for _, tt := range tests {
