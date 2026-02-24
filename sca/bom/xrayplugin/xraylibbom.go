@@ -113,8 +113,9 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 }
 
 func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
+	envVars := sbg.getPluginEnvVars()
 	// Create a new plugin client
-	scanner, err := plugin.CreateScannerPluginClient(xrayLibBinary, sbg.getPluginEnvVars())
+	scanner, err := plugin.CreateScannerPluginClient(xrayLibBinary, envVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
@@ -123,6 +124,9 @@ func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target resu
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
+	}
+	if len(envVars) > 0 {
+		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
