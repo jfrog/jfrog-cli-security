@@ -30,6 +30,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # fetch all branches so we can checkout main and merge dev
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
@@ -38,11 +40,6 @@ jobs:
         env:
           JF_URL: ${{ secrets.FROGBOT_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.FROGBOT_ACCESS_TOKEN }}
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "jfrog-security-cli-release-bot"
-          git config --global user.email "jfrog-security-cli-release-bot@users.noreply.github.com"
 
       - name: Merge dev into main and create tag
         run: |

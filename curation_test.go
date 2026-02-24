@@ -108,13 +108,13 @@ func getCurationExpectedResponse(config *config.ServerDetails) []curation.Packag
 
 func TestDockerCurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
-	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" {
+	if securityTests.ContainerRegistry == nil || *securityTests.ContainerRegistry == "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		t.Skip("Skipping Docker curation test - container registry not configured")
 	}
 	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUp()
 
-	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "ganodndentcom/drupal")
+	testImage := fmt.Sprintf("%s/%s/%s", *securityTests.ContainerRegistry, "docker-curation", "bitnami/kubectl")
 
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "curation-audit",
 		"--image="+testImage,
@@ -128,7 +128,7 @@ func TestDockerCurationAudit(t *testing.T) {
 
 	require.NotEmpty(t, results, "Expected at least one blocked package")
 	assert.Equal(t, "blocked", results[0].Action)
-	assert.Equal(t, "ganodndentcom/drupal", results[0].PackageName)
+	assert.Equal(t, "bitnami/kubectl", results[0].PackageName)
 	assert.Equal(t, curation.BlockingReasonPolicy, results[0].BlockingReason)
 	require.NotEmpty(t, results[0].Policy, "Expected at least one policy violation")
 	assert.Equal(t, "Image is not Docker Hub official", results[0].Policy[0].Condition)
