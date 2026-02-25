@@ -469,15 +469,6 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 }
 
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
-	if params.DeprecatedAppsConfig() == nil && !isNewFlow(params.bomGenerator) {
-		// Load deprecated apps config information
-		jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(params.workingDirs)
-		if err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
-			return
-		}
-		params.SetDeprecatedAppsConfig(jfrogAppsConfig)
-	}
 	cwd, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("failed to get working directory: %s", err.Error()), false)
@@ -573,19 +564,17 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
 				cmdResults.NewScanResults(results.ScanTarget{
-					Target:                     requestedDirectory,
-					Technology:                 tech,
-					Exclude:                    params.Exclusions(),
-					DeprecatedAppsConfigModule: jas.GetModule(requestedDirectory, params.DeprecatedAppsConfig()),
+					Target:     requestedDirectory,
+					Technology: tech,
+					Exclude:    params.Exclusions(),
 				})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
 				targetResults := cmdResults.NewScanResults(results.ScanTarget{
-					Target:                     workingDir,
-					Technology:                 tech,
-					Exclude:                    params.Exclusions(),
-					DeprecatedAppsConfigModule: jas.GetModule(workingDir, params.DeprecatedAppsConfig()),
+					Target:     workingDir,
+					Technology: tech,
+					Exclude:    params.Exclusions(),
 				})
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
@@ -596,10 +585,21 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 	// If no scan targets were detected, we should still proceed with the scans.
 	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
 		cmdResults.NewScanResults(results.ScanTarget{
-			Target:                     potentialScanTargets[0],
-			Exclude:                    params.Exclusions(),
-			DeprecatedAppsConfigModule: jas.GetModule(potentialScanTargets[0], params.DeprecatedAppsConfig()),
+			Target:  potentialScanTargets[0],
+			Exclude: params.Exclusions(),
 		})
+	}
+	// Load deprecated apps config information for all targets
+	if params.DeprecatedAppsConfig() == nil && !isNewFlow(params.bomGenerator) {
+		jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
+		if err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
+			return
+		}
+		params.SetDeprecatedAppsConfig(jfrogAppsConfig)
+	}
+	for _, targetResult := range cmdResults.Targets {
+		targetResult.DeprecatedAppsConfigModule = jas.GetModule(targetResult.Target, params.DeprecatedAppsConfig())
 	}
 }
 
