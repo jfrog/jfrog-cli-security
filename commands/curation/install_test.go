@@ -64,6 +64,7 @@ func TestDetectInstallHandler(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644))
 			}
 			require.NoError(t, os.Chdir(tempDir))
+			defer func() { require.NoError(t, os.Chdir(originalDir)) }()
 
 			handler, err := detectInstallHandler()
 
