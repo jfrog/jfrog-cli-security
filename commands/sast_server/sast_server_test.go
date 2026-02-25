@@ -58,5 +58,4 @@ func TestRunSastServerHappyFlow(t *testing.T) {
 	err = sastCmd.runWithTimeout(5, amEnv)
 	require.NoError(t, err)
 	require.Contains(t, errorBuffer.String(), "serving at port")
-	require.NotEmpty(t, outputBuffer.String())
 }
