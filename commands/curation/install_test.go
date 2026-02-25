@@ -130,7 +130,7 @@ func TestInstallModeFiltersAuditResults(t *testing.T) {
 							},
 						},
 					},
-					totalNumberOfPackages: 1,
+					totalNumberOfPackages: 2,
 				},
 			},
 		},
@@ -152,7 +152,7 @@ func TestInstallModeFiltersAuditResults(t *testing.T) {
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			requestToFail: map[string]bool{
-				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+				"/api/go/go-virtual/rsc.io/quote/@v/v1.5.2.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {
@@ -161,11 +161,11 @@ func TestInstallModeFiltersAuditResults(t *testing.T) {
 							Action:            "blocked",
 							ParentName:        "rsc.io/quote",
 							ParentVersion:     "v1.5.2",
-							BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
-							PackageName:       "rsc.io/sampler",
-							PackageVersion:    "v1.3.0",
+							BlockedPackageUrl: "/api/go/go-virtual/rsc.io/quote/@v/v1.5.2.zip",
+							PackageName:       "rsc.io/quote",
+							PackageVersion:    "v1.5.2",
 							BlockingReason:    "Policy violations",
-							DepRelation:       "indirect",
+							DepRelation:       "direct",
 							PkgType:           "go",
 							Policy: []Policy{
 								{
