@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -30,6 +31,7 @@ const (
 
 	pluginName                  = "scang"
 	xrayLibPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
+	xrayPluginLogsName          = "xrayPluginLogs"
 )
 
 // Injected at build so needs to be variable
@@ -71,21 +73,27 @@ type ScannerRPCServer struct {
 	Impl Scanner
 }
 
-func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) {
-	// Create the plugin client with JFrog logger adapter
-	// This will align the plugin's logging with JFrog CLI's logging
-	var logStdErr io.Writer
-	if jfrogLog, ok := log.GetLogger().(log.JfrogLogger); ok {
-		logStdErr = jfrogLog.ErrorLog.Writer()
+// CreateScannerPluginClient creates a plugin client. When not in CI and log level is DEBUG, plugin stderr is written
+// to a log file under JFrog home (logs/xrayPluginLogs/)
+func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath string, err error) {
+	stderrWriter, logPath, err := getPluginLogger()
+	if err != nil {
+		return nil, "", err
 	}
-	client := goplugin.NewClient(&goplugin.ClientConfig{
+	clientConfig := &goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
 		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
 		Cmd:             &exec.Cmd{Path: scangBinary},
 		Managed:         true,
-		Stderr:          logStdErr,
-		Logger:          NewHclogToJfrogAdapter(),
-	})
+		Logger: hclog.New(&hclog.LoggerOptions{
+			Output: stderrWriter,
+			Level:  hclog.Trace,
+			Name:   "plugin",
+		}),
+		Stderr:     stderrWriter,
+		SyncStderr: stderrWriter,
+	}
+	client := goplugin.NewClient(clientConfig)
 	defer func() {
 		if err != nil {
 			client.Kill()
@@ -93,19 +101,50 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	}()
 	rpcClient, err := client.Client()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	// Wait for the plugin to complete the handshake
 	raw, err := rpcClient.Dispense(pluginName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	// Assert that the plugin is of type Scanner
 	scanPlugin, ok := raw.(Scanner)
 	if !ok {
-		return nil, fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
+		return nil, "", fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
 	}
-	return scanPlugin, nil
+	return scanPlugin, logPath, nil
+}
+
+func getPluginLogger() (writer io.Writer, logPath string, err error) {
+	if shouldOutputPluginLogs() {
+		writer = utils.NewLineDecoratorWriter(os.Stderr, "{", "}")
+		return
+	}
+	logDir, dirErr := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, xrayPluginLogsName))
+	if dirErr != nil {
+		err = fmt.Errorf("failed to create plugin log directory: %w", dirErr)
+		return
+	}
+	writer, logPath, err = createPluginStderrLogFile(logDir)
+	if err != nil {
+		err = fmt.Errorf("failed to create plugin stderr log file: %w", err)
+		return
+	}
+	return
+}
+
+func shouldOutputPluginLogs() bool {
+	return utils.IsCI() && log.Logger.GetLogLevel() == log.DEBUG
+}
+
+func createPluginStderrLogFile(logDir string) (io.Writer, string, error) {
+	p := filepath.Join(logDir, fmt.Sprintf("%s-%s.log", xrayPluginLogsName, utils.GetCurrentTimeUnix()))
+	f, err := os.Create(p)
+	if err != nil {
+		return nil, "", err
+	}
+	return f, p, nil
 }
 
 func (g *ScannerRPCClient) Scan(path string, config Config) (*cyclonedx.BOM, error) {
