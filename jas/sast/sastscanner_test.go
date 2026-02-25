@@ -67,7 +67,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -90,7 +90,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {

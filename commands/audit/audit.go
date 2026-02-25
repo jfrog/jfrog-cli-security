@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -39,7 +40,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
@@ -176,22 +177,35 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func (auditCmd *AuditCommand) Run() (err error) {
-	isRecursiveScan := false
-	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
-		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
-		}
+func getTargetsInfo(auditCmd *AuditCommand) (includeDirs []string, isRecursiveScan, isSingleTarget bool, err error) {
+	includeDirs, err = utils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	if err != nil {
+		return
+	}
+	if isNewFlow(auditCmd.bomGenerator) {
+		// In new flow, we always scan a single target. the SBOM lib can support multiple tech and directories. no need to detect them.
+		isSingleTarget = true
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(auditCmd.workingDirs) == 0
 	}
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	logScanPaths(includeDirs, isRecursiveScan)
+	return
+}
+
+func isNewFlow(bomGenerator bom.SbomGenerator) bool {
+	if _, ok := bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		return true
+	}
+	return false
+}
+
+func (auditCmd *AuditCommand) Run() (err error) {
+	includeDirs, isRecursiveScan, isSingleTarget, err := getTargetsInfo(auditCmd)
 	if err != nil {
 		return
 	}
-	logScanPaths(workingDirs, isRecursiveScan)
 	serverDetails, err := auditCmd.ServerDetails()
 	if err != nil {
 		return
@@ -201,7 +215,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		auditCmd.GetXrayVersion(),
 		auditCmd.GetXscVersion(),
 		serverDetails,
-		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+		xsc.CreateAnalyticsEvent(xscServices.CliProduct, xscServices.CliEventType, serverDetails),
 		auditCmd.projectKey,
 	)
 
@@ -213,10 +227,11 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetViolationGenerator(auditCmd.violationGenerator).
 		SetRtResultRepository(auditCmd.rtResultRepository).
 		SetUploadCdxResults(auditCmd.uploadCdxResults).
-		SetWorkingDirs(workingDirs).
+		SetWorkingDirs(includeDirs).
+		SetIsSingleTarget(isSingleTarget).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
-		SetGraphBasicParams(auditCmd.AuditBasicParams).
+		SetGraphBasicParams(auditCmd.AuditBasicParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())).
 		SetResultsContext(CreateAuditResultsContext(
 			serverDetails,
 			auditCmd.GetXrayVersion(),
@@ -231,8 +246,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
-	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).
+		SetStartTime(startTime).
+		SetMultiScanId(multiScanId)
 
 	auditResults := RunAudit(auditParams)
 
@@ -340,9 +356,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
 		// Xray-Scan-Plugin Bom Generator Options
-		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
-		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -403,16 +417,8 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	// Populate the scan targets based on the provided parameters.
 	detectScanTargets(cmdResults, params)
-	// Load apps config information
-	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
-	if err != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
-		return
-	}
 	// Populate target information for the scans
 	for _, targetResult := range cmdResults.Targets {
-		// Get the apps config module and assign it to the target result for JAS scans.
-		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, jfrogAppsConfig)
 		// Generate SBOM for the target if requested or for SCA scans.
 		if !params.resultsContext.IncludeSbom && len(params.ScansToPerform()) > 0 && !slices.Contains(params.ScansToPerform(), utils.ScaScan) {
 			// No need to generate the SBOM if we are not going to use it.
@@ -421,6 +427,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
+				TotalTargets:         len(cmdResults.Targets),
 				AllowPartialResults:  params.AllowPartialResults(),
 				ScanResultsOutputDir: params.scanResultsOutputDir,
 				// Diff mode - SCA
@@ -435,17 +442,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
 	// Print the scan targets
 	if len(cmdResults.Targets) == 1 {
-		outLog := "Performing scans on "
-		if cmdResults.Targets[0].Technology != techutils.NoTech {
-			outLog += fmt.Sprintf("%s ", cmdResults.Targets[0].Technology.String())
-		}
-		outLog += "project "
-		if cmdResults.Targets[0].Name != "" {
-			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Name)
-		} else {
-			outLog += fmt.Sprintf("'%s' ", cmdResults.Targets[0].Target)
-		}
-		log.Info(outLog)
+		log.Info(fmt.Sprintf("Performing scans on project %s", cmdResults.Targets[0].String()))
 		return
 	}
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
@@ -472,13 +469,86 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 }
 
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
-	for _, requestedDirectory := range params.workingDirs {
+	cwd, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		cmdResults.AddGeneralError(fmt.Errorf("failed to get working directory: %s", err.Error()), false)
+		return
+	}
+	// Create scan targets
+	if params.IsSingleTarget() {
+		createSingleScanTarget(cmdResults, params, cwd)
+	} else {
+		detectScaTargetsFromTechnologies(cmdResults, params, cwd)
+	}
+	// Match central config modules to the scan targets
+	matchCentralConfigModules(cmdResults, params.GetConfigProfile())
+}
+
+func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
+	scanTarget := results.ScanTarget{Target: cwd, Exclude: params.Exclusions()}
+	// Resolve working dirs to include
+	dirs := datastructures.MakeSet[string]()
+	for _, dir := range params.workingDirs {
+		if !fileutils.IsPathExists(dir, false) {
+			log.Warn("The working directory", dir, "doesn't exist. Skipping...")
+			continue
+		}
+		// check path is not cwd
+		if dir == cwd {
+			continue
+		}
+		dirs.Add(dir)
+	}
+	scanTarget.Include = dirs.ToSlice()
+	// Detect technologies
+	detectedTechnologies := datastructures.MakeSet[techutils.Technology]()
+	for _, included := range jas.GetRootsFromTarget(scanTarget) {
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == cwd, params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), included == cwd, scanTarget.Exclude...))
+		if err != nil {
+			log.Warn("Couldn't detect technologies in", included, "directory.", err.Error())
+			continue
+		}
+		for tech := range techToWorkingDirs {
+			detectedTechnologies.Add(tech)
+		}
+	}
+	for _, tech := range detectedTechnologies.ToSlice() {
+		// TODO: We only support one technology per target for now. should be extended in the future.
+		scanTarget.Technology = tech
+		break
+	}
+	cmdResults.NewScanResults(scanTarget)
+}
+
+func matchCentralConfigModules(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
+	if centralProfile == nil {
+		return
+	}
+	if len(centralProfile.Modules) < 1 {
+		// Verify Modules are not nil and contain at least one modules
+		cmdResults.AddGeneralError(fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", centralProfile.ProfileName), false)
+		return
+	}
+	for _, targetResult := range cmdResults.Targets {
+		// TODO: support matching multiple config modules to the scan targets
+		// currently only supported one config module for all targets to configure in the UI
+		// PathFromRoot is always '.'
+		targetResult.CentralConfigModules = centralProfile.Modules
+	}
+}
+
+func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
+	potentialScanTargets := []string{cwd}
+	if len(params.workingDirs) > 0 {
+		potentialScanTargets = params.workingDirs
+	}
+	for _, requestedDirectory := range potentialScanTargets {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
 			continue
 		}
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -493,11 +563,19 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
+				cmdResults.NewScanResults(results.ScanTarget{
+					Target:     requestedDirectory,
+					Technology: tech,
+					Exclude:    params.Exclusions(),
+				})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech})
+				targetResults := cmdResults.NewScanResults(results.ScanTarget{
+					Target:     workingDir,
+					Technology: tech,
+					Exclude:    params.Exclusions(),
+				})
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
 				}
@@ -505,8 +583,23 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 		}
 	}
 	// If no scan targets were detected, we should still proceed with the scans.
-	if len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
+	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
+		cmdResults.NewScanResults(results.ScanTarget{
+			Target:  potentialScanTargets[0],
+			Exclude: params.Exclusions(),
+		})
+	}
+	// Load deprecated apps config information for all targets
+	if params.DeprecatedAppsConfig() == nil && !isNewFlow(params.bomGenerator) {
+		jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
+		if err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
+			return
+		}
+		params.SetDeprecatedAppsConfig(jfrogAppsConfig)
+	}
+	for _, targetResult := range cmdResults.Targets {
+		targetResult.DeprecatedAppsConfigModule = jas.GetModule(targetResult.Target, params.DeprecatedAppsConfig())
 	}
 }
 
@@ -526,10 +619,7 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	// TODO: remove "isNewFlow" once the old flow is fully deprecated.
-	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
-		isNewFlow = false
-	}
+	isNewFlow := isNewFlow(auditParams.bomGenerator)
 	// Add the scans to the parallel runner
 	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
@@ -608,7 +698,6 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		jas.WithResultsToCompare(auditParams.resultsToCompare),
 	}
 	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
-	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.GetConfigProfile())
 
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
@@ -619,7 +708,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner), func(taskErr error) {
+	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, isNewFlow), func(taskErr error) {
 		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
@@ -628,7 +717,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 }
 
 func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanResults *results.SecurityCommandResults,
-	serverDetails *config.ServerDetails, auditParams *AuditParams, scanner *jas.JasScanner) parallel.TaskFunc {
+	serverDetails *config.ServerDetails, auditParams *AuditParams, scanner *jas.JasScanner, isNewFlow bool) parallel.TaskFunc {
 	return func(threadId int) (generalError error) {
 		defer func() {
 			auditParallelRunner.JasWg.Done()
@@ -648,16 +737,14 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
-			if targetResult.AppsConfigModule == nil {
+			if !isNewFlow && targetResult.DeprecatedAppsConfigModule == nil {
 				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
 				continue
 			}
-			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
 				Runner:                 auditParallelRunner,
 				ServerDetails:          serverDetails,
 				Scanner:                scanner,
-				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),

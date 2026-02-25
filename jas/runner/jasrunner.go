@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jfrog/gofrog/parallel"
-	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -26,9 +25,10 @@ type JasRunnerParams struct {
 	Runner        *utils.SecurityParallelRunner
 	ServerDetails *config.ServerDetails
 	Scanner       *jas.JasScanner
-	// Module flags
-	Module        jfrogappsconfig.Module
+	// Module / Target flags
 	ConfigProfile *services.ConfigProfile
+	TargetCount   int
+	ScanResults   *results.TargetResults
 	// Scan flags
 	AllowPartialResults bool
 	ScansToPerform      []utils.SubScanType
@@ -45,20 +45,20 @@ type JasRunnerParams struct {
 	SignedDescriptions bool
 	SastRules          string
 	// Outputs
-	TargetCount     int
-	ScanResults     *results.TargetResults
 	TargetOutputDir string
+}
+
+func (params JasRunnerParams) runAllScanners() bool {
+	// For docker scan we support only secrets and contextual scans.
+	return params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType
 }
 
 // Cves are only available after the SCA scan is performed, so we need a provider to dynamically pass the discovered cves.
 type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) error {
-	// For docker scan we support only secrets and contextual scans.
-	runAllScanners := params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType
-
 	var errorsCollection error
-	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
+	if generalError := addJasScanTaskIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
@@ -67,29 +67,29 @@ func AddJasScannersTasks(params JasRunnerParams) error {
 		return errorsCollection
 	}
 
-	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
+	if generalError := addJasScanTaskIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
-	if !runAllScanners {
+	if !params.runAllScanners() {
 		// Binary scan only supports secrets and contextual scans.
 		return errorsCollection
 	}
 
-	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
+	if generalError := addJasScanTaskIfNeeded(params, utils.IacScan, runIacScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
-	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
+	if generalError := addJasScanTaskIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 	return errorsCollection
 }
 
-func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
+func addJasScanTaskIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
 	jasType := jasutils.SubScanTypeToJasScanType(subScan)
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
@@ -99,34 +99,19 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		return
 	}
 	if params.ConfigProfile != nil {
-		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
-		enabled := false
-		switch jasType {
-		case jasutils.Secrets:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.SecretsScannerConfig.EnableSecretsScan
-		case jasutils.Sast:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
-		case jasutils.IaC:
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
-		case jasutils.Applicability:
-			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
-			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+		if jas.ShouldSkipScannerByConfigProfile(params.ScanResults.ScanTarget, params.ConfigProfile, subScan, jasType) {
+			return
 		}
-		if enabled {
-			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
-		} else {
-			log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, params.ConfigProfile.ProfileName))
-		}
+		// If Config profile exists, we don't need to check for deprecated apps config module
+		return addJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
+	}
+	if jas.ShouldSkipScannerByModule(params.ScanResults.ScanTarget, jasType) {
 		return
 	}
-	if jas.ShouldSkipScanner(params.Module, jasType) {
-		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", subScan))
-		return
-	}
-	return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
+	return addJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 }
 
-func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
+func addJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
 	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
 		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), allowSkippingErrors)
@@ -141,7 +126,14 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Secrets)...)
+		secretsScanParams := secrets.SecretsScanParams{
+			ThreadId:         threadId,
+			TargetCount:      params.TargetCount,
+			ScanType:         params.SecretsScanType,
+			ResultsToCompare: getSourceRunsToCompare(params, jasutils.Secrets),
+			Target:           params.ScanResults.ScanTarget,
+		}
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, secretsScanParams)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -158,7 +150,13 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.IaC)...)
+		iacScanParams := iac.IacScanParams{
+			ThreadId:         threadId,
+			TargetCount:      params.TargetCount,
+			ResultsToCompare: getSourceRunsToCompare(params, jasutils.IaC),
+			Target:           params.ScanResults.ScanTarget,
+		}
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, iacScanParams)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -175,7 +173,15 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.SastRules, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
+		sastScanParams := sast.SastScanParams{
+			ThreadId:           threadId,
+			TargetCount:        params.TargetCount,
+			SignedDescriptions: params.SignedDescriptions,
+			SastRules:          params.SastRules,
+			ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
+			Target:             params.ScanResults.ScanTarget,
+		}
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, sastScanParams)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -205,7 +211,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
 				ThreadId:                     threadId,
 				TargetCount:                  params.TargetCount,
-				Module:                       params.Module,
+				Target:                       params.ScanResults.ScanTarget,
 			},
 			params.Scanner,
 		)

@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -28,26 +29,40 @@ type IacScanManager struct {
 	resultsFileName          string
 }
 
+type IacScanParams struct {
+	ThreadId         int
+	TargetCount      int
+	ResultsToCompare []*sarif.Run
+	Target           results.ScanTarget
+}
+
 // The getIacScanResults function runs the iac scan flow, which includes the following steps:
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, params IacScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), threadId); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), params.ThreadId); err != nil {
 		return
 	}
-	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, resultsToCompare...)
+	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.IacScan, threadId, module, targetCount))
-	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
+	log.Info(jas.GetStartJasScanLog(utils.IacScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
+	if vulnerabilitiesResults, violationsResults, err = runIacScan(iacScanManager, params); err != nil {
 		return
 	}
-	log.Info(utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
+	log.Info(utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
+}
+
+func runIacScan(iacScanManager *IacScanManager, params IacScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+	if params.Target.DeprecatedAppsConfigModule == nil {
+		return iacScanManager.scanner.Run(iacScanManager, params.Target)
+	}
+	return iacScanManager.scanner.DeprecatedRun(iacScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.IacScan))
 }
 
 func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *IacScanManager, err error) {
@@ -69,14 +84,24 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsTo
 	return
 }
 
-func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = iac.createConfigFile(module, iac.scanner.ScannersExclusions.IacExcludePatterns, iac.scanner.Exclusions...); err != nil {
+func (iac *IacScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = iac.deprecatedCreateConfigFile(module, centralConfigExclusions, iac.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, module.SourceRoot)
+}
+
+func (iac *IacScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = iac.createConfigFileForTarget(target); err != nil {
+		return
+	}
+	if err = iac.runAnalyzerManager(); err != nil {
+		return
+	}
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, iacDocsUrlSuffix, iac.scanner.MinSeverity, target.Target, target.Include...)
 }
 
 type iacScanConfig struct {
@@ -91,7 +116,7 @@ type iacScanConfiguration struct {
 	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
-func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, centralConfigExclusions []string, exclusions ...string) error {
+func (iac *IacScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Module, centralConfigExclusions []string, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Iac)
 	if err != nil {
 		return err
@@ -103,7 +128,22 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, centr
 				Output:                 iac.resultsFileName,
 				PathToResultsToCompare: iac.resultsToCompareFileName,
 				Type:                   iacScannerType,
-				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
+				SkippedDirs:            jas.GetJasExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
+			},
+		},
+	}
+	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, jasutils.IaC)
+}
+
+func (iac *IacScanManager) createConfigFileForTarget(target results.ScanTarget) error {
+	configFileContent := iacScanConfig{
+		Scans: []iacScanConfiguration{
+			{
+				Roots:                  jas.GetRootsFromTarget(target),
+				Output:                 iac.resultsFileName,
+				PathToResultsToCompare: iac.resultsToCompareFileName,
+				Type:                   iacScannerType,
+				SkippedDirs:            jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.IacScan)),
 			},
 		},
 	}

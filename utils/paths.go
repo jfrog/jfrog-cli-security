@@ -6,11 +6,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -81,6 +84,27 @@ func GetCurationNugetCacheFolder() (string, error) {
 		return "", err
 	}
 	return filepath.Join(curationFolder, "nuget"), nil
+}
+
+func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
+	var fullPathsWorkingDirs []string
+	for _, wd := range workingDirs {
+		fullPathWd, err := filepath.Abs(wd)
+		if err != nil {
+			return nil, err
+		}
+		fullPathsWorkingDirs = append(fullPathsWorkingDirs, fullPathWd)
+	}
+	return fullPathsWorkingDirs, nil
+}
+
+func IsPathExcluded(path string, exclusions []string) bool {
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, true), path)
+	if err != nil {
+		log.Warn("Failed to check if path is excluded:", err.Error())
+		return false
+	}
+	return match
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {

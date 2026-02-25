@@ -12,7 +12,6 @@ import (
 	"unicode"
 
 	"github.com/jfrog/gofrog/datastructures"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -30,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
@@ -50,17 +50,7 @@ type JasScanner struct {
 	DiffMode              bool
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
-	// This field contains scanner specific exclude patterns from Config Profile
-	ScannersExclusions SpecificScannersExcludePatterns
-	MinSeverity        severityutils.Severity
-}
-
-type SpecificScannersExcludePatterns struct {
-	ContextualAnalysisExcludePatterns []string
-	SastExcludePatterns               []string
-	SecretsExcludePatterns            []string
-	IacExcludePatterns                []string
-	MaliciousCodeExcludePatterns      []string
+	MinSeverity           severityutils.Severity
 }
 
 type JasScannerOption func(f *JasScanner) error
@@ -148,9 +138,9 @@ func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string) (
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
-		log.Warn("Please note the 'jfrog-apps-config.yml' is soon to be deprecated. Please consider using flags, environment variables, or centrally via the JFrog platform.")
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
+		log.Warn("Please note the 'jfrog-apps-config.yml' is soon to be deprecated. Please consider using flags, environment variables, or centrally via the JFrog platform.")
 		// jfrog-apps-config.yml exist in the workspace
 		for i := range jfrogAppsConfig.Modules {
 			// converting to absolute path before starting the scan flow
@@ -175,19 +165,36 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 }
 
 type ScannerCmd interface {
-	Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
+	DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
+	Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (a *JasScanner) DeprecatedRun(scannerCmd ScannerCmd, module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	func() {
-		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.Run(module); err != nil {
+		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module, centralConfigExclusions); err != nil {
 			return
 		}
 	}()
 	return
 }
 
-func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+func (a *JasScanner) Run(scannerCmd ScannerCmd, target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	return scannerCmd.Run(target)
+}
+
+func GetRootsFromTarget(target results.ScanTarget) []string {
+	if len(target.Include) > 0 {
+		return target.Include
+	}
+	return []string{target.Target}
+}
+
+func GetWorkingDirsFromTarget(target results.ScanTarget) []string {
+	wd := []string{target.Target}
+	return append(wd, target.Include...)
+}
+
+func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
 	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
 	if err != nil {
@@ -198,13 +205,13 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 		return
 	}
 	if vulnFileExist {
-		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, wd, informationUrlSuffix, minSeverity)
+		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, informationUrlSuffix, minSeverity, target, includeDirs...)
 		if err != nil {
 			return
 		}
 	}
 	if violationsFileExist {
-		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, wd, informationUrlSuffix, minSeverity)
+		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, informationUrlSuffix, minSeverity, target, includeDirs...)
 	}
 	return
 }
@@ -219,18 +226,18 @@ func checkJasResultsFilesExist(vulnFileName, violationsFileName string) (vulnFil
 	return
 }
 
-func readJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
+func readJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
-	processSarifRuns(sarifRuns, wd, informationUrlSuffix, minSeverity)
+	processSarifRuns(sarifRuns, informationUrlSuffix, minSeverity, target, includeDirs...)
 	return
 }
 
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
-func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {
+func processSarifRuns(sarifRuns []*sarif.Run, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) {
 	for _, sarifRun := range sarifRuns {
-		fillMissingRequiredInvocationInformation(wd, sarifRun)
+		fillMissingRequiredInvocationInformation(sarifRun, target, includeDirs...)
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		addScoreToRunRules(sarifRun)
 		// Process results
@@ -258,29 +265,13 @@ func isValidVersion(version string) bool {
 	return unicode.IsDigit(firstChar)
 }
 
-func fillMissingRequiredInvocationInformation(wd string, run *sarif.Run) {
-	// If no invocations are present, add an empty invocation with an empty working directory
-	if len(run.Invocations) == 0 {
-		run.Invocations = append(run.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
-	}
+func fillMissingRequiredInvocationInformation(run *sarif.Run, target string, includeDirs ...string) {
+	isExeSuccess := false
 	for _, invocation := range run.Invocations {
-		// Set the actual working directory to the invocation, not the analyzerManager directory
-		// Also used to calculate relative paths if needed with it
-		invocation.WorkingDirectory.WithURI(utils.ToURI(wd))
-		// Make sure the invocation not omitted attributes are set (the lib reports them as required but spec says they are optional)
-		if len(invocation.NotificationConfigurationOverrides) == 0 {
-			invocation.NotificationConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
-		}
-		if len(invocation.RuleConfigurationOverrides) == 0 {
-			invocation.RuleConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
-		}
-		if len(invocation.ToolConfigurationNotifications) == 0 {
-			invocation.ToolConfigurationNotifications = make([]*sarif.Notification, 0)
-		}
-		if len(invocation.ToolExecutionNotifications) == 0 {
-			invocation.ToolExecutionNotifications = make([]*sarif.Notification, 0)
-		}
+		isExeSuccess = isExeSuccess || (invocation.ExecutionSuccessful != nil && *invocation.ExecutionSuccessful)
 	}
+	// Set the actual working directory to the invocation, not the analyzerManager directory
+	run.Invocations = []*sarif.Invocation{sarifutils.CreateNewInvocation(isExeSuccess, target, includeDirs...)}
 }
 
 func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
@@ -389,6 +380,9 @@ func GetTestDataPath() string {
 }
 
 func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogappsconfig.Module {
+	if appConfig == nil || len(appConfig.Modules) == 0 {
+		return nil
+	}
 	for _, module := range appConfig.Modules {
 		if module.SourceRoot == root {
 			return &module
@@ -397,10 +391,38 @@ func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogap
 	return nil
 }
 
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
+func ShouldSkipScannerByConfigProfile(target results.ScanTarget, configProfile *xscServices.ConfigProfile, scanType utils.SubScanType, jasType jasutils.JasScanType) bool {
+	if configProfile == nil {
+		return false
+	}
+	log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", configProfile.ProfileName, jasType))
+	if !target.IsScanRequestedByCentralConfig(scanType) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, configProfile.ProfileName))
+		return true
+	}
+	// validate target is excluded by config profile exclude patterns
+	excludePatterns := configProfile.GeneralConfig.GeneralExcludePatterns
+	if len(excludePatterns) > 0 {
+		if utils.IsPathExcluded(target.Target, excludePatterns) {
+			log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by config profile exclude patterns...", jasType))
+			return true
+		}
+	}
+	return false
+}
+
+func ShouldSkipScannerByModule(target results.ScanTarget, scanType jasutils.JasScanType) bool {
+	if target.DeprecatedAppsConfigModule == nil {
+		return false
+	}
 	lowerScanType := strings.ToLower(string(scanType))
-	if slices.Contains(module.ExcludeScanners, lowerScanType) {
-		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+	if slices.Contains(target.DeprecatedAppsConfigModule.ExcludeScanners, lowerScanType) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", scanType))
+		return true
+	}
+	exclusions := target.GeDeprecatedAppsConfigModuleExclusions(scanType)
+	if len(exclusions) > 0 && utils.IsPathExcluded(target.Target, exclusions) {
+		log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by local module config...", scanType))
 		return true
 	}
 	return false
@@ -421,7 +443,7 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 	return roots, nil
 }
 
-func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, centralConfigExclusions []string, cliExclusions ...string) []string {
+func GetJasExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, centralConfigExclusions []string, cliExclusions ...string) []string {
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	if len(cliExclusions) > 0 || len(centralConfigExclusions) > 0 {
 		// Adding exclusions from CLI requires to convert them to file exclude patterns
@@ -438,6 +460,20 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	if uniqueExcludePatterns.Size() == 0 {
 		return utils.DefaultJasExcludePatterns
 	}
+	return uniqueExcludePatterns.ToSlice()
+}
+
+func GetJasExcludePatternsForTarget(target results.ScanTarget, centralConfigExclusions []string) []string {
+	if len(centralConfigExclusions) > 0 {
+		return centralConfigExclusions
+	}
+	if utils.ElementsEqual(target.Exclude, utils.DefaultScaExcludePatterns) {
+		// Default SCA exclude patterns, so we use the default JAS exclude patterns
+		return utils.DefaultJasExcludePatterns
+	}
+	uniqueExcludePatterns := datastructures.MakeSet[string]()
+	// Adding exclude patterns from the CLI requires to convert them to file exclude patterns
+	uniqueExcludePatterns.AddElements(convertToFilesExcludePatterns(target.Exclude)...)
 	return uniqueExcludePatterns.ToSlice()
 }
 
@@ -511,19 +547,9 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId i
 	return scannerTempDir, nil
 }
 
-func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile *clientservices.ConfigProfile) {
-	if profile == nil {
-		return
-	}
-	scanner.ScannersExclusions.ContextualAnalysisExcludePatterns = profile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.SastExcludePatterns = profile.Modules[0].ScanConfig.SastScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
-	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
-}
-
-func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module jfrogappsconfig.Module, targetCount int) string {
+func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module *jfrogappsconfig.Module, targetCount int) string {
 	outLog := goclientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan", scanType.ToTextString())
-	if targetCount != 1 {
+	if targetCount != 1 && module != nil {
 		outLog += fmt.Sprintf(" on target '%s'...", module.SourceRoot)
 	} else {
 		outLog += "..."

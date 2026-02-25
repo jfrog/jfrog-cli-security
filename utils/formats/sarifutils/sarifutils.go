@@ -886,6 +886,18 @@ func GetInvocationWorkingDirectory(invocation *sarif.Invocation) string {
 	return ""
 }
 
+func CreateNewInvocation(success bool, target string, includeDirs ...string) *sarif.Invocation {
+	wd := sarif.NewArtifactLocation().WithURI(utils.ToURI(target))
+	if len(includeDirs) > 0 {
+		// Add properties to the working directory
+		properties := sarif.NewPropertyBag()
+		properties.Add("include", strings.Join(includeDirs, ","))
+		wd.Properties = properties
+	}
+	invocation := sarif.NewInvocation().WithExecutionSuccessful(success).WithWorkingDirectory(wd)
+	return invocation
+}
+
 func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count int) {
 	for _, run := range runs {
 		for _, rule := range run.Tool.Driver.Rules {
