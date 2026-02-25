@@ -252,6 +252,7 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 	log.Info(fmt.Sprintf("Launching: %s; command %s; arguments %v", amPath, cmd, args))
 	command := exec.Command(amPath, allArgs...)
 	command.Env = utils.ToCommandEnvVars(env)
+	setProcessGroupAttr(command)
 
 	stdin, pipeErr := command.StdinPipe()
 	if pipeErr != nil {
@@ -305,9 +306,7 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 		case waitErr = <-waitCh:
 		case <-time.After(time.Duration(timeout) * time.Second):
 			log.Warn("Timeout reached")
-			if command.Process != nil {
-				_ = command.Process.Kill()
-			}
+			killProcessTree(command.Process)
 			return nil
 		}
 	} else {
