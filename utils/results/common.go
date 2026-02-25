@@ -1396,6 +1396,7 @@ func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVe
 
 func ExtractComponentDirectComponentsInBOM(bomIndex *cdxutils.BOMIndex, component cyclonedx.Component, impactPaths [][]formats.ComponentRow) (directComponents []formats.ComponentRow) {
 	if relation := bomIndex.GetComponentRelation(component.BOMRef); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
+		// The component is a root or direct dependency, no parents to extract, return the component itself
 		directComponents = append(directComponents, formats.ComponentRow{
 			Id:        component.BOMRef,
 			Name:      component.Name,
@@ -1404,6 +1405,7 @@ func ExtractComponentDirectComponentsInBOM(bomIndex *cdxutils.BOMIndex, componen
 		})
 		return
 	}
+	// The component is a transitive dependency, go over path from start until we find the first direct dependency relation
 	for _, path := range impactPaths {
 		for _, pathComponent := range path {
 			if relation := bomIndex.GetComponentRelation(pathComponent.Id); relation == cdxutils.DirectRelation {

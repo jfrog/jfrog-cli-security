@@ -25,6 +25,12 @@ type FullBOM struct {
 	Sast []*sarif.Run `json:"sast,omitempty"`
 }
 
+type BOMIndex struct {
+	componentByRef map[string]*cyclonedx.Component
+	parentsByChild map[string][]*cyclonedx.Component
+	rootRefs       *datastructures.Set[string]
+}
+
 // Regular expression to match CWE IDs, which can be in the format "CWE-1234" or just "1234".
 var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
 
@@ -110,12 +116,6 @@ func GetJfrogRelationProperty(component *cyclonedx.Component) ComponentRelation 
 	return ComponentRelation(property.Value)
 }
 
-type BOMIndex struct {
-	componentByRef map[string]*cyclonedx.Component
-	parentsByChild map[string][]*cyclonedx.Component
-	rootRefs       *datastructures.Set[string]
-}
-
 func NewBOMIndex(bom *cyclonedx.BOM, skipDefaultRoot bool) *BOMIndex {
 	idx := &BOMIndex{
 		componentByRef: map[string]*cyclonedx.Component{},
@@ -180,34 +180,6 @@ func (idx *BOMIndex) GetComponentRelation(componentRef string) ComponentRelation
 		}
 	}
 	return TransitiveRelation
-}
-
-func SearchParents(componentRef string, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) []cyclonedx.Component {
-	if len(dependencies) == 0 || len(components) == 0 {
-		return []cyclonedx.Component{}
-	}
-	parents := []cyclonedx.Component{}
-	for _, dependency := range dependencies {
-		parents = append(parents, getDependencyComponentIfParent(componentRef, dependency, components)...)
-	}
-	return parents
-}
-
-func getDependencyComponentIfParent(componentRef string, dependency cyclonedx.Dependency, components []cyclonedx.Component) (parents []cyclonedx.Component) {
-	parents = []cyclonedx.Component{}
-	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-		// No dependencies, no parents
-		return
-	}
-	parentComponent := SearchComponentByRef(&components, dependency.Ref)
-	if parentComponent == nil {
-		return
-	}
-	if slices.Contains(*dependency.Dependencies, componentRef) {
-		// The component is a child of this dependency, the dependency is a parent
-		return append(parents, *parentComponent)
-	}
-	return
 }
 
 func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {

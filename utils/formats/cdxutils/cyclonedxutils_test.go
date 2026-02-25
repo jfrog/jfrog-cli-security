@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -577,73 +578,319 @@ func TestGetDirectDependencies(t *testing.T) {
 	}
 }
 
-func TestSearchParents(t *testing.T) {
+func TestBOMIndex(t *testing.T) {
 	tests := []struct {
-		name         string
-		ref          string
-		dependencies []cyclonedx.Dependency
-		components   []cyclonedx.Component
-		expected     []cyclonedx.Component
+		name     string
+		bom      *cyclonedx.BOM
+		skipRoot bool
+		expected *BOMIndex
 	}{
 		{
-			name: "Search No parent match",
-			ref:  "compX",
-			components: []cyclonedx.Component{
-				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			name:     "Nil BOM",
+			bom:      nil,
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{},
+				parentsByChild: map[string][]*cyclonedx.Component{},
+				rootRefs:       datastructures.MakeSet[string](),
 			},
-			dependencies: []cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
-				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
-			},
-			expected: []cyclonedx.Component{},
 		},
 		{
-			name: "Search No dependencies",
-			ref:  "comp2",
-			components: []cyclonedx.Component{
-				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			name:     "Empty BOM - no components or dependencies",
+			bom:      &cyclonedx.BOM{},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{},
+				parentsByChild: map[string][]*cyclonedx.Component{},
+				rootRefs:       datastructures.MakeSet[string](),
 			},
-			expected: []cyclonedx.Component{},
 		},
 		{
-			name:       "Search Root no parent",
-			ref:        "root",
-			components: []cyclonedx.Component{{BOMRef: "root"}},
-			dependencies: []cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+			name: "Components only - no dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Lib 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Lib 2"},
+				},
 			},
-			expected: []cyclonedx.Component{},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"lib1": {BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Lib 1"},
+					"lib2": {BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Lib 2"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{},
+				rootRefs:       datastructures.MakeSetFromElements("lib1", "lib2"),
+			},
 		},
 		{
-			name: "Single parent match",
-			ref:  "comp3",
-			components: []cyclonedx.Component{
-				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			name: "Simple dependency tree",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					{BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+					{BOMRef: "grandchild", Type: cyclonedx.ComponentTypeLibrary, Name: "Grandchild"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"child"}},
+					{Ref: "child", Dependencies: &[]string{"grandchild"}},
+				},
 			},
-			dependencies: []cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
-				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"root":       {BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					"child":      {BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+					"grandchild": {BOMRef: "grandchild", Type: cyclonedx.ComponentTypeLibrary, Name: "Grandchild"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"child":      {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+					"grandchild": {{BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("root"),
 			},
-			expected: []cyclonedx.Component{{BOMRef: "comp1"}},
 		},
 		{
-			name: "Multiple parent matches",
-			ref:  "comp1",
-			components: []cyclonedx.Component{
-				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			name: "Diamond dependency - shared child has multiple parents",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					{BOMRef: "a", Type: cyclonedx.ComponentTypeLibrary, Name: "A"},
+					{BOMRef: "b", Type: cyclonedx.ComponentTypeLibrary, Name: "B"},
+					{BOMRef: "shared", Type: cyclonedx.ComponentTypeLibrary, Name: "Shared"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"a", "b"}},
+					{Ref: "a", Dependencies: &[]string{"shared"}},
+					{Ref: "b", Dependencies: &[]string{"shared"}},
+				},
 			},
-			dependencies: []cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"comp1", "comp2", "comp3"}},
-				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
-				{Ref: "comp2", Dependencies: &[]string{"comp1"}},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"root":   {BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					"a":      {BOMRef: "a", Type: cyclonedx.ComponentTypeLibrary, Name: "A"},
+					"b":      {BOMRef: "b", Type: cyclonedx.ComponentTypeLibrary, Name: "B"},
+					"shared": {BOMRef: "shared", Type: cyclonedx.ComponentTypeLibrary, Name: "Shared"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"a":      {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+					"b":      {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+					"shared": {{BOMRef: "a", Type: cyclonedx.ComponentTypeLibrary, Name: "A"}, {BOMRef: "b", Type: cyclonedx.ComponentTypeLibrary, Name: "B"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("root"),
 			},
-			expected: []cyclonedx.Component{{BOMRef: "root"}, {BOMRef: "comp2"}},
+		},
+		{
+			name: "Dependency entry with nil Dependencies field - skipped",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					{BOMRef: "leaf", Type: cyclonedx.ComponentTypeLibrary, Name: "Leaf"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"leaf"}},
+					{Ref: "leaf"},
+				},
+			},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"root": {BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					"leaf": {BOMRef: "leaf", Type: cyclonedx.ComponentTypeLibrary, Name: "Leaf"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"leaf": {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("root"),
+			},
+		},
+		{
+			name: "Dependency ref not in components - parent lookup skipped",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					{BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"child"}},
+					{Ref: "nonexistent", Dependencies: &[]string{"child"}},
+				},
+			},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"root":  {BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					"child": {BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"child": {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("root"),
+			},
+		},
+		{
+			name: "Metadata component as root connector",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "project-sha",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "project-sha", Dependencies: &[]string{"root"}},
+					{Ref: "root", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			skipRoot: true,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"root": {BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+					"dep1": {BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"dep1": {{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("root"),
+			},
+		},
+		{
+			name: "skipRoot=false with generic root - root not expanded",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "actual1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual 1"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "pkg:generic/root", Dependencies: &[]string{"actual1"}},
+					{Ref: "actual1", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			skipRoot: false,
+			expected: &BOMIndex{
+				componentByRef: map[string]*cyclonedx.Component{
+					"pkg:generic/root": {BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					"actual1":          {BOMRef: "actual1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual 1"},
+					"dep1":             {BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+				},
+				parentsByChild: map[string][]*cyclonedx.Component{
+					"actual1": {{BOMRef: "pkg:generic/root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"}},
+					"dep1":    {{BOMRef: "actual1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual 1"}},
+				},
+				rootRefs: datastructures.MakeSetFromElements("pkg:generic/root"),
+			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := SearchParents(tt.ref, tt.components, tt.dependencies...)
-			assert.ElementsMatch(t, tt.expected, result, "Expected parent components do not match")
+			result := NewBOMIndex(tt.bom, tt.skipRoot)
+			assert.Equal(t, tt.expected, result, "Expected BOMIndex does not match")
+		})
+	}
+}
+
+func TestBOMIndex_GetComponent(t *testing.T) {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+			{BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{Ref: "root", Dependencies: &[]string{"child"}},
+		},
+	}
+	idx := NewBOMIndex(bom, true)
+
+	tests := []struct {
+		name     string
+		ref      string
+		expected *cyclonedx.Component
+	}{
+		{
+			name:     "Existing component",
+			ref:      "root",
+			expected: &cyclonedx.Component{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+		},
+		{
+			name:     "Another existing component",
+			ref:      "child",
+			expected: &cyclonedx.Component{BOMRef: "child", Type: cyclonedx.ComponentTypeLibrary, Name: "Child"},
+		},
+		{
+			name:     "Missing ref returns nil",
+			ref:      "nonexistent",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := idx.GetComponent(tt.ref)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBOMIndex_GetParents(t *testing.T) {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+			{BOMRef: "a", Type: cyclonedx.ComponentTypeLibrary, Name: "A"},
+			{BOMRef: "b", Type: cyclonedx.ComponentTypeLibrary, Name: "B"},
+			{BOMRef: "shared", Type: cyclonedx.ComponentTypeLibrary, Name: "Shared"},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{Ref: "root", Dependencies: &[]string{"a", "b"}},
+			{Ref: "a", Dependencies: &[]string{"shared"}},
+			{Ref: "b", Dependencies: &[]string{"shared"}},
+		},
+	}
+	idx := NewBOMIndex(bom, true)
+
+	tests := []struct {
+		name     string
+		ref      string
+		expected []*cyclonedx.Component
+	}{
+		{
+			name: "Single parent",
+			ref:  "a",
+			expected: []*cyclonedx.Component{
+				{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root"},
+			},
+		},
+		{
+			name: "Multiple parents - diamond",
+			ref:  "shared",
+			expected: []*cyclonedx.Component{
+				{BOMRef: "a", Type: cyclonedx.ComponentTypeLibrary, Name: "A"},
+				{BOMRef: "b", Type: cyclonedx.ComponentTypeLibrary, Name: "B"},
+			},
+		},
+		{
+			name:     "Root has no parents",
+			ref:      "root",
+			expected: nil,
+		},
+		{
+			name:     "Nonexistent ref returns nil",
+			ref:      "nonexistent",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := idx.GetParents(tt.ref)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
