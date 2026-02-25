@@ -22,6 +22,7 @@ import (
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+
 	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
@@ -703,6 +704,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
+	curationAuditCommand.SetInstallPackage(c.GetStringFlagValue(flags.InstallPackage))
 	return curationAuditCommand, nil
 }
 

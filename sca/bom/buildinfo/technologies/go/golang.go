@@ -55,10 +55,12 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil || len(dependenciesGraph) == 0 {
 		return
 	}
-	// Calculate go dependencies list
-	dependenciesList, err := getDependenciesList(currentDir, handleCurationGoError)
-	if err != nil {
-		return
+	var dependenciesList map[string]bool
+	if !params.IsInstallMode {
+		dependenciesList, err = getDependenciesList(currentDir, handleCurationGoError)
+		if err != nil {
+			return
+		}
 	}
 	// Get root module name
 	rootModuleName, err := goutils.GetModuleName(currentDir)
@@ -71,7 +73,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		Nodes: []*xrayUtils.GraphNode{},
 	}
 	uniqueDepsSet := datastructures.MakeSet[string]()
-	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
+	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet, params.IsInstallMode)
 
 	// In case of curation command, go version is not relevant as it can't be resolved from go repo
 	if !params.IsCurationCmd {
@@ -106,7 +108,7 @@ func handleCurationGoError(err error) (bool, error) {
 	return false, nil
 }
 
-func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string]) {
+func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string], isInstallMode bool) {
 	if currNode.NodeHasLoop() {
 		return
 	}
@@ -114,7 +116,11 @@ func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph m
 	currDepChildren := dependenciesGraph[strings.TrimPrefix(currNode.Id, goPackageTypeIdentifier)]
 	// Recursively create & append all node's dependencies.
 	for _, childName := range currDepChildren {
-		if !dependenciesList[childName] {
+		if isInstallMode {
+			if isGoToolchainDep(childName) {
+				continue
+			}
+		} else if !dependenciesList[childName] {
 			// 'go list all' is more accurate than 'go graph' so we filter out deps that don't exist in go list
 			continue
 		}
@@ -124,7 +130,7 @@ func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph m
 			Parent: currNode,
 		}
 		currNode.Nodes = append(currNode.Nodes, childNode)
-		populateGoDependencyTree(childNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
+		populateGoDependencyTree(childNode, dependenciesGraph, dependenciesList, uniqueDepsSet, isInstallMode)
 	}
 }
 
@@ -154,4 +160,8 @@ func getDependenciesGraph(projectDir string) (map[string][]string, error) {
 		return nil, errorutils.CheckError(err)
 	}
 	return deps, nil
+}
+
+func isGoToolchainDep(dep string) bool {
+	return strings.HasPrefix(dep, "toolchain@") || strings.HasPrefix(dep, "go@")
 }

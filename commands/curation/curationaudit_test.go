@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -545,6 +546,9 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
+	if tt.installPackage != "" {
+		curationCmd.SetInstallPackage(tt.installPackage)
+	}
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -600,6 +604,7 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
+	installPackage           string
 }
 
 func (tc testCase) getPathToTests() string {
@@ -1633,6 +1638,122 @@ func TestSendWaiverRequests(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, requestStatuses)
 			}
+		})
+	}
+}
+
+func TestFilterTreeForInstallPackage(t *testing.T) {
+	tests := []struct {
+		name              string
+		installPkgName    string
+		tech              techutils.Technology
+		tree              *xrayUtils.GraphNode
+		flatNodes         []*xrayUtils.GraphNode
+		expectedChildren  []string
+		expectedFlatCount int
+	}{
+		{
+			name:           "npm - keep install package and transitives, drop others",
+			installPkgName: "express",
+			tech:           techutils.Npm,
+			tree: &xrayUtils.GraphNode{
+				Id: "npm://my-project:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "npm://react:18.0.0"},
+					{
+						Id: "npm://express:4.18.2",
+						Nodes: []*xrayUtils.GraphNode{
+							{
+								Id: "npm://body-parser:1.20.1",
+								Nodes: []*xrayUtils.GraphNode{
+									{Id: "npm://raw-body:2.5.1"},
+								},
+							},
+							{Id: "npm://cookie:0.5.0"},
+						},
+					},
+					{Id: "npm://lodash:4.17.21"},
+				},
+			},
+			flatNodes: []*xrayUtils.GraphNode{
+				{Id: "npm://react:18.0.0"},
+				{Id: "npm://express:4.18.2"},
+				{Id: "npm://body-parser:1.20.1"},
+				{Id: "npm://raw-body:2.5.1"},
+				{Id: "npm://cookie:0.5.0"},
+				{Id: "npm://lodash:4.17.21"},
+			},
+			expectedChildren:  []string{"npm://express:4.18.2"},
+			expectedFlatCount: 4,
+		},
+		{
+			name:           "go - keep install package and deep transitives",
+			installPkgName: "rsc.io/quote",
+			tech:           techutils.Go,
+			tree: &xrayUtils.GraphNode{
+				Id: "go://my-project",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "go://github.com/existing/dep:v1.0.0"},
+					{
+						Id: "go://rsc.io/quote:v1.5.2",
+						Nodes: []*xrayUtils.GraphNode{
+							{
+								Id: "go://rsc.io/sampler:v1.3.0",
+								Nodes: []*xrayUtils.GraphNode{
+									{Id: "go://golang.org/x/text:v0.0.0-20170915032832-14c0d48ead0c"},
+								},
+							},
+						},
+					},
+				},
+			},
+			flatNodes: []*xrayUtils.GraphNode{
+				{Id: "go://github.com/existing/dep:v1.0.0"},
+				{Id: "go://rsc.io/quote:v1.5.2"},
+				{Id: "go://rsc.io/sampler:v1.3.0"},
+				{Id: "go://golang.org/x/text:v0.0.0-20170915032832-14c0d48ead0c"},
+			},
+			expectedChildren:  []string{"go://rsc.io/quote:v1.5.2"},
+			expectedFlatCount: 3,
+		},
+		{
+			name:           "npm - no match leaves tree unchanged",
+			installPkgName: "nonexistent",
+			tech:           techutils.Npm,
+			tree: &xrayUtils.GraphNode{
+				Id: "npm://my-project:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "npm://react:18.0.0"},
+					{Id: "npm://lodash:4.17.21"},
+				},
+			},
+			flatNodes: []*xrayUtils.GraphNode{
+				{Id: "npm://react:18.0.0"},
+				{Id: "npm://lodash:4.17.21"},
+			},
+			expectedChildren:  []string{"npm://react:18.0.0", "npm://lodash:4.17.21"},
+			expectedFlatCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			depTreeResult := &buildinfo.DependencyTreeResult{
+				FullDepTrees: []*xrayUtils.GraphNode{tt.tree},
+				FlatTree:     &xrayUtils.GraphNode{Nodes: tt.flatNodes},
+			}
+
+			filterTreeForInstallPackage(depTreeResult, tt.tech, tt.installPkgName)
+
+			// Verify the filtered direct children
+			var childIds []string
+			for _, child := range depTreeResult.FullDepTrees[0].Nodes {
+				childIds = append(childIds, child.Id)
+			}
+			assert.Equal(t, tt.expectedChildren, childIds)
+
+			// Verify the flat tree only contains reachable nodes
+			assert.Equal(t, tt.expectedFlatCount, len(depTreeResult.FlatTree.Nodes))
 		})
 	}
 }

@@ -157,6 +157,7 @@ const (
 	DockerImageName       = "image"
 	SolutionPath          = "solution-path"
 	IncludeCachedPackages = "include-cached-packages"
+	InstallPackage        = "install"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -215,7 +216,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, InstallPackage,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -333,6 +334,7 @@ var flagsMap = map[string]components.Flag{
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
+	InstallPackage:                components.NewStringFlag(InstallPackage, "Run curation audit on a specific package and its transitive dependencies. Format: <packageName>@<packageVersion> (e.g. express@4.18.2 for npm, github.com/pkg/errors@v0.9.1 for Go)."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
