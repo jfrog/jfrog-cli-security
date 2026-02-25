@@ -458,7 +458,7 @@ func TestGetComponentRelation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetComponentRelation(tt.bom, tt.componentRef, true)
+			result := NewBOMIndex(tt.bom, true).GetComponentRelation(tt.componentRef)
 			assert.Equal(t, tt.expected, result, "Expected component relation does not match")
 		})
 	}

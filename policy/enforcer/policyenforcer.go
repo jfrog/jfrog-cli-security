@@ -237,12 +237,9 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 			if strings.HasPrefix(component.BOMRef, ref) {
 				// Found the relevant component
 				impactedComponent = &component
-				dependencies := []cyclonedx.Dependency{}
-				if target.ScaResults.Sbom.Dependencies != nil {
-					dependencies = *target.ScaResults.Sbom.Dependencies
-				}
-				impactPaths = results.BuildImpactPath(component, *target.ScaResults.Sbom.Components, dependencies...)
-				directComponents = results.ExtractComponentDirectComponentsInBOM(target.ScaResults.Sbom, component, impactPaths)
+				bomIndex := cdxutils.NewBOMIndex(target.ScaResults.Sbom, true)
+				impactPaths = results.BuildImpactPath(component, bomIndex)
+				directComponents = results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths)
 				break
 			}
 		}

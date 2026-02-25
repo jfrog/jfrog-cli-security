@@ -221,11 +221,12 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 	if handler == nil || bom == nil || bom.Components == nil {
 		return
 	}
+	bomIndex := cdxutils.NewBOMIndex(bom, true)
 	for _, component := range *bom.Components {
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.GetComponentRelation(bom, component.BOMRef, true),
+			bomIndex.GetComponentRelation(component.BOMRef),
 		); err != nil {
 			return err
 		}
@@ -290,11 +291,11 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 	return
 }
 
-func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
+func BuildImpactPath(affectedComponent cyclonedx.Component, bomIndex *cdxutils.BOMIndex) (impactPathsRows [][]formats.ComponentRow) {
 	impactPathsRows = [][]formats.ComponentRow{}
 	componentAppearances := map[string]int8{}
-	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
-		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
+	for _, parent := range bomIndex.GetParents(affectedComponent.BOMRef) {
+		impactedPath := buildImpactPathForComponent(*parent, componentAppearances, bomIndex)
 		// Add the affected component at the end of the impact path
 		impactedPath = append(impactedPath, formats.ComponentRow{
 			Id:        affectedComponent.BOMRef,
@@ -308,9 +309,8 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclone
 	return
 }
 
-func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, bomIndex *cdxutils.BOMIndex) (impactPath []formats.ComponentRow) {
 	componentAppearances[component.BOMRef]++
-	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
 		{
 			Id:        component.BOMRef,
@@ -319,14 +319,11 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 			Evidences: CdxEvidencesToLocations(component),
 		},
 	}
-	// Add the parent components to the impact path
-	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+	for _, parent := range bomIndex.GetParents(component.BOMRef) {
 		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
-			// If the parent is the same as the affected component, we skip it (cyclic dependencies).
-			// If the component has already appeared too many times, skip it to avoid stack overflow.
 			continue
 		}
-		parentImpactPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
+		parentImpactPath := buildImpactPathForComponent(*parent, componentAppearances, bomIndex)
 		if len(parentImpactPath) > 0 {
 			impactPath = append(parentImpactPath, impactPath...)
 		}
@@ -753,13 +750,14 @@ func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indire
 	}
 	directCvesSet := datastructures.MakeSet[string]()
 	indirectCvesSet := datastructures.MakeSet[string]()
+	bomIndex := cdxutils.NewBOMIndex(bom, true)
 	for _, vulnerability := range *bom.Vulnerabilities {
 		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
 			// No affected components, skip this vulnerability
 			continue
 		}
 		for _, affectedComponent := range *vulnerability.Affects {
-			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref, true)
+			relation := bomIndex.GetComponentRelation(affectedComponent.Ref)
 			if relation == cdxutils.TransitiveRelation {
 				indirectCvesSet.Add(vulnerability.BOMRef)
 			} else {
@@ -1396,9 +1394,8 @@ func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVe
 	return
 }
 
-func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclonedx.Component, impactPaths [][]formats.ComponentRow) (directComponents []formats.ComponentRow) {
-	if relation := cdxutils.GetComponentRelation(bom, component.BOMRef, true); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
-		// The component is a root or direct dependency, no parents to extract, return the component itself
+func ExtractComponentDirectComponentsInBOM(bomIndex *cdxutils.BOMIndex, component cyclonedx.Component, impactPaths [][]formats.ComponentRow) (directComponents []formats.ComponentRow) {
+	if relation := bomIndex.GetComponentRelation(component.BOMRef); relation == cdxutils.RootRelation || relation == cdxutils.DirectRelation {
 		directComponents = append(directComponents, formats.ComponentRow{
 			Id:        component.BOMRef,
 			Name:      component.Name,
@@ -1407,11 +1404,9 @@ func ExtractComponentDirectComponentsInBOM(bom *cyclonedx.BOM, component cyclone
 		})
 		return
 	}
-	// The component is a transitive dependency, go over path from start until we find the first direct dependency relation
 	for _, path := range impactPaths {
 		for _, pathComponent := range path {
-			if relation := cdxutils.GetComponentRelation(bom, pathComponent.Id, true); relation == cdxutils.DirectRelation {
-				// Found the first direct dependency in the path, add it to the direct components and stop processing this path
+			if relation := bomIndex.GetComponentRelation(pathComponent.Id); relation == cdxutils.DirectRelation {
 				directComponents = append(directComponents, pathComponent)
 				break
 			}

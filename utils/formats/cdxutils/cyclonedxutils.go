@@ -110,47 +110,75 @@ func GetJfrogRelationProperty(component *cyclonedx.Component) ComponentRelation 
 	return ComponentRelation(property.Value)
 }
 
-func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRoot bool) ComponentRelation {
-	if bom == nil || bom.Components == nil {
-		return UnknownRelation
+type BOMIndex struct {
+	componentByRef map[string]*cyclonedx.Component
+	parentsByChild map[string][]*cyclonedx.Component
+	rootRefs       *datastructures.Set[string]
+}
+
+func NewBOMIndex(bom *cyclonedx.BOM, skipDefaultRoot bool) *BOMIndex {
+	idx := &BOMIndex{
+		componentByRef: map[string]*cyclonedx.Component{},
+		parentsByChild: map[string][]*cyclonedx.Component{},
+		rootRefs:       datastructures.MakeSet[string](),
 	}
-	component := SearchComponentByRef(bom.Components, componentRef)
-	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
-		// The component is not found in the BOM components or not library, return UnknownRelation
-		return UnknownRelation
+	if bom == nil {
+		return idx
 	}
-	// Check if the component has a JFrog specific relation property
-	if relation := GetJfrogRelationProperty(component); relation != UnknownRelation {
-		return relation
+	if bom.Components != nil {
+		for i := range *bom.Components {
+			comp := &(*bom.Components)[i]
+			idx.componentByRef[comp.BOMRef] = comp
+		}
 	}
-	dependencies := []cyclonedx.Dependency{}
 	if bom.Dependencies != nil {
-		dependencies = *bom.Dependencies
-	}
-	parents := SearchParents(componentRef, *bom.Components, dependencies...)
-	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(bom, skipDefaultRoot) {
-		if root.Ref == componentRef {
-			// The component is a root
-			return RootRelation
-		}
-		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
-			// No dependencies, continue to the next root
-			continue
-		}
-		for _, parentRef := range parents {
-			if parentRef.BOMRef == root.Ref {
-				// At least one of parents is a component that is a child of this root, hence it is a direct dependency
-				return DirectRelation
+		for _, dep := range *bom.Dependencies {
+			if dep.Dependencies == nil {
+				continue
+			}
+			parent := idx.componentByRef[dep.Ref]
+			if parent == nil {
+				continue
+			}
+			for _, childRef := range *dep.Dependencies {
+				idx.parentsByChild[childRef] = append(idx.parentsByChild[childRef], parent)
 			}
 		}
 	}
-	// If we reach here, it means the component is not a root or not a child of a root component
+	for _, root := range GetRootDependenciesEntries(bom, skipDefaultRoot) {
+		idx.rootRefs.Add(root.Ref)
+	}
+	return idx
+}
+
+func (idx *BOMIndex) GetComponent(ref string) *cyclonedx.Component {
+	return idx.componentByRef[ref]
+}
+
+func (idx *BOMIndex) GetParents(ref string) []*cyclonedx.Component {
+	return idx.parentsByChild[ref]
+}
+
+func (idx *BOMIndex) GetComponentRelation(componentRef string) ComponentRelation {
+	component := idx.componentByRef[componentRef]
+	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
+		return UnknownRelation
+	}
+	if relation := GetJfrogRelationProperty(component); relation != UnknownRelation {
+		return relation
+	}
+	if idx.rootRefs.Exists(componentRef) {
+		return RootRelation
+	}
+	parents := idx.parentsByChild[componentRef]
 	if len(parents) == 0 {
-		// No parents found, the component is a direct dependency
 		return DirectRelation
 	}
-	// Parents found, but not a root or direct dependency, hence it is a transitive dependency
+	for _, parent := range parents {
+		if idx.rootRefs.Exists(parent.BOMRef) {
+			return DirectRelation
+		}
+	}
 	return TransitiveRelation
 }
 
@@ -352,8 +380,9 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 		return &bom
 	}
 	filteredSbom = &bom
+	bomIndex := NewBOMIndex(&bom, false)
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
+		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL); matchedBomComp == nil || bomIndex.GetComponentRelation(matchedBomComp.BOMRef) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
