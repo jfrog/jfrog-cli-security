@@ -27,7 +27,7 @@ func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars map[st
 }
 
 func (mcpCmd *McpCommand) Run() (err error) {
-	am_env, err := jas.GetAnalyzerManagerEnvVariables(mcpCmd.ServerDetails)
+	amEnv, err := jas.GetAnalyzerManagerEnvVariables(mcpCmd.ServerDetails)
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ func (mcpCmd *McpCommand) Run() (err error) {
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
 	}
-	return mcpCmd.runWithTimeout(0, cmd, am_env)
+	return mcpCmd.runWithTimeout(0, cmd, amEnv)
 }
 
 func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {

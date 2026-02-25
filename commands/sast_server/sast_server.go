@@ -21,12 +21,12 @@ type SastServerCommand struct {
 	ErrorPipe     io.Writer
 }
 
-func (sastCmd *SastServerCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
+func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars map[string]string) (err error) {
 	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
 }
 
 func (sastCmd *SastServerCommand) Run() (err error) {
-	am_env, err := jas.GetAnalyzerManagerEnvVariables(sastCmd.ServerDetails)
+	amEnv, err := jas.GetAnalyzerManagerEnvVariables(sastCmd.ServerDetails)
 	if err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func (sastCmd *SastServerCommand) Run() (err error) {
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
 	}
-	return sastCmd.runWithTimeout(0, cmd, am_env)
+	return sastCmd.runWithTimeout(0, amEnv)
 }
 
 func isEntitledForSastServer(serverDetails *config.ServerDetails) (entitled bool, err error) {

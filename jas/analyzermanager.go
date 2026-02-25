@@ -305,6 +305,9 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 		case waitErr = <-waitCh:
 		case <-time.After(time.Duration(timeout) * time.Second):
 			log.Warn("Timeout reached")
+			if command.Process != nil {
+				_ = command.Process.Kill()
+			}
 			return nil
 		}
 	} else {
@@ -320,9 +323,8 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 
 // RunAnalyzerManagerWithPipesAndDownload downloads the analyzer manager if needed and runs the command with pipes.
 func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
-	err := DownloadAnalyzerManagerIfNeeded(0)
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to download Analyzer Manager: %v", err))
+	if err := DownloadAnalyzerManagerIfNeeded(0); err != nil {
+		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
 	}
 	return RunAnalyzerManagerWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)
 }

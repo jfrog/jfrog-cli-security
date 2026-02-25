@@ -37,26 +37,26 @@ func TestRunSastServerHappyFlow(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
-	scanner, init_error := jas.NewJasScanner(serverDetails)
-	assert.NoError(t, init_error)
+	scanner, initError := jas.NewJasScanner(serverDetails)
+	assert.NoError(t, initError)
 	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
-	input_buffer := *bytes.NewBufferString(query)
-	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
+	inputBuffer := *bytes.NewBufferString(query)
+	outputBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	errorBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	amEnv, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 
 	port, err := getFreePort()
 	require.NoError(t, err)
-	sast_cmd := SastServerCommand{
+	sastCmd := SastServerCommand{
 		ServerDetails: serverDetails,
 		Arguments:     []string{"--port", strconv.Itoa(port)},
-		InputPipe:     &input_buffer,
-		OutputPipe:    &output_buffer,
-		ErrorPipe:     &error_buffer,
+		InputPipe:     &inputBuffer,
+		OutputPipe:    &outputBuffer,
+		ErrorPipe:     &errorBuffer,
 	}
 
-	err = sast_cmd.runWithTimeout(5, "sast-server", am_env)
+	err = sastCmd.runWithTimeout(5, amEnv)
 	require.NoError(t, err)
-	require.Contains(t, error_buffer.String(), "serving at port")
-	require.Contains(t, output_buffer.String(), "")
+	require.Contains(t, errorBuffer.String(), "serving at port")
+	require.NotEmpty(t, outputBuffer.String())
 }
