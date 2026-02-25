@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
@@ -18,6 +19,7 @@ import (
 type XrayLibBomGenerator struct {
 	binaryPath     string
 	ignorePatterns []string
+	specificTechs  []techutils.Technology
 	totalTargets   int
 }
 
@@ -29,6 +31,17 @@ func WithTotalTargets(totalTargets int) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.totalTargets = totalTargets
+		}
+	}
+}
+
+func WithSpecificTechnologies(technologies []string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.specificTechs = make([]techutils.Technology, 0, len(technologies))
+			for _, tech := range technologies {
+				sbg.specificTechs = append(sbg.specificTechs, techutils.Technology(tech))
+			}
 		}
 	}
 }
@@ -116,6 +129,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
+		Ecosystems:     sbg.specificTechs,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
