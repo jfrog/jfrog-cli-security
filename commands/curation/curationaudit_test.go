@@ -547,7 +547,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
 	if tt.installPackage != "" {
-		curationCmd.SetInstallPackage(tt.installPackage)
+		curationCmd.SetAuditPackage(tt.installPackage)
 	}
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
@@ -1642,7 +1642,7 @@ func TestSendWaiverRequests(t *testing.T) {
 	}
 }
 
-func TestFilterTreeForInstallPackage(t *testing.T) {
+func TestFilterAuditPackageTree(t *testing.T) {
 	tests := []struct {
 		name              string
 		installPkgName    string
@@ -1743,7 +1743,7 @@ func TestFilterTreeForInstallPackage(t *testing.T) {
 				FlatTree:     &xrayUtils.GraphNode{Nodes: tt.flatNodes},
 			}
 
-			filterTreeForInstallPackage(depTreeResult, tt.tech, tt.installPkgName)
+			filterAuditPackageTree(depTreeResult, tt.tech, tt.installPkgName)
 
 			// Verify the filtered direct children
 			var childIds []string

@@ -56,11 +56,11 @@ func (ca *CurationAuditCommand) runInstallMode() (err error) {
 		return err
 	}
 	tech := handler.Technology()
-	pkg, parseErr := handler.ParsePackageSpec(ca.installPackage)
+	pkg, parseErr := handler.ParsePackageSpec(ca.auditPackage)
 	if parseErr != nil {
 		return parseErr
 	}
-	ca.installPackage = pkg.Name
+	ca.auditPackage = pkg.Name
 	log.Info(fmt.Sprintf("Running curation audit for %s package %s@%s", tech.ToFormal(), pkg.Name, pkg.Version))
 
 	if err = ca.SetRepo(tech); err != nil {
@@ -143,7 +143,7 @@ func detectInstallHandler() (PackageInstallHandler, error) {
 	}
 	supportedTechs := getSupportedInstallTechnologies()
 	return nil, errorutils.CheckErrorf(
-		"could not detect a supported technology in the current directory for --install. Currently supported: %s",
+		"could not detect a supported technology in the current directory for --package flag. Currently supported: %s",
 		strings.Join(supportedTechs, ", "))
 }
 

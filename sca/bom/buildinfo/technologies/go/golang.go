@@ -56,7 +56,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 	var dependenciesList map[string]bool
-	if !params.IsInstallMode {
+	if !params.IsPackageMode {
 		dependenciesList, err = getDependenciesList(currentDir, handleCurationGoError)
 		if err != nil {
 			return
@@ -73,7 +73,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		Nodes: []*xrayUtils.GraphNode{},
 	}
 	uniqueDepsSet := datastructures.MakeSet[string]()
-	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet, params.IsInstallMode)
+	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet, params.IsPackageMode)
 
 	// In case of curation command, go version is not relevant as it can't be resolved from go repo
 	if !params.IsCurationCmd {

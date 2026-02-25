@@ -224,7 +224,7 @@ type CurationAuditCommand struct {
 	parallelRequests      int
 	dockerImageName       string
 	includeCachedPackages bool
-	installPackage        string
+	auditPackage          string
 	audit.AuditParamsInterface
 }
 
@@ -275,13 +275,13 @@ func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages b
 	return ca
 }
 
-func (ca *CurationAuditCommand) SetInstallPackage(spec string) *CurationAuditCommand {
-	ca.installPackage = spec
+func (ca *CurationAuditCommand) SetAuditPackage(spec string) *CurationAuditCommand {
+	ca.auditPackage = spec
 	return ca
 }
 
 func (ca *CurationAuditCommand) Run() (err error) {
-	if ca.installPackage != "" {
+	if ca.auditPackage != "" {
 		return ca.runInstallMode()
 	}
 	rootDir, err := os.Getwd()
@@ -452,7 +452,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
 		IsCurationCmd: true,
-		IsInstallMode: ca.installPackage != "",
+		IsPackageMode: ca.auditPackage != "",
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.UseWrapper(),
@@ -485,8 +485,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if len(depTreeResult.FullDepTrees) == 0 {
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
 	}
-	if params.IsInstallMode && ca.installPackage != "" {
-		filterTreeForInstallPackage(&depTreeResult, tech, ca.installPackage)
+	if params.IsPackageMode && ca.auditPackage != "" {
+		filterAuditPackageTree(&depTreeResult, tech, ca.auditPackage)
 	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
@@ -555,10 +555,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	return err
 }
 
-// filterTreeForInstallPackage modifies depTreeResult in place to keep only the
-// install package and its transitive dependencies. This ensures that in --install mode
+// filterAuditPackageTree modifies depTreeResult in place to keep only the
+// requested package and its transitive dependencies. This ensures that in --package mode
 // we only audit the new package, not the customer's existing dependencies.
-func filterTreeForInstallPackage(depTreeResult *buildinfo.DependencyTreeResult, tech techutils.Technology, installPkgName string) {
+func filterAuditPackageTree(depTreeResult *buildinfo.DependencyTreeResult, tech techutils.Technology, installPkgName string) {
 	prefix := tech.GetXrayPackageTypeId() + installPkgName + ":"
 	for _, tree := range depTreeResult.FullDepTrees {
 		for _, child := range tree.Nodes {
