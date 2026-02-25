@@ -7,6 +7,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -93,27 +94,21 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(sbom *cyclonedx.BOM)
 	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
 		return
 	}
-	dependencies := []cyclonedx.Dependency{}
-	if sbom.Dependencies != nil {
-		dependencies = append(dependencies, *sbom.Dependencies...)
-	}
-	// Iterate through the components and collect licenses
+	bomIndex := cdxutils.NewBOMIndex(sbom, true)
 	for _, component := range *sbom.Components {
 		if component.Licenses == nil || len(*component.Licenses) == 0 {
-			// No licenses found for this component, continue to the next one
 			continue
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 		for _, license := range *component.Licenses {
 			if license.License == nil || (license.License.Name == "" && license.License.ID == "") {
-				// No license name found, continue to the next one
 				continue
 			}
 			name := license.License.Name
 			if name == "" {
 				name = license.License.ID
 			}
-			impactPaths := results.BuildImpactPath(component, *sbom.Components, dependencies...)
+			impactPaths := results.BuildImpactPath(component, bomIndex)
 			sjc.current.Licenses = append(sjc.current.Licenses, formats.LicenseRow{
 				LicenseKey:  license.License.ID,
 				LicenseName: name,
@@ -121,7 +116,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(sbom *cyclonedx.BOM)
 					ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
 					ImpactedDependencyVersion: compVersion,
 					ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
-					Components:                results.ExtractComponentDirectComponentsInBOM(sbom, component, impactPaths),
+					Components:                results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths),
 				},
 				ImpactPaths: impactPaths,
 			})
@@ -134,13 +129,10 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM,
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
+	bomIndex := cdxutils.NewBOMIndex(enrichedSbom, true)
 	return results.ForEachScaBomVulnerability(sjc.currentTarget, enrichedSbom, sjc.entitledForJas, results.CollectRuns(applicableScan...),
 		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersions *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-			dependencies := []cyclonedx.Dependency{}
-			if enrichedSbom.Dependencies != nil {
-				dependencies = append(dependencies, *enrichedSbom.Dependencies...)
-			}
-			impactPaths := results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...)
+			impactPaths := results.BuildImpactPath(component, bomIndex)
 			// Convert the CycloneDX vulnerability to a simple JSON vulnerability row
 			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, sjc.createVulnerabilityOrViolationRowFromCdx(
 				vulnerability.ID,
@@ -149,7 +141,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM,
 				applicability,
 				vulnerability,
 				component,
-				results.ExtractComponentDirectComponentsInBOM(enrichedSbom, component, impactPaths),
+				results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths),
 				impactPaths,
 				fixedVersions,
 				// TODO: implement JfrogResearchInformation conversion
