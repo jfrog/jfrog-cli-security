@@ -1,4 +1,4 @@
-package source_mcp
+package sast_server
 
 import (
 	"fmt"
@@ -10,11 +10,10 @@ import (
 )
 
 const (
-	cmd            = "mcp-sast"
-	mcpEntitlement = "local_sast_mcp"
+	cmd = "sast-server"
 )
 
-type McpCommand struct {
+type SastServerCommand struct {
 	ServerDetails *config.ServerDetails
 	Arguments     []string
 	InputPipe     io.Reader
@@ -22,24 +21,24 @@ type McpCommand struct {
 	ErrorPipe     io.Writer
 }
 
-func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
-	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
+func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars map[string]string) (err error) {
+	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
 }
 
-func (mcpCmd *McpCommand) Run() (err error) {
-	amEnv, err := jas.GetAnalyzerManagerEnvVariables(mcpCmd.ServerDetails)
+func (sastCmd *SastServerCommand) Run() (err error) {
+	amEnv, err := jas.GetAnalyzerManagerEnvVariables(sastCmd.ServerDetails)
 	if err != nil {
 		return err
 	}
-	if entitled, err := isEntitledForSourceMCP(mcpCmd.ServerDetails); err != nil {
+	if entitled, err := isEntitledForSastServer(sastCmd.ServerDetails); err != nil {
 		return err
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
 	}
-	return mcpCmd.runWithTimeout(0, cmd, amEnv)
+	return sastCmd.runWithTimeout(0, amEnv)
 }
 
-func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
+func isEntitledForSastServer(serverDetails *config.ServerDetails) (entitled bool, err error) {
 	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return
@@ -48,5 +47,5 @@ func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool,
 	if err != nil {
 		return
 	}
-	return xray.IsEntitled(xrayManager, xrayVersion, mcpEntitlement)
+	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }

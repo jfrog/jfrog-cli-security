@@ -27,6 +27,7 @@ const (
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
 	MaliciousScan        = "malicious-scan"
+	SastServer           = "sast-server"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -70,6 +71,7 @@ const (
 
 	// Sast related flags
 	AddSastRules = "add-sast-rules"
+	Port         = "port"
 )
 
 const (
@@ -221,6 +223,9 @@ var commandFlags = map[string][]string{
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
 	},
+	SastServer: {
+		Port,
+	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
 		Url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
@@ -346,6 +351,7 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
 	// Docker flags
 	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
