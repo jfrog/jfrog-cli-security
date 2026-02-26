@@ -278,7 +278,7 @@ var flagsMap = map[string]components.Flag{
 	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
-		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
+		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package. Note: cycloneDx format does support information about violations, only vulnerabilities are currently supported",
 		components.WithStrDefaultValue("table"),
 	),
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
