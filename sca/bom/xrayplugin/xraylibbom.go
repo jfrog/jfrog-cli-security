@@ -103,6 +103,9 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		startLog += fmt.Sprintf(" (plugin logs: %s)", logPath)
 	}
 	log.Info(startLog + "...")
+	if len(envVars) > 0 {
+		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
+	}
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
 		return nil, fmt.Errorf("failed to execute Xray-Lib command: %w", err)
