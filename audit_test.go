@@ -1177,14 +1177,14 @@ func TestAuditNewScaSnippetDetection(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
 		validations.ValidationParams{ExactResultsMatch: true},
 	)
-	// With snippet detection. should find 4 licenses violations
+	// With snippet detection. should find 5 licenses violations
 	params.WithSnippetDetection = true
 	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
 		validations.ValidationParams{
 			ExactResultsMatch: true,
-			Total:             &validations.TotalCount{Violations: 4},
+			Total:             &validations.TotalCount{Violations: 5},
 			Violations: &validations.ViolationCount{
-				ValidateType: &validations.ScaViolationCount{License: 4},
+				ValidateType: &validations.ScaViolationCount{License: 5},
 			},
 		},
 	)
