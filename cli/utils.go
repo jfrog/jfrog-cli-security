@@ -98,9 +98,8 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
 	}
 
-	vulnRequested := c.GetBoolFlagValue(flags.Vuln)
 	if contextFlag > 0 && format == outputFormat.CycloneDx {
-		if vulnRequested {
+		if c.GetBoolFlagValue(flags.Vuln) {
 			// If Vuln flag id requested we indicate that ONLY vulnerabilities will be displayed in the output cdx, even if violations exist.
 			log.Warn("The CycloneDX format does not support security violations. Since the --vuln flag is present, the generated report will contain only vulnerabilities. Any existing violations induced from the provided context (--project, --watches, or --repoPath) will be excluded, resulting in a partial report if violations exist.")
 			return nil
