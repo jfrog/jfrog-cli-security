@@ -37,11 +37,13 @@ type GitAuditParams struct {
 	multiScanId         string
 	startTime           time.Time
 	// Dynamic logic params
-	bomGenerator       bom.SbomGenerator
-	scaScanStrategy    scan.SbomScanStrategy
-	violationGenerator policy.PolicyHandler
-	uploadResults      bool
-	rtResultRepository string
+	customAnalyzerManagerBinaryPath string
+	customBomGenBinaryPath          string
+	bomGenerator                    bom.SbomGenerator
+	scaScanStrategy                 scan.SbomScanStrategy
+	violationGenerator              policy.PolicyHandler
+	uploadResults                   bool
+	rtResultRepository              string
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -79,6 +81,11 @@ func (gap *GitAuditParams) SetIncludeLicenses(includeLicenses bool) *GitAuditPar
 
 func (gap *GitAuditParams) SetIncludeVulnerabilities(includeVulnerabilities bool) *GitAuditParams {
 	gap.resultsContext.IncludeVulnerabilities = includeVulnerabilities
+	return gap
+}
+
+func (gap *GitAuditParams) SetIncludeSnippetDetection(includeSnippetDetection bool) *GitAuditParams {
+	gap.resultsContext.IncludeSnippetDetection = includeSnippetDetection
 	return gap
 }
 
@@ -172,4 +179,22 @@ func (gap *GitAuditParams) RtResultRepository() string {
 func (gap *GitAuditParams) SetIncludeSbom(includeSbom bool) *GitAuditParams {
 	gap.includeSbom = includeSbom
 	return gap
+}
+
+func (gap *GitAuditParams) SetCustomAnalyzerManagerBinaryPath(customAnalyzerManagerBinaryPath string) *GitAuditParams {
+	gap.customAnalyzerManagerBinaryPath = customAnalyzerManagerBinaryPath
+	return gap
+}
+
+func (gap *GitAuditParams) CustomAnalyzerManagerBinaryPath() string {
+	return gap.customAnalyzerManagerBinaryPath
+}
+
+func (gap *GitAuditParams) SetCustomBomGenBinaryPath(customBomGenBinaryPath string) *GitAuditParams {
+	gap.customBomGenBinaryPath = customBomGenBinaryPath
+	return gap
+}
+
+func (gap *GitAuditParams) CustomBomGenBinaryPath() string {
+	return gap.customBomGenBinaryPath
 }

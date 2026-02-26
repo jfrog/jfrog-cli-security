@@ -281,13 +281,13 @@ func CreateTestIgnoreRules(t *testing.T, description string, filters xrayApi.Ign
 	}
 }
 
-func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayApi.PolicyRule) (string, func()) {
+func CreateXrayPolicy(t *testing.T, policyName string, policyType xrayApi.PolicyType, rules ...xrayApi.PolicyRule) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default security policy.
 	policyParams := xrayApi.PolicyParams{
 		Name:  fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
-		Type:  xrayApi.Security,
+		Type:  policyType,
 		Rules: rules,
 	}
 	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
@@ -299,7 +299,7 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayApi.Poli
 }
 
 func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayApi.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
-	return CreateSecurityPolicy(t, policyName,
+	return CreateXrayPolicy(t, policyName, xrayApi.Security,
 		xrayApi.PolicyRule{
 			Name:     "sca_rule",
 			Criteria: *xrayApi.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
@@ -321,6 +321,18 @@ func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayApi.
 	)
 }
 
+func CreateTestLicensePolicy(t *testing.T, policyName string, severity xrayApi.Severity, failBuild, allowedLicenses bool, licenses ...string) (string, func()) {
+	return CreateXrayPolicy(t, policyName, xrayApi.License, xrayApi.PolicyRule{
+		Name:     "license_rule",
+		Criteria: *xrayApi.CreateLicensePolicyCriteria(allowedLicenses, true, false, licenses...),
+		Actions: &xrayApi.PolicyAction{
+			FailBuild:      clientUtils.Pointer(failBuild),
+			CustomSeverity: severity,
+		},
+		Priority: 1,
+	})
+}
+
 func getBuildFailAction(failBuild bool) *xrayApi.PolicyAction {
 	if failBuild {
 		return &xrayApi.PolicyAction{
@@ -330,7 +342,7 @@ func getBuildFailAction(failBuild bool) *xrayApi.PolicyAction {
 	return nil
 }
 
-func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayApi.WatchParams) xrayApi.WatchParams) (string, func()) {
+func createTestWatch(t *testing.T, policyName, watchName string, policyType xrayApi.PolicyType, assignParams func(watchParams xrayApi.WatchParams) xrayApi.WatchParams) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default watch.
@@ -341,7 +353,7 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	watchParams.Policies = []xrayApi.AssignedPolicy{
 		{
 			Name: policyName,
-			Type: string(xrayApi.Security),
+			Type: string(policyType),
 		},
 	}
 	assert.NoError(t, xrayManager.CreateWatch(watchParams))
@@ -350,23 +362,23 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	}
 }
 
-func CreateWatchOnProjectBuilds(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+func CreateWatchOnProjectBuilds(t *testing.T, policyName, watchName string, policyType xrayApi.PolicyType, projectKey string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, policyType, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.ProjectKey = projectKey
 		watchParams.Builds.Type = xrayApi.WatchBuildAll
 		return watchParams
 	})
 }
 
-func CreateWatchOnGitResources(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+func CreateWatchOnGitResources(t *testing.T, policyName, watchName string, policyType xrayApi.PolicyType, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, policyType, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.GitRepositories.Resources = gitResources
 		return watchParams
 	})
 }
 
-func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, repos ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, policyType xrayApi.PolicyType, repos ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, policyType, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.Repositories.Type = xrayApi.WatchRepositoriesByName
 		for _, repo := range repos {
 			watchParams.Repositories.Repositories[repo] = xrayApi.NewWatchRepositoryByName(repo)
@@ -378,14 +390,14 @@ func CreateWatchOnArtifactoryRepos(t *testing.T, policyName, watchName string, r
 	})
 }
 
-func CreateWatchOnAllBuilds(t *testing.T, policyName, watchName string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
+func CreateWatchOnAllBuilds(t *testing.T, policyName, watchName string, policyType xrayApi.PolicyType) (string, func()) {
+	return createTestWatch(t, policyName, watchName, policyType, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.Builds.Type = xrayApi.WatchBuildAll
 		return watchParams
 	})
 }
 
-func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayApi.Severity) (string, func()) {
+func CreateSecurityTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayApi.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
@@ -405,7 +417,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateWatchOnAllBuilds(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateWatchOnAllBuilds(t, policyParams.Name, watchName, xrayApi.Security)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))

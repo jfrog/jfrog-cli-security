@@ -44,16 +44,17 @@ import (
 )
 
 type AuditCommand struct {
-	watches                []string
-	gitRepoHttpsCloneUrl   string
-	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	IncludeSbom            bool
-	Fail                   bool
-	PrintExtendedTable     bool
-	Threads                int
+	watches                 []string
+	gitRepoHttpsCloneUrl    string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	IncludeSbom             bool
+	IncludeSnippetDetection bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	Threads                 int
 	AuditParams
 }
 
@@ -100,6 +101,11 @@ func (auditCmd *AuditCommand) SetIncludeSbom(include bool) *AuditCommand {
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetIncludeSnippetDetection(include bool) *AuditCommand {
+	auditCmd.IncludeSnippetDetection = include
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) SetFail(fail bool) *AuditCommand {
 	auditCmd.Fail = fail
 	return auditCmd
@@ -116,14 +122,15 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom, includeSnippetDetection bool) (context results.ResultContext) {
 	context = results.ResultContext{
-		RepoPath:               artifactoryRepoPath,
-		Watches:                watches,
-		ProjectKey:             projectKey,
-		IncludeVulnerabilities: shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
-		IncludeLicenses:        includeLicenses,
-		IncludeSbom:            includeSbom,
+		RepoPath:                artifactoryRepoPath,
+		Watches:                 watches,
+		ProjectKey:              projectKey,
+		IncludeVulnerabilities:  shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
+		IncludeLicenses:         includeLicenses,
+		IncludeSbom:             includeSbom,
+		IncludeSnippetDetection: includeSnippetDetection,
 	}
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
@@ -236,6 +243,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
+			auditCmd.IncludeSnippetDetection,
 		)).
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
@@ -352,6 +360,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
+		xrayplugin.WithSnippetDetection(params.resultsContext.IncludeSnippetDetection),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -397,6 +406,13 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	}
 	if entitledForJas {
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
+	}
+	if params.resultsContext.IncludeSnippetDetection {
+		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), utils.SnippetDetectionMinVersion); err != nil {
+			// Snippet detection is not supported by the Xray version.
+			log.Warn(fmt.Sprintf("Snippet detection is not supported by the Xray version (%s). Snippet detection will not be included in the results.", params.GetXrayVersion()))
+			params.resultsContext.IncludeSnippetDetection = false
+		}
 	}
 	return
 }

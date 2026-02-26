@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
@@ -40,6 +41,7 @@ const (
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 	StaticScanMinVersion          = "3.133.0"
+	SnippetDetectionMinVersion    = "3.139.0"
 
 	XrayToolName = "JFrog Xray Scanner"
 
@@ -448,6 +450,7 @@ func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFil
 
 // LineDecoratorWriter is a line decorator that writes each line to the underlying writer with an optional prefix and suffix.
 type LineDecoratorWriter struct {
+	mu     sync.Mutex
 	w      io.Writer
 	prefix []byte
 	suffix []byte
@@ -465,6 +468,8 @@ func NewLineDecoratorWriter(w io.Writer, prefix, suffix string) *LineDecoratorWr
 }
 
 func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	n = len(data)
 	p.buf = append(p.buf, data...)
 	for {

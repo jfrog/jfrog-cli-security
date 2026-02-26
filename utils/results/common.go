@@ -292,24 +292,76 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 }
 
 func BuildImpactPath(affectedComponent cyclonedx.Component, bomIndex *cdxutils.BOMIndex) (impactPathsRows [][]formats.ComponentRow) {
-	impactPathsRows = [][]formats.ComponentRow{}
+	log.Verbose("Building impact paths for component:", affectedComponent.Name, affectedComponent.Version)
+	if isSnippetComponent(affectedComponent) {
+		log.Debug("Component is a snippet with sub-components, building impact paths for sub-components")
+		return buildSnippetImpactPaths(affectedComponent)
+	}
+	log.Debug("Component is a regular component, building impact paths for parent components")
 	componentAppearances := map[string]int8{}
-	for _, parent := range bomIndex.GetParents(affectedComponent.BOMRef) {
-		impactedPath := buildImpactPathForComponent(*parent, componentAppearances, bomIndex)
-		// Add the affected component at the end of the impact path
-		impactedPath = append(impactedPath, formats.ComponentRow{
-			Id:        affectedComponent.BOMRef,
-			Name:      affectedComponent.Name,
-			Version:   affectedComponent.Version,
-			Evidences: CdxEvidencesToLocations(affectedComponent),
+	return buildComponentParentsImpactPaths(affectedComponent, componentAppearances, bomIndex)
+}
+
+func isSnippetComponent(component cyclonedx.Component) bool {
+	return component.Version == "snippet" && component.Components != nil
+}
+
+func buildSnippetImpactPaths(component cyclonedx.Component) (impactPaths [][]formats.ComponentRow) {
+	if component.Components == nil {
+		log.Warn(fmt.Sprintf("Snippet component %s has no sub components", component.BOMRef))
+		return
+	}
+	for _, subComp := range *component.Components {
+		impactPaths = append(impactPaths, []formats.ComponentRow{
+			{
+				Id:        component.BOMRef,
+				Name:      component.Name,
+				Version:   component.Version,
+				Evidences: CdxEvidencesToLocations(component, getExternalReferencesUrls(component)...),
+			},
+			{
+				Id:        subComp.BOMRef,
+				Name:      subComp.Name,
+				Version:   subComp.Version,
+				Evidences: CdxEvidencesToLocations(subComp, getExternalReferencesUrls(subComp)...),
+			},
 		})
-		// Add the impact path to the list of impact paths
-		impactPathsRows = append(impactPathsRows, impactedPath)
+	}
+	return impactPaths
+}
+
+func buildComponentParentsImpactPaths(component cyclonedx.Component, componentAppearances map[string]int8, bomIndex *cdxutils.BOMIndex) (impactPaths [][]formats.ComponentRow) {
+	for _, parent := range bomIndex.GetParents(component.BOMRef) {
+		impactPath := buildParentImpactPathForComponent(*parent, componentAppearances, bomIndex)
+		// Add the affected component at the end of the impact path
+		impactPath = append(impactPath, formats.ComponentRow{
+			Id:        component.BOMRef,
+			Name:      component.Name,
+			Version:   component.Version,
+			Evidences: CdxEvidencesToLocations(component),
+		})
+		impactPaths = append(impactPaths, impactPath)
+	}
+	return impactPaths
+}
+
+func buildParentImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, bomIndex *cdxutils.BOMIndex) (impactPath []formats.ComponentRow) {
+	impactPath = createImpactPathsForComponent(component, componentAppearances)
+	for _, parent := range bomIndex.GetParents(component.BOMRef) {
+		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
+			// If the parent is the same as the affected component, we skip it (cyclic dependencies).
+			// If the component has already appeared too many times, skip it to avoid stack overflow.
+			continue
+		}
+		parentImpactPath := buildParentImpactPathForComponent(*parent, componentAppearances, bomIndex)
+		if len(parentImpactPath) > 0 {
+			impactPath = append(parentImpactPath, impactPath...)
+		}
 	}
 	return
 }
 
-func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, bomIndex *cdxutils.BOMIndex) (impactPath []formats.ComponentRow) {
+func createImpactPathsForComponent(component cyclonedx.Component, componentAppearances map[string]int8) (impactPath []formats.ComponentRow) {
 	componentAppearances[component.BOMRef]++
 	impactPath = []formats.ComponentRow{
 		{
@@ -318,15 +370,6 @@ func buildImpactPathForComponent(component cyclonedx.Component, componentAppeara
 			Version:   component.Version,
 			Evidences: CdxEvidencesToLocations(component),
 		},
-	}
-	for _, parent := range bomIndex.GetParents(component.BOMRef) {
-		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
-			continue
-		}
-		parentImpactPath := buildImpactPathForComponent(*parent, componentAppearances, bomIndex)
-		if len(parentImpactPath) > 0 {
-			impactPath = append(parentImpactPath, impactPath...)
-		}
 	}
 	return
 }
@@ -1441,12 +1484,32 @@ func CdxEvidencesToPreferredLocation(component cyclonedx.Component) (location *f
 	}
 }
 
-func CdxEvidencesToLocations(component cyclonedx.Component) (evidences []formats.Location) {
+func getExternalReferencesUrls(component cyclonedx.Component) (externalReferences []string) {
+	if component.ExternalReferences != nil && len(*component.ExternalReferences) > 0 {
+		for _, externalReference := range *component.ExternalReferences {
+			if externalReference.URL != "" {
+				externalReferences = append(externalReferences, externalReference.URL)
+			}
+		}
+	}
+	return externalReferences
+}
+
+func CdxEvidencesToLocations(component cyclonedx.Component, externalReferences ...string) (evidences []formats.Location) {
 	if component.Evidence == nil || component.Evidence.Occurrences == nil || len(*component.Evidence.Occurrences) == 0 {
 		return nil
 	}
+
 	for _, occurrence := range *component.Evidence.Occurrences {
-		evidences = append(evidences, formats.Location{File: occurrence.Location})
+		startLine := 0
+		if occurrence.Line != nil {
+			startLine = *occurrence.Line
+		}
+		evidences = append(evidences, formats.Location{
+			File:               occurrence.Location,
+			StartLine:          startLine,
+			ExternalReferences: externalReferences,
+		})
 	}
 	return
 }

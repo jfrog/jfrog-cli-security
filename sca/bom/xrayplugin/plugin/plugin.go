@@ -24,7 +24,9 @@ import (
 
 const (
 	xrayLibPluginVersionEnvVariable = "JFROG_CLI_XRAY_LIB_PLUGIN_VERSION"
-	defaultXrayLibPluginVersion     = "0.0.3-52"
+	defaultXrayLibPluginVersion     = "0.0.3-55"
+
+	SnippetDetectionEnvVariable = "JFROG_XRAY_SNIPPET_SCAN_ENABLE"
 
 	xrayLibPluginRtRepository   = "xray-scan-lib"
 	XrayLibPluginExecutableName = "xray-scan-plugin"
@@ -75,7 +77,7 @@ type ScannerRPCServer struct {
 
 // CreateScannerPluginClient creates a plugin client. When not in CI and log level is DEBUG, plugin stderr is written
 // to a log file under JFrog home (logs/xrayPluginLogs/)
-func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath string, err error) {
+func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (scanner Scanner, logPath string, err error) {
 	stderrWriter, logPath, err := getPluginLogger()
 	if err != nil {
 		return nil, "", err
@@ -83,7 +85,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, logPath str
 	clientConfig := &goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
 		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
-		Cmd:             &exec.Cmd{Path: scangBinary},
+		Cmd:             &exec.Cmd{Path: scangBinary, Env: utils.ToCommandEnvVars(envVars)},
 		Managed:         true,
 		Logger: hclog.New(&hclog.LoggerOptions{
 			Output: stderrWriter,

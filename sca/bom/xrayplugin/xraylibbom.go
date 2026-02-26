@@ -16,9 +16,10 @@ import (
 )
 
 type XrayLibBomGenerator struct {
-	binaryPath     string
-	ignorePatterns []string
-	totalTargets   int
+	binaryPath       string
+	snippetDetection bool
+	ignorePatterns   []string
+	totalTargets     int
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
@@ -45,6 +46,14 @@ func WithIgnorePatterns(ignorePatterns []string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.ignorePatterns = ignorePatterns
+		}
+	}
+}
+
+func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.snippetDetection = snippetDetection
 		}
 	}
 }
@@ -81,7 +90,8 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 	}
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
 	startTime := time.Now()
-	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath)
+	envVars := sbg.getPluginEnvVars()
+	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
@@ -93,6 +103,9 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		startLog += fmt.Sprintf(" (plugin logs: %s)", logPath)
 	}
 	log.Info(startLog + "...")
+	if len(envVars) > 0 {
+		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
+	}
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
 		return nil, fmt.Errorf("failed to execute Xray-Lib command: %w", err)
@@ -121,6 +134,14 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
+}
+
+func (sbg *XrayLibBomGenerator) getPluginEnvVars() map[string]string {
+	envVars := map[string]string{}
+	if sbg.snippetDetection {
+		envVars[plugin.SnippetDetectionEnvVariable] = "true"
+	}
+	return envVars
 }
 
 func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string, startTime time.Time) {

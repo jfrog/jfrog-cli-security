@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
@@ -84,6 +85,18 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 	if err := validateConnectionInputs(serverDetails); err != nil {
 		return err
 	}
+	contextFlag := getEnabledContextFlagsCount(c)
+	if contextFlag > 1 {
+		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
+	}
+	if contextFlag > 0 && format == outputFormat.CycloneDx {
+		// CDX format does not support displaying violations so we cannot allow context flags that are relevant only when violations are displayed.
+		return errorutils.CheckErrorf("Violations are not supported in CycloneDX format.")
+	}
+	return nil
+}
+
+func getEnabledContextFlagsCount(c *components.Context) int {
 	contextFlag := 0
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		contextFlag++
@@ -94,14 +107,7 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 	if c.GetStringFlagValue(flags.RepoPath) != "" {
 		contextFlag++
 	}
-	if contextFlag > 1 {
-		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
-	}
-	if contextFlag > 0 && format == outputFormat.CycloneDx {
-		// CDX format does not support displaying violations so we cannot allow context flags that are relevant only when violations are displayed.
-		return errorutils.CheckErrorf("Violations are not supported in CycloneDX format.")
-	}
-	return nil
+	return contextFlag
 }
 
 func isProjectProvided(c *components.Context) bool {
@@ -113,6 +119,29 @@ func getProject(c *components.Context) string {
 		return c.GetStringFlagValue(flags.Project)
 	}
 	return os.Getenv(coreutils.Project)
+}
+
+func isSnippetDetectionEnabled(c *components.Context) bool {
+	if c.IsFlagSet(flags.Snippet) {
+		return c.GetBoolFlagValue(flags.Snippet)
+	}
+	return strings.ToLower(os.Getenv(plugin.SnippetDetectionEnvVariable)) == "true"
+}
+
+func validateSnippetDetection(c *components.Context) (bool, error) {
+	isEnabled := isSnippetDetectionEnabled(c)
+	if !isEnabled {
+		return false, nil
+	}
+	subScans, err := getSubScansToPreform(c)
+	if err != nil {
+		return false, err
+	}
+	// Make sure SCA is requested or SBOM is requested
+	if !utils.IsScanRequested(utils.SourceCode, utils.ScaScan, subScans...) && !c.GetBoolFlagValue(flags.Sbom) {
+		return false, errorutils.CheckErrorf("Snippet detection is only supported when SCA is requested or SBOM is requested")
+	}
+	return true, nil
 }
 
 func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, err error) {
