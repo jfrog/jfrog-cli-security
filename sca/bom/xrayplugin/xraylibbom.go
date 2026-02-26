@@ -84,19 +84,27 @@ func (sbg *XrayLibBomGenerator) PrepareGenerator() (err error) {
 }
 
 func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
-	startLog := "Generating SBOM"
-	if sbg.totalTargets > 1 {
-		startLog += fmt.Sprintf(" for target: %s", target.Target)
-	}
-	log.Info(startLog + "...")
 	binaryPath, err := sbg.getXrayLibExecutablePath()
 	if err != nil || binaryPath == "" {
 		return nil, fmt.Errorf("failed to get local Xray-Lib executable path: %w", err)
 	}
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
 	startTime := time.Now()
+	envVars := sbg.getPluginEnvVars()
+	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
+	}
+	startLog := "Generating SBOM"
+	if sbg.totalTargets > 1 {
+		startLog += fmt.Sprintf(" for target: %s", target.Target)
+	}
+	if logPath != "" {
+		startLog += fmt.Sprintf(" (plugin logs: %s)", logPath)
+	}
+	log.Info(startLog + "...")
 	// Run the xray-lib command to generate the SBOM
-	if sbom, err = sbg.executeScanner(binaryPath, target); err != nil {
+	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
 		return nil, fmt.Errorf("failed to execute Xray-Lib command: %w", err)
 	}
 	sbg.logScannerOutput(sbom, target.Target, startTime)
@@ -112,21 +120,12 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 	return plugin.GetLocalXrayLibExecutablePath()
 }
 
-func (sbg *XrayLibBomGenerator) executeScanner(xrayLibBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
-	envVars := sbg.getPluginEnvVars()
-	// Create a new plugin client
-	scanner, err := plugin.CreateScannerPluginClient(xrayLibBinary, envVars)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
-	}
+func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	scanConfig := plugin.Config{
 		BomRef:         cdxutils.GetFileRef(target.Target),
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
-	}
-	if len(envVars) > 0 {
-		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))

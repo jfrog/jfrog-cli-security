@@ -183,22 +183,31 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func (auditCmd *AuditCommand) Run() (err error) {
-	isRecursiveScan := false
+func getRelatedWorkingDirs(auditCmd *AuditCommand) (projectPath string, workingDirs []string, isRecursiveScan bool, err error) {
 	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
+			return "", nil, false, errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
+		// OLD logic:
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(auditCmd.workingDirs) == 0
 	}
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	workingDirs, err = coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
 	}
 	logScanPaths(workingDirs, isRecursiveScan)
+	projectPath = utils.GetCommonParentDir(workingDirs...)
+	return
+}
+
+func (auditCmd *AuditCommand) Run() (err error) {
+	projectPath, workingDirs, isRecursiveScan, err := getRelatedWorkingDirs(auditCmd)
+	if err != nil {
+		return
+	}
 	serverDetails, err := auditCmd.ServerDetails()
 	if err != nil {
 		return
@@ -208,7 +217,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		auditCmd.GetXrayVersion(),
 		auditCmd.GetXscVersion(),
 		serverDetails,
-		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails, projectPath),
 		auditCmd.projectKey,
 	)
 

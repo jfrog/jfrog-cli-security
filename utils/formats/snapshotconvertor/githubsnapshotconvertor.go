@@ -59,6 +59,7 @@ func CreateGithubSnapshotFromSbom(bom *cdxutils.FullBOM, snapshotVersion int, sc
 		}
 	}
 
+	bomIndex := cdxutils.NewBOMIndex(&bom.BOM, false)
 	manifests := make(map[string]*vcsclient.Manifest)
 	for descriptorRelativePath, componentsList := range descriptorToComponents {
 		manifest := &vcsclient.Manifest{
@@ -69,7 +70,7 @@ func CreateGithubSnapshotFromSbom(bom *cdxutils.FullBOM, snapshotVersion int, sc
 		resolvedDependencies := make(map[string]*vcsclient.ResolvedDependency)
 		for _, component := range componentsList {
 			var relationship string
-			bomRelationship := cdxutils.GetComponentRelation(&bom.BOM, component.BOMRef, false)
+			bomRelationship := bomIndex.GetComponentRelation(component.BOMRef)
 			switch bomRelationship {
 			case cdxutils.RootRelation:
 				continue

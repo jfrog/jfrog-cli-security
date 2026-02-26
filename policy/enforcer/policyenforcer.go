@@ -233,17 +233,14 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Components == nil {
 			continue
 		}
+		bomIndex := cdxutils.NewBOMIndex(target.ScaResults.Sbom, true)
 		for _, component := range *target.ScaResults.Sbom.Components {
 			// XRAY-135509, CTLG-1290 Bug in Xray: the BOMRef is not always in the same case as the ref, so we need to check both
 			if strings.HasPrefix(component.BOMRef, ref) || strings.EqualFold(component.BOMRef, ref) {
 				// Found the relevant component
 				impactedComponent = &component
-				dependencies := []cyclonedx.Dependency{}
-				if target.ScaResults.Sbom.Dependencies != nil {
-					dependencies = *target.ScaResults.Sbom.Dependencies
-				}
-				impactPaths = results.BuildImpactPath(component, *target.ScaResults.Sbom.Components, dependencies...)
-				directComponents = results.ExtractComponentDirectComponentsInBOM(target.ScaResults.Sbom, component, impactPaths)
+				impactPaths = results.BuildImpactPath(component, bomIndex)
+				directComponents = results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths)
 				break
 			}
 		}

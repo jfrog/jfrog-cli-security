@@ -108,6 +108,59 @@ type BasicGitServerParams struct {
 	Owner string `yaml:"owner"`
 	// List of specific repositories names to analyze, If not provided all repositories in the project will be analyzed.
 	Repositories []string `yaml:"repositories,omitempty"`
+	// Tracks whether scm-type was explicitly provided in the YAML.
+	// Needed because vcsutils.GitHub is 0 (same as the zero value).
+	scmTypeProvided bool
+}
+
+func (p *BasicGitServerParams) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a mapping node for git server params")
+	}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		key := node.Content[i].Value
+		val := node.Content[i+1]
+		switch key {
+		case "scm-type":
+			if err := val.Decode(&p.ScmType); err != nil {
+				return err
+			}
+			p.scmTypeProvided = true
+		case "scm-api-url":
+			if err := val.Decode(&p.ScmApiUrl); err != nil {
+				return err
+			}
+		case "token":
+			if err := val.Decode(&p.Token); err != nil {
+				return err
+			}
+		case "owner":
+			if err := val.Decode(&p.Owner); err != nil {
+				return err
+			}
+		case "repositories":
+			if err := val.Decode(&p.Repositories); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p *BasicGitServerParams) validate() error {
+	if !p.scmTypeProvided {
+		return fmt.Errorf("scm-type is missing in the input file")
+	}
+	if p.ScmApiUrl == "" {
+		return fmt.Errorf("scm-api-url is missing in the input file")
+	}
+	if p.Token == "" {
+		return fmt.Errorf("token is missing in the input file")
+	}
+	if p.Owner == "" {
+		return fmt.Errorf("owner is missing in the input file")
+	}
+	return nil
 }
 
 type CountContributorsParams struct {
@@ -219,6 +272,9 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 	}
 	var contributors []VcsCountContributors
 	for _, param := range gitServersList.ServersList {
+		if err = param.validate(); err != nil {
+			return nil, err
+		}
 		p := CountContributorsParams{BasicGitServerParams: param, MonthsNum: cc.MonthsNum, DetailedSummery: cc.DetailedSummery}
 		vcsClient, err := vcsclient.NewClientBuilder(param.ScmType).ApiEndpoint(param.ScmApiUrl).Token(param.Token).Build()
 		if err != nil {

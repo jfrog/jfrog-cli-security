@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -444,4 +445,48 @@ func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFil
 		return false, fmt.Errorf("failed to calculate the local file checksum: %w", err)
 	}
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil
+}
+
+// LineDecoratorWriter is a line decorator that writes each line to the underlying writer with an optional prefix and suffix.
+type LineDecoratorWriter struct {
+	w      io.Writer
+	prefix []byte
+	suffix []byte
+	buf    []byte
+}
+
+// NewLineDecoratorWriter returns a writer that decorates each line with the given prefix and suffix.
+// Use empty string for prefix or suffix to omit. E.g. NewLineDecoratorWriter(w, "{", "}") wraps each line as "{ line }".
+func NewLineDecoratorWriter(w io.Writer, prefix, suffix string) *LineDecoratorWriter {
+	return &LineDecoratorWriter{
+		w:      w,
+		prefix: []byte(prefix),
+		suffix: []byte(suffix),
+	}
+}
+
+func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
+	n = len(data)
+	p.buf = append(p.buf, data...)
+	for {
+		i := bytes.IndexByte(p.buf, '\n')
+		if i < 0 {
+			return n, nil
+		}
+		line := p.buf[:i+1] // includes \n
+		p.buf = p.buf[i+1:]
+		lineWithoutNewline := line[:len(line)-1]
+		if _, err = p.w.Write(p.prefix); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write(lineWithoutNewline); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write(p.suffix); err != nil {
+			return 0, err
+		}
+		if _, err = p.w.Write([]byte{'\n'}); err != nil {
+			return 0, err
+		}
+	}
 }
