@@ -3,11 +3,13 @@ package jas
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -212,4 +214,116 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 		return err
 	}
 	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, threadId)
+}
+
+func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
+	defer func() {
+		if err := dst.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing pipe: %v", err))
+		}
+	}()
+	_, err := io.Copy(dst, src)
+	if err != nil {
+		log.Error("Error establishing pipe")
+	}
+}
+
+func establishPipeFromFile(dst io.Writer, src io.ReadCloser) {
+	defer func() {
+		if err := src.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing pipe: %v", err))
+		}
+	}()
+	_, err := io.Copy(dst, src)
+	if err != nil {
+		log.Error("Error establishing pipe")
+	}
+}
+
+// RunAnalyzerManagerWithPipes runs the analyzer manager with the given command and pipes for stdin, stdout, and stderr.
+// timeout is in seconds; if 0 or negative, the command runs until completion.
+func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+	amPath, err := GetAnalyzerManagerExecutable()
+	if err != nil {
+		return err
+	}
+
+	allArgs := append([]string{cmd}, args...)
+	log.Info(fmt.Sprintf("Launching: %s; command %s; arguments %v", amPath, cmd, args))
+	command := exec.Command(amPath, allArgs...)
+	command.Env = utils.ToCommandEnvVars(env)
+	setProcessGroupAttr(command)
+
+	stdin, pipeErr := command.StdinPipe()
+	if pipeErr != nil {
+		log.Error(fmt.Sprintf("Error creating stdin pipe: %v", pipeErr))
+		return pipeErr
+	}
+	defer func() {
+		if err := stdin.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stdin pipe: %v", err))
+		}
+	}()
+
+	stdout, pipeErr := command.StdoutPipe()
+	if pipeErr != nil {
+		log.Error(fmt.Sprintf("Error creating stdout pipe: %v", pipeErr))
+		return pipeErr
+	}
+	defer func() {
+		if err := stdout.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stdout pipe: %v", err))
+		}
+	}()
+
+	stderr, pipeErr := command.StderrPipe()
+	if pipeErr != nil {
+		log.Error(fmt.Sprintf("Error creating stderr pipe: %v", pipeErr))
+		return pipeErr
+	}
+	defer func() {
+		if err := stderr.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing stderr pipe: %v", err))
+		}
+	}()
+
+	go establishPipeToFile(stdin, inputPipe)
+	go establishPipeFromFile(errorPipe, stderr)
+	go establishPipeFromFile(outputPipe, stdout)
+
+	if startErr := command.Start(); startErr != nil {
+		log.Error(fmt.Sprintf("Error starting subprocess: %v", startErr))
+		return startErr
+	}
+
+	var waitErr error
+	if timeout > 0 {
+		waitCh := make(chan error, 1)
+		go func() {
+			waitCh <- command.Wait()
+		}()
+		select {
+		case waitErr = <-waitCh:
+		case <-time.After(time.Duration(timeout) * time.Second):
+			log.Warn("Timeout reached")
+			killProcessTree(command.Process)
+			return nil
+		}
+	} else {
+		waitErr = command.Wait()
+	}
+
+	if waitErr != nil {
+		log.Error(fmt.Sprintf("Error waiting for subprocess: %v", waitErr))
+		return waitErr
+	}
+	return nil
+}
+
+// RunAnalyzerManagerWithPipesAndDownload downloads the analyzer manager if needed and runs the command with pipes.
+func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+	if err := DownloadAnalyzerManagerIfNeeded(0); err != nil {
+		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
+	}
+	return RunAnalyzerManagerWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)
 }
