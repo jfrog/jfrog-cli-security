@@ -893,7 +893,8 @@ func TestCreateResultsContext(t *testing.T) {
 			{
 				name:                            "Snippet Detection - no violation context",
 				includeSnippetDetection:         true,
-				expectedIncludeSnippetDetection: false,
+				expectedIncludeVulnerabilities:  true,
+				expectedIncludeSnippetDetection: true,
 			},
 			{
 				name:                    "All",
