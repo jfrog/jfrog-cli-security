@@ -224,6 +224,7 @@ type CurationAuditCommand struct {
 	parallelRequests      int
 	dockerImageName       string
 	includeCachedPackages bool
+	auditPackage          string
 	audit.AuditParamsInterface
 }
 
@@ -274,7 +275,15 @@ func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages b
 	return ca
 }
 
+func (ca *CurationAuditCommand) SetAuditPackage(spec string) *CurationAuditCommand {
+	ca.auditPackage = spec
+	return ca
+}
+
 func (ca *CurationAuditCommand) Run() (err error) {
+	if ca.auditPackage != "" {
+		return ca.runInstallMode()
+	}
 	rootDir, err := os.Getwd()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -443,6 +452,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
 		IsCurationCmd: true,
+		IsPackageMode: ca.auditPackage != "",
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.UseWrapper(),
@@ -474,6 +484,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	// Validate the graph isn't empty.
 	if len(depTreeResult.FullDepTrees) == 0 {
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
+	}
+	if params.IsPackageMode && ca.auditPackage != "" {
+		filterAuditPackageTree(&depTreeResult, tech, ca.auditPackage)
 	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
@@ -540,6 +553,43 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
 	}
 	return err
+}
+
+// filterAuditPackageTree modifies depTreeResult in place to keep only the
+// requested package and its transitive dependencies. This ensures that in --package mode
+// we only audit the new package, not the customer's existing dependencies.
+func filterAuditPackageTree(depTreeResult *buildinfo.DependencyTreeResult, tech techutils.Technology, installPkgName string) {
+	prefix := tech.GetXrayPackageTypeId() + installPkgName + ":"
+	for _, tree := range depTreeResult.FullDepTrees {
+		for _, child := range tree.Nodes {
+			if strings.HasPrefix(child.Id, prefix) {
+				tree.Nodes = []*xrayUtils.GraphNode{child}
+				break
+			}
+		}
+	}
+	reachable := map[string]struct{}{}
+	for _, tree := range depTreeResult.FullDepTrees {
+		reachable[tree.Id] = struct{}{}
+		collectReachableNodes(tree, reachable)
+	}
+	var filteredFlat []*xrayUtils.GraphNode
+	for _, node := range depTreeResult.FlatTree.Nodes {
+		if _, ok := reachable[node.Id]; ok {
+			filteredFlat = append(filteredFlat, node)
+		}
+	}
+	depTreeResult.FlatTree.Nodes = filteredFlat
+}
+
+func collectReachableNodes(node *xrayUtils.GraphNode, reachable map[string]struct{}) {
+	for _, child := range node.Nodes {
+		if _, seen := reachable[child.Id]; seen {
+			continue
+		}
+		reachable[child.Id] = struct{}{}
+		collectReachableNodes(child, reachable)
+	}
 }
 
 func getSelectedPackages(requestedRows string, blockedPackages []*PackageStatus) (selectedPackages []*PackageStatus, ok bool) {

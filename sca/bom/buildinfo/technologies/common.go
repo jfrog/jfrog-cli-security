@@ -32,6 +32,11 @@ const (
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
+type InstalledPackage struct {
+	Name    string
+	Version string
+}
+
 type BuildInfoBomGeneratorParams struct {
 	XrayVersion         string
 	Progress            ioUtils.ProgressMgr
@@ -49,6 +54,7 @@ type BuildInfoBomGeneratorParams struct {
 	InstallCommandArgs []string
 	// Curation params
 	IsCurationCmd bool
+	IsPackageMode bool
 	// Java params
 	IsMavenDepTreeInstalled bool
 	UseWrapper              bool
