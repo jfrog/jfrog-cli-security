@@ -15,31 +15,31 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
-	scanner, init_error := jas.NewJasScanner(serverDetails)
-	assert.NoError(t, init_error)
+	scanner, initError := jas.NewJasScanner(serverDetails)
+	assert.NoError(t, initError)
 	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
-	input_buffer := *bytes.NewBufferString(query)
-	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
+	inputBuffer := *bytes.NewBufferString(query)
+	outputBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	errorBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	amEnv, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 
 	mcp_cmd := McpCommand{
 		ServerDetails: serverDetails,
 		Arguments:     []string{scanned_path},
-		InputPipe:     &input_buffer,
-		OutputPipe:    &output_buffer,
-		ErrorPipe:     &error_buffer,
+		InputPipe:     &inputBuffer,
+		OutputPipe:    &outputBuffer,
+		ErrorPipe:     &errorBuffer,
 	}
 
-	err := mcp_cmd.runWithTimeout(5, "mcp-sast", am_env)
+	err := mcp_cmd.runWithTimeout(5, "mcp-sast", amEnv)
 	assert.NoError(t, err) // returns error because it was terminated upon timeout
-	if !assert.Contains(t, error_buffer.String(), "Generated IR") {
-		t.Error(error_buffer.String())
+	if !assert.Contains(t, errorBuffer.String(), "Generated IR") {
+		t.Error(errorBuffer.String())
 	}
 
-	if !assert.Contains(t, output_buffer.String(), "\"serverInfo\":{\"name\":\"jfrog_sast\"") {
-		t.Error(output_buffer.String())
+	if !assert.Contains(t, outputBuffer.String(), "\"serverInfo\":{\"name\":\"jfrog_sast\"") {
+		t.Error(outputBuffer.String())
 	}
 }
 
@@ -47,22 +47,22 @@ func TestRunSourceMcpScannerError(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
-	scanner, init_error := jas.NewJasScanner(serverDetails)
-	assert.NoError(t, init_error)
+	scanner, initError := jas.NewJasScanner(serverDetails)
+	assert.NoError(t, initError)
 
 	// no such path
 	scanned_path := ""
-	input_buffer := *bytes.NewBufferString("")
-	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
-	mcp_cmd := McpCommand{
+	inputBuffer := *bytes.NewBufferString("")
+	outputBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	errorBuffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	amEnv, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
+	mcpCmd := McpCommand{
 		ServerDetails: serverDetails,
 		Arguments:     []string{scanned_path},
-		InputPipe:     &input_buffer,
-		OutputPipe:    &output_buffer,
-		ErrorPipe:     &error_buffer,
+		InputPipe:     &inputBuffer,
+		OutputPipe:    &outputBuffer,
+		ErrorPipe:     &errorBuffer,
 	}
-	err := mcp_cmd.runWithTimeout(0, "mcp-sast1", am_env) // no such command
+	err := mcpCmd.runWithTimeout(0, "mcp-sast1", amEnv) // no such command
 	assert.ErrorContains(t, err, "exit status 99")
 }
