@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
@@ -1006,7 +1006,10 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 		Watches:     []string{watchName},
 	})
 	// Make Sure to check violations with fail build error
-	assert.ErrorAs(t, err, policy.NewFailBuildError())
+	var cliErr coreutils.CliError
+	if assert.ErrorAs(t, err, &cliErr) {
+		assert.Equal(t, coreutils.ExitCodeVulnerableBuild, cliErr.ExitCode)
+	}
 	// Validate results
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
