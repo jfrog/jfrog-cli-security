@@ -1,0 +1,6 @@
+git-servers-list:
+  - scm-type: github
+    token: "token"
+    owner: "owner"
+    repositories:
+      - "repo1"

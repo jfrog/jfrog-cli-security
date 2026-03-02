@@ -60,6 +60,9 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error
 		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
 			log.Warn("Failed to serialize git context to JSON: %v", err)
 		} else {
+			if bom.Metadata.Component == nil {
+				bom.Metadata.Component = &cyclonedx.Component{}
+			}
 			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
 				Name:  gitContextProperty,
 				Value: gitContextStr,

@@ -210,7 +210,7 @@ var technologiesData = map[Technology]TechData{
 		language:                   GoLang,
 	},
 	Pip: {
-		formal:             "Python",
+		formal:             "Pip",
 		packageType:        Pypi,
 		xrayPackageType:    Pypi,
 		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
@@ -221,7 +221,7 @@ var technologiesData = map[Technology]TechData{
 		language:           Python,
 	},
 	Pipenv: {
-		formal:                     "Python",
+		formal:                     "Pipenv",
 		packageType:                Pypi,
 		xrayPackageType:            Pypi,
 		indicators:                 []string{"Pipfile", "Pipfile.lock"},

@@ -28,13 +28,13 @@ func TestCountContributorsFlags(t *testing.T) {
 	defer testCleanUp()
 
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("git", "count-contributors", "--token", "token", "--owner", "owner", "--scm-api-url", "url")
-	assert.EqualError(t, err, "Mandatory flag 'scm-type' is missing")
+	assert.ErrorContains(t, err, "The --scm-type option is mandatory")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "github", "--owner", "owner", "--scm-api-url", "url")
-	assert.ErrorContains(t, err, "Mandatory flag 'token' is missing")
+	assert.ErrorContains(t, err, "Providing a token is mandatory")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "gitlab", "--token", "token", "--scm-api-url", "url")
-	assert.EqualError(t, err, "Mandatory flag 'owner' is missing")
+	assert.ErrorContains(t, err, "The --owner option is mandatory")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "bitbucket", "--token", "token", "--owner", "owner")
-	assert.EqualError(t, err, "Mandatory flag 'scm-api-url' is missing")
+	assert.ErrorContains(t, err, "The --scm-api-url option is mandatory")
 
 	// Test token env variable
 	bitbucketCallback := tests.SetEnvWithCallbackAndAssert(t, contributors.BitbucketTokenEnvVar, "token")
@@ -265,7 +265,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
 				ValidateScan:                &validations.ScanCount{Sca: 10, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 4, NotCovered: 6, Inactive: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, NotCovered: 5, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},
@@ -292,8 +292,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 6, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 6, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 5, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},

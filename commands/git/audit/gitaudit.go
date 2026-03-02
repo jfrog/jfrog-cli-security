@@ -113,7 +113,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Send scan started event
-	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
+	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails, params.repositoryLocalPath)
 	event.GitInfo = &params.gitContext
 	event.IsGitInfoFlow = true
 	multiScanId, startTime := xsc.SendNewScanEvent(
