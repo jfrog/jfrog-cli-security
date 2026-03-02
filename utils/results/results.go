@@ -190,6 +190,8 @@ type ScaScanResults struct {
 	// Metadata about the scan
 	Descriptors           []string `json:"descriptors,omitempty"`
 	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
+	// ScanIds from the scan responses, can be used to generate links to on-demand scanning
+	ScanIds []string `json:"scan_ids,omitempty"`
 	// Sca scan results
 	DeprecatedXrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
@@ -633,6 +635,12 @@ func (sr *TargetResults) ScaScanResults(statusCode int, responses ...services.Sc
 		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.DeprecatedXrayResults = append(sr.ScaResults.DeprecatedXrayResults, responses...)
+	// Collect scan IDs from responses
+	for _, response := range responses {
+		if response.ScanId != "" {
+			sr.ScaResults.ScanIds = utils.UniqueUnion(sr.ScaResults.ScanIds, response.ScanId)
+		}
+	}
 	sr.ResultsStatus.UpdateStatus(CmdStepSca, &statusCode)
 	return sr.ScaResults
 }
