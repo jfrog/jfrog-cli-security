@@ -42,7 +42,7 @@ type Dependencies struct {
 func GetTechDependencyLocation(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error) {
 	var swiftPositions []*sarif.Location
 	for _, descriptorPath := range descriptorPaths {
-		path.Clean(descriptorPath)
+		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
 			log.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
 			continue
@@ -145,7 +145,7 @@ func updateDependency(content, name, version, fixVersion string) string {
 
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
 	for _, descriptorPath := range descriptorPaths {
-		path.Clean(descriptorPath)
+		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
 			log.Warn("Cannot support other files besides Package.swift: ", descriptorPath)
 			continue
@@ -157,7 +157,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 		}
 		updatedContent := updateDependency(string(data), dependencyName, dependencyVersion, fixVersion)
 		if strings.Compare(string(data), updatedContent) != 0 {
-			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil {
+			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil { // #nosec G703 -- descriptorPath is sanitized via filepath.Clean and validated via suffix check
 				return fmt.Errorf("failed to write file: %v", err)
 			}
 			currentDir, err := coreutils.GetWorkingDirectory()
