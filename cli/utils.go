@@ -146,8 +146,13 @@ func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, 
 }
 
 func validateAnalyzerManagerRequirements(subScans []utils.SubScanType) error {
-	if len(subScans) != 0 && (!slices.Contains(subScans, utils.SecretsScan) && !slices.Contains(subScans, utils.ContextualAnalysisScan) && !slices.Contains(subScans, utils.IacScan) && !slices.Contains(subScans, utils.SastScan)) {
-		// No analyzer manager related sub-scan is requested
+	if len(subScans) != 0 && (
+		!slices.Contains(subScans, utils.SecretsScan) &&
+		!slices.Contains(subScans, utils.ContextualAnalysisScan) &&
+		!slices.Contains(subScans, utils.IacScan) &&
+		!slices.Contains(subScans, utils.SastScan) &&
+		!slices.Contains(subScans, utils.MaliciousCodeScan)) {
+			// No analyzer manager related sub-scan is requested
 		return nil
 	}
 	return jas.ValidateRequiredInstalledSoftware()
