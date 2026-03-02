@@ -27,6 +27,7 @@ const (
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
 	MaliciousScan        = "malicious-scan"
+	SastServer           = "sast-server"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -70,6 +71,7 @@ const (
 
 	// Sast related flags
 	AddSastRules = "add-sast-rules"
+	Port         = "port"
 )
 
 const (
@@ -220,6 +222,9 @@ var commandFlags = map[string][]string{
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
 	},
+	SastServer: {
+		Port,
+	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
 		Url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
@@ -273,7 +278,7 @@ var flagsMap = map[string]components.Flag{
 	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
-		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
+		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package. Note: cycloneDx format does support information about violations, only vulnerabilities are currently supported",
 		components.WithStrDefaultValue("table"),
 	),
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
@@ -344,6 +349,7 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
 	// Docker flags
 	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
