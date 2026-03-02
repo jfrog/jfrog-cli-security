@@ -157,7 +157,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 		}
 		updatedContent := updateDependency(string(data), dependencyName, dependencyVersion, fixVersion)
 		if strings.Compare(string(data), updatedContent) != 0 {
-			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil {
+			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil { // #nosec G703 -- descriptorPath is sanitized via filepath.Clean and validated via suffix check
 				return fmt.Errorf("failed to write file: %v", err)
 			}
 			currentDir, err := coreutils.GetWorkingDirectory()
