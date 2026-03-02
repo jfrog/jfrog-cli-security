@@ -31,10 +31,36 @@ const expectedInitScriptWithRepos = `initscript {
 	}
 }
 
+apply plugin: com.jfrog.GradleDepTreeSettings
+
 allprojects {
 	repositories { 
 		maven {
 			url "https://myartifactory.com/artifactory/deps-repo"
+			credentials {
+				username = 'admin'
+				password = '%s'
+			}
+		}
+	}
+	apply plugin: com.jfrog.GradleDepTree
+}`
+
+const expectedInitScriptWithCuration = `initscript {
+	repositories { 
+		mavenCentral()
+	}
+	dependencies {
+		classpath files('%s')
+	}
+}
+
+apply plugin: com.jfrog.GradleDepTreeSettings
+
+allprojects {
+	repositories { 
+		maven {
+			url "https://myartifactory.com/artifactory/api/curation/audit/deps-repo"
 			credentials {
 				username = 'admin'
 				password = '%s'
@@ -255,30 +281,51 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 	}
 }
 
-func TestGradleCurationAuditMode(t *testing.T) {
-	// Test that curation audit mode flag is added when IsCurationCmd is true
-	params := &DepTreeParams{
-		IsCurationCmd: true,
-	}
-
+func TestCreateDepTreeScriptWithCuration(t *testing.T) {
 	manager := &gradleDepTreeManager{
-		DepTreeManager: NewDepTreeManager(params),
-		isCurationCmd:  params.IsCurationCmd,
+		DepTreeManager: DepTreeManager{
+			depsRepo: "deps-repo",
+			server: &config.ServerDetails{
+				Url:            "https://myartifactory.com/",
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				AccessToken:    dummyToken,
+			},
+		},
+		isCurationCmd: true,
 	}
+	assert.True(t, manager.isCurationCmd)
 
-	// Verify that the manager has the curation flag set
-	assert.True(t, manager.isCurationCmd, "isCurationCmd should be true for curation commands")
+	tmpDir, err := manager.createDepTreeScriptAndGetDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, os.Remove(filepath.Join(tmpDir, gradleDepTreeInitFile)))
+	}()
 
-	// Test with non-curation command
-	paramsNonCuration := &DepTreeParams{
-		IsCurationCmd: false,
+	content, err := os.ReadFile(filepath.Join(tmpDir, gradleDepTreeInitFile))
+	assert.NoError(t, err)
+	gradleDepTreeJarPath := ioutils.DoubleWinPathSeparator(filepath.Join(tmpDir, gradleDepTreeJarFile))
+
+	assert.Equal(t, fmt.Sprintf(expectedInitScriptWithCuration, gradleDepTreeJarPath, dummyToken), string(content))
+	assert.Contains(t, string(content), "api/curation/audit/deps-repo")
+}
+
+func TestCreateDepTreeScriptWithCurationEmptyRepo(t *testing.T) {
+	manager := &gradleDepTreeManager{
+		DepTreeManager: DepTreeManager{},
+		isCurationCmd:  true,
 	}
+	assert.True(t, manager.isCurationCmd)
 
-	managerNonCuration := &gradleDepTreeManager{
-		DepTreeManager: NewDepTreeManager(paramsNonCuration),
-		isCurationCmd:  paramsNonCuration.IsCurationCmd,
-	}
+	tmpDir, err := manager.createDepTreeScriptAndGetDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, os.Remove(filepath.Join(tmpDir, gradleDepTreeInitFile)))
+	}()
 
-	// Verify that the manager does not have the curation flag set
-	assert.False(t, managerNonCuration.isCurationCmd, "isCurationCmd should be false for non-curation commands")
+	content, err := os.ReadFile(filepath.Join(tmpDir, gradleDepTreeInitFile))
+	assert.NoError(t, err)
+	gradleDepTreeJarPath := ioutils.DoubleWinPathSeparator(filepath.Join(tmpDir, gradleDepTreeJarFile))
+
+	assert.Equal(t, fmt.Sprintf(gradleDepTreeInitScript, "", gradleDepTreeJarPath, ""), string(content))
+	assert.NotContains(t, string(content), "api/curation/audit")
 }
