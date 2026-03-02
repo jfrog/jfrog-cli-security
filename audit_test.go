@@ -972,6 +972,8 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 
 func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-03-2026", 14, "Bug in Xray plugin, should be fixed at XRAY-135832")
+
 	output, err := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
 		WithSbom: true,
 		Format:   format.CycloneDx,
