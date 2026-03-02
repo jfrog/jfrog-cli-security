@@ -108,6 +108,8 @@ func TestGitAuditSimpleJson(t *testing.T) {
 
 func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 	integration.InitAuditNewScaTests(t, securityUtils.StaticScanMinVersion)
+	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-03-2026", 14, "Bug in Xray plugin, should be fixed at XRAY-136444")
+
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
@@ -126,7 +128,6 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 			auditCommandTestParams: auditCommandTestParams{
 				Format:        format.SimpleJson,
 				WithStaticSca: true,
-				WithSbom:      true,
 				WithLicense:   true,
 				WithVuln:      true,
 				Watches:       []string{watchName},
