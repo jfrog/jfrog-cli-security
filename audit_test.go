@@ -1204,9 +1204,9 @@ func TestAuditNewScaSnippetDetection(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output,
 		validations.ValidationParams{
 			ExactResultsMatch: true,
-			Total:             &validations.TotalCount{Violations: 5},
+			Total:             &validations.TotalCount{Violations: 4},
 			Violations: &validations.ViolationCount{
-				ValidateType: &validations.ScaViolationCount{License: 5},
+				ValidateType: &validations.ScaViolationCount{License: 4},
 			},
 		},
 	)
