@@ -546,8 +546,8 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
-	if tt.installPackage != "" {
-		curationCmd.SetAuditPackage(tt.installPackage)
+	if tt.specificPackage != "" {
+		curationCmd.SetAuditPackage(tt.specificPackage)
 	}
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
@@ -604,7 +604,7 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
-	installPackage           string
+	specificPackage          string
 }
 
 func (tc testCase) getPathToTests() string {

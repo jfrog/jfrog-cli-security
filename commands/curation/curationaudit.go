@@ -282,7 +282,7 @@ func (ca *CurationAuditCommand) SetAuditPackage(spec string) *CurationAuditComma
 
 func (ca *CurationAuditCommand) Run() (err error) {
 	if ca.auditPackage != "" {
-		return ca.runInstallMode()
+		return ca.runSpecificPackageMode()
 	}
 	rootDir, err := os.Getwd()
 	if err != nil {

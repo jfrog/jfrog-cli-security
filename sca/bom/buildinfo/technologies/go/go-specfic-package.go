@@ -12,14 +12,14 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-type GoInstallHandler struct{}
+type GoSpecificPackageHandler struct{}
 
-func (h *GoInstallHandler) Technology() techutils.Technology {
+func (h *GoSpecificPackageHandler) Technology() techutils.Technology {
 	return techutils.Go
 }
 
 // ParsePackageSpec parses a Go package spec: <module>@<version>.
-func (h *GoInstallHandler) ParsePackageSpec(spec string) (technologies.InstalledPackage, error) {
+func (h *GoSpecificPackageHandler) ParsePackageSpec(spec string) (technologies.InstalledPackage, error) {
 	atIdx := strings.LastIndex(spec, "@")
 	if atIdx <= 0 {
 		return technologies.InstalledPackage{}, errorutils.CheckErrorf(
@@ -34,7 +34,7 @@ func (h *GoInstallHandler) ParsePackageSpec(spec string) (technologies.Installed
 	return technologies.InstalledPackage{Name: name, Version: version}, nil
 }
 
-func (h *GoInstallHandler) CreateTempProject(projectDir, tempDir, pkgName, pkgVersion string) error {
+func (h *GoSpecificPackageHandler) CreateTempProject(projectDir, tempDir, pkgName, pkgVersion string) error {
 	if err := biutils.CopyDir(projectDir, tempDir, true, []string{".git", "vendor"}); err != nil {
 		return err
 	}

@@ -18,18 +18,18 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-type PackageInstallHandler interface {
+type SpecificPackageHandler interface {
 	ParsePackageSpec(spec string) (technologies.InstalledPackage, error)
 	CreateTempProject(projectDir, tempDir, pkgName, pkgVersion string) error
 	Technology() techutils.Technology
 }
 
-var installHandlers = map[techutils.Technology]PackageInstallHandler{
-	techutils.Npm: &npm.NpmInstallHandler{},
-	techutils.Go:  &gotech.GoInstallHandler{},
+var specificPackageHandlers = map[techutils.Technology]SpecificPackageHandler{
+	techutils.Npm: &npm.NpmSpecificPackageHandler{},
+	techutils.Go:  &gotech.GoSpecificPackageHandler{},
 }
 
-func (ca *CurationAuditCommand) runInstallMode() (err error) {
+func (ca *CurationAuditCommand) runSpecificPackageMode() (err error) {
 	originalDir, err := os.Getwd()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -51,7 +51,7 @@ func (ca *CurationAuditCommand) runInstallMode() (err error) {
 		}()
 	}
 
-	handler, err := detectInstallHandler()
+	handler, err := detectSpecificPackageHandler()
 	if err != nil {
 		return err
 	}
@@ -134,22 +134,22 @@ func (ca *CurationAuditCommand) runInstallMode() (err error) {
 	return err
 }
 
-func detectInstallHandler() (PackageInstallHandler, error) {
+func detectSpecificPackageHandler() (SpecificPackageHandler, error) {
 	detectedTechs := techutils.DetectedTechnologiesList()
 	for _, tech := range detectedTechs {
-		if handler, ok := installHandlers[techutils.Technology(tech)]; ok {
+		if handler, ok := specificPackageHandlers[techutils.Technology(tech)]; ok {
 			return handler, nil
 		}
 	}
-	supportedTechs := getSupportedInstallTechnologies()
+	supportedTechs := getSupportedSpecificPackageTechnologies()
 	return nil, errorutils.CheckErrorf(
 		"could not detect a supported technology in the current directory for --package flag. Currently supported: %s",
 		strings.Join(supportedTechs, ", "))
 }
 
-func getSupportedInstallTechnologies() []string {
-	techs := make([]string, 0, len(installHandlers))
-	for tech := range installHandlers {
+func getSupportedSpecificPackageTechnologies() []string {
+	techs := make([]string, 0, len(specificPackageHandlers))
+	for tech := range specificPackageHandlers {
 		techs = append(techs, tech.ToFormal())
 	}
 	return techs

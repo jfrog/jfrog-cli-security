@@ -11,7 +11,7 @@ import (
 )
 
 func TestGoParsePackageSpec(t *testing.T) {
-	handler := &GoInstallHandler{}
+	handler := &GoSpecificPackageHandler{}
 
 	tests := []struct {
 		name        string
@@ -87,7 +87,7 @@ func TestGoParsePackageSpec(t *testing.T) {
 }
 
 func TestGoCreateTempProject(t *testing.T) {
-	handler := &GoInstallHandler{}
+	handler := &GoSpecificPackageHandler{}
 
 	tests := []struct {
 		name       string
@@ -152,7 +152,7 @@ func TestGoCreateTempProject(t *testing.T) {
 }
 
 func TestGoCreateTempProject_InvalidDir(t *testing.T) {
-	handler := &GoInstallHandler{}
+	handler := &GoSpecificPackageHandler{}
 	err := handler.CreateTempProject("/nonexistent/path/that/does/not/exist", t.TempDir(), "github.com/pkg/errors", "v0.9.1")
 	assert.Error(t, err)
 }

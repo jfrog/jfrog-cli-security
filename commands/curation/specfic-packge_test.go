@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDetectInstallHandler(t *testing.T) {
+func TestDetectSpecificPackageHandler(t *testing.T) {
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer func() { require.NoError(t, os.Chdir(originalDir)) }()
@@ -32,14 +32,14 @@ func TestDetectInstallHandler(t *testing.T) {
 			files: map[string]string{
 				"package.json": `{"name": "test-project", "version": "1.0.0"}`,
 			},
-			expectedType: &npm.NpmInstallHandler{},
+			expectedType: &npm.NpmSpecificPackageHandler{},
 		},
 		{
 			name: "detect go from go.mod",
 			files: map[string]string{
 				"go.mod": "module example.com/test\n\ngo 1.21\n",
 			},
-			expectedType: &gotech.GoInstallHandler{},
+			expectedType: &gotech.GoSpecificPackageHandler{},
 		},
 		{
 			name:          "no supported technology detected",
@@ -66,7 +66,7 @@ func TestDetectInstallHandler(t *testing.T) {
 			require.NoError(t, os.Chdir(tempDir))
 			defer func() { require.NoError(t, os.Chdir(originalDir)) }()
 
-			handler, err := detectInstallHandler()
+			handler, err := detectSpecificPackageHandler()
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -82,15 +82,15 @@ func TestDetectInstallHandler(t *testing.T) {
 	}
 }
 
-func TestGetSupportedInstallTechnologies(t *testing.T) {
-	techs := getSupportedInstallTechnologies()
-	assert.Len(t, techs, len(installHandlers))
-	for tech := range installHandlers {
+func TestGetSupportedSpecificPackageTechnologies(t *testing.T) {
+	techs := getSupportedSpecificPackageTechnologies()
+	assert.Len(t, techs, len(specificPackageHandlers))
+	for tech := range specificPackageHandlers {
 		assert.Contains(t, techs, tech.ToFormal())
 	}
 }
 
-func TestInstallModeFiltersAuditResults(t *testing.T) {
+func TestSpecificPackageModeFiltersAuditResults(t *testing.T) {
 	basePathToTests, err := filepath.Abs(TestDataDir)
 	require.NoError(t, err)
 
@@ -99,11 +99,11 @@ func TestInstallModeFiltersAuditResults(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:                   "npm install mode - only audits installed package",
+			name:                   "npm specific package mode - only audits specific package",
 			tech:                   techutils.Npm,
 			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
-			installPackage:         "underscore@1.13.6",
+			specificPackage:        "underscore@1.13.6",
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
@@ -136,11 +136,11 @@ func TestInstallModeFiltersAuditResults(t *testing.T) {
 			},
 		},
 		{
-			name:                     "go install mode - only audits installed package and its transitives",
+			name:                     "go specific package mode - only audits specific package and its transitives",
 			tech:                     techutils.Go,
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
-			installPackage:           "rsc.io/quote@v1.5.2",
+			specificPackage:          "rsc.io/quote@v1.5.2",
 			serveResources: map[string]string{
 				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
 				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),

@@ -13,14 +13,14 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-type NpmInstallHandler struct{}
+type NpmSpecificPackageHandler struct{}
 
-func (h *NpmInstallHandler) Technology() techutils.Technology {
+func (h *NpmSpecificPackageHandler) Technology() techutils.Technology {
 	return techutils.Npm
 }
 
 // ParsePackageSpec parses an npm package spec: <name>@<version> or @<scope>/<name>@<version>.
-func (h *NpmInstallHandler) ParsePackageSpec(spec string) (technologies.InstalledPackage, error) {
+func (h *NpmSpecificPackageHandler) ParsePackageSpec(spec string) (technologies.InstalledPackage, error) {
 	lastAt := strings.LastIndex(spec, "@")
 	if lastAt <= 0 {
 		return technologies.InstalledPackage{}, errorutils.CheckErrorf(
@@ -37,7 +37,7 @@ func (h *NpmInstallHandler) ParsePackageSpec(spec string) (technologies.Installe
 
 // CreateTempProject copies the project directory (excluding node_modules) to the temp directory,
 // then adds the requested package to the copied package.json.
-func (h *NpmInstallHandler) CreateTempProject(projectDir, tempDir, pkgName, pkgVersion string) error {
+func (h *NpmSpecificPackageHandler) CreateTempProject(projectDir, tempDir, pkgName, pkgVersion string) error {
 	if err := biutils.CopyDir(projectDir, tempDir, true, []string{"node_modules", ".git"}); err != nil {
 		return err
 	}

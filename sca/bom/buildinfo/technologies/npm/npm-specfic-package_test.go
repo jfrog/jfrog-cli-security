@@ -11,7 +11,7 @@ import (
 )
 
 func TestParsePackageSpec(t *testing.T) {
-	handler := &NpmInstallHandler{}
+	handler := &NpmSpecificPackageHandler{}
 
 	tests := []struct {
 		name        string
@@ -110,7 +110,7 @@ func TestParsePackageSpec(t *testing.T) {
 }
 
 func TestCreateTempProject(t *testing.T) {
-	handler := &NpmInstallHandler{}
+	handler := &NpmSpecificPackageHandler{}
 
 	tests := []struct {
 		name       string
