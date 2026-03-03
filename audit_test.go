@@ -1180,7 +1180,7 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 }
 
 func TestAuditNewScaSnippetDetection(t *testing.T) {
-	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.SnippetDetectionMinVersion)
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	// Create license policy and watch
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestLicensePolicy(t, "snippet-detection-policy", xrayUtils.Critical, false, false, "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later")
 	defer cleanUpPolicy()
