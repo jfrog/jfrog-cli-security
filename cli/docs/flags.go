@@ -275,7 +275,7 @@ var flagsMap = map[string]components.Flag{
 	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
 	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs, operational risk, and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
-	Snippet:          components.NewBoolFlag(Snippet, "Set to true if you'd like to enable a snippet component detection for licenses.", components.SetHiddenBoolFlag()),
+	Snippet:          components.NewBoolFlag(Snippet, "Set to true if you'd like to enables snippet-level detection to identify copied code from third-party components and surface related license violations.", components.SetHiddenBoolFlag()),
 	Licenses:         components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
 	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
