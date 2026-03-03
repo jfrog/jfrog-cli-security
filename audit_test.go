@@ -699,7 +699,7 @@ func TestAuditJasCycloneDx(t *testing.T) {
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "sast", "c"), auditCommandTestParams{
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c", "sast"), auditCommandTestParams{
 		CustomExclusion: []string{"*out*"},
 		Format:          format.SimpleJson,
 	})
