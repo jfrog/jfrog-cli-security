@@ -1192,12 +1192,16 @@ func TestAuditNewScaSnippetDetection(t *testing.T) {
 		Watches:     []string{watchName},
 	}
 	// No snippet detection. nothing should be found
-	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
+	output, err := testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params)
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output,
 		validations.ValidationParams{ExactResultsMatch: true},
 	)
 	// With snippet detection. should find 5 licenses violations
 	params.WithSnippetDetection = true
-	validations.VerifySimpleJsonResults(t, testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params),
+	output, err = testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params)
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output,
 		validations.ValidationParams{
 			ExactResultsMatch: true,
 			Total:             &validations.TotalCount{Violations: 5},
