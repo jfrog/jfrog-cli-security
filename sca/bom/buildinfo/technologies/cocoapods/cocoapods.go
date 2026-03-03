@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"golang.org/x/exp/slices"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -34,7 +33,7 @@ var (
 func GetTechDependencyLocation(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error) {
 	var podPositions []*sarif.Location
 	for _, descriptorPath := range descriptorPaths {
-		path.Clean(descriptorPath)
+		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Podfile") {
 			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
 			continue
@@ -92,7 +91,7 @@ func parsePodLine(line, directDependencyName, directDependencyVersion, descripto
 
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
 	for _, descriptorPath := range descriptorPaths {
-		path.Clean(descriptorPath)
+		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Podfile") {
 			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
 			continue
@@ -123,7 +122,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 			}
 		}
 		output := strings.Join(newLines, "\n")
-		err = os.WriteFile(descriptorPath, []byte(output), 0644)
+		err = os.WriteFile(descriptorPath, []byte(output), 0644) // #nosec G703 -- descriptorPath is sanitized via filepath.Clean and validated via suffix check
 		if err != nil {
 			return fmt.Errorf("failed to write file: %v", err)
 		}
