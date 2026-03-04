@@ -64,8 +64,12 @@ type auditCommandTestParams struct {
 	WithSbom bool
 	// adds "--secrets", "--validate-secrets" flags if true
 	ValidateSecrets bool
+	// adds "--sca" and "--without-contextual-analysis" flags if true
+	OnlyScaScan bool
 	// adds "--static-sca" flag value if provided
 	WithStaticSca bool
+	// adds "--snippet" flag value if provided
+	WithSnippetDetection bool
 	// --threads flag value if provided
 	Threads int
 	// adds '--requirements-file' flag with the given value
@@ -108,8 +112,14 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 	if params.WithSbom {
 		args = append(args, "--sbom")
 	}
+	if params.WithSnippetDetection {
+		args = append(args, "--snippet")
+	}
 	if params.WithStaticSca {
 		args = append(args, "--static-sca")
+	}
+	if params.OnlyScaScan {
+		args = append(args, "--sca", "--without-contextual-analysis")
 	}
 	if params.Threads > 0 {
 		args = append(args, "--threads="+strconv.Itoa(params.Threads))
@@ -156,7 +166,7 @@ func testAuditNpm(t *testing.T, format format.OutputFormat, violationContextPref
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
-	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, violationContextPrefix+string(format)+"-npm-audit-policy", violationContextPrefix+string(format)+"-npm-audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateSecurityTestPolicyAndWatch(t, violationContextPrefix+string(format)+"-npm-audit-policy", violationContextPrefix+string(format)+"-npm-audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUpHome()
@@ -210,7 +220,7 @@ func testAuditConan(t *testing.T, format format.OutputFormat, withVuln bool) str
 	defer cleanUp()
 	// Run conan install before executing jfrog audit
 	assert.NoError(t, exec.Command("conan").Run())
-	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, string(format)+"-conan-audit-policy", string(format)+"-conan-audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateSecurityTestPolicyAndWatch(t, string(format)+"-conan-audit-policy", string(format)+"-conan-audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUpHome()
@@ -689,7 +699,7 @@ func TestAuditJasCycloneDx(t *testing.T) {
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), auditCommandTestParams{
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c", "sast"), auditCommandTestParams{
 		CustomExclusion: []string{"*out*"},
 		Format:          format.SimpleJson,
 	})
@@ -995,7 +1005,7 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.Medium, false, false)
 	defer cleanUpPolicy()
-	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "static-sca-watch")
+	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "static-sca-watch", xrayUtils.Security)
 	defer deleteWatch()
 
 	output, err := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
@@ -1167,4 +1177,37 @@ func TestAuditNewScaCycloneDxNuget(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3, MissingContext: 1},
 		},
 	})
+}
+
+func TestAuditNewScaSnippetDetection(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	// Create license policy and watch
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestLicensePolicy(t, "snippet-detection-policy", xrayUtils.Critical, false, false, "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later")
+	defer cleanUpPolicy()
+	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "snippet-detection-watch", xrayUtils.License)
+	defer deleteWatch()
+	params := auditCommandTestParams{
+		OnlyScaScan: true,
+		Format:      format.SimpleJson,
+		Watches:     []string{watchName},
+	}
+	// No snippet detection. nothing should be found
+	output, err := testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params)
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output,
+		validations.ValidationParams{ExactResultsMatch: true},
+	)
+	// With snippet detection. should find 4 licenses violations
+	params.WithSnippetDetection = true
+	output, err = testAuditCommandNewSca(t, filepath.Join("package-managers", "c", "snippet_detection"), params)
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output,
+		validations.ValidationParams{
+			ExactResultsMatch: true,
+			Total:             &validations.TotalCount{Violations: 4},
+			Violations: &validations.ViolationCount{
+				ValidateType: &validations.ScaViolationCount{License: 4},
+			},
+		},
+	)
 }
