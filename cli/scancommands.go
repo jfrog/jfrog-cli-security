@@ -492,6 +492,10 @@ func AuditCmd(c *components.Context) error {
 		auditCmd.SetScansToPerform(subScans)
 	}
 
+	if err := validateAnalyzerManagerRequirements(auditCmd.ScansToPerform()); err != nil {
+		return err
+	}
+
 	// Validate that there is a sast scan before setting the sast rules
 	if sastRulesFile := c.GetStringFlagValue(flags.AddSastRules); sastRulesFile != "" {
 		// Check if file exists

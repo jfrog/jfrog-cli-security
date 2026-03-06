@@ -94,6 +94,10 @@ func (gap *GitAuditParams) SetScansToPerform(scansToPerform []utils.SubScanType)
 	return gap
 }
 
+func (gap *GitAuditParams) GetScansToPerform() []utils.SubScanType {
+	return gap.scansToPerform
+}
+
 func (gap *GitAuditParams) SetOutputFormat(outputFormat format.OutputFormat) *GitAuditParams {
 	gap.outputFormat = outputFormat
 	return gap
