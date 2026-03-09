@@ -16,6 +16,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -376,14 +377,10 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, appli
 }
 
 func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
+	bomIndex := cdxutils.NewBOMIndex(enrichedSbom, true)
 	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-		// Prepare the required fields
-		dependencies := []cyclonedx.Dependency{}
-		if enrichedSbom.Dependencies != nil {
-			dependencies = append(dependencies, *enrichedSbom.Dependencies...)
-		}
-		impactPaths := results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...)
-		directDependencies := results.ExtractComponentDirectComponentsInBOM(enrichedSbom, component, impactPaths)
+		impactPaths := results.BuildImpactPath(component, bomIndex)
+		directDependencies := results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths)
 		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
 		if e != nil {
 			return
@@ -740,7 +737,7 @@ func getFixedVersionString(fixedVersions []string) string {
 func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (string, error) {
 	var formattedDirectDependencies strings.Builder
 	for _, dependency := range directDependencies {
-		if _, err := formattedDirectDependencies.WriteString(fmt.Sprintf("`%s %s`<br/>", dependency.Name, dependency.Version)); err != nil {
+		if _, err := fmt.Fprintf(&formattedDirectDependencies, "`%s %s`<br/>", dependency.Name, dependency.Version); err != nil {
 			return "", err
 		}
 	}

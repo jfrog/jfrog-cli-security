@@ -89,6 +89,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		params.includeSbom,
+		params.resultsContext.IncludeSnippetDetection,
 	)
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
@@ -101,6 +102,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetUploadCdxResults(params.uploadResults).SetRtResultRepository(params.rtResultRepository)
 	// Cmd information
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator)
+	auditParams.SetCustomBomGenBinaryPath(params.customBomGenBinaryPath).SetCustomAnalyzerManagerBinaryPath(params.customAnalyzerManagerBinaryPath)
 	// Basic params
 	isRecursiveScan := true
 	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
@@ -113,7 +115,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Send scan started event
-	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
+	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails, params.repositoryLocalPath)
 	event.GitInfo = &params.gitContext
 	event.IsGitInfoFlow = true
 	multiScanId, startTime := xsc.SendNewScanEvent(

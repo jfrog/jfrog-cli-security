@@ -65,6 +65,7 @@ const (
 	Debian   Technology = "deb"
 	Composer Technology = "composer"
 	Alpine   Technology = "alpine"
+	Cpp      Technology = "cpp"
 	NoTech   Technology = ""
 )
 
@@ -210,7 +211,7 @@ var technologiesData = map[Technology]TechData{
 		language:                   GoLang,
 	},
 	Pip: {
-		formal:             "Python",
+		formal:             "Pip",
 		packageType:        Pypi,
 		xrayPackageType:    Pypi,
 		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
@@ -221,7 +222,7 @@ var technologiesData = map[Technology]TechData{
 		language:           Python,
 	},
 	Pipenv: {
-		formal:                     "Python",
+		formal:                     "Pipenv",
 		packageType:                Pypi,
 		xrayPackageType:            Pypi,
 		indicators:                 []string{"Pipfile", "Pipfile.lock"},
@@ -291,6 +292,8 @@ var technologiesData = map[Technology]TechData{
 		projectType:        project.Ruby,
 		language:           Ruby,
 	},
+	// Snippet detection
+	Cpp: {formal: "Github", packageType: "github", xrayPackageType: "cpp"},
 	// Not Supported by build-info BOM generator
 	Docker: {
 		formal:      "Docker",
@@ -852,7 +855,7 @@ func XrayPackageTypeToCdxPackageType(xrayPackageType string) string {
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
-	if packageType == Gav {
+	if packageType == Gav || packageType == "github" {
 		componentName = strings.ReplaceAll(componentName, "/", ":")
 	}
 	if componentVersion == "" {
@@ -930,9 +933,6 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 }
 
 func ToPackageRef(compName, version, packageType string) (output string) {
-	if packageType == "" {
-		packageType = "generic"
-	}
 	return ToPackageUrl(compName, version, packageType)
 }
 

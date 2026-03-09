@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -22,18 +23,19 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-	"golang.org/x/exp/slices"
 
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -41,19 +43,22 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+
+	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 type AuditCommand struct {
-	watches                []string
-	gitRepoHttpsCloneUrl   string
-	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	IncludeSbom            bool
-	Fail                   bool
-	PrintExtendedTable     bool
-	Threads                int
+	watches                 []string
+	gitRepoHttpsCloneUrl    string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	IncludeSbom             bool
+	IncludeSnippetDetection bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	Threads                 int
 	AuditParams
 }
 
@@ -100,6 +105,11 @@ func (auditCmd *AuditCommand) SetIncludeSbom(include bool) *AuditCommand {
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetIncludeSnippetDetection(include bool) *AuditCommand {
+	auditCmd.IncludeSnippetDetection = include
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) SetFail(fail bool) *AuditCommand {
 	auditCmd.Fail = fail
 	return auditCmd
@@ -116,14 +126,15 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom, includeSnippetDetection bool) (context results.ResultContext) {
 	context = results.ResultContext{
-		RepoPath:               artifactoryRepoPath,
-		Watches:                watches,
-		ProjectKey:             projectKey,
-		IncludeVulnerabilities: shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
-		IncludeLicenses:        includeLicenses,
-		IncludeSbom:            includeSbom,
+		RepoPath:                artifactoryRepoPath,
+		Watches:                 watches,
+		ProjectKey:              projectKey,
+		IncludeVulnerabilities:  shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
+		IncludeLicenses:         includeLicenses,
+		IncludeSbom:             includeSbom,
+		IncludeSnippetDetection: includeSnippetDetection,
 	}
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
@@ -161,6 +172,18 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 	return includeVulnerabilities || len(watches) == 0 && projectKey == "" && artifactoryRepoPath == "" && gitRepoHttpsCloneUrl == ""
 }
 
+func shouldIncludeSnippetDetection(params *AuditParams) bool {
+	if profile := params.GetConfigProfile(); profile != nil && len(profile.Modules) > 0 {
+		if profile.Modules[0].ScanConfig.ScaScannerConfig.EnableSnippetDetection {
+			return true
+		}
+	}
+	if params.resultsContext.IncludeSnippetDetection {
+		return true
+	}
+	return strings.ToLower(os.Getenv(plugin.SnippetDetectionEnvVariable)) == "true"
+}
+
 func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	if len(workingDirs) == 0 {
 		return
@@ -176,22 +199,31 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func (auditCmd *AuditCommand) Run() (err error) {
-	isRecursiveScan := false
+func getRelatedWorkingDirs(auditCmd *AuditCommand) (projectPath string, workingDirs []string, isRecursiveScan bool, err error) {
 	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
+			return "", nil, false, errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
+		// OLD logic:
 	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(auditCmd.workingDirs) == 0
 	}
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	workingDirs, err = coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
 	}
 	logScanPaths(workingDirs, isRecursiveScan)
+	projectPath = utils.GetCommonParentDir(workingDirs...)
+	return
+}
+
+func (auditCmd *AuditCommand) Run() (err error) {
+	projectPath, workingDirs, isRecursiveScan, err := getRelatedWorkingDirs(auditCmd)
+	if err != nil {
+		return
+	}
 	serverDetails, err := auditCmd.ServerDetails()
 	if err != nil {
 		return
@@ -201,7 +233,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		auditCmd.GetXrayVersion(),
 		auditCmd.GetXscVersion(),
 		serverDetails,
-		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails, projectPath),
 		auditCmd.projectKey,
 	)
 
@@ -227,6 +259,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
+			auditCmd.IncludeSnippetDetection,
 		)).
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
@@ -343,6 +376,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
+		xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()

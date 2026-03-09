@@ -373,6 +373,38 @@ func TestCountContributorsCommand_InputFile(t *testing.T) {
 				expectedError:    "invalid VcsProvider",
 			},
 		},
+		{
+			name: "missing owner",
+			args: args{
+				inputFile:        "missing_owner.yaml",
+				gitServersNumber: 0,
+				expectedError:    "owner is missing in the input file",
+			},
+		},
+		{
+			name: "missing token",
+			args: args{
+				inputFile:        "missing_token.yaml",
+				gitServersNumber: 0,
+				expectedError:    "token is missing in the input file",
+			},
+		},
+		{
+			name: "missing scm-api-url",
+			args: args{
+				inputFile:        "missing_scm_api_url.yaml",
+				gitServersNumber: 0,
+				expectedError:    "scm-api-url is missing in the input file",
+			},
+		},
+		{
+			name: "missing scm-type",
+			args: args{
+				inputFile:        "missing_scm_type.yaml",
+				gitServersNumber: 0,
+				expectedError:    "scm-type is missing in the input file",
+			},
+		},
 	}
 
 	for _, tt := range tests {

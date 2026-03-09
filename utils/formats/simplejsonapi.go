@@ -124,12 +124,13 @@ type ScannerInfo struct {
 }
 
 type Location struct {
-	File        string `json:"file"`
-	StartLine   int    `json:"startLine,omitempty"`
-	StartColumn int    `json:"startColumn,omitempty"`
-	EndLine     int    `json:"endLine,omitempty"`
-	EndColumn   int    `json:"endColumn,omitempty"`
-	Snippet     string `json:"snippet,omitempty"`
+	File               string   `json:"file"`
+	StartLine          int      `json:"startLine,omitempty"`
+	StartColumn        int      `json:"startColumn,omitempty"`
+	EndLine            int      `json:"endLine,omitempty"`
+	EndColumn          int      `json:"endColumn,omitempty"`
+	Snippet            string   `json:"snippet,omitempty"`
+	ExternalReferences []string `json:"externalReferences,omitempty"`
 }
 
 // String Representation of the location (can be used as unique ID of the location)
