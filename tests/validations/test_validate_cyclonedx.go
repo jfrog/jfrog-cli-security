@@ -58,6 +58,7 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, rootComponents
 		return
 	}
 	parsedLicenses := datastructures.MakeSet[string]()
+	bomIndex := cdxutils.NewBOMIndex(content, true)
 	for _, component := range *content.Components {
 		if component.Licenses != nil {
 			for _, license := range *component.Licenses {
@@ -66,7 +67,7 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, rootComponents
 				}
 			}
 		}
-		relation := cdxutils.GetComponentRelation(content, component.BOMRef, true)
+		relation := bomIndex.GetComponentRelation(component.BOMRef)
 		if relation == cdxutils.UnknownRelation {
 			continue
 		}

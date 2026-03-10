@@ -77,7 +77,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		dsc.xrayVersion,
 		dsc.xscVersion,
 		dsc.serverDetails,
-		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, dsc.serverDetails),
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, dsc.serverDetails, dsc.imageTag),
 		dsc.resultsContext.ProjectKey,
 	)
 
