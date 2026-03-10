@@ -60,6 +60,10 @@ const (
 
 type JasDiffScanEnvValue string
 
+var scannersRequiredInstalledSoftware = []string{
+	"git", "unzip", "curl",
+}
+
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
 	unsupportedCommandExitCode: "got unsupported scan command error from analyzer manager",
@@ -326,4 +330,13 @@ func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd strin
 		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
 	}
 	return RunAnalyzerManagerWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)
+}
+
+func ValidateRequiredInstalledSoftware() (err error) {
+	for _, software := range scannersRequiredInstalledSoftware {
+		if softwarePath, e := exec.LookPath(software); e != nil || softwarePath == "" {
+			err = errors.Join(err, fmt.Errorf("could not find the required '%s' executable in the system PATH to run the Advanced Security Scans", software))
+		}
+	}
+	return
 }

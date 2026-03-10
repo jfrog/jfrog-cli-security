@@ -421,6 +421,11 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForJas(entitledForJas)
 	}
 	if entitledForJas {
+		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
+			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
+				return cmdResults.AddGeneralError(err, false)
+			}
+		}
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
 	return
