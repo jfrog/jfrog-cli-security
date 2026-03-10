@@ -372,7 +372,8 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
@@ -826,7 +827,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation)).
+		SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

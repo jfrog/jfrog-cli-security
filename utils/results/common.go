@@ -297,7 +297,7 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, bomIndex *cdxutils.B
 		log.Debug("Component is a snippet with sub-components, building impact paths for sub-components")
 		return buildSnippetImpactPaths(affectedComponent)
 	}
-	log.Debug("Component is a regular component, building impact paths for parent components")
+	log.Verbose("Component is a regular component, building impact paths for parent components")
 	componentAppearances := map[string]int8{}
 	return buildComponentParentsImpactPaths(affectedComponent, componentAppearances, bomIndex)
 }
