@@ -216,10 +216,6 @@ func (scanCmd *ScanCommand) SetScansToPerform(scansToPerform []utils.SubScanType
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) ScansToPerform() []utils.SubScanType {
-	return scanCmd.scansToPerform
-}
-
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
 }
@@ -342,6 +338,11 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
+			if utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+				if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
+					return xrayManager, cmdResults.AddGeneralError(err, false)
+				}
+			}
 			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, scanCmd.xrayVersion, scanCmd.validateSecrets))
 		}
 	}

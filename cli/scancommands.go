@@ -383,9 +383,6 @@ func ScanCmd(c *components.Context) error {
 	} else if len(subScans) > 0 {
 		scanCmd.SetScansToPerform(subScans)
 	}
-	if err := validateAnalyzerManagerRequirements(scanCmd.ScansToPerform()); err != nil {
-		return err
-	}
 	return commandsCommon.Exec(scanCmd)
 }
 
@@ -494,10 +491,6 @@ func AuditCmd(c *components.Context) error {
 		return err
 	} else if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
-	}
-
-	if err := validateAnalyzerManagerRequirements(auditCmd.ScansToPerform()); err != nil {
-		return err
 	}
 
 	// Validate that there is a sast scan before setting the sast rules
@@ -813,9 +806,6 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	} else if len(subScans) > 0 {
 		containerScanCommand.SetScansToPerform(subScans)
-	}
-	if err := validateAnalyzerManagerRequirements(containerScanCommand.ScansToPerform()); err != nil {
-		return err
 	}
 	containerScanCommand.
 		SetImageTag(image).
