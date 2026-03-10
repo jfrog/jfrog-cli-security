@@ -20,7 +20,7 @@ type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
 	ignorePatterns   []string
-	specificTechs  []techutils.Technology
+	specificTechs    []techutils.Technology
 	totalTargets     int
 }
 

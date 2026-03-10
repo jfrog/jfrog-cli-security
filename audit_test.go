@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
@@ -1002,7 +1002,7 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.Medium, false, false)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "static-sca-policy", xrayUtils.Medium, true, false)
 	defer cleanUpPolicy()
 	watchName, deleteWatch := securityTestUtils.CreateWatchOnArtifactoryRepos(t, policyName, "static-sca-watch", xrayUtils.Security)
 	defer deleteWatch()
@@ -1015,10 +1015,7 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 		Watches:     []string{watchName},
 	})
 	// Make Sure to check violations with fail build error
-	var cliErr coreutils.CliError
-	if assert.ErrorAs(t, err, &cliErr) {
-		assert.Equal(t, coreutils.ExitCodeVulnerableBuild, cliErr.ExitCode)
-	}
+	assert.Equal(t, err, policy.NewFailBuildError())
 	// Validate results
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
