@@ -227,8 +227,8 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
-github.com/orto17/jfrog-client-go v0.0.0-20260305122245-9494249820be h1:XjoNjUWu4FHmtNBxydDNj8VhSmgRYpW3czwf9aGjCx4=
-github.com/orto17/jfrog-client-go v0.0.0-20260305122245-9494249820be/go.mod h1:sCE06+GngPoyrGO0c+vmhgMoVSP83UMNiZnIuNPzU8U=
+github.com/orto17/jfrog-client-go v0.0.0-20260308110532-b0095ca8dbe7 h1:ha8wAs/pRJxBn2rE+2vGJWgPH7xCxjQAoIUs9DuESeY=
+github.com/orto17/jfrog-client-go v0.0.0-20260308110532-b0095ca8dbe7/go.mod h1:sCE06+GngPoyrGO0c+vmhgMoVSP83UMNiZnIuNPzU8U=
 github.com/owenrumney/go-sarif/v3 v3.2.3 h1:n6mdX5ugKwCrZInvBsf6WumXmpAe3mbmQXgkXlIq34U=
 github.com/owenrumney/go-sarif/v3 v3.2.3/go.mod h1:1bV7t8SZg7pX41spaDkEUs8/yEjzk9JapztMoX1XNjg=
 github.com/package-url/packageurl-go v0.1.3 h1:4juMED3hHiz0set3Vq3KeQ75KD1avthoXLtmE3I0PLs=
