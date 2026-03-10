@@ -15,7 +15,8 @@ import (
 )
 
 type XrayLibBomGenerator struct {
-	binaryPath string
+	binaryPath       string
+	snippetDetection bool
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
@@ -26,6 +27,14 @@ func WithBinaryPath(binaryPath string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.binaryPath = binaryPath
+		}
+	}
+}
+
+func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.snippetDetection = snippetDetection
 		}
 	}
 }
@@ -61,12 +70,16 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		return nil, fmt.Errorf("failed to get local Xray-Lib executable path: %w", err)
 	}
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
-	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath)
+	envVars := sbg.getPluginEnvVars()
+	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
 	if logPath != "" {
 		log.Debug(fmt.Sprintf("Plugin logs: %s", logPath))
+	}
+	if len(envVars) > 0 {
+		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
 	}
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
@@ -96,6 +109,14 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
+}
+
+func (sbg *XrayLibBomGenerator) getPluginEnvVars() map[string]string {
+	envVars := map[string]string{}
+	if sbg.snippetDetection {
+		envVars[plugin.SnippetDetectionEnvVariable] = "true"
+	}
+	return envVars
 }
 
 func (sbg *XrayLibBomGenerator) CleanUp() (err error) {

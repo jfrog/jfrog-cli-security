@@ -13,6 +13,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -824,7 +825,7 @@ func TestExtractComponentDirectComponentsInBOM(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualDirects := ExtractComponentDirectComponentsInBOM(test.bom, test.component, test.impactPaths)
+			actualDirects := ExtractComponentDirectComponentsInBOM(cdxutils.NewBOMIndex(test.bom, true), test.component, test.impactPaths)
 			assert.ElementsMatch(t, test.expectedDirects, actualDirects)
 		})
 	}

@@ -27,6 +27,7 @@ const (
 	Enrich               = "sbom-enrich"
 	UploadCdx            = "upload-cdx"
 	MaliciousScan        = "malicious-scan"
+	SastServer           = "sast-server"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -70,6 +71,7 @@ const (
 
 	// Sast related flags
 	AddSastRules = "add-sast-rules"
+	Port         = "port"
 )
 
 const (
@@ -120,6 +122,7 @@ const (
 	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
+	Snippet             = "snippet"
 	Fail                = "fail"
 	ExtendedTable       = "extended-table"
 	MinSeverity         = "min-severity"
@@ -176,7 +179,7 @@ var commandFlags = map[string][]string{
 	XrScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir, AnalyzerManagerCustomPath,
 	},
 	Enrich: {
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
@@ -189,10 +192,10 @@ var commandFlags = map[string][]string{
 	},
 	DockerScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir, AnalyzerManagerCustomPath,
 	},
 	Audit: {
-		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Snippet, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
@@ -205,7 +208,7 @@ var commandFlags = map[string][]string{
 		// Connection params
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
-		scanProjectKey, Watches, ScanVuln, Fail,
+		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom,
@@ -219,6 +222,9 @@ var commandFlags = map[string][]string{
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
+	},
+	SastServer: {
+		Port,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -269,11 +275,12 @@ var flagsMap = map[string]components.Flag{
 	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
 	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs, operational risk, and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	Snippet:          components.NewBoolFlag(Snippet, "Set to true if you'd like to enables snippet-level detection to identify copied code from third-party components and surface related license violations.", components.SetHiddenBoolFlag()),
 	Licenses:         components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
 	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
-		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
+		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package. Note: cycloneDx format does support information about violations, only vulnerabilities are currently supported",
 		components.WithStrDefaultValue("table"),
 	),
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
@@ -344,6 +351,7 @@ var flagsMap = map[string]components.Flag{
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
+	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
 	// Docker flags
 	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),

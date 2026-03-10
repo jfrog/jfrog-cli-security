@@ -22,8 +22,10 @@ import (
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+
 	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
+	sastServerDocs "github.com/jfrog/jfrog-cli-security/cli/docs/sastserver"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
@@ -37,6 +39,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/sast_server"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -124,6 +127,13 @@ func getAuditAndScansCommands() []components.Command {
 			Name:        "source-mcp",
 			Description: mcpDocs.GetDescription(),
 			Action:      SourceMcpCmd,
+			Hidden:      true,
+		},
+		{
+			Name:        "sast-server",
+			Description: sastServerDocs.GetDescription(),
+			Flags:       flags.GetCommandFlags(flags.SastServer),
+			Action:      SastServerCmd,
 			Hidden:      true,
 		},
 		{
@@ -215,6 +225,26 @@ func SourceMcpCmd(c *components.Context) error {
 		ErrorPipe:     os.Stderr,
 	}
 	return mcp_cmd.Run()
+}
+
+func SastServerCmd(c *components.Context) error {
+	serverDetails, err := CreateServerDetailsFromFlags(c)
+	if err != nil {
+		return err
+	}
+	port := c.GetStringFlagValue(flags.Port)
+	if port == "" {
+		return pluginsCommon.PrintHelpAndReturnError("port is required", c)
+	}
+	arguments := []string{"--port", port}
+	sastServerCmd := sast_server.SastServerCommand{
+		ServerDetails: serverDetails,
+		Arguments:     arguments,
+		InputPipe:     os.Stdin,
+		OutputPipe:    os.Stdout,
+		ErrorPipe:     os.Stderr,
+	}
+	return sastServerCmd.Run()
 }
 
 func EnrichCmd(c *components.Context) error {
@@ -342,7 +372,8 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
@@ -518,6 +549,10 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+	includeSnippetDetection, err := validateSnippetDetection(c)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	auditCmd.SetViolationGenerator(violationGenerator)
@@ -527,6 +562,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetIncludeSbom(shouldIncludeSbom(c, format)).
+		SetIncludeSnippetDetection(includeSnippetDetection).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
@@ -791,7 +827,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation)).
+		SetCustomAnalyzerManagerPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
