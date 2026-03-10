@@ -216,6 +216,10 @@ func (scanCmd *ScanCommand) SetScansToPerform(scansToPerform []utils.SubScanType
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) ScansToPerform() []utils.SubScanType {
+	return scanCmd.scansToPerform
+}
+
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
 }
