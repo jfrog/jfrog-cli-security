@@ -122,6 +122,7 @@ const (
 	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
+	Snippet             = "snippet"
 	Fail                = "fail"
 	ExtendedTable       = "extended-table"
 	MinSeverity         = "min-severity"
@@ -178,7 +179,7 @@ var commandFlags = map[string][]string{
 	XrScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir, AnalyzerManagerCustomPath,
 	},
 	Enrich: {
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls,
@@ -191,10 +192,10 @@ var commandFlags = map[string][]string{
 	},
 	DockerScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
-		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir,
+		binarySca, binarySecrets, binaryWithoutCA, SecretValidation, OutputDir, AnalyzerManagerCustomPath,
 	},
 	Audit: {
-		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Snippet, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
@@ -207,7 +208,7 @@ var commandFlags = map[string][]string{
 		// Connection params
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
-		scanProjectKey, Watches, ScanVuln, Fail,
+		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom,
@@ -274,6 +275,7 @@ var flagsMap = map[string]components.Flag{
 	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
 	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs, operational risk, and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	Snippet:          components.NewBoolFlag(Snippet, "Set to true if you'd like to enables snippet-level detection to identify copied code from third-party components and surface related license violations.", components.SetHiddenBoolFlag()),
 	Licenses:         components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
 	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
