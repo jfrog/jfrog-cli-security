@@ -270,6 +270,8 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if len(rw.tableNotes) > 0 {
 		printMessages(rw.tableNotes)
 	}
+	// Print scan IDs with links to on-demand scanning
+	rw.printScanIdsIfAvailable()
 	return
 }
 
@@ -452,4 +454,39 @@ func WriteJsonResults(results *results.SecurityCommandResults) (resultsPath stri
 
 func WriteSarifResultsAsString(report *sarif.Report, escape bool) (sarifStr string, err error) {
 	return utils.GetAsJsonString(report, escape, true)
+}
+
+func (rw *ResultsWriter) printScanIdsIfAvailable() {
+	if rw.platformUrl == "" {
+		return
+	}
+	// Collect all scan IDs from all targets
+	scanIds := []string{}
+	for _, target := range rw.commandResults.Targets {
+		if target.ScaResults != nil && len(target.ScaResults.ScanIds) > 0 {
+			scanIds = append(scanIds, target.ScaResults.ScanIds...)
+		}
+	}
+	if len(scanIds) == 0 {
+		return
+	}
+	// Remove duplicates by using UniqueUnion with an empty base
+	scanIds = utils.UniqueUnion([]string{}, scanIds...)
+	// Print scan IDs with links
+	log.Output()
+	icon := "🔗"
+	if !isPrettyOutputSupported() {
+		icon = "*"
+	}
+	if len(scanIds) == 1 {
+		onDemandUrl := fmt.Sprintf("%sui/onDemandScanning/%s", rw.platformUrl, scanIds[0])
+		log.Output(fmt.Sprintf("%s Scan ID: %s", icon, scanIds[0]))
+		log.Output(fmt.Sprintf("   View scan results: %s", onDemandUrl))
+	} else {
+		log.Output(fmt.Sprintf("%s Scan IDs:", icon))
+		for _, scanId := range scanIds {
+			onDemandUrl := fmt.Sprintf("%sui/onDemandScanning/%s", rw.platformUrl, scanId)
+			log.Output(fmt.Sprintf("   - %s: %s", scanId, onDemandUrl))
+		}
+	}
 }
