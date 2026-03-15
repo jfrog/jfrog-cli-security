@@ -24,7 +24,7 @@ import (
 
 const (
 	xrayLibPluginVersionEnvVariable = "JFROG_CLI_XRAY_LIB_PLUGIN_VERSION"
-	defaultXrayLibPluginVersion     = "1.0.4"
+	defaultXrayLibPluginVersion     = "1.1.0"
 
 	SnippetDetectionEnvVariable = "JFROG_XRAY_SNIPPET_SCAN_ENABLE"
 
