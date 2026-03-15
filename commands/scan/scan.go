@@ -565,10 +565,11 @@ func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGr
 
 func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi string, secretValidation bool, targetResults *results.TargetResults, targetCompId string, graphScanResults *services.ScanResponse, jasFileProducerConsumer *utils.SecurityParallelRunner, scanThreadId int) (err error) {
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
-	module, err := getJasModule(targetResults)
+	deprecatedAppsConfigModule, err := getJasDeprecatedAppsConfigModule(targetResults.Target)
 	if err != nil {
 		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"jas scanning failed with error: %s", err.Error()), false)
 	}
+	targetResults.DeprecatedAppsConfigModule = &deprecatedAppsConfigModule
 	// Prepare Jas scans
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
@@ -604,7 +605,6 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		Runner:          jasFileProducerConsumer,
 		ServerDetails:   scanCmd.serverDetails,
 		Scanner:         scanner,
-		Module:          module,
 		TargetOutputDir: scanCmd.outputDir,
 		ScansToPerform:  scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
@@ -646,8 +646,8 @@ func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResu
 	return cmdType == utils.DockerImage || targetResults.Technology == techutils.Docker || targetResults.Technology == techutils.Oci
 }
 
-func getJasModule(targetResults *results.TargetResults) (jfrogappsconfig.Module, error) {
-	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig([]string{targetResults.Target})
+func getJasDeprecatedAppsConfigModule(target string) (jfrogappsconfig.Module, error) {
+	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig([]string{target})
 	if err != nil {
 		return jfrogappsconfig.Module{}, err
 	}

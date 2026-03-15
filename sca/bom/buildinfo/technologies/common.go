@@ -81,7 +81,7 @@ func (bbp *BuildInfoBomGeneratorParams) SetConanProfile(file string) *BuildInfoB
 	return bbp
 }
 
-func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
+func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
 	if configProfile != nil {
 		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
 	}
