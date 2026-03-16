@@ -314,7 +314,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.EntitledForJas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-				if !found && isMatchingJasViolation(id, jasType, rule, result, location, run.Invocations, violation) {
+				if !found && isMatchingJasViolation(id, jasType, rule, location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
 					match = matchedJsaVulnerability{
 						rule:     rule,
@@ -332,7 +332,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 	return
 }
 
-func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, result *sarif.Result, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
+func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
 	if jasType == jasutils.Secrets {
 		// Secrets Jas should relay on Scanner ID to match
 		if id != sarifutils.GetSecretScannerRuleId(rule) {
