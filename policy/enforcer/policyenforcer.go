@@ -332,6 +332,19 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 	return
 }
 
+func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, result *sarif.Result, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
+	if jasType == jasutils.Secrets {
+		// Secrets Jas should relay on Scanner ID to match
+		if id != sarifutils.GetSecretScannerRuleId(rule) {
+			return false
+		}
+	} else if sarifutils.GetRuleId(rule) != id {
+		// Other Jas should relay on rule ID to match
+		return false
+	}
+	return isLocationMatchingJasViolation(location, invocations, violation)
+}
+
 func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
 	// Convert location to relative path
 	if relative := sarifutils.GetRelativeLocationFileName(location, invocations); !slices.Contains(violation.InfectedFilePaths, relative) {
@@ -353,7 +366,13 @@ func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.Ja
 			log.Debug(fmt.Sprintf("Skipping Secrets violation with mismatched or missing Exposure details for ID %s", violation.IssueId))
 			return ""
 		}
-		return violation.ExposureDetails.Abbreviation
+		// ID format: 'EXP-<rule_id>-<unique_id>' --> return 'EXP-<rule_id>'
+		split := strings.Split(violation.ExposureDetails.Id, "-")
+		if len(split) < 2 {
+			log.Warn(fmt.Sprintf("Skipping Secrets violation with invalid ID format for ID %s", violation.IssueId))
+			return ""
+		}
+		return fmt.Sprintf("EXP-%s", split[1])
 	}
 	return ""
 }

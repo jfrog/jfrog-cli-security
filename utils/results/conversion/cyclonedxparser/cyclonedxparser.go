@@ -184,7 +184,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 			}
 		}
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, applicabilityStatus, source)}
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), getSecretScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetSecretScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		properties = append(properties, cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
@@ -193,14 +193,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)
 		return
 	})
-}
-
-func getSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
-	ruleId := sarifutils.GetRuleScannerId(rule)
-	if ruleId == "" {
-		return ""
-	}
-	return fmt.Sprintf("EXP-%s", ruleId)
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
