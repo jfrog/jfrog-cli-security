@@ -314,7 +314,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.EntitledForJas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-				if !found && sarifutils.GetRuleId(rule) == id && isLocationMatchingJasViolation(location, run.Invocations, violation) {
+				if !found && isMatchingJasViolation(id, jasType, rule, result, location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
 					match = matchedJsaVulnerability{
 						rule:     rule,
