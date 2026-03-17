@@ -391,6 +391,13 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 		}
 	}
 	filteredSbom.Components = excludeFromComponents(bom.Components, toExclude.ToSlice()...)
+	cleanDeps := make([]cyclonedx.Dependency, 0, len(*filteredSbom.Dependencies))
+	for _, dep := range *filteredSbom.Dependencies {
+		if dep.Dependencies != nil && len(*dep.Dependencies) > 0 {
+			cleanDeps = append(cleanDeps, dep)
+		}
+	}
+	filteredSbom.Dependencies = &cleanDeps
 	return filteredSbom
 }
 
@@ -437,9 +444,7 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 				}
 			}
 		}
-		if filteredDep.Dependencies != nil && len(*filteredDep.Dependencies) > 0 {
-			filteredDependencies = append(filteredDependencies, filteredDep)
-		}
+		filteredDependencies = append(filteredDependencies, filteredDep)
 	}
 	return &filteredDependencies
 }
