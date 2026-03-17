@@ -59,10 +59,7 @@ type MavenDepTreeManager struct {
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
-	depTreeManager := NewDepTreeManager(&DepTreeParams{
-		Server:   params.Server,
-		DepsRepo: params.DepsRepo,
-	})
+	depTreeManager := NewDepTreeManager(params)
 	return &MavenDepTreeManager{
 		DepTreeManager:      depTreeManager,
 		isInstalled:         params.IsMavenDepTreeInstalled,
