@@ -107,7 +107,8 @@ func TestGitAuditSimpleJson(t *testing.T) {
 }
 
 func TestGitAuditStaticScaSimpleJson(t *testing.T) {
-	integration.InitAuditNewScaTests(t, securityUtils.StaticScanMinVersion)
+	// XRAY-136444 will be fixed in 3.141.7
+	integration.InitAuditNewScaTests(t, "3.141.7")
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
