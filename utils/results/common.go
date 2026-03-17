@@ -1,6 +1,7 @@
 package results
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -56,9 +57,9 @@ type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependenc
 type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) error {
+func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) (err error) {
 	if !entitledForJas || handler == nil {
-		return nil
+		return
 	}
 	for _, run := range runs {
 		for _, result := range run.Results {
@@ -67,50 +68,56 @@ func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIss
 				log.Verbose(fmt.Sprintf("Skipping informational result with rule id: %s", sarifutils.GetResultRuleId(result)))
 				continue
 			}
-			severity, err := severityutils.ParseSeverity(result.Level, true)
-			if err != nil {
-				return err
+			severity, e := severityutils.ParseSeverity(result.Level, true)
+			if e != nil {
+				err = errors.Join(err, e)
+				continue
 			}
 			rule := sarifutils.GetRuleById(run, sarifutils.GetResultRuleId(result))
 			if len(result.Locations) == 0 {
 				// If there are no locations, the issue is not specific to a location, and we should handle it as a general issue.
-				if err := handler(run, rule, severity, result, nil); err != nil {
-					return err
+				if e := handler(run, rule, severity, result, nil); e != nil {
+					err = errors.Join(err, e)
+					continue
 				}
 			} else {
 				for _, location := range result.Locations {
-					if err := handler(run, rule, severity, result, location); err != nil {
-						return err
+					if e := handler(run, rule, severity, result, location); e != nil {
+						err = errors.Join(err, e)
+						continue
 					}
 				}
 			}
 		}
 	}
-	return nil
+	return
 }
 
 // ForEachScanGraphVulnerability allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScanGraphVulnerabilityFunc) error {
+func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScanGraphVulnerabilityFunc) (err error) {
 	if handler == nil {
-		return nil
+		return
 	}
 	for _, vulnerability := range vulnerabilities {
 		cves, applicabilityStatus := ConvertCvesWithApplicability(vulnerability.Cves, entitledForJas, applicabilityRuns, vulnerability.Components)
-		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
-		if err != nil {
-			return err
+		severity, e := severityutils.ParseSeverity(vulnerability.Severity, false)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
 		}
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(GetBestScaEvidenceMatch(target, descriptors), vulnerability.Components)
-		if err != nil {
-			return err
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(GetBestScaEvidenceMatch(target, descriptors), vulnerability.Components)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
 		}
 		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-			if err := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
-				return err
+			if e := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
+				err = errors.Join(err, e)
+				continue
 			}
 		}
 	}
-	return nil
+	return
 }
 
 // Get the best match for the scan target in the sca results
@@ -130,7 +137,7 @@ func GetBestScaEvidenceMatch(target ScanTarget, descriptors []string) string {
 	return bestMatch
 }
 
-func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
+func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) (err error) {
 	if handler == nil || bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
 		return nil
 	}
@@ -153,12 +160,13 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 				continue
 			}
 			// Pass the vulnerability to the handler with its related information
-			if err := handler(vulnerability, *relatedComponent, GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); err != nil {
-				return err
+			if e := handler(vulnerability, *relatedComponent, GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); e != nil {
+				err = errors.Join(err, e)
+				continue
 			}
 		}
 	}
-	return nil
+	return
 }
 
 func GetFixedVersions(affectedComponent cyclonedx.Affects) (fixedVersions *[]cyclonedx.AffectedVersions) {
@@ -193,9 +201,9 @@ func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity sev
 }
 
 // ForEachLicense allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
-func ForEachLicense(target ScanTarget, licenses []services.License, handler ParseLicenseFunc) error {
+func ForEachLicense(target ScanTarget, licenses []services.License, handler ParseLicenseFunc) (err error) {
 	if handler == nil {
-		return nil
+		return
 	}
 	for _, license := range licenses {
 		if license.Key == "Unknown" && len(license.Components) == 0 {
@@ -203,17 +211,19 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 			log.Debug("Skipping license with key 'Unknown' and no components")
 			continue
 		}
-		impactedPackagesIds, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
+		impactedPackagesIds, _, directComponents, impactPaths, e := SplitComponents(target.Target, license.Components)
 		if err != nil {
-			return err
+			err = errors.Join(err, e)
+			continue
 		}
 		for compIndex := range impactedPackagesIds {
-			if err := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
-				return err
+			if e := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
+				err = errors.Join(err, e)
+				continue
 			}
 		}
 	}
-	return nil
+	return
 }
 
 // ForEachSbomComponent allows to iterate over the provided CycloneDX SBOM components and call the provided handler for each component to process it.
@@ -223,12 +233,9 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 	}
 	bomIndex := cdxutils.NewBOMIndex(bom, true)
 	for _, component := range *bom.Components {
-		if err := handler(
-			component,
-			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			bomIndex.GetComponentRelation(component.BOMRef),
-		); err != nil {
-			return err
+		if e := handler(component, cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef), bomIndex.GetComponentRelation(component.BOMRef)); e != nil {
+			err = errors.Join(err, e)
+			continue
 		}
 	}
 	return
