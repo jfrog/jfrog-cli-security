@@ -1568,6 +1568,34 @@ func TestExclude(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Exclude all transitive deps of root component - no cascade removal",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "flask", PackageURL: "pkg:pypi/flask@0.12", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "jinja2", PackageURL: "pkg:pypi/jinja2@2.10", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "werkzeug", PackageURL: "pkg:pypi/werkzeug@0.14", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "click", PackageURL: "pkg:pypi/click@6.7", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "markupsafe", PackageURL: "pkg:pypi/markupsafe@1.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "flask", Dependencies: &[]string{"jinja2", "werkzeug", "click"}},
+					{Ref: "jinja2", Dependencies: &[]string{"markupsafe"}},
+				},
+			},
+			exclude: []cyclonedx.Component{
+				{PackageURL: "pkg:pypi/jinja2@2.10"},
+				{PackageURL: "pkg:pypi/werkzeug@0.14"},
+				{PackageURL: "pkg:pypi/click@6.7"},
+				{PackageURL: "pkg:pypi/markupsafe@1.0"},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "flask", PackageURL: "pkg:pypi/flask@0.12", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
