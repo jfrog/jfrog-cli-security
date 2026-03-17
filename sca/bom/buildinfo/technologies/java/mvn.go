@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -88,6 +89,12 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 // Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
 // If a non-nil clearMavenDepTreeRun pointer is returns it means we had no error during the entire function execution
 func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMavenDepTreeRun func() error, err error) {
+	if mdt.useWrapper {
+		mdt.useWrapper, err = isMavenWrapperExist()
+		if err != nil {
+			return
+		}
+	}
 	// depTreeExecDir is a temp directory for all the files that are required for the maven-dep-tree run
 	depTreeExecDir, clearMavenDepTreeRun, err := mdt.CreateTempDirWithSettingsXmlIfNeeded()
 	if err != nil {
@@ -202,6 +209,14 @@ func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
 
 func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
+}
+
+func isMavenWrapperExist() (bool, error) {
+	wrapperName := "mvnw"
+	if coreutils.IsWindows() {
+		wrapperName += ".cmd"
+	}
+	return fileutils.IsFileExists(wrapperName, false)
 }
 
 func removeMavenConfig() (func() error, error) {
