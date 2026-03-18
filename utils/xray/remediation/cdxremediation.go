@@ -59,6 +59,7 @@ func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *c
 	}
 }
 
+// TODO remove this when https://jfrog-int.atlassian.net/browse/XRAY-137306 is done, as fix versions should be already normalized when returning from remediation API.
 func normalizeVersion(version string) string {
 	return strings.TrimPrefix(version, "v")
 }
