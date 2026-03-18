@@ -80,6 +80,8 @@ type ScanCommand struct {
 	multiScanId string
 	startTime   time.Time
 
+	customAnalyzerManagerPath string
+
 	// Dynamic logic params
 	scansToPerform []utils.SubScanType
 	bomGenerator   bom.SbomGenerator
@@ -108,6 +110,11 @@ func (scanCmd *ScanCommand) SetSecretValidation(validateSecrets bool) *ScanComma
 
 func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 	scanCmd.fixableOnly = fixable
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetCustomAnalyzerManagerPath(customPath string) *ScanCommand {
+	scanCmd.customAnalyzerManagerPath = customPath
 	return scanCmd
 }
 
@@ -242,7 +249,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	// Violations
 	if cmdResults.HasViolationContext() {
 		if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
-			return fmt.Errorf("failed to enrich with violations: %s", err.Error())
+			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich with violations: %s", err.Error()), false)
 		}
 	}
 
@@ -331,6 +338,11 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
+			if utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+				if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
+					return xrayManager, cmdResults.AddGeneralError(err, false)
+				}
+			}
 			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, scanCmd.xrayVersion, scanCmd.validateSecrets))
 		}
 	}
@@ -341,9 +353,13 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	// Download (if needed) the analyzer manager in a background routine.
 	AnalyzerErrGroup := new(errgroup.Group)
 	if cmdResults.EntitledForJas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
-		AnalyzerErrGroup.Go(func() error {
-			return jas.DownloadAnalyzerManagerIfNeeded(0)
-		})
+		if scanCmd.customAnalyzerManagerPath == "" {
+			AnalyzerErrGroup.Go(func() error {
+				return jas.DownloadAnalyzerManagerIfNeeded(0)
+			})
+		} else {
+			log.Debug("Using custom analyzer manager binary path, skipping download")
+		}
 	} else {
 		log.Debug("Advanced Security scans were not initiated, so Advanced Security scans were skipped...")
 	}
@@ -583,7 +599,9 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		return
 	}
 	// Set the analyzer manager executable path.
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+	if scanCmd.customAnalyzerManagerPath != "" {
+		scanner.AnalyzerManager.AnalyzerManagerFullPath = scanCmd.customAnalyzerManagerPath
+	} else if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
 		return fmt.Errorf("failed to set analyzer manager executable path: %s", err.Error())
 	}
 	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))

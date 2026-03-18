@@ -115,6 +115,14 @@ func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
 	return
 }
 
+func GetSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
+	ruleId := GetRuleScannerId(rule)
+	if ruleId == "" {
+		return ""
+	}
+	return fmt.Sprintf("EXP-%s", ruleId)
+}
+
 func GetRuleScannerId(rule *sarif.ReportingDescriptor) (issueId string) {
 	return GetRuleProperty(JasScannerIdSarifPropertyKey, rule)
 }

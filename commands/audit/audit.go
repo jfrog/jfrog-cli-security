@@ -376,6 +376,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithTotalTargets(len(params.workingDirs)),
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
+		xrayplugin.WithSpecificTechnologies(params.Technologies()),
 		xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 	}
 	// Scan Strategies Options
@@ -421,6 +422,11 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForJas(entitledForJas)
 	}
 	if entitledForJas {
+		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
+			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
+				return cmdResults.AddGeneralError(err, false)
+			}
+		}
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
 	return

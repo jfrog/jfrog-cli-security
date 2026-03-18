@@ -66,7 +66,7 @@ func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, e
 }
 
 func getDummyGitRepoUrl() string {
-	return fmt.Sprintf("https://github.com/jfrog/dummy-repo-url-%s.git", securityTests.GetUniqueSuffix())
+	return fmt.Sprintf("https://github.com/jfrog/dummy-repo-url%s.git", securityTests.GetUniqueSuffix())
 }
 
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
@@ -106,9 +106,9 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	)
 }
 
-func TestGitAuditStaticScaCycloneDx(t *testing.T) {
-	integration.InitAuditNewScaTests(t, securityUtils.StaticScanMinVersion)
-	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-03-2026", 14, "Bug in Xray plugin, should be fixed at XRAY-136444")
+func TestGitAuditStaticScaSimpleJson(t *testing.T) {
+	// XRAY-136444 will be fixed in 3.141.7
+	integration.InitAuditNewScaTests(t, "3.141.7")
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
@@ -132,6 +132,7 @@ func TestGitAuditStaticScaCycloneDx(t *testing.T) {
 				WithVuln:      true,
 				Watches:       []string{watchName},
 			},
+			OverrideRepoCloneUrl: dummyCloneUrl,
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
