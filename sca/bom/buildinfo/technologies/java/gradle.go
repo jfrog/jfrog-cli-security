@@ -179,7 +179,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	}
 
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
-	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
+	if output, err := buildGradleExecCommand(gradleExecPath, gdt.useWrapper, tasks).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
 	}
 	defer func() {
@@ -205,6 +205,15 @@ func getDepTreeArtifactoryRepository(remoteRepo string, server *config.ServerDet
 		remoteRepo,
 		username,
 		password), nil
+}
+
+// Constructs the command to run gradlew/gradle with the given tasks.
+// When using the Gradle wrapper on non-Windows systems, the wrapper script is invoked via 'sh' in order to avoid "permission denied" errors
+func buildGradleExecCommand(gradleExecPath string, useWrapper bool, tasks []string) *exec.Cmd {
+	if useWrapper && !coreutils.IsWindows() {
+		return exec.Command("sh", append([]string{gradleExecPath}, tasks...)...)
+	}
+	return exec.Command(gradleExecPath, tasks...)
 }
 
 // This function assumes that the Gradle wrapper is in the root directory.
