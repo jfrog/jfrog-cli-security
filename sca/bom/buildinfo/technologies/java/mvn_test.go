@@ -242,7 +242,7 @@ func TestMavenWrapperTrees(t *testing.T) {
 		GavPackageTypeIdentifier + "javax.servlet:servlet-api:2.5",
 	}
 
-	modulesDependencyTrees, uniqueDeps, err := buildMavenDependencyTree(&DepTreeParams{})
+	modulesDependencyTrees, uniqueDeps, err := buildMavenDependencyTree(&DepTreeParams{UseWrapper: true})
 	if assert.NoError(t, err) && assert.NotEmpty(t, modulesDependencyTrees) {
 		assert.ElementsMatch(t, maps.Keys(uniqueDeps), expectedUniqueDeps, "First is actual, Second is Expected")
 		// Check root module
@@ -314,7 +314,7 @@ func TestDepTreeWithDedicatedCache(t *testing.T) {
 	assert.NoError(t, err)
 	tempDir := t.TempDir()
 	defer assert.NoError(t, utils.RemoveTempDir(tempDir))
-	manager := NewMavenDepTreeManager(&DepTreeParams{IsCurationCmd: true, CurationCacheFolder: tempDir}, Tree)
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, IsCurationCmd: true, CurationCacheFolder: tempDir}, Tree)
 	_, err = manager.runTreeCmd(tempDir)
 	require.NoError(t, err)
 	// validate one of the jars exist in the dedicated cache for curation
@@ -425,4 +425,29 @@ func TestRemoveMavenConfig(t *testing.T) {
 	err = restoreFunc()
 	assert.NoError(t, err)
 	assert.FileExists(t, mavenConfigPath)
+}
+
+func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
+	server := &config.ServerDetails{ArtifactoryUrl: "https://test.jfrog.io/artifactory"}
+	params := &DepTreeParams{
+		UseWrapper:              true,
+		Server:                  server,
+		DepsRepo:                "test-repo",
+		IsMavenDepTreeInstalled: true,
+		IsCurationCmd:           true,
+		CurationCacheFolder:     "/tmp/cache",
+		UseIncludedBuilds:       true,
+	}
+
+	manager := NewMavenDepTreeManager(params, Tree)
+
+	assert.True(t, manager.useWrapper)
+	assert.True(t, manager.useIncludedBuilds)
+	assert.Equal(t, server, manager.server)
+	assert.Equal(t, "test-repo", manager.depsRepo)
+
+	assert.True(t, manager.isInstalled)
+	assert.True(t, manager.isCurationCmd)
+	assert.Equal(t, "/tmp/cache", manager.curationCacheFolder)
+	assert.Equal(t, Tree, manager.cmdName)
 }
