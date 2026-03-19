@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -59,10 +60,7 @@ type MavenDepTreeManager struct {
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
-	depTreeManager := NewDepTreeManager(&DepTreeParams{
-		Server:   params.Server,
-		DepsRepo: params.DepsRepo,
-	})
+	depTreeManager := NewDepTreeManager(params)
 	return &MavenDepTreeManager{
 		DepTreeManager:      depTreeManager,
 		isInstalled:         params.IsMavenDepTreeInstalled,
@@ -91,6 +89,12 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 // Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
 // If a non-nil clearMavenDepTreeRun pointer is returns it means we had no error during the entire function execution
 func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMavenDepTreeRun func() error, err error) {
+	if mdt.useWrapper {
+		mdt.useWrapper, err = isMavenWrapperExist()
+		if err != nil {
+			return
+		}
+	}
 	// depTreeExecDir is a temp directory for all the files that are required for the maven-dep-tree run
 	depTreeExecDir, clearMavenDepTreeRun, err := mdt.CreateTempDirWithSettingsXmlIfNeeded()
 	if err != nil {
@@ -178,11 +182,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	}
 
 	//#nosec G204
-	// Fix bug #418 if DepTreeParams.UseWrapper is true, we need to run the maven wrapper script instead of 'mvn'
-	cmd := "mvn"
-	if mdt.useWrapper {
-		cmd = "./mvnw"
-	}
+	cmd := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
 	cmdOutput, err = exec.Command(cmd, goals...).CombinedOutput()
 	if err != nil {
@@ -191,9 +191,9 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
-			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)
+			err = fmt.Errorf("failed running command '%s %s'\n\n%s", cmd, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command 'mvn %s': %s", strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %s", cmd, strings.Join(goals, " "), err.Error())
 		}
 	}
 	return
@@ -205,6 +205,28 @@ func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
 
 func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
+}
+
+func getMavenExecPath(useWrapper bool) string {
+	if useWrapper {
+		wrapperName := "mvnw"
+		if coreutils.IsWindows() {
+			wrapperName += ".cmd"
+		}
+		// Prefix with "." + separator to form an explicit relative path (e.g. "./mvnw" or ".\mvnw.cmd").
+		// This is required since Go 1.19, which no longer resolves executables in the current directory
+		// via PATH unless an explicit relative path is provided.
+		return "." + string(os.PathSeparator) + wrapperName
+	}
+	return "mvn"
+}
+
+func isMavenWrapperExist() (bool, error) {
+	wrapperName := "mvnw"
+	if coreutils.IsWindows() {
+		wrapperName += ".cmd"
+	}
+	return fileutils.IsFileExists(wrapperName, false)
 }
 
 func removeMavenConfig() (func() error, error) {
