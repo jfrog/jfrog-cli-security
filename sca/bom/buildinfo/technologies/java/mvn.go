@@ -185,7 +185,11 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	// Fix bug #418 if DepTreeParams.UseWrapper is true, we need to run the maven wrapper script instead of 'mvn'
 	cmd := "mvn"
 	if mdt.useWrapper {
-		cmd = "./mvnw"
+		if coreutils.IsWindows() {
+			cmd = "mvnw.cmd"
+		} else {
+			cmd = "./mvnw"
+		}
 	}
 	//#nosec G204
 	cmdOutput, err = exec.Command(cmd, goals...).CombinedOutput()
@@ -195,9 +199,9 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
-			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)
+			err = fmt.Errorf("failed running command '%s %s'\n\n%s", cmd, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command 'mvn %s': %s", strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %s", cmd, strings.Join(goals, " "), err.Error())
 		}
 	}
 	return
