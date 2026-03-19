@@ -214,6 +214,18 @@ func TestMavenTreesMultiModule(t *testing.T) {
 	}
 }
 
+func TestMavenWrapperWithoutExecutePermission(t *testing.T) {
+	// Simulate mvnw committed without the execute bit (e.g. 100644 in git).
+	// The scan must still succeed because RunMvnCmd invokes it via 'sh' on non-Windows.
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example-with-wrapper"))
+	defer cleanUp()
+	assert.NoError(t, os.Chmod("mvnw", 0644))
+
+	modulesDependencyTrees, _, err := buildMavenDependencyTree(&DepTreeParams{UseWrapper: true})
+	assert.NoError(t, err)
+	assert.NotNil(t, modulesDependencyTrees)
+}
+
 func TestMavenWrapperTrees(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example-with-wrapper"))

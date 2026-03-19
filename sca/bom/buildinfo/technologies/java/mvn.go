@@ -181,19 +181,18 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 		goals = append(goals, "-s", mdt.settingsXmlPath)
 	}
 
+	execPath := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
-	cmd := getMavenExecPath(mdt.useWrapper)
-	//#nosec G204
-	cmdOutput, err = exec.Command(cmd, goals...).CombinedOutput()
+	cmdOutput, err = buildMvnExecCommand(mdt.useWrapper, execPath, goals).CombinedOutput()
 	if err != nil {
 		stringOutput := string(cmdOutput)
 		if len(cmdOutput) > 0 {
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
-			err = fmt.Errorf("failed running command '%s %s'\n\n%s", cmd, strings.Join(goals, " "), msg)
+			err = fmt.Errorf("failed running command '%s %s'\n\n%s", execPath, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command '%s %s': %s", cmd, strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %s", execPath, strings.Join(goals, " "), err.Error())
 		}
 	}
 	return
@@ -205,6 +204,19 @@ func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
 
 func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
+}
+
+// Constructs the command to run mvnw/mvn with the given goals.
+// When using the Maven wrapper on non-Windows systems, the wrapper script is invoked via 'sh' in order to avoid "permission denied" errors.
+func buildMvnExecCommand(useWrapper bool, mvnExecPath string, goals []string) *exec.Cmd {
+	var cmd *exec.Cmd
+	if useWrapper && !coreutils.IsWindows() {
+		cmd = exec.Command("sh", append([]string{mvnExecPath}, goals...)...)
+	} else {
+		cmd = exec.Command(mvnExecPath, goals...)
+	}
+	log.Info("Running maven command:", cmd.Path, strings.Join(cmd.Args[1:], " "))
+	return cmd
 }
 
 func getMavenExecPath(useWrapper bool) string {
