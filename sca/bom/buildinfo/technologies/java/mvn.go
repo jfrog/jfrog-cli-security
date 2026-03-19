@@ -182,15 +182,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	}
 
 	//#nosec G204
-	// Fix bug #418 if DepTreeParams.UseWrapper is true, we need to run the maven wrapper script instead of 'mvn'
-	cmd := "mvn"
-	if mdt.useWrapper {
-		if coreutils.IsWindows() {
-			cmd = "mvnw.cmd"
-		} else {
-			cmd = "./mvnw"
-		}
-	}
+	cmd := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
 	cmdOutput, err = exec.Command(cmd, goals...).CombinedOutput()
 	if err != nil {
@@ -213,6 +205,20 @@ func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
 
 func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
+}
+
+func getMavenExecPath(useWrapper bool) string {
+	if useWrapper {
+		wrapperName := "mvnw"
+		if coreutils.IsWindows() {
+			wrapperName += ".cmd"
+		}
+		// Prefix with "." + separator to form an explicit relative path (e.g. "./mvnw" or ".\mvnw.cmd").
+		// This is required since Go 1.19, which no longer resolves executables in the current directory
+		// via PATH unless an explicit relative path is provided.
+		return "." + string(os.PathSeparator) + wrapperName
+	}
+	return "mvn"
 }
 
 func isMavenWrapperExist() (bool, error) {
