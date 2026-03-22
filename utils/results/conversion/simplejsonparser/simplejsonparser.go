@@ -735,10 +735,12 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 // Converts a PURL-derived component name to Xray-compatible format.
 // SplitPackageURL joins namespace and name with "/".
 // For Maven/Gradle (package type "maven"), Xray and package updaters expect "groupId:artifactId" with ":" as the separator.
+// For Debian (package type "deb"), Xray expects "distro:version:name" with ":" as the separator.
 // For all other ecosystems (Go, npm, etc.) the "/" is semantically part of the package identifier and must be preserved.
 func normalizeCdxComponentName(compName, compType string) string {
-	if compType == techutils.Maven.String() {
-		return strings.Replace(compName, "/", ":", 1)
+	switch compType {
+	case techutils.Maven.String(), techutils.Debian.String():
+		return strings.ReplaceAll(compName, "/", ":")
 	}
 	return compName
 }
