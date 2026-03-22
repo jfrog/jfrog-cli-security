@@ -457,26 +457,51 @@ func TestScanAndCollectCommitsInfo_Parallel(t *testing.T) {
 			BasicGitServerParams: BasicGitServerParams{Owner: "test-owner"},
 			MonthsNum:            1,
 			Threads:              3,
-			CacheValidity:        0, // disable cache
+			CacheValidity:        -1, // disable cache
 		},
 	}
 
-	sr := vcc.scanAndCollectCommitsInfo([]string{"repo1", "repo2", "repo3"})
+	baseOptions := vcsclient.GitCommitsQueryOptions{
+		Since:       time.Now().AddDate(0, -1, 0),
+		ListOptions: vcsclient.ListOptions{Page: 1, PerPage: vcsutils.NumberOfCommitsToFetch},
+	}
+	repos := []string{"repo1", "repo2", "repo3"}
+	tasks := make([]repoScanTask, len(repos))
+	for i, repo := range repos {
+		tasks[i] = repoScanTask{vcc: vcc, repo: repo, baseOptions: baseOptions, idx: i}
+	}
+
+	repoResults, err := runRepoScanTasks(tasks, 3)
+	assert.NoError(t, err)
+
+	// Merge results the same way Run() does.
+	var scannedRepos, skippedRepos []string
+	uniqueContributors := make(map[BasicContributor]Contributor)
+	totalCommits := 0
+	for _, rr := range repoResults {
+		if rr.skipped {
+			skippedRepos = append(skippedRepos, rr.repo)
+		} else {
+			scannedRepos = append(scannedRepos, rr.repo)
+			totalCommits += rr.totalCommits
+			mergeContributors(uniqueContributors, rr.uniqueContributors)
+		}
+	}
 
 	// All three repos should be scanned (none skipped).
-	sort.Strings(sr.scannedRepos)
-	assert.Equal(t, []string{"repo1", "repo2", "repo3"}, sr.scannedRepos)
-	assert.Empty(t, sr.skippedRepos)
+	sort.Strings(scannedRepos)
+	assert.Equal(t, []string{"repo1", "repo2", "repo3"}, scannedRepos)
+	assert.Empty(t, skippedRepos)
 
 	// repo1 has 2 commits, repo2 has 2, repo3 has 0.
-	assert.Equal(t, 4, sr.totalCommits)
+	assert.Equal(t, 4, totalCommits)
 
 	// 4 unique (email, repo) pairs: email1+repo1, email2+repo1, email2+repo2, email3+repo2.
-	assert.Len(t, sr.uniqueContributors, 4)
-	assert.Contains(t, sr.uniqueContributors, BasicContributor{Email: "email1@example.com", Repo: "repo1"})
-	assert.Contains(t, sr.uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo1"})
-	assert.Contains(t, sr.uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo2"})
-	assert.Contains(t, sr.uniqueContributors, BasicContributor{Email: "email3@example.com", Repo: "repo2"})
+	assert.Len(t, uniqueContributors, 4)
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email1@example.com", Repo: "repo1"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo1"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo2"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email3@example.com", Repo: "repo2"})
 }
 
 // ---- helpers ----

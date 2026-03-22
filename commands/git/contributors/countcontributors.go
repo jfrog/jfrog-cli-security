@@ -230,14 +230,14 @@ type repoScanResult struct {
 	skipped              bool
 }
 
-// vcsServerScanResult holds the aggregated results from scanning all repos of one VCS server.
-type vcsServerScanResult struct {
-	uniqueContributors   map[BasicContributor]Contributor
-	detailedContributors map[string]map[string]ContributorDetailedSummary
-	detailedRepos        map[string]map[string]RepositoryDetailedSummary
-	scannedRepos         []string
-	skippedRepos         []string
-	totalCommits         int
+// repoScanTask holds everything needed to scan a single repository in parallel.
+type repoScanTask struct {
+	vcc           VcsCountContributors
+	repo          string
+	baseOptions   vcsclient.GitCommitsQueryOptions
+	cacheDir      string
+	cacheValidity time.Duration
+	idx           int
 }
 
 func (cc *CountContributorsCommand) Run() error {
@@ -246,57 +246,47 @@ func (cc *CountContributorsCommand) Run() error {
 		cc.Progress.SetHeadlineMsg("Calculating Git contributors information")
 	}
 
+	vcsCountContributors, err := cc.getVcsCountContributors()
+	if err != nil {
+		return err
+	}
+
+	tasks, err := buildRepoScanTasks(vcsCountContributors)
+	if err != nil {
+		return err
+	}
+
+	threads := cc.Threads
+	if threads <= 0 {
+		threads = DefaultThreads
+	}
+
+	repoResults, scanErr := runRepoScanTasks(tasks, threads)
+
+	// Merge results sequentially.
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
 	var totalScannedRepos []string
 	var totalSkippedRepos []string
 	totalCommitsNumber := 0
-
-	vcsCountContributors, err := cc.getVcsCountContributors()
-	if err != nil {
-		return err
-	}
-
-	// Scan all VCS servers in parallel.
-	serverResults := make([]vcsServerScanResult, len(vcsCountContributors))
-	var serverResultsMu sync.Mutex
-	threads := cc.Threads
-	if threads <= 0 {
-		threads = DefaultThreads
-	}
-	runner := parallel.NewRunner(threads, 20000, false)
-	for i, vcc := range vcsCountContributors {
-		if _, addErr := runner.AddTaskWithError(func(threadId int) error {
-			logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
-			log.Info(logPrefix + fmt.Sprintf("Scanning VCS server: owner=%q, url=%q", vcc.params.Owner, vcc.params.ScmApiUrl))
-			repositories, repoListErr := vcc.getRepositoriesListToScan()
-			if repoListErr != nil {
-				return repoListErr
-			}
-			log.Info(logPrefix + fmt.Sprintf("Found %d repositories for %q, scanning in parallel", len(repositories), vcc.params.Owner))
-			result := vcc.scanAndCollectCommitsInfo(repositories)
-			serverResultsMu.Lock()
-			serverResults[i] = result
-			serverResultsMu.Unlock()
-			return nil
-		}, func(taskErr error) {
-			log.Error("Error scanning VCS server: %v", taskErr)
-		}); addErr != nil {
-			return fmt.Errorf("failed to add VCS server scan task: %w", addErr)
+	for _, rr := range repoResults {
+		if rr.repo == "" {
+			continue
+		}
+		if rr.skipped {
+			totalSkippedRepos = append(totalSkippedRepos, rr.repo)
+		} else {
+			totalScannedRepos = append(totalScannedRepos, rr.repo)
+			totalCommitsNumber += rr.totalCommits
+			mergeContributors(uniqueContributors, rr.uniqueContributors)
+			mergeDetailedContributors(detailedContributors, rr.detailedContributors)
+			mergeDetailedRepos(detailedRepos, rr.detailedRepos)
 		}
 	}
-	runner.Done()
-	runner.Run()
 
-	// Merge server results sequentially.
-	for _, sr := range serverResults {
-		mergeContributors(uniqueContributors, sr.uniqueContributors)
-		mergeDetailedContributors(detailedContributors, sr.detailedContributors)
-		mergeDetailedRepos(detailedRepos, sr.detailedRepos)
-		totalScannedRepos = append(totalScannedRepos, sr.scannedRepos...)
-		totalSkippedRepos = append(totalSkippedRepos, sr.skippedRepos...)
-		totalCommitsNumber += sr.totalCommits
+	if scanErr != nil {
+		return scanErr
 	}
 
 	// Create the report.
@@ -350,74 +340,82 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 	return contributors, nil
 }
 
-// scanAndCollectCommitsInfo scans repositories in parallel and returns aggregated results.
-func (cc *VcsCountContributors) scanAndCollectCommitsInfo(repositories []string) vcsServerScanResult {
-	cacheValidity := time.Duration(cc.params.CacheValidity) * 24 * time.Hour
-
-	// Compute cache directory once (best-effort; empty string disables cache).
-	cacheDir := ""
-	if cc.params.CacheValidity >= 0 {
-		dir, err := getRepoCacheDir(cc.params.BasicGitServerParams, cc.params.MonthsNum)
+// buildRepoScanTasks iterates all VCS servers sequentially, lists their repositories,
+// and returns a flat slice of repoScanTask ready for parallel execution.
+// Fails fast if any server's repository listing fails.
+func buildRepoScanTasks(vcsCountContributors []VcsCountContributors) ([]repoScanTask, error) {
+	var tasks []repoScanTask
+	for _, vcc := range vcsCountContributors {
+		repositories, err := vcc.getRepositoriesListToScan()
 		if err != nil {
-			log.Warn("Contributors cache: failed to determine cache directory: %v. Continuing without cache.", err)
-		} else {
-			cacheDir = dir
+			return nil, fmt.Errorf("failed to list repositories for %q: %w", vcc.params.Owner, err)
+		}
+
+		cacheValidity := time.Duration(vcc.params.CacheValidity) * 24 * time.Hour
+		cacheDir := ""
+		if vcc.params.CacheValidity >= 0 {
+			if dir, cacheErr := getRepoCacheDir(vcc.params.BasicGitServerParams, vcc.params.MonthsNum); cacheErr != nil {
+				log.Warn("Contributors cache: failed to determine cache directory: %v. Continuing without cache.", cacheErr)
+			} else {
+				cacheDir = dir
+			}
+		}
+		baseOptions := vcsclient.GitCommitsQueryOptions{
+			Since: time.Now().AddDate(0, -1*vcc.params.MonthsNum, 0),
+			ListOptions: vcsclient.ListOptions{
+				Page:    1,
+				PerPage: vcsutils.NumberOfCommitsToFetch,
+			},
+		}
+
+		for _, repo := range repositories {
+			tasks = append(tasks, repoScanTask{
+				vcc:           vcc,
+				repo:          repo,
+				baseOptions:   baseOptions,
+				cacheDir:      cacheDir,
+				cacheValidity: cacheValidity,
+				idx:           len(tasks),
+			})
 		}
 	}
+	return tasks, nil
+}
 
-	baseOptions := vcsclient.GitCommitsQueryOptions{
-		Since: time.Now().AddDate(0, -1*cc.params.MonthsNum, 0),
-		ListOptions: vcsclient.ListOptions{
-			Page:    1,
-			PerPage: vcsutils.NumberOfCommitsToFetch,
-		},
-	}
+// runRepoScanTasks scans all repositories using a single parallel runner.
+// Errors from scan failures or enqueue failures are collected and returned joined.
+// Failed-to-enqueue repos are marked as skipped, consistent with scan failures.
+func runRepoScanTasks(tasks []repoScanTask, threads int) ([]repoScanResult, error) {
+	repoResults := make([]repoScanResult, len(tasks))
+	var mu sync.Mutex
+	var taskErrors []error
 
-	repoResults := make([]repoScanResult, len(repositories))
-	var repoResultsMu sync.Mutex
-
-	threads := cc.params.Threads
-	if threads <= 0 {
-		threads = DefaultThreads
-	}
 	runner := parallel.NewRunner(threads, 20000, false)
-	for i, repo := range repositories {
-		if _, addErr := runner.AddTaskWithError(func(threadId int) error {
-			result := cc.scanRepo(repo, baseOptions, cacheDir, cacheValidity, threadId)
-			repoResultsMu.Lock()
-			repoResults[i] = result
-			repoResultsMu.Unlock()
+	for _, task := range tasks {
+		if _, addErr := runner.AddTask(func(threadId int) error {
+			result := task.vcc.scanRepo(task.repo, task.baseOptions, task.cacheDir, task.cacheValidity, threadId)
+			mu.Lock()
+			repoResults[task.idx] = result
+			if result.skipped {
+				taskErrors = append(taskErrors, fmt.Errorf("failed to scan repository %q", task.repo))
+			}
+			mu.Unlock()
 			return nil
-		}, func(taskErr error) {
-			log.Error("Error scanning repo %q: %v", repo, taskErr)
 		}); addErr != nil {
-			log.Error("Failed to enqueue repo %q for scanning: %v", repo, addErr)
+			// Failed to enqueue: mark repo as skipped, same treatment as a scan failure.
+			mu.Lock()
+			repoResults[task.idx] = repoScanResult{repo: task.repo, skipped: true}
+			taskErrors = append(taskErrors, fmt.Errorf("failed to enqueue repository %q: %w", task.repo, addErr))
+			mu.Unlock()
 		}
 	}
 	runner.Done()
 	runner.Run()
 
-	// Merge all repo results into the server-level result.
-	sr := vcsServerScanResult{
-		uniqueContributors:   make(map[BasicContributor]Contributor),
-		detailedContributors: make(map[string]map[string]ContributorDetailedSummary),
-		detailedRepos:        make(map[string]map[string]RepositoryDetailedSummary),
+	if len(taskErrors) > 0 {
+		return repoResults, errors.Join(taskErrors...)
 	}
-	for _, rr := range repoResults {
-		if rr.repo == "" {
-			continue
-		}
-		if rr.skipped {
-			sr.skippedRepos = append(sr.skippedRepos, rr.repo)
-		} else {
-			sr.scannedRepos = append(sr.scannedRepos, rr.repo)
-			sr.totalCommits += rr.totalCommits
-			mergeContributors(sr.uniqueContributors, rr.uniqueContributors)
-			mergeDetailedContributors(sr.detailedContributors, rr.detailedContributors)
-			mergeDetailedRepos(sr.detailedRepos, rr.detailedRepos)
-		}
-	}
-	return sr
+	return repoResults, nil
 }
 
 // scanRepo scans a single repository (with cache) and returns its result.
