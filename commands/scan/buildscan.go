@@ -166,7 +166,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	// Enrich violations with generated violations from local policies
 	if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
-		return false, err
+		cmdResults.AddGeneralError(fmt.Errorf("failed to enrich with violations: %s", err.Error()), false)
 	}
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).

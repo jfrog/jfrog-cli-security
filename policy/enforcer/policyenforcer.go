@@ -314,7 +314,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.EntitledForJas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-				if !found && sarifutils.GetRuleId(rule) == id && isLocationMatchingJasViolation(location, run.Invocations, violation) {
+				if !found && isMatchingJasViolation(id, jasType, rule, location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
 					match = matchedJsaVulnerability{
 						rule:     rule,
@@ -330,6 +330,19 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 	}
 	return
+}
+
+func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
+	if jasType == jasutils.Secrets {
+		// Secrets Jas should relay on Scanner ID to match
+		if id != sarifutils.GetSecretScannerRuleId(rule) {
+			return false
+		}
+	} else if sarifutils.GetRuleId(rule) != id {
+		// Other Jas should relay on rule ID to match
+		return false
+	}
+	return isLocationMatchingJasViolation(location, invocations, violation)
 }
 
 func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
@@ -353,7 +366,13 @@ func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.Ja
 			log.Debug(fmt.Sprintf("Skipping Secrets violation with mismatched or missing Exposure details for ID %s", violation.IssueId))
 			return ""
 		}
-		return violation.ExposureDetails.Abbreviation
+		// ID format: 'EXP-<rule_id>-<unique_id>' --> return 'EXP-<rule_id>'
+		split := strings.Split(violation.ExposureDetails.Id, "-")
+		if len(split) < 2 {
+			log.Warn(fmt.Sprintf("Skipping Secrets violation with invalid ID format for ID %s", violation.IssueId))
+			return ""
+		}
+		return fmt.Sprintf("EXP-%s", split[1])
 	}
 	return ""
 }

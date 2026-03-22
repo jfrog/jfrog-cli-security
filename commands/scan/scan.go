@@ -249,7 +249,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	// Violations
 	if cmdResults.HasViolationContext() {
 		if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
-			return fmt.Errorf("failed to enrich with violations: %s", err.Error())
+			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich with violations: %s", err.Error()), false)
 		}
 	}
 
@@ -338,6 +338,11 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
+			if utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+				if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
+					return xrayManager, cmdResults.AddGeneralError(err, false)
+				}
+			}
 			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, scanCmd.xrayVersion, scanCmd.validateSecrets))
 		}
 	}

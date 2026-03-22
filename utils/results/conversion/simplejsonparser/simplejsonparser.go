@@ -113,7 +113,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(sbom *cyclonedx.BOM)
 				LicenseKey:  license.License.ID,
 				LicenseName: name,
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-					ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
+					ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 					ImpactedDependencyVersion: compVersion,
 					ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
 					Components:                results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths),
@@ -234,7 +234,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createVulnerabilityOrViolationRowFromC
 		Summary: summary,
 		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 			SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
-			ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
+			ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 			ImpactedDependencyVersion: compVersion,
 			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
 			Components:                directComponents,
@@ -272,7 +272,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createLicenseViolationRow(licenseKey, 
 			LicenseName: licenseName,
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 				SeverityDetails:           severityutils.GetAsDetails(severity, jasutils.NotScanned, sjc.pretty),
-				ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
+				ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 				ImpactedDependencyVersion: compVersion,
 				ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
 				Components:                directComponents,
@@ -288,7 +288,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createOpRiskViolationRow(opRiskViolati
 		ViolationContext: convertToViolationContext(opRiskViolation.Violation),
 		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 			SeverityDetails:           severityutils.GetAsDetails(opRiskViolation.Severity, jasutils.NotScanned, sjc.pretty),
-			ImpactedDependencyName:    strings.ReplaceAll(compName, "/", ":"),
+			ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 			ImpactedDependencyVersion: compVersion,
 			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
 			Components:                opRiskViolation.DirectComponents,
@@ -730,4 +730,17 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 		}
 		return rows[i].File > rows[j].File
 	})
+}
+
+// Converts a PURL-derived component name to Xray-compatible format.
+// SplitPackageURL joins namespace and name with "/".
+// For Maven/Gradle (package type "maven"), Xray and package updaters expect "groupId:artifactId" with ":" as the separator.
+// For Debian (package type "deb"), Xray expects "distro:version:name" with ":" as the separator.
+// For all other ecosystems (Go, npm, etc.) the "/" is semantically part of the package identifier and must be preserved.
+func normalizeCdxComponentName(compName, compType string) string {
+	switch compType {
+	case techutils.Maven.String(), techutils.Debian.String():
+		return strings.ReplaceAll(compName, "/", ":")
+	}
+	return compName
 }
