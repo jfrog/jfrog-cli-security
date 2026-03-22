@@ -2,6 +2,7 @@ package remediation
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
@@ -58,6 +59,11 @@ func matchVulnerabilityToRemediationOptions(bom *cyclonedx.BOM, vulnerability *c
 	}
 }
 
+// TODO remove this when https://jfrog-int.atlassian.net/browse/XRAY-137306 is done, as fix versions should be already normalized when returning from remediation API.
+func normalizeVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
+}
+
 func getAffectComponentCveRemediationStepsByFixedVersion(cve string, component cyclonedx.Component, cveRemediationOptions []utils.Option, strategy utils.FixStrategy) (steps []utils.OptionStep) {
 	for _, cveRemediationOption := range cveRemediationOptions {
 		if cveRemediationOption.Type != utils.InLock {
@@ -78,7 +84,7 @@ func getAffectComponentCveRemediationStepsByFixedVersion(cve string, component c
 				continue
 			}
 			// We only want FixVersion step type
-			if step.StepType == utils.FixVersion && step.PkgVersion.Name == component.Name && step.PkgVersion.Version == component.Version {
+			if step.StepType == utils.FixVersion && step.PkgVersion.Name == component.Name && normalizeVersion(step.PkgVersion.Version) == normalizeVersion(component.Version) {
 				steps = append(steps, step)
 			}
 		}
