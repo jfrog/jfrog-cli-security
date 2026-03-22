@@ -65,19 +65,19 @@ func readRepoCache(cacheDir, repo string, maxAge time.Duration) *repoScanResult 
 	}
 	var entry repoCacheFile
 	if err = json.Unmarshal(data, &entry); err != nil {
-		log.Warn("Contributors cache: failed to parse cache file %s: %v", path, err)
+		log.Warn(fmt.Sprintf("Contributors cache: failed to parse cache file %s: %v", path, err))
 		return nil
 	}
 	scannedAt, err := time.Parse(time.RFC3339, entry.ScannedAt)
 	if err != nil {
-		log.Warn("Contributors cache: invalid scanned_at in %s: %v", path, err)
+		log.Warn(fmt.Sprintf("Contributors cache: invalid scanned_at in %s: %v", path, err))
 		return nil
 	}
 	if time.Since(scannedAt) > maxAge {
-		log.Debug("Contributors cache: entry for %q expired (scanned %s ago)", repo, time.Since(scannedAt).Round(time.Second))
+		log.Debug(fmt.Sprintf("Contributors cache: entry for %q expired (scanned %s ago)", repo, time.Since(scannedAt).Round(time.Second)))
 		return nil
 	}
-	log.Debug("Contributors cache: using cached data for repo %q (scanned at %s)", repo, entry.ScannedAt)
+	log.Debug(fmt.Sprintf("Contributors cache: using cached data for repo %q (scanned at %s)", repo, entry.ScannedAt))
 	uniqueContributors := make(map[BasicContributor]Contributor, len(entry.UniqueContributors))
 	for _, e := range entry.UniqueContributors {
 		uniqueContributors[e.Key] = e.Value
@@ -110,17 +110,17 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
-		log.Warn("Contributors cache: failed to marshal cache for repo %q: %v", repo, err)
+		log.Warn(fmt.Sprintf("Contributors cache: failed to marshal cache for repo %q: %v", repo, err))
 		return
 	}
 	finalPath := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
 	tmpPath := finalPath + ".tmp"
 	if err = os.WriteFile(tmpPath, data, 0600); err != nil {
-		log.Warn("Contributors cache: failed to write tmp file %s: %v", tmpPath, err)
+		log.Warn(fmt.Sprintf("Contributors cache: failed to write tmp file %s: %v", tmpPath, err))
 		return
 	}
 	if err = os.Rename(tmpPath, finalPath); err != nil {
-		log.Warn("Contributors cache: failed to rename %s → %s: %v", tmpPath, finalPath, err)
+		log.Warn(fmt.Sprintf("Contributors cache: failed to rename %s → %s: %v", tmpPath, finalPath, err))
 		_ = os.Remove(tmpPath)
 	}
 }
