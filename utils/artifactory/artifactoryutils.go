@@ -86,14 +86,25 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 	return
 }
 
-func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (uploaded []string, err error) {
+func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string, printDeploymentView bool) (uploaded []string, err error) {
 	uploadCmd := generic.NewUploadCommand()
 	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Project(relatedProjectKey).Target(repo).Flat(true).BuildSpec())
 	uploadCmd.SetDetailedSummary(true).SetQuiet(true)
 	err = uploadCmd.Run()
 	result := uploadCmd.Result()
 	defer common.CleanupResult(result, &err)
-	return getArtifactsPaths(repo, result.Reader()), common.PrintDeploymentView(result.Reader())
+	view, err := common.GetDeploymentViewString(result.Reader())
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed to get deployment view: %v", err))
+	} else if view != "" {
+		view = fmt.Sprintf("These files were uploaded:\n\n%s", view)
+		if printDeploymentView {
+			log.Info(view)
+		} else {
+			log.Debug(view)
+		}
+	}
+	return getArtifactsPaths(repo, result.Reader()), err
 }
 
 func getArtifactsPaths(repo string, reader *content.ContentReader) (paths []string) {

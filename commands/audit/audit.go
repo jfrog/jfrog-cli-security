@@ -285,7 +285,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	if !cmdResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
-	if cmdResults.ResultsPlatformUrl != "" {
+	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
@@ -744,7 +744,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	var err error
 	uploadPath := ""
 	if params.uploadCdxResults {
-		log.Info("Finished scanning. Uploading scan results to Artifactory")
+		log.Debug("Finished scanning. Uploading scan results to Artifactory")
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}
