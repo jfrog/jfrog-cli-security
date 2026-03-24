@@ -846,6 +846,7 @@ func UploadCdxCmd(c *components.Context) error {
 	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
 		SetServerDetails(serverDetails).
 		SetUploadRepository(c.GetStringFlagValue(flags.UploadRepoPath)).
-		SetProjectKey(c.GetStringFlagValue(flags.Project))
+		SetProjectKey(c.GetStringFlagValue(flags.Project)).
+		SetPrintDeploymentView(true)
 	return commandsCommon.Exec(uploadCmd)
 }
