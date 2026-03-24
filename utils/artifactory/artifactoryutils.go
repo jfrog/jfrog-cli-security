@@ -93,9 +93,8 @@ func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetail
 	err = uploadCmd.Run()
 	result := uploadCmd.Result()
 	defer common.CleanupResult(result, &err)
-	view, err := common.GetDeploymentViewString(result.Reader())
-	if err != nil {
-		log.Debug(fmt.Sprintf("failed to get deployment view: %v", err))
+	if view, e := common.GetDeploymentViewString(result.Reader()); e != nil {
+		log.Debug(fmt.Sprintf("failed to get deployment view: %v", e))
 	} else if view != "" {
 		view = fmt.Sprintf("These files were uploaded:\n\n%s", view)
 		if printDeploymentView {
