@@ -16,10 +16,15 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray"
+)
+
+const (
+	MaliciousScanFeatureId = "ai_catalog"
 )
 
 type MaliciousScanCommand struct {
@@ -105,8 +110,12 @@ func (cmd *MaliciousScanCommand) Run() (err error) {
 	return cmd.outputResults(cmdResults)
 }
 
+func IsEntitledForMaliciousScan(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
+	return xrayUtils.IsEntitled(xrayManager, xrayVersion, MaliciousScanFeatureId)
+}
+
 func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entitledForJas bool, workingDirs []string, err error) {
-	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xray.WithScopedProjectKey(cmd.project))
+	xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xrayUtils.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return "", false, nil, err
 	}
