@@ -13,6 +13,7 @@ import (
 type mockVcsClient struct {
 	getCommitsWithQueryOptionsFn func(ctx context.Context, owner, repo string, opts vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error)
 	listRepositoriesFn           func(ctx context.Context) (map[string][]string, error)
+	listRepositoriesByOwnerFn    func(ctx context.Context, owner string) ([]string, error)
 }
 
 func (m *mockVcsClient) GetCommitsWithQueryOptions(ctx context.Context, owner, repository string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
@@ -25,6 +26,13 @@ func (m *mockVcsClient) GetCommitsWithQueryOptions(ctx context.Context, owner, r
 func (m *mockVcsClient) ListRepositories(ctx context.Context) (map[string][]string, error) {
 	if m.listRepositoriesFn != nil {
 		return m.listRepositoriesFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockVcsClient) ListRepositoriesByOwner(ctx context.Context, owner string) ([]string, error) {
+	if m.listRepositoriesByOwnerFn != nil {
+		return m.listRepositoriesByOwnerFn(ctx, owner)
 	}
 	return nil, nil
 }

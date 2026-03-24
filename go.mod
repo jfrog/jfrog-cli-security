@@ -163,4 +163,5 @@ require (
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+// attiasas:list_repo_by_owner_api
+replace github.com/jfrog/froggit-go => github.com/attiasas/froggit-go v0.0.0-20260323132312-3ced2c54b489

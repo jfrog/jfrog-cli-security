@@ -2,6 +2,7 @@ package contributors
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -418,6 +419,87 @@ func TestMergeDetailedRepos(t *testing.T) {
 			"repo1": {"alice@example.com": summaryAlt},
 		})
 		assert.Equal(t, summary1, dst["repo1"]["alice@example.com"], "existing entry should not be overwritten")
+	})
+}
+
+// ---- getRepositoriesListToScan tests ----
+
+func TestGetRepositoriesListToScan(t *testing.T) {
+	t.Run("explicit repos returned as-is", func(t *testing.T) {
+		vcc := &VcsCountContributors{
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{
+					Repositories: []string{"repo-a", "repo-b"},
+				},
+			},
+		}
+		repos, err := vcc.getRepositoriesListToScan()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"repo-a", "repo-b"}, repos)
+	})
+
+	t.Run("nil vcsClient returns error", func(t *testing.T) {
+		vcc := &VcsCountContributors{
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "owner"},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "missing vcs client")
+	})
+
+	t.Run("ListRepositoriesByOwner error propagated", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, _ string) ([]string, error) {
+				return nil, fmt.Errorf("api failure")
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "my-org"},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "api failure")
+	})
+
+	t.Run("empty result from ListRepositoriesByOwner returns error", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, _ string) ([]string, error) {
+				return []string{}, nil
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{
+					Owner:     "empty-org",
+					ScmType:   vcsutils.GitHub,
+					ScmApiUrl: "https://api.github.com",
+				},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "no repositories found for owner empty-org")
+	})
+
+	t.Run("ListRepositoriesByOwner success", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, owner string) ([]string, error) {
+				assert.Equal(t, "my-org", owner)
+				return []string{"repo-x", "repo-y", "repo-z"}, nil
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "my-org"},
+			},
+		}
+		repos, err := vcc.getRepositoriesListToScan()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"repo-x", "repo-y", "repo-z"}, repos)
 	})
 }
 

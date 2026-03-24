@@ -23,6 +23,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFI
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuWl6zY27l47sB3qLNK6tF2fkHG55UZxx8oIVo4=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
+github.com/attiasas/froggit-go v0.0.0-20260323132312-3ced2c54b489 h1:HQs2eeXhnA3bv8x9YN8TSw6272iPd4wk9lpqkQX8NoM=
+github.com/attiasas/froggit-go v0.0.0-20260323132312-3ced2c54b489/go.mod h1:umBiakJB0CSPFfe0AHVaC3n9xsmUT7NGkDCny3bRchI=
 github.com/beevik/etree v1.6.0 h1:u8Kwy8pp9D9XeITj2Z0XtA5qqZEmtJtuXZRQi+j03eE=
 github.com/beevik/etree v1.6.0/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=
@@ -175,8 +177,6 @@ github.com/jfrog/archiver/v3 v3.6.3 h1:hkAmPjBw393tPmQ07JknLNWFNZjXdy2xFEnOW9wwO
 github.com/jfrog/archiver/v3 v3.6.3/go.mod h1:5V9l+Fte30Y4qe9dUOAd3yNTf8lmtVNuhKNrvI8PMhg=
 github.com/jfrog/build-info-go v1.13.1-0.20260216093441-40a4dc563294 h1:7aJGdrjibtWT1VPLH+GYyoZsAsoca8/fMrvGIvkZ8Fs=
 github.com/jfrog/build-info-go v1.13.1-0.20260216093441-40a4dc563294/go.mod h1:+OCtMb22/D+u7Wne5lzkjJjaWr0LRZcHlDwTH86Mpwo=
-github.com/jfrog/froggit-go v1.21.1 h1:I/XUOO6GQ1d/rmBlM361F8T654C3ohIWrpw23xNL9JY=
-github.com/jfrog/froggit-go v1.21.1/go.mod h1:umBiakJB0CSPFfe0AHVaC3n9xsmUT7NGkDCny3bRchI=
 github.com/jfrog/gofrog v1.7.6 h1:QmfAiRzVyaI7JYGsB7cxfAJePAZTzFz0gRWZSE27c6s=
 github.com/jfrog/gofrog v1.7.6/go.mod h1:ntr1txqNOZtHplmaNd7rS4f8jpA5Apx8em70oYEe7+4=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=

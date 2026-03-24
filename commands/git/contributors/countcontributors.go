@@ -475,24 +475,11 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 	if cc.vcsClient == nil {
 		return nil, errors.New("failed to get repositories list, missing vcs client")
 	}
-	reposMap, err := cc.vcsClient.ListRepositories(context.Background())
+	repos, err := cc.vcsClient.ListRepositoriesByOwner(context.Background(), cc.params.Owner)
 	if err != nil {
 		return nil, err
 	}
-	return cc.getOwnersMatchingRepos(reposMap)
-}
-
-// getOwnersMatchingRepos gets all projects and their repo map and look for the specific owner.
-func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
-	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {
-		// Matching owner name without considering lower/upper cases.
-		normalizedSearchKey := strings.ToUpper(cc.params.Owner)
-		for owner, repoList := range reposMap {
-			if strings.ToUpper(owner) == normalizedSearchKey {
-				return repoList, nil
-			}
-		}
 		return nil, fmt.Errorf("no repositories found for owner %s in %s at URL %s", cc.params.Owner, cc.params.ScmType, cc.params.ScmApiUrl)
 	}
 	return repos, nil
