@@ -7,7 +7,7 @@ import (
 
 	"path/filepath"
 
-	"github.com/jfrog/jfrog-cli-security/commands/maliciousscan"
+	// "github.com/jfrog/jfrog-cli-security/commands/maliciousscan"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/stretchr/testify/assert"
