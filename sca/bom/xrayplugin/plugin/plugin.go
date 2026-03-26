@@ -76,11 +76,12 @@ type ScannerRPCServer struct {
 }
 
 // CreateScannerPluginClient creates a plugin client. When not in CI and log level is DEBUG, plugin stderr is written
-// to a log file under JFrog home (logs/xrayPluginLogs/)
-func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (scanner Scanner, logPath string, err error) {
+// to a log file under JFrog home (logs/xrayPluginLogs/).
+// The returned cleanup function must be called when the scanner is no longer needed to terminate the plugin subprocess.
+func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (scanner Scanner, logPath string, cleanup func(), err error) {
 	stderrWriter, logPath, err := getPluginLogger()
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	clientConfig := &goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
@@ -103,19 +104,19 @@ func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (s
 	}()
 	rpcClient, err := client.Client()
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	// Wait for the plugin to complete the handshake
 	raw, err := rpcClient.Dispense(pluginName)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	// Assert that the plugin is of type Scanner
 	scanPlugin, ok := raw.(Scanner)
 	if !ok {
-		return nil, "", fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
+		return nil, "", nil, fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
 	}
-	return scanPlugin, logPath, nil
+	return scanPlugin, logPath, client.Kill, nil
 }
 
 func getPluginLogger() (writer io.Writer, logPath string, err error) {
