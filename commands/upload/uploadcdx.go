@@ -29,6 +29,7 @@ type UploadCycloneDxCommand struct {
 	filePrefix      string
 
 	// Options
+	printDeploymentView   bool
 	scanResultsRepository string
 	projectKey            string
 }
@@ -72,6 +73,11 @@ func (ucc *UploadCycloneDxCommand) SetServerDetails(server *config.ServerDetails
 
 func (ucc *UploadCycloneDxCommand) SetProjectKey(projectKey string) *UploadCycloneDxCommand {
 	ucc.projectKey = projectKey
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) SetPrintDeploymentView(printDeploymentView bool) *UploadCycloneDxCommand {
+	ucc.printDeploymentView = printDeploymentView
 	return ucc
 }
 
@@ -127,7 +133,7 @@ func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
 		return
 	}
 	// Upload the CycloneDx file to the JFrog repository
-	if artifactPath, err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+	if artifactPath, err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey, ucc.printDeploymentView); err != nil {
 		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	return
@@ -157,7 +163,7 @@ func validateInputFile(cdxFilePath string) (err error) {
 	return
 }
 
-func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (artifactPath string, err error) {
+func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string, printDeploymentView bool) (artifactPath string, err error) {
 	// scanResultsRepository may be the repository name and after the slash the path in the repository, we want to extract the repository name
 	repoName := strings.Split(scanResultsRepository, "/")[0]
 	if repoName == "" {
@@ -176,7 +182,7 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
 	// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
 	// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
-	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, clientUtils.AddTrailingSlashIfNeeded(scanResultsRepository), relatedProjectKey)
+	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, clientUtils.AddTrailingSlashIfNeeded(scanResultsRepository), relatedProjectKey, printDeploymentView)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", filePath, scanResultsRepository, err)
 	}
