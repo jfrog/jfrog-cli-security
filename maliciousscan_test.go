@@ -7,7 +7,7 @@ import (
 
 	"path/filepath"
 
-	// "github.com/jfrog/jfrog-cli-security/commands/maliciousscan"
+	"github.com/jfrog/jfrog-cli-security/commands/maliciousscan"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +48,7 @@ func runMaliciousScan(t *testing.T, params maliciousScanCommandTestParams) (stri
 }
 
 func TestMaliciousScan(t *testing.T) {
-	// securityIntegrationTestUtils.InitMaliciousScanTest(t, maliciousscan.MinimumXrayVersionForMaliciousScan)
+	securityIntegrationTestUtils.InitMaliciousScanTest(t, maliciousscan.MinimumXrayVersionForMaliciousScan)
 	testCases := []struct {
 		name           string
 		format         format.OutputFormat
@@ -94,7 +94,7 @@ func TestMaliciousScan(t *testing.T) {
 }
 
 func TestMaliciousScanWithWorkingDirs(t *testing.T) {
-	// securityIntegrationTestUtils.InitMaliciousScanTest(t, maliciousscan.MinimumXrayVersionForMaliciousScan)
+	securityIntegrationTestUtils.InitMaliciousScanTest(t, maliciousscan.MinimumXrayVersionForMaliciousScan)
 
 	maliciousProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas", "malicious")
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, maliciousProjectPath)
