@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -24,7 +25,8 @@ import (
 )
 
 const (
-	MaliciousScanFeatureId = "ai_catalog"
+	MaliciousScanFeatureId             = "ai_catalog"
+	MinimumXrayVersionForMaliciousScan = "3.132.0"
 )
 
 type MaliciousScanCommand struct {
@@ -110,26 +112,21 @@ func (cmd *MaliciousScanCommand) Run() (err error) {
 	return cmd.outputResults(cmdResults)
 }
 
-func IsEntitledForMaliciousScan(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	return xrayUtils.IsEntitled(xrayManager, xrayVersion, MaliciousScanFeatureId)
-}
-
 func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entitledForJas bool, workingDirs []string, err error) {
 	xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xrayUtils.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return "", false, nil, err
 	}
-
-	entitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
-	if err != nil {
+	if err = clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion, MinimumXrayVersionForMaliciousScan); err != nil {
+		return "", false, nil, err
+	}
+	log.Info("JFrog Xray version is:", xrayVersion)
+	if entitledForJas, err = IsEntitledForMaliciousScan(xrayManager, xrayVersion); err != nil {
 		return "", false, nil, err
 	}
 	if !entitledForJas {
-		return "", false, nil, errors.New("JAS (Advanced Security) feature is not entitled")
+		return "", false, nil, errors.New("malicious scan feature is not entitled")
 	}
-
-	log.Info("JFrog Xray version is:", xrayVersion)
-
 	workingDirs, err = coreutils.GetFullPathsWorkingDirs(cmd.workingDirs)
 	if err != nil {
 		return "", false, nil, err
@@ -137,6 +134,10 @@ func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entit
 	logScanPaths(workingDirs)
 
 	return xrayVersion, entitledForJas, workingDirs, nil
+}
+
+func IsEntitledForMaliciousScan(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
+	return xrayUtils.IsEntitled(xrayManager, xrayVersion, MaliciousScanFeatureId)
 }
 
 func (cmd *MaliciousScanCommand) initializeCommandResults(xrayVersion string, entitledForJas bool) *results.SecurityCommandResults {

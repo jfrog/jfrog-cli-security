@@ -23,7 +23,7 @@ import (
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 
-	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
+	maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	sastServerDocs "github.com/jfrog/jfrog-cli-security/cli/docs/sastserver"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
@@ -79,15 +79,15 @@ func getAuditAndScansCommands() []components.Command {
 			Category:    securityCategory,
 			Action:      EnrichCmd,
 		},
-		// {
-		// 	Name:        "malicious-scan",
-		// 	Aliases:     []string{"ms"},
-		// 	Flags:       flags.GetCommandFlags(flags.MaliciousScan),
-		// 	Description: maliciousScanDocs.GetDescription(),
-		// 	Arguments:   maliciousScanDocs.GetArguments(),
-		// 	Category:    securityCategory,
-		// 	Action:      MaliciousScanCmd,
-		// },
+		{
+			Name:        "malicious-scan",
+			Aliases:     []string{"ms"},
+			Flags:       flags.GetCommandFlags(flags.MaliciousScan),
+			Description: maliciousScanDocs.GetDescription(),
+			Arguments:   maliciousScanDocs.GetArguments(),
+			Category:    securityCategory,
+			Action:      MaliciousScanCmd,
+		},
 		{
 			Name:        "build-scan",
 			Aliases:     []string{"bs"},
