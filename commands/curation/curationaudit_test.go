@@ -1636,3 +1636,60 @@ func TestSendWaiverRequests(t *testing.T) {
 		})
 	}
 }
+
+// TestFetchNodesStatusConcurrentMapWrite reproduces crash
+// reported when many packages are blocked by curation simultaneously.
+func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
+	const numNodes = 50
+
+	// Mock server: HEAD returns 403 for all packages, GET returns curation block JSON
+	blockResponse := `{"errors":[{"status":403,"message":"Package download was blocked by JFrog Packages Curation service due to the following policies violated {testPolicy, testCondition, testExplanation, testRecommendation}"}]}`
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+			return
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	root := &xrayUtils.GraphNode{Id: "npm://root:1.0.0"}
+	for i := 0; i < numNodes; i++ {
+		root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{
+			Id: fmt.Sprintf("npm://pkg-%d:%d.0.0", i, i),
+		})
+	}
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 "npm-remote",
+		tech:                 techutils.Npm,
+		parallelRequests:     10,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+
+	// This will crash with "concurrent map writes" without the fix
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	assert.NoError(t, err)
+
+	// Verify all blocked packages were recorded
+	count := 0
+	packagesStatusMap.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
+}
