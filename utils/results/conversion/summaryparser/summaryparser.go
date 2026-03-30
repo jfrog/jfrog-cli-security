@@ -45,7 +45,7 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 
 func (sc *CmdResultsSummaryConverter) Reset(metadata results.ResultsMetaData, statusCodes results.ResultsStatus, multipleTargets bool) (err error) {
 	sc.current = &formats.ResultsSummary{}
-	sc.entitledForJas = metadata.EntitledForJas
+	sc.entitledForJas = metadata.Entitlements.Jas
 	sc.status = statusCodes
 	return
 }
