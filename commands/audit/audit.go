@@ -423,9 +423,8 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	entitledForJas, err := isEntitledForJas(xrayManager, params)
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetEntitledForJas(entitledForJas)
 	}
+	cmdResults.SetEntitledForJas(entitledForJas)
 	if entitledForJas {
 		// Validate required installed software
 		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
@@ -435,12 +434,14 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		}
 		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
-	}
-	entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
-	if err != nil {
-		return cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
+		// Validate snippet detection entitlement
+		if shouldIncludeSnippetDetection(params) {
+			entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
+			if err != nil {
+				return cmdResults.AddGeneralError(err, false)
+			}
+			cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
+		}
 	}
 	return
 }

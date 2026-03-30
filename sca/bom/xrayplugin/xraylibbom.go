@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+// SnippetDetectionFeatureId is "curation" because snippet detection is gated by the curation entitlement on the Xray server.
 const SnippetDetectionFeatureId = "curation"
 
 type XrayLibBomGenerator struct {
