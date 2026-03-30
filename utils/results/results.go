@@ -48,19 +48,24 @@ type SecurityCommandResults struct {
 }
 
 type ResultsMetaData struct {
-	XrayVersion      string                         `json:"xray_version"`
-	XscVersion       string                         `json:"xsc_version,omitempty"`
-	EntitledForJas   bool                           `json:"jas_entitled"`
-	SecretValidation bool                           `json:"secret_validation"`
-	CmdType          utils.CommandType              `json:"command_type"`
-	ResultContext    ResultContext                  `json:"result_context,omitempty"`
-	GitContext       *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime        time.Time                      `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId        string `json:"multi_scan_id,omitempty"`
-	ResultsPlatformUrl string `json:"results_platform_url,omitempty"`
+	MultiScanId        string                         `json:"multi_scan_id,omitempty"`
+	XrayVersion        string                         `json:"xray_version"`
+	XscVersion         string                         `json:"xsc_version,omitempty"`
+	Entitlements       Entitlements                   `json:"entitlements"`
+	SecretValidation   bool                           `json:"secret_validation"`
+	CmdType            utils.CommandType              `json:"command_type"`
+	ResultContext      ResultContext                  `json:"result_context"`
+	GitContext         *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime          time.Time                      `json:"start_time"`
+	ResultsPlatformUrl string                         `json:"results_platform_url,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralError error `json:"general_error,omitempty"`
+}
+
+type Entitlements struct {
+	Jas              bool `json:"jas"`
+	SnippetDetection bool `json:"snippet_detection"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -257,7 +262,7 @@ func (r *SecurityCommandResults) SetXscVersion(xscVersion string) *SecurityComma
 }
 
 func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *SecurityCommandResults {
-	r.EntitledForJas = entitledForJas
+	r.Entitlements.Jas = entitledForJas
 	return r
 }
 
@@ -354,7 +359,7 @@ func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.Sc
 }
 
 func (r *SecurityCommandResults) HasJasScansResults(scanType jasutils.JasScanType) bool {
-	if !r.EntitledForJas {
+	if !r.Entitlements.Jas {
 		return false
 	}
 	for _, target := range r.Targets {
@@ -441,7 +446,7 @@ func (r *SecurityCommandResults) GetStatusCodes() ResultsStatus {
 
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
 	targetResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
-	if r.EntitledForJas {
+	if r.Entitlements.Jas {
 		targetResults.JasResults = &JasScansResults{JasVulnerabilities: JasScanResults{}, JasViolations: JasScanResults{}}
 	}
 

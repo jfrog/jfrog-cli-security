@@ -123,7 +123,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults); err != nil {
 			return
 		}
-		if !cmdResults.EntitledForJas {
+		if !cmdResults.Entitlements.Jas {
 			continue
 		}
 		if err = parseJasResults(params, parser, targetScansResults); err != nil {
