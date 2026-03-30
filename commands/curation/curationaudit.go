@@ -851,17 +851,6 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	return multiErrors
 }
 
-// createRequestDetails returns a deep copy of nc.httpClientDetails with its own Headers map,
-// safe to use from concurrent goroutines without racing on the shared map.
-func (nc *treeAnalyzer) createRequestDetails() httputils.HttpClientDetails {
-	requestDetails := nc.httpClientDetails
-	requestDetails.Headers = make(map[string]string, len(nc.httpClientDetails.Headers))
-	for k, v := range nc.httpClientDetails.Headers {
-		requestDetails.Headers[k] = v
-	}
-	return requestDetails
-}
-
 func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) error {
 	packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, &node, nc.downloadUrls, nc.url, nc.repo)
 	if len(packageUrls) == 0 {
@@ -871,8 +860,8 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		name = scope + "/" + name
 	}
 	for _, packageUrl := range packageUrls {
-		requestDetails := nc.createRequestDetails()
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
+		requestDetails := nc.httpClientDetails.Clone()
+		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, requestDetails)
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
 				return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
@@ -909,9 +898,9 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	requestDetails := nc.createRequestDetails()
+	requestDetails := nc.httpClientDetails.Clone()
 	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &requestDetails)
+	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
 	if err != nil {
 		if getResp == nil {
 			return nil, err
