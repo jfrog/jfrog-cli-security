@@ -174,8 +174,10 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func shouldIncludeSnippetDetection(params *AuditParams) bool {
 	if profile := params.GetConfigProfile(); profile != nil && len(profile.Modules) > 0 {
-		if profile.Modules[0].ScanConfig.ScaScannerConfig.EnableSnippetDetection {
-			return true
+		for _, module := range profile.Modules {
+			if module.ScanConfig.ScaScannerConfig.EnableSnippetDetection {
+				return true
+			}
 		}
 	}
 	if params.resultsContext.IncludeSnippetDetection {
@@ -345,7 +347,7 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
-	bomGenOptions, scanOptions, err := getScanLogicOptions(params, cmdResults.Entitlements)
+	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
@@ -363,16 +365,11 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	return
 }
 
-func getScanLogicOptions(params *AuditParams, entitlements results.Entitlements) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
+func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
 	// Bom Generators Options
 	buildParams, err := params.ToBuildInfoBomGenParams()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
-	}
-	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
-	snippetDetection := shouldIncludeSnippetDetection(params)
-	if !entitlements.SnippetDetection && snippetDetection {
-		return nil, nil, fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it")
 	}
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
@@ -382,7 +379,6 @@ func getScanLogicOptions(params *AuditParams, entitlements results.Entitlements)
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 		xrayplugin.WithSpecificTechnologies(params.Technologies()),
-		xrayplugin.WithSnippetDetection(snippetDetection),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -434,11 +430,15 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		}
 		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
-		// Validate snippet detection entitlement
-		if shouldIncludeSnippetDetection(params) {
+		// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+		snippetDetection := shouldIncludeSnippetDetection(params)
+		if snippetDetection {
 			entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
 			if err != nil {
 				return cmdResults.AddGeneralError(err, false)
+			}
+			if !entitledForSnippetDetection {
+				return cmdResults.AddGeneralError(fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it"), false)
 			}
 			cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 		}
@@ -480,7 +480,10 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			// No need to generate the SBOM if we are not going to use it.
 			continue
 		}
-		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
+		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
+			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
+			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
+		),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
 				AllowPartialResults:  params.AllowPartialResults(),
