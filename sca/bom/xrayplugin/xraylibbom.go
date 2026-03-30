@@ -16,6 +16,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+const SnippetDetectionFeatureId = "curation"
+
 type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool

@@ -266,6 +266,11 @@ func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *Securit
 	return r
 }
 
+func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnippetDetection bool) *SecurityCommandResults {
+	r.Entitlements.SnippetDetection = entitledForSnippetDetection
+	return r
+}
+
 func (r *SecurityCommandResults) SetSecretValidation(secretValidation bool) *SecurityCommandResults {
 	r.SecretValidation = secretValidation
 	return r

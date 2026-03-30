@@ -345,7 +345,7 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
-	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
+	bomGenOptions, scanOptions, err := getScanLogicOptions(params, cmdResults.Entitlements)
 	if err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
@@ -363,11 +363,16 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	return
 }
 
-func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
+func getScanLogicOptions(params *AuditParams, entitlements results.Entitlements) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
 	// Bom Generators Options
 	buildParams, err := params.ToBuildInfoBomGenParams()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	snippetDetection := shouldIncludeSnippetDetection(params)
+	if !entitlements.SnippetDetection && snippetDetection {
+		return nil, nil, fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it")
 	}
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
@@ -377,7 +382,7 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 		xrayplugin.WithSpecificTechnologies(params.Technologies()),
-		xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
+		xrayplugin.WithSnippetDetection(snippetDetection),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -422,12 +427,20 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForJas(entitledForJas)
 	}
 	if entitledForJas {
+		// Validate required installed software
 		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
 			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 				return cmdResults.AddGeneralError(err, false)
 			}
 		}
+		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
+	}
+	entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
+	if err != nil {
+		return cmdResults.AddGeneralError(err, false)
+	} else {
+		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
 	return
 }
@@ -438,6 +451,14 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 		return false, nil
 	}
 	return jas.IsEntitledForJas(xrayManager, auditParams.GetXrayVersion())
+}
+
+func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.XrayServicesManager, auditParams *AuditParams) (entitled bool, err error) {
+	if !isEntitledForJas {
+		return false, nil
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.SnippetDetectionFeatureId)
 }
 
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
