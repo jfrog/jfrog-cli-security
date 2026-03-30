@@ -126,7 +126,7 @@ func (sc *CmdResultsSarifConverter) Reset(metadata results.ResultsMetaData, stat
 	// Reset the current stream general information
 	sc.currentCmdType = metadata.CmdType
 	sc.xrayVersion = metadata.XrayVersion
-	sc.entitledForJas = metadata.EntitledForJas
+	sc.entitledForJas = metadata.Entitlements.Jas
 	sc.status = statusCodes
 	// Reset the current stream cache information
 	sc.currentTargetConvertedRuns = nil
