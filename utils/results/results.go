@@ -299,7 +299,7 @@ func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []st
 	return exclusions.ToSlice()
 }
 
-func (st ScanTarget) GeDeprecatedAppsConfigModuleExclusions(scanType jasutils.JasScanType) []string {
+func (st ScanTarget) GetDeprecatedAppsConfigModuleExclusions(scanType jasutils.JasScanType) []string {
 	if st.DeprecatedAppsConfigModule == nil {
 		return nil
 	}

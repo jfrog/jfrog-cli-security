@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -663,4 +664,119 @@ func TestProcessSarifRuns(t *testing.T) {
 	// Check file paths are relative and with / separators.
 	result := run.Results[0]
 	require.Equal(t, "dir/file2", sarifutils.GetLocationFileName(result.Locations[0]))
+}
+
+func TestShouldSkipScannerByConfigProfile(t *testing.T) {
+	enabledProfile := &xscServices.ConfigProfile{
+		ProfileName: "test-profile",
+		Modules: []xscServices.Module{{
+			ScanConfig: xscServices.ScanConfig{
+				ScaScannerConfig:                xscServices.ScaScannerConfig{EnableScaScan: true},
+				ContextualAnalysisScannerConfig: xscServices.CaScannerConfig{EnableCaScan: true},
+				IacScannerConfig:                xscServices.IacScannerConfig{EnableIacScan: true},
+				SecretsScannerConfig:            xscServices.SecretsScannerConfig{EnableSecretsScan: true},
+				SastScannerConfig:               xscServices.SastScannerConfig{EnableSastScan: true},
+			},
+		}},
+	}
+
+	tests := []struct {
+		name     string
+		target   results.ScanTarget
+		profile  *xscServices.ConfigProfile
+		scanType utils.SubScanType
+		jasType  jasutils.JasScanType
+		expected bool
+	}{
+		{
+			name:     "Nil config profile - should not skip",
+			target:   results.ScanTarget{Target: "/project"},
+			profile:  nil,
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: false,
+		},
+		{
+			name:     "Scan enabled - should not skip",
+			target:   results.ScanTarget{Target: "/project", CentralConfigModules: enabledProfile.Modules},
+			profile:  enabledProfile,
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: false,
+		},
+		{
+			name: "Scan disabled - should skip",
+			target: results.ScanTarget{Target: "/project", CentralConfigModules: []xscServices.Module{{
+				ScanConfig: xscServices.ScanConfig{
+					SecretsScannerConfig: xscServices.SecretsScannerConfig{EnableSecretsScan: false},
+				},
+			}}},
+			profile: &xscServices.ConfigProfile{
+				ProfileName: "disabled-profile",
+				Modules: []xscServices.Module{{
+					ScanConfig: xscServices.ScanConfig{
+						SecretsScannerConfig: xscServices.SecretsScannerConfig{EnableSecretsScan: false},
+					},
+				}},
+			},
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: true,
+		},
+		{
+			name:   "Target excluded by GeneralExcludePatterns - should skip",
+			target: results.ScanTarget{Target: "/project/test-dir", CentralConfigModules: enabledProfile.Modules},
+			profile: &xscServices.ConfigProfile{
+				ProfileName:   "exclude-profile",
+				GeneralConfig: xscServices.GeneralConfig{GeneralExcludePatterns: []string{"*test*"}},
+				Modules:       enabledProfile.Modules,
+			},
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ShouldSkipScannerByConfigProfile(tt.target, tt.profile, tt.scanType, tt.jasType))
+		})
+	}
+}
+
+func TestGetJasExcludePatternsForTarget(t *testing.T) {
+	tests := []struct {
+		name                    string
+		target                  results.ScanTarget
+		centralConfigExclusions []string
+		expected                []string
+	}{
+		{
+			name:                    "Central config exclusions take precedence",
+			target:                  results.ScanTarget{Target: "/project"},
+			centralConfigExclusions: []string{"**/vendor/**", "**/generated/**"},
+			expected:                []string{"**/vendor/**", "**/generated/**"},
+		},
+		{
+			name:                    "Default SCA exclusions map to default JAS exclusions",
+			target:                  results.ScanTarget{Target: "/project", Exclude: utils.DefaultScaExcludePatterns},
+			centralConfigExclusions: nil,
+			expected:                utils.DefaultJasExcludePatterns,
+		},
+		{
+			name:                    "Custom exclusions are converted to file exclude patterns",
+			target:                  results.ScanTarget{Target: "/project", Exclude: []string{"custom-dir"}},
+			centralConfigExclusions: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetJasExcludePatternsForTarget(tt.target, tt.centralConfigExclusions)
+			if tt.expected != nil {
+				assert.ElementsMatch(t, tt.expected, result)
+			} else {
+				// For custom exclusions, just verify we got a non-empty result (converted patterns)
+				assert.NotEmpty(t, result)
+			}
+		})
+	}
 }

@@ -544,7 +544,11 @@ func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *
 			detectedTechnologies.Add(tech)
 		}
 	}
-	for _, tech := range detectedTechnologies.ToSlice() {
+	techs := detectedTechnologies.ToSlice()
+	if len(techs) > 1 {
+		log.Warn(fmt.Sprintf("Detected multiple technologies %v but only one is supported per target. Using '%s'; others will be ignored.", techs, techs[0]))
+	}
+	for _, tech := range techs {
 		// TODO: We only support one technology per target for now. should be extended in the future.
 		scanTarget.Technology = tech
 		break
@@ -561,6 +565,7 @@ func matchCentralConfigModules(cmdResults *results.SecurityCommandResults, centr
 		cmdResults.AddGeneralError(fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", centralProfile.ProfileName), false)
 		return
 	}
+	log.Debug(fmt.Sprintf("Assigning all %d config profile module(s) from '%s' to each of the %d scan target(s)", len(centralProfile.Modules), centralProfile.ProfileName, len(cmdResults.Targets)))
 	for _, targetResult := range cmdResults.Targets {
 		// TODO: support matching multiple config modules to the scan targets
 		// currently only supported one config module for all targets to configure in the UI

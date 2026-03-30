@@ -498,13 +498,13 @@ func ElementsEqual[T comparable](slice1 []T, slice2 []T) bool {
 	if len(slice1) != len(slice2) {
 		return false
 	}
-	for i := range slice1 {
-		if !slices.Contains(slice2, slice1[i]) {
-			return false
-		}
+	freq := make(map[T]int, len(slice1))
+	for _, v := range slice1 {
+		freq[v]++
 	}
-	for i := range slice2 {
-		if !slices.Contains(slice1, slice2[i]) {
+	for _, v := range slice2 {
+		freq[v]--
+		if freq[v] < 0 {
 			return false
 		}
 	}

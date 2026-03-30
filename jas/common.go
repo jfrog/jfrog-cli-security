@@ -266,11 +266,13 @@ func isValidVersion(version string) bool {
 }
 
 func fillMissingRequiredInvocationInformation(run *sarif.Run, target string, includeDirs ...string) {
+	// Aggregate execution success across all existing invocations, then replace them with a single
+	// canonical invocation carrying the scan target as working directory (not the analyzerManager directory set by the scanner). Downstream consumers only
+	// use the working directory URI and the success flag, so no other invocation metadata is needed.
 	isExeSuccess := false
 	for _, invocation := range run.Invocations {
 		isExeSuccess = isExeSuccess || (invocation.ExecutionSuccessful != nil && *invocation.ExecutionSuccessful)
 	}
-	// Set the actual working directory to the invocation, not the analyzerManager directory
 	run.Invocations = []*sarif.Invocation{sarifutils.CreateNewInvocation(isExeSuccess, target, includeDirs...)}
 }
 
@@ -420,7 +422,7 @@ func ShouldSkipScannerByModule(target results.ScanTarget, scanType jasutils.JasS
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", scanType))
 		return true
 	}
-	exclusions := target.GeDeprecatedAppsConfigModuleExclusions(scanType)
+	exclusions := target.GetDeprecatedAppsConfigModuleExclusions(scanType)
 	if len(exclusions) > 0 && utils.IsPathExcluded(target.Target, exclusions) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by local module config...", scanType))
 		return true
