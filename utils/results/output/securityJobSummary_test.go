@@ -73,7 +73,7 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 }
 
 func createDummyJasResult(entitled bool) *results.SecurityCommandResults {
-	return &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{EntitledForJas: entitled}}
+	return &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{Entitlements: results.Entitlements{Jas: entitled}}}
 }
 
 func hasFilesInDir(t *testing.T, dir string) bool {
