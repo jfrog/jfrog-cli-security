@@ -430,18 +430,17 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		}
 		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
-		// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
-		snippetDetection := shouldIncludeSnippetDetection(params)
-		if snippetDetection {
-			entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
-			if err != nil {
-				return cmdResults.AddGeneralError(err, false)
-			}
-			if !entitledForSnippetDetection {
-				return cmdResults.AddGeneralError(fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it"), false)
-			}
-			cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	if shouldIncludeSnippetDetection(params) {
+		entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
+		if err != nil {
+			return cmdResults.AddGeneralError(err, false)
 		}
+		if !entitledForSnippetDetection {
+			return cmdResults.AddGeneralError(fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it"), false)
+		}
+		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
 	return
 }
