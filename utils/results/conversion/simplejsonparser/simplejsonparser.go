@@ -242,7 +242,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createVulnerabilityOrViolationRowFromC
 		ImpactPaths:              impactPaths,
 		Cves:                     results.CdxVulnToCveRows(vulnerability, contextualAnalysis),
 		FixedVersions:            results.CdxToFixedVersions(fixedVersions),
-		Technology:               results.GetIssueTechnology(compType, sjc.currentTarget.Technology),
+		Technology:               results.GetIssueTechnology(compType, sjc.currentTarget.FirstTechnology()),
 		References:               toReferences(vulnerability),
 		Applicable:               applicabilityStatus.ToString(sjc.pretty),
 		JfrogResearchInformation: jfrogResearch,
@@ -425,7 +425,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 				References:               vulnerability.References,
 				JfrogResearchInformation: results.ConvertJfrogResearchInformation(vulnerability.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.Technology),
+				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.FirstTechnology()),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)

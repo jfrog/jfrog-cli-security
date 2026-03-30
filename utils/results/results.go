@@ -220,13 +220,32 @@ type ScanTarget struct {
 	Exclude []string `json:"exclude,omitempty"`
 	// Logical name of the target (build name / module name / docker image name...)
 	Name string `json:"name,omitempty"`
-	// Optional field (not used only in build scan) to provide the technology of the target
-	// TODO: convert to list of technologies
-	Technology techutils.Technology `json:"technology,omitempty"`
+	// Technologies detected or assigned for this target
+	Technologies []techutils.Technology `json:"technologies,omitempty"`
 	// Optional field to provide the deprecated apps config module for the target
 	DeprecatedAppsConfigModule *jfrogappsconfig.Module `json:"deprecated_apps_config_module,omitempty"`
 	// Optional field to provide the central config modules for the target
 	CentralConfigModules []xscServices.Module `json:"central_config_modules,omitempty"`
+}
+
+// FirstTechnology returns the first technology in the list, or empty if none are set.
+// Use this only in backward-compatible call sites where a single technology is expected
+// (e.g. old-flow BuildInfo BOM generation, legacy issue-technology fallback).
+// For multi-tech aware code, prefer iterating Technologies directly or using HasTechnology().
+func (st ScanTarget) FirstTechnology() techutils.Technology {
+	if len(st.Technologies) == 0 {
+		return ""
+	}
+	return st.Technologies[0]
+}
+
+func (st ScanTarget) HasTechnology(tech techutils.Technology) bool {
+	for _, t := range st.Technologies {
+		if t == tech {
+			return true
+		}
+	}
+	return false
 }
 
 func (st ScanTarget) String() (str string) {
@@ -242,11 +261,15 @@ func (st ScanTarget) String() (str string) {
 	if st.Name != "" {
 		str = st.Name
 	}
-	tech := st.Technology.String()
-	if tech == techutils.NoTech.String() {
-		tech = "unknown"
+	if len(st.Technologies) == 0 {
+		str += " [unknown]"
+	} else {
+		techNames := make([]string, 0, len(st.Technologies))
+		for _, t := range st.Technologies {
+			techNames = append(techNames, t.String())
+		}
+		str += fmt.Sprintf(" [%s]", strings.Join(techNames, ", "))
 	}
-	str += fmt.Sprintf(" [%s]", tech)
 	return
 }
 
@@ -585,9 +608,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 
 func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	technologiesSet := datastructures.MakeSet[techutils.Technology]()
-	if sr.Technology != "" {
-		technologiesSet.Add(sr.Technology)
-	}
+	technologiesSet.AddElements(sr.Technologies...)
 	if sr.ScaResults == nil {
 		return technologiesSet.ToSlice()
 	}

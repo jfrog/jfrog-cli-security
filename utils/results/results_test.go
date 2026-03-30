@@ -24,32 +24,40 @@ func TestScanTarget_String(t *testing.T) {
 		},
 		{
 			name:     "Target with technology",
-			target:   ScanTarget{Target: "/path/to/project", Technology: techutils.Npm},
+			target:   ScanTarget{Target: "/path/to/project", Technologies: []techutils.Technology{techutils.Npm}},
 			expected: "/path/to/project [npm]",
 		},
 		{
 			name:     "Target with name overrides path",
-			target:   ScanTarget{Target: "/path/to/project", Name: "my-project", Technology: techutils.Go},
+			target:   ScanTarget{Target: "/path/to/project", Name: "my-project", Technologies: []techutils.Technology{techutils.Go}},
 			expected: "my-project [go]",
 		},
 		{
 			name: "Target with include dirs",
 			target: ScanTarget{
-				Target:     "/root",
-				Include:    []string{"/root/sub1", "/root/sub2"},
-				Technology: techutils.Maven,
+				Target:       "/root",
+				Include:      []string{"/root/sub1", "/root/sub2"},
+				Technologies: []techutils.Technology{techutils.Maven},
 			},
 			expected: "/root {sub1, sub2} [maven]",
 		},
 		{
 			name: "Target with include dirs and name - name wins",
 			target: ScanTarget{
-				Target:     "/root",
-				Include:    []string{"/root/sub1"},
-				Name:       "override-name",
-				Technology: techutils.Pip,
+				Target:       "/root",
+				Include:      []string{"/root/sub1"},
+				Name:         "override-name",
+				Technologies: []techutils.Technology{techutils.Pip},
 			},
 			expected: "override-name [pip]",
+		},
+		{
+			name: "Target with multiple technologies",
+			target: ScanTarget{
+				Target:       "/path/to/project",
+				Technologies: []techutils.Technology{techutils.Npm, techutils.Go},
+			},
+			expected: "/path/to/project [npm, go]",
 		},
 	}
 	for _, tt := range tests {

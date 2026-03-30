@@ -102,7 +102,7 @@ func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 			generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 		}()
 	}
-	if target.Technology == techutils.NoTech {
+	if target.FirstTechnology() == techutils.NoTech {
 		log.Debug(fmt.Sprintf("Couldn't determine a package manager or build tool used by '%s'.", target.Target))
 		return
 	}
@@ -147,13 +147,14 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, scan.Technology)
+	tech := scan.FirstTechnology()
+	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, tech)
 	if err != nil {
 		return nil, err
 	}
-	treeResult, techErr := GetTechDependencyTree(b.params, serverDetails, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(b.params, serverDetails, tech)
 	if techErr != nil {
-		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
+		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", tech, techErr)
 	}
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")

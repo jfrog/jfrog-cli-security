@@ -544,15 +544,7 @@ func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *
 			detectedTechnologies.Add(tech)
 		}
 	}
-	techs := detectedTechnologies.ToSlice()
-	if len(techs) > 1 {
-		log.Warn(fmt.Sprintf("Detected multiple technologies %v but only one is supported per target. Using '%s'; others will be ignored.", techs, techs[0]))
-	}
-	for _, tech := range techs {
-		// TODO: We only support one technology per target for now. should be extended in the future.
-		scanTarget.Technology = tech
-		break
-	}
+	scanTarget.Technologies = detectedTechnologies.ToSlice()
 	cmdResults.NewScanResults(scanTarget)
 }
 
@@ -601,17 +593,17 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
 				cmdResults.NewScanResults(results.ScanTarget{
-					Target:     requestedDirectory,
-					Technology: tech,
-					Exclude:    params.Exclusions(),
+					Target:       requestedDirectory,
+					Technologies: []techutils.Technology{tech},
+					Exclude:      params.Exclusions(),
 				})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
 				targetResults := cmdResults.NewScanResults(results.ScanTarget{
-					Target:     workingDir,
-					Technology: tech,
-					Exclude:    params.Exclusions(),
+					Target:       workingDir,
+					Technologies: []techutils.Technology{tech},
+					Exclude:      params.Exclusions(),
 				})
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
@@ -789,7 +781,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
-						return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology), true))
+						return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.ScanTarget), true))
 					} else if targetResult.ScaResults != nil && targetResult.ScaResults.Sbom != nil {
 						return results.ExtractCdxDependenciesCves(targetResult.ScaResults.Sbom)
 					}

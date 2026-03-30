@@ -265,7 +265,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
 				targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *scanResults), *scanResults)
-				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)
+				targetResults.Technologies = []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}
 				return
 			}
 

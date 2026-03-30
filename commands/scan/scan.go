@@ -539,7 +539,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		return
 	}
 	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-	targetResults.Technology = techutils.ToTechnology(graphScanResults.ScannedPackageType)
+	targetResults.Technologies = []techutils.Technology{techutils.ToTechnology(graphScanResults.ScannedPackageType)}
 	// Dump scan response if requested
 	if scanCmd.outputDir == "" {
 		return
@@ -648,7 +648,7 @@ func getJasScanTypes(cmdType utils.CommandType, targetResults *results.TargetRes
 }
 
 func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResults) bool {
-	return cmdType == utils.DockerImage || targetResults.Technology == techutils.Docker || targetResults.Technology == techutils.Oci
+	return cmdType == utils.DockerImage || targetResults.HasTechnology(techutils.Docker) || targetResults.HasTechnology(techutils.Oci)
 }
 
 func getJasDeprecatedAppsConfigModule(target string) (jfrogappsconfig.Module, error) {

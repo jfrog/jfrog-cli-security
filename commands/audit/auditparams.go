@@ -311,15 +311,14 @@ func (params *AuditParams) DiffMode() bool {
 // Our solution for this case is to send all dependencies to the CA scanner.
 // When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
 // Only npm is supported for this flag.
-func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(target results.ScanTarget) bool {
 	if params.bomGenerator == nil {
 		return false
 	}
-	// Check if bomGenerator is BuildInfo type, if not, return false
 	if _, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); !success {
 		return false
 	}
-	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+	return target.HasTechnology(techutils.Pip) || (params.thirdPartyApplicabilityScan && target.HasTechnology(techutils.Npm))
 }
 
 func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {

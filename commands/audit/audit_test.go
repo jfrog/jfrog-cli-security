@@ -64,8 +64,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -74,8 +74,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -88,8 +88,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -116,8 +116,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Nuget,
-						Target:     filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.Nuget},
+						Target:       filepath.Join(dir, "Nuget"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -126,8 +126,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -136,8 +136,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -150,8 +150,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -160,8 +160,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Yarn,
-						Target:     filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -170,8 +170,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pip,
-						Target:     filepath.Join(dir, "yarn", "Pip"),
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -180,8 +180,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pipenv,
-						Target:     filepath.Join(dir, "yarn", "Pipenv"),
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -201,8 +201,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -222,8 +222,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -250,8 +250,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -260,8 +260,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -274,8 +274,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -284,8 +284,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pip,
-						Target:     filepath.Join(dir, "yarn", "Pip"),
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -294,8 +294,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pipenv,
-						Target:     filepath.Join(dir, "yarn", "Pipenv"),
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -304,8 +304,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Yarn,
-						Target:     filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -325,8 +325,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -350,8 +350,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -371,9 +371,9 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Target:     dir,
-						Include:    []string{filepath.Join(dir, "dir", "npm")},
-						Technology: techutils.Npm,
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "npm")},
+						Technologies: []techutils.Technology{techutils.Npm},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -390,9 +390,9 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Target:     dir,
-						Include:    []string{filepath.Join(dir, "dir", "maven")},
-						Technology: techutils.Maven,
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "maven")},
+						Technologies: []techutils.Technology{techutils.Maven},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -1171,8 +1171,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				Targets: []*results.TargetResults{
 					{
 						ScanTarget: results.ScanTarget{
-							Target:     tempProjectPath,
-							Technology: techutils.Pip,
+							Target:       tempProjectPath,
+							Technologies: []techutils.Technology{techutils.Pip},
 						},
 						ScaResults: &results.ScaScanResults{
 							Sbom: &cyclonedx.BOM{
