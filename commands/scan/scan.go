@@ -352,7 +352,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandResults, xrayManager *xrayClient.XrayServicesManager) (err error) {
 	// Download (if needed) the analyzer manager in a background routine.
 	AnalyzerErrGroup := new(errgroup.Group)
-	if cmdResults.EntitledForJas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+	if cmdResults.Entitlements.Jas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
 		if scanCmd.customAnalyzerManagerPath == "" {
 			AnalyzerErrGroup.Go(func() error {
 				return jas.DownloadAnalyzerManagerIfNeeded(0)
@@ -444,7 +444,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				// SCA scan
 				targetCompId, graphScanResults, err := scanCmd.RunBinaryScaScan(file.Target, cmdResults, targetResults, deprecatedGraph, scanThreadId)
-				if err != nil || !cmdResults.EntitledForJas {
+				if err != nil || !cmdResults.Entitlements.Jas {
 					return
 				}
 				// Run Jas scans

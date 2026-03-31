@@ -860,7 +860,8 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		name = scope + "/" + name
 	}
 	for _, packageUrl := range packageUrls {
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &nc.httpClientDetails)
+		requestDetails := nc.httpClientDetails.Clone()
+		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, requestDetails)
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
 				return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
@@ -897,8 +898,9 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	nc.httpClientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
+	requestDetails := nc.httpClientDetails.Clone()
+	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
 	if err != nil {
 		if getResp == nil {
 			return nil, err

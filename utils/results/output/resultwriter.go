@@ -302,14 +302,14 @@ func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTabl
 		return
 	}
 	if (rw.showViolations || rw.commandResults.HasViolationContext()) && len(rw.commandResults.ResultContext.GitRepoHttpsCloneUrl) > 0 {
-		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, true); err != nil {
+		if err = PrintJasTable(tableContent, rw.commandResults.Entitlements.Jas, scanType, true); err != nil {
 			return
 		}
 	}
 	if !rw.commandResults.IncludesVulnerabilities() {
 		return
 	}
-	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, false)
+	return PrintJasTable(tableContent, rw.commandResults.Entitlements.Jas, scanType, false)
 }
 
 func (rw *ResultsWriter) shouldPrintSecretValidationExtraMessage() bool {
