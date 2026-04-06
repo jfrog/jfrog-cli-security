@@ -203,7 +203,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 60, test.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "06-04-2026", 60, test.skipMsg)
 			}
 			// Create and change directory to test workspace
 			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
