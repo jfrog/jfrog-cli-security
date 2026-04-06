@@ -119,7 +119,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			if testCase.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-02-2026", 60, testCase.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-04-2026", 60, testCase.skipMsg)
 			}
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
 		})
