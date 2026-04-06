@@ -44,11 +44,12 @@ import (
 func TestDependencyResolutionFromArtifactory(t *testing.T) {
 	securityIntegrationTestUtils.InitArtifactoryTest(t)
 	testCases := []struct {
-		testProjectPath []string
-		resolveRepoName string
-		cacheRepoName   string
-		projectType     project.ProjectType
-		skipMsg         string
+		testProjectPath    []string
+		resolveRepoName    string
+		cacheRepoName      string
+		projectType        project.ProjectType
+		skipMsg            string
+		extraConfigOptions []commonCommands.ConfigOption
 	}{
 		{
 			testProjectPath: []string{"npm", "npm-no-lock"},
@@ -57,10 +58,11 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Npm,
 		},
 		{
-			testProjectPath: []string{"dotnet", "dotnet-single"},
-			resolveRepoName: securityTests.NugetRemoteRepo,
-			cacheRepoName:   securityTests.NugetRemoteRepo,
-			projectType:     project.Dotnet,
+			testProjectPath:    []string{"dotnet", "dotnet-single"},
+			resolveRepoName:    securityTests.NugetRemoteRepo,
+			cacheRepoName:      securityTests.NugetRemoteRepo,
+			projectType:        project.Dotnet,
+			extraConfigOptions: []commonCommands.ConfigOption{commonCommands.WithResolverNugetV2(true)},
 		},
 		{
 			testProjectPath: []string{"yarn", "yarn-v2"},
@@ -120,12 +122,12 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			if testCase.skipMsg != "" {
 				securityTestUtils.SkipTestIfDurationNotPassed(t, "06-04-2026", 60, testCase.skipMsg)
 			}
-			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
+			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType, testCase.extraConfigOptions...)
 		})
 	}
 }
 
-func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []string, resolveRepoName string, cacheRepoName string, projectType project.ProjectType) {
+func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []string, resolveRepoName string, cacheRepoName string, projectType project.ProjectType, extraConfigOptions ...commonCommands.ConfigOption) {
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	testProjectPath := filepath.Join(append([]string{filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers"}, testProjectPartialPath...)...)
@@ -147,10 +149,11 @@ func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []s
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, securityTests.ServerId).SetDetails(server).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
 	// Create build config
-	assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, projectType,
+	configOptions := append([]commonCommands.ConfigOption{
 		commonCommands.WithResolverServerId(server.ServerId),
 		commonCommands.WithResolverRepo(resolveRepoName),
-	))
+	}, extraConfigOptions...)
+	assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, projectType, configOptions...))
 
 	artifactoryPathToSearch := cacheRepoName + "-cache/*"
 	// To ensure a clean state between test cases, we need to verify that the cache remains clear for remote directories shared across multiple test cases.

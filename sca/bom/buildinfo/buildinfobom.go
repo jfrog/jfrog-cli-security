@@ -299,6 +299,7 @@ func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGenerato
 	// If the configuration file is found, the server details and the target repository are extracted from it.
 	params.DependenciesRepository = artifactoryDetails.TargetRepository
 	params.ServerDetails = artifactoryDetails.ServerDetails
+	params.UseNugetV2 = artifactoryDetails.UseNugetV2
 	serverDetails = artifactoryDetails.ServerDetails
 	return
 }

@@ -64,6 +64,7 @@ type BuildInfoBomGeneratorParams struct {
 	DockerImageName string
 	// NuGet params
 	SolutionFilePath string
+	UseNugetV2       bool
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {

@@ -23,13 +23,15 @@ import (
 type ArtifactoryDetails struct {
 	ServerDetails    *config.ServerDetails
 	TargetRepository string
+	UseNugetV2       bool
 }
 
 // Searches for a configuration file based on the technology type in the current directory.
 // If found, it extract ArtifactoryDetails from it to used as registry resolution target.
 func GetResolutionRepoIfExists(tech techutils.Technology) (details *ArtifactoryDetails, err error) {
 	// If the resolver repository doesn't exist and triggers a MissingResolverErr in ReadResolutionOnlyConfiguration, the repoConfig becomes nil. In this scenario, there is no depsRepo to set, nor is there a necessity to do so.
-	if repoConfig, e := getArtifactoryRepositoryConfig(tech); e != nil {
+	repoConfig, nugetV2, e := getArtifactoryRepositoryConfig(tech)
+	if e != nil {
 		err = fmt.Errorf("failed getting artifactory repository config: %s", e.Error())
 	} else if repoConfig != nil {
 		// If the configuration file is found, the server details and the target repository are extracted from it.
@@ -37,14 +39,14 @@ func GetResolutionRepoIfExists(tech techutils.Technology) (details *ArtifactoryD
 		if e != nil {
 			err = fmt.Errorf("failed getting server details: %s", e.Error())
 		} else {
-			details = &ArtifactoryDetails{ServerDetails: serverDetails, TargetRepository: repoConfig.TargetRepo()}
+			details = &ArtifactoryDetails{ServerDetails: serverDetails, TargetRepository: repoConfig.TargetRepo(), UseNugetV2: nugetV2}
 		}
 	}
 	return
 }
 
 // Searches for the configuration file based on the technology type. If found, it extracts the resolver repository from it.
-func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *project.RepositoryConfig, err error) {
+func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *project.RepositoryConfig, nugetV2 bool, err error) {
 	configFilePath, exists, err := project.GetProjectConfFilePath(tech.GetProjectType())
 	if err != nil {
 		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
@@ -68,8 +70,14 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 			return
 		}
 	}
-	// If the configuration file is found, the resolver repository is extracted from it.
-	repoConfig, err = project.ReadResolutionOnlyConfiguration(configFilePath)
+	// Read the full config to extract additional fields (like nugetV2) that RepositoryConfig doesn't expose.
+	vConfig, err := project.ReadConfigFile(configFilePath, project.YAML)
+	if err != nil {
+		err = fmt.Errorf("failed while reading %s.yaml config file: %s", tech.String(), err.Error())
+		return
+	}
+	nugetV2 = vConfig.GetBool("resolver.nugetV2")
+	repoConfig, err = project.GetRepoConfigByPrefix(configFilePath, project.ProjectConfigResolverPrefix, vConfig)
 	if err != nil {
 		var missingResolverErr *project.MissingResolverErr
 		if !errors.As(err, &missingResolverErr) {
