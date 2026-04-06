@@ -657,3 +657,52 @@ func TestProcessSarifRuns(t *testing.T) {
 	result := run.Results[0]
 	require.Equal(t, "dir/file2", sarifutils.GetLocationFileName(result.Locations[0]))
 }
+
+func TestIsAnySoftwareInstalled(t *testing.T) {
+	tests := []struct {
+		name         string
+		alternatives []string
+		expected     bool
+	}{
+		{
+			name:         "single tool found",
+			alternatives: []string{"go"},
+			expected:     true,
+		},
+		{
+			name:         "single tool not found",
+			alternatives: []string{"nonexistent_tool_xyz_12345"},
+			expected:     false,
+		},
+		{
+			name:         "first alternative found",
+			alternatives: []string{"go", "nonexistent_tool_xyz_12345"},
+			expected:     true,
+		},
+		{
+			name:         "second alternative found",
+			alternatives: []string{"nonexistent_tool_xyz_12345", "go"},
+			expected:     true,
+		},
+		{
+			name:         "no alternatives found",
+			alternatives: []string{"nonexistent_tool_xyz_12345", "another_missing_tool_67890"},
+			expected:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isAnySoftwareInstalled(tt.alternatives))
+		})
+	}
+}
+
+func TestFormatMissingSoftwareError(t *testing.T) {
+	singleErr := formatMissingSoftwareError([]string{"git"})
+	assert.Contains(t, singleErr.Error(), "'git'")
+	assert.NotContains(t, singleErr.Error(), "any of")
+
+	multiErr := formatMissingSoftwareError([]string{"unzip", "7z"})
+	assert.Contains(t, multiErr.Error(), "'unzip' or '7z'")
+	assert.Contains(t, multiErr.Error(), "any of")
+}
