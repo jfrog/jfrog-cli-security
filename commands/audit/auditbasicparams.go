@@ -28,6 +28,7 @@ type AuditParamsInterface interface {
 	Args() []string
 	InstallCommandName() string
 	InstallCommandArgs() []string
+	SetInstallCommandArgs(installCommandArgs []string) *AuditBasicParams
 	SetNpmScope(depType string) *AuditBasicParams
 	SetRunNative(runNative bool) *AuditBasicParams
 	RunNative() bool
