@@ -28,6 +28,7 @@ type AuditParamsInterface interface {
 	Args() []string
 	InstallCommandName() string
 	InstallCommandArgs() []string
+	SetInstallCommandArgs(installCommandArgs []string) *AuditBasicParams
 	SetNpmScope(depType string) *AuditBasicParams
 	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
 	MaxTreeDepth() string

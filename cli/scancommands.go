@@ -739,6 +739,9 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
+	if c.GetBoolFlagValue(flags.LegacyPeerDeps) {
+		curationAuditCommand.SetInstallCommandArgs(append(curationAuditCommand.InstallCommandArgs(), "--legacy-peer-deps"))
+	}
 	return curationAuditCommand, nil
 }
 
