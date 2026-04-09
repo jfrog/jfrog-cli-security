@@ -60,10 +60,8 @@ const (
 
 type JasDiffScanEnvValue string
 
-// scannersRequiredInstalledSoftware lists groups of executables needed by the
-// scanner at runtime.  Each inner slice represents a single capability: when
-// multiple entries exist in a group, ANY one of them satisfies the requirement
-// (e.g. either "unzip" or "7z" can handle zip extraction).
+// scannersRequiredInstalledSoftware lists groups of executables needed by the scanner at runtime.
+// Each inner slice represents a single capability, and  entry within a group can satisfies the requirement
 var scannersRequiredInstalledSoftware = [][]string{
 	{"git"},
 	{"unzip", "7z"},
@@ -364,5 +362,5 @@ func formatMissingSoftwareError(alternatives []string) error {
 	for i, alt := range alternatives {
 		quoted[i] = "'" + alt + "'"
 	}
-	return fmt.Errorf("could not find any of the required executables (%s) in the system PATH to run the Advanced Security Scans", strings.Join(quoted, " or "))
+	return fmt.Errorf("could not find any of the required executables (%s) in the system PATH to run the Advanced Security Scans", strings.Join(quoted, ", "))
 }
