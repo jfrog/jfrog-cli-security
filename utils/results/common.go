@@ -949,6 +949,7 @@ func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]strin
 	}
 	dependencies = &[]string{}
 	*dependencies = depSet.ToSlice()
+	slices.Sort(*dependencies)
 	return
 }
 
