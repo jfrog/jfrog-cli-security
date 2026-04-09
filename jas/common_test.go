@@ -703,6 +703,6 @@ func TestFormatMissingSoftwareError(t *testing.T) {
 	assert.NotContains(t, singleErr.Error(), "any of")
 
 	multiErr := formatMissingSoftwareError([]string{"unzip", "7z"})
-	assert.Contains(t, multiErr.Error(), "'unzip' or '7z'")
+	assert.Contains(t, multiErr.Error(), "'unzip', '7z'")
 	assert.Contains(t, multiErr.Error(), "any of")
 }
