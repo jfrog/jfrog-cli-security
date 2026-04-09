@@ -10,18 +10,22 @@ RESET="\033[0m"
 
 GOMOD="go.mod"
 COMMENT_REPLACE=true
+# Used for go get / go mod tidy when resolving modules (override e.g. for a corporate proxy).
+JFROG_DEPS_GOPROXY="${JFROG_DEPS_GOPROXY:-direct}"
 
 usage() {
     echo -e "${BOLD}Usage:${RESET} $0 [OPTIONS] [dep1 dep2 ...]"
     echo
     echo "Update JFrog Go dependencies to their latest versions."
+    echo "With no dependency names, updates all known JFrog modules; otherwise only those listed."
     echo
     echo -e "${BOLD}Options:${RESET}"
-    echo "  -a, --all            Update all JFrog dependencies (branch + tagged)"
-    echo "  -b, --branch         Update only branch-tracked dependencies (master/main)"
-    echo "  -t, --tagged         Update only tagged dependencies (latest release)"
+    echo "  -a, --all            Explicitly update all JFrog dependencies (same as passing no names)"
     echo "  --keep-replace       Don't comment out active 'replace' directives (default: comment them out)"
     echo "  -h, --help           Show this help message"
+    echo
+    echo -e "${BOLD}Environment:${RESET}"
+    echo "  JFROG_DEPS_GOPROXY   GOPROXY for go get / go mod tidy (default: direct)"
     echo
     echo -e "${BOLD}Individual dependencies (pass one or more):${RESET}"
     echo "  client-go        github.com/jfrog/jfrog-client-go        @master"
@@ -32,10 +36,11 @@ usage() {
     echo "  gofrog           github.com/jfrog/gofrog                 @latest (tag)"
     echo
     echo -e "${BOLD}Examples:${RESET}"
-    echo "  $0 --all                          # Update everything"
-    echo "  $0 --branch                       # Update only branch-tracked deps"
-    echo "  $0 client-go cli-core             # Update specific deps"
-    echo "  $0 --all --keep-replace           # Update all, leave replace directives as-is"
+    echo "  $0                                # Update all JFrog deps"
+    echo "  $0 --all                          # Same as no arguments"
+    echo "  $0 client-go cli-core             # Update only those"
+    echo "  $0 --keep-replace                 # Update all, leave replace directives as-is"
+    echo "  JFROG_DEPS_GOPROXY=https://proxy.golang.org $0   # Use a different GOPROXY"
 }
 
 log_info()  { echo -e "${CYAN}[INFO]${RESET}  $*"; }
@@ -43,9 +48,7 @@ log_ok()    { echo -e "${GREEN}[OK]${RESET}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${RESET} $*"; }
 
-BRANCH_KEYS="client-go cli-core cli-artifactory build-info-go"
-TAGGED_KEYS="froggit-go gofrog"
-ALL_KEYS="$BRANCH_KEYS $TAGGED_KEYS"
+ALL_KEYS="client-go cli-core cli-artifactory build-info-go froggit-go gofrog"
 
 resolve_dep() {
     case "$1" in
@@ -97,7 +100,7 @@ update_dep() {
     local module="${entry%%|*}"
     local ref="${entry##*|}"
     log_info "Updating ${BOLD}${key}${RESET} → ${module}@${ref}"
-    if go get "${module}@${ref}"; then
+    if GOPROXY="$JFROG_DEPS_GOPROXY" go get "${module}@${ref}"; then
         log_ok "${key} updated"
     else
         log_error "Failed to update ${key}"
@@ -107,22 +110,16 @@ update_dep() {
 
 # --- Main ---
 
-if [[ $# -eq 0 ]]; then
-    mode="all"
-else
-    mode=""
-fi
-specifics=""
+explicit_all=false
+specific_deps=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -a|--all)           mode="all"; shift ;;
-        -b|--branch)        mode="branch"; shift ;;
-        -t|--tagged)        mode="tagged"; shift ;;
+        -a|--all)           explicit_all=true; shift ;;
         --keep-replace)     COMMENT_REPLACE=false; shift ;;
         -h|--help)          usage; exit 0 ;;
         -*)                 log_error "Unknown option: $1"; usage; exit 1 ;;
-        *)                  specifics="${specifics} $1"; shift ;;
+        *)                  specific_deps+=("$1"); shift ;;
     esac
 done
 
@@ -135,25 +132,20 @@ fi
 failed=0
 keys_to_update=""
 
-case "$mode" in
-    all)
-        log_info "Updating ${BOLD}all${RESET} JFrog dependencies…"
-        echo
-        keys_to_update="$ALL_KEYS"
-        ;;
-    branch)
-        log_info "Updating ${BOLD}branch-tracked${RESET} dependencies…"
-        echo
-        keys_to_update="$BRANCH_KEYS"
-        ;;
-    tagged)
-        log_info "Updating ${BOLD}tagged${RESET} dependencies…"
-        echo
-        keys_to_update="$TAGGED_KEYS"
-        ;;
-esac
+if ((${#specific_deps[@]} > 0)); then
+    if [[ "$explicit_all" == true ]]; then
+        log_warn "${BOLD}--all${RESET} is ignored when dependency names are listed"
+    fi
+    log_info "Updating ${BOLD}${specific_deps[*]}${RESET}…"
+    echo
+    keys_to_update="${specific_deps[*]}"
+else
+    log_info "Updating ${BOLD}all${RESET} JFrog dependencies…"
+    echo
+    keys_to_update="$ALL_KEYS"
+fi
 
-for dep in $keys_to_update $specifics; do
+for dep in $keys_to_update; do
     update_dep "$dep" || ((failed++)) || true
 done
 
@@ -165,7 +157,14 @@ else
 fi
 
 log_info "Running go mod tidy…"
-GOPROXY=direct go mod tidy
-log_ok "Done"
+GOPROXY="$JFROG_DEPS_GOPROXY" go mod tidy
+log_ok "go mod tidy done"
+
+log_info "Running go vet ./…"
+if ! go vet ./...; then
+    log_error "go vet failed"
+    exit 1
+fi
+log_ok "go vet passed"
 
 exit "$failed"
