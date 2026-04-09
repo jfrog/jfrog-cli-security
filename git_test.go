@@ -112,7 +112,7 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 	integration.InitAuditNewScaTests(t, "3.141.7")
 	if coreutils.IsWindows() {
 		// On windows tests are failing due to the bug in Xray Server, should be fixed at XRAY-138079
-		securityTestUtils.SkipTestIfDurationNotPassed(t, "26-03-2026", 14, "Bug in Xray Server, should be fixed at XRAY-138079")
+		securityTestUtils.SkipTestIfDurationNotPassed(t, "09-04-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
 	}
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
