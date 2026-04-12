@@ -228,7 +228,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	lockFilePath := filepath.Join(currentDir, lockFileName)
 	if _, err := os.Stat(lockFilePath); os.IsNotExist(err) {
 		if params.SkipAutoInstall {
-			return nil, nil, fmt.Errorf("Podfile.lock not found and skip auto install is enabled")
+			return nil, nil, fmt.Errorf("the Podfile.lock file was not found and skip auto install is enabled")
 		}
 		if _, err = runPodCmd(podExecPath, currentDir, []string{"install"}); err != nil {
 			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", podInstallErrWithHint(err))
