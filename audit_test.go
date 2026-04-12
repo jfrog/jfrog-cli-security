@@ -30,7 +30,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
-	// "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
@@ -580,11 +580,11 @@ func TestXrayAuditCocoapods(t *testing.T) {
 
 func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
-	// if !coreutils.IsMac() {
-	// 	t.Skip("Skipping: CocoaPods auto-install (pod install) for this iOS fixture requires macOS with Xcode.")
-	// 	return
-	// }
-	output := testXrayAuditCocoapods(t, format.Json, "cocoapods-no-lock-file")
+	if coreutils.IsWindows() {
+		t.Skip("Skipping: CocoaPods auto-install (pod install) requires macOS/Linux with Xcode.")
+		return
+	}
+	output := testXrayAuditCocoapods(t, format.SimpleJson, "cocoapods-no-lock-file")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
 
