@@ -172,7 +172,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 }
 
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
-	run := sarif.NewRunWithInformationURI(utils.XrayToolName, utils.BaseDocumentationURL+"xray/features-and-capabilities/sca")
+	run := sarif.NewRunWithInformationURI(utils.XrayToolName, utils.BaseDocumentationURL+"xray")
 	run.Tool.Driver.Version = &sc.xrayVersion
 	wd := target.Target
 	if sc.currentCmdType.IsTargetBinary() {
@@ -187,7 +187,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 }
 
 func (sc *CmdResultsSarifConverter) createViolationsRun() *sarif.Run {
-	run := sarif.NewRunWithInformationURI(PolicyEnforcerToolName, utils.BaseDocumentationURL+"xray/features-and-capabilities/sdlc-policy-mangement/sdlc-policy-mangement")
+	run := sarif.NewRunWithInformationURI(PolicyEnforcerToolName, utils.BaseDocumentationURL+"policies-in-jfrog-xray")
 	run.Tool.Driver.Version = &sc.xrayVersion
 	currentWd, _ := os.Getwd()
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(currentWd))).WithExecutionSuccessful(true))
