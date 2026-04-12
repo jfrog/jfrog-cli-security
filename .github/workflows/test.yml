@@ -94,6 +94,9 @@ jobs:
     name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
     strategy:
       fail-fast: false
       matrix:

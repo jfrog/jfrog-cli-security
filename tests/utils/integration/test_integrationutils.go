@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -158,6 +161,25 @@ func InitAuditCocoapodsTest(t *testing.T, minVersion string) {
 		t.Skip(getSkipTestMsg("Audit command Cocoapods technologies integration", "--test.audit.Cocoapods"))
 	}
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
+}
+
+// RequireCocoaPodsPodInstallEnv skips the test unless the host can run `pod install` for typical iOS
+// CocoaPods fixtures (macOS with full Xcode selected, not Command Line Tools only).
+func RequireCocoaPodsPodInstallEnv(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("Skipping: CocoaPods auto-install (pod install) for this iOS fixture requires macOS with Xcode.")
+		return
+	}
+	out, err := exec.Command("xcode-select", "-p").CombinedOutput()
+	path := strings.TrimSpace(string(out))
+	if err != nil {
+		t.Skipf("Skipping: could not run xcode-select -p: %v (%s)", err, path)
+		return
+	}
+	if strings.Contains(path, "CommandLineTools") {
+		t.Skip("Skipping: full Xcode is required for pod install (active developer dir is Command Line Tools only). Install Xcode and run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
+	}
 }
 
 func InitAuditSwiftTest(t *testing.T, minVersion string) {

@@ -579,6 +579,7 @@ func TestXrayAuditCocoapods(t *testing.T) {
 
 func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
+	securityIntegrationTestUtils.RequireCocoaPodsPodInstallEnv(t)
 	output := testXrayAuditCocoapods(t, format.Json, "cocoapods-no-lock-file")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }

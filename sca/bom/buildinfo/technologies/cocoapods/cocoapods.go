@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"golang.org/x/exp/slices"
@@ -195,6 +196,21 @@ func GetDependenciesData(currentDir string) (string, error) {
 	return result, nil
 }
 
+// podInstallErrWithHint appends guidance when pod failed due to missing or misconfigured Xcode (macOS).
+func podInstallErrWithHint(podInstallErr error) error {
+	if podInstallErr == nil {
+		return nil
+	}
+	msg := podInstallErr.Error()
+	if runtime.GOOS != "darwin" {
+		return podInstallErr
+	}
+	if !strings.Contains(msg, "xcodebuild") && !strings.Contains(msg, "xcode-select") && !strings.Contains(msg, "CommandLineTools") {
+		return podInstallErr
+	}
+	return fmt.Errorf("%w\nhint: on macOS, CocoaPods often requires full Xcode (not only Command Line Tools). Install Xcode and run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer", podInstallErr)
+}
+
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
@@ -215,7 +231,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 			return nil, nil, fmt.Errorf("Podfile.lock not found and skip auto install is enabled")
 		}
 		if _, err = runPodCmd(podExecPath, currentDir, []string{"install"}); err != nil {
-			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", err)
+			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", podInstallErrWithHint(err))
 		}
 	}
 	// Calculate pod dependencies
