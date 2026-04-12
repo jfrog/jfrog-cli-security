@@ -949,6 +949,7 @@ func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]strin
 	}
 	dependencies = &[]string{}
 	*dependencies = depSet.ToSlice()
+	slices.Sort(*dependencies)
 	return
 }
 
@@ -981,12 +982,14 @@ func CreateScaComponentFromBinaryNode(node *xrayUtils.BinaryGraphNode) (componen
 	// Create the component
 	component = CreateScaComponentFromXrayCompId(node.Id)
 
-	// Add license information to the component if it exists
+	// Add license information to the component if it exists (deduplicate by license ID)
 	licenses := cyclonedx.Licenses{}
+	seen := datastructures.MakeSet[string]()
 	for _, license := range node.Licenses {
-		if license == "" {
+		if license == "" || seen.Exists(license) {
 			continue
 		}
+		seen.Add(license)
 		licenses = append(licenses, cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: license}})
 	}
 	if len(licenses) > 0 {
@@ -1052,10 +1055,13 @@ func getDataFromBinaryNode(node *xrayUtils.BinaryGraphNode, parsed *datastructur
 }
 
 func getBinaryNodeDirectDependencies(node *xrayUtils.BinaryGraphNode) (dependencies *[]string) {
-	dependencies = &[]string{}
+	depSet := datastructures.MakeSet[string]()
 	for _, dep := range node.Nodes {
-		*dependencies = append(*dependencies, techutils.XrayComponentIdToCdxComponentRef(dep.Id))
+		depSet.Add(techutils.XrayComponentIdToCdxComponentRef(dep.Id))
 	}
+	dependencies = &[]string{}
+	*dependencies = depSet.ToSlice()
+	slices.Sort(*dependencies)
 	return
 }
 
