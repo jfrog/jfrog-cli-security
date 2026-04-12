@@ -1,0 +1,10 @@
+platform :ios, '9.0'
+
+target 'Test' do
+  use_frameworks!
+pod 'GoogleSignIn', '~> 6.2.4'
+pod 'AppAuth', '~> 1.7.5'
+pod 'AppAuth', '~> 1.7.5'
+pod 'nanopb', '~> 0.3.0'
+
+end

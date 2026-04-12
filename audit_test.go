@@ -573,12 +573,18 @@ func testXrayAuditPip(t *testing.T, outFormat format.OutputFormat, requirementsF
 
 func TestXrayAuditCocoapods(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
-	output := testXrayAuditCocoapods(t, format.Json)
+	output := testXrayAuditCocoapods(t, format.Json, "cocoapods-project")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
 
-func testXrayAuditCocoapods(t *testing.T, format format.OutputFormat) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "cocoapods"))
+func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
+	output := testXrayAuditCocoapods(t, format.Json, "cocoapods-no-lock-file")
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
+}
+
+func testXrayAuditCocoapods(t *testing.T, format format.OutputFormat, projectName string) string {
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "cocoapods", projectName))
 	defer cleanUp()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUpHome()
