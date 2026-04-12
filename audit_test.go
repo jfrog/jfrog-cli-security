@@ -585,7 +585,7 @@ func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
 		return
 	}
 	output := testXrayAuditCocoapods(t, format.SimpleJson, "cocoapods-no-lock-file")
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
 
 func testXrayAuditCocoapods(t *testing.T, format format.OutputFormat, projectName string) string {
