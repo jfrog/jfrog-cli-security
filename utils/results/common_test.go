@@ -10,6 +10,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -1026,10 +1027,51 @@ func TestSearchTargetResultsByRelativePath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, techutils.NoTech, tc.cmdResults)
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}
+}
+
+func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t *testing.T) {
+	sharedDir := filepath.Join("root", "app")
+	cmdResults := NewCommandResults(utils.SourceCode)
+	// Order intentionally Poetry before Npm (simulates nondeterministic map iteration).
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
+
+	// Same absolute path for every target ⇒ common parent equals that path ⇒ relative key is "" (see utils.GetRelativePath).
+	relativeKey := utils.GetRelativePath(sharedDir, cmdResults.GetCommonParentPath())
+	require.Equal(t, "", relativeKey)
+
+	t.Run("picks npm when requested", func(t *testing.T) {
+		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Npm, cmdResults)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, sharedDir, found.Target)
+	})
+	t.Run("picks poetry when requested", func(t *testing.T) {
+		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Poetry, cmdResults)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Poetry, found.Technology)
+	})
+	t.Run("reversed slice order still picks npm", func(t *testing.T) {
+		reversed := NewCommandResults(utils.SourceCode)
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
+		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
+		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, reversed)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Npm, found.Technology)
+	})
+	t.Run("baseline NoTech matches explicit source tech", func(t *testing.T) {
+		legacyBaseline := NewCommandResults(utils.SourceCode)
+		legacyBaseline.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.NoTech})
+		rel := utils.GetRelativePath(sharedDir, legacyBaseline.GetCommonParentPath())
+		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, legacyBaseline)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.NoTech, found.Technology)
+	})
 }
 
 func TestDepTreeToSbom(t *testing.T) {

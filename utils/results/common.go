@@ -871,7 +871,18 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+// targetMatchesTechnologyForDiffCompare returns whether potential is an acceptable baseline match
+// when pairing scan targets for diff mode. When technology is NoTech, any baseline row matches
+// (legacy behavior). Otherwise the baseline must match technology, or have unset technology (NoTech)
+// for backward compatibility with older results.
+func targetMatchesTechnologyForDiffCompare(potential *TargetResults, technology techutils.Technology) bool {
+	if technology == techutils.NoTech {
+		return true
+	}
+	return potential.Technology == technology || potential.Technology == techutils.NoTech
+}
+
+func SearchTargetResultsByRelativePath(relativeTarget string, technology techutils.Technology, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
 		return
 	}
@@ -880,6 +891,9 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 	var best *TargetResults
 	log.Debug(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
 	for _, potential := range resultsToCompare.Targets {
+		if !targetMatchesTechnologyForDiffCompare(potential, technology) {
+			continue
+		}
 		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it

@@ -525,6 +525,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	}
 	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
+		targetResult.Technology,
 		resultsToCompare,
 	)
 	// Let's check if the target results to compare are valid.
@@ -724,7 +725,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath()), targetResult.Technology),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
