@@ -2,11 +2,12 @@ package cocoapods
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -22,6 +23,9 @@ import (
 // dependencies.
 const (
 	VersionForMainModule = "0.0.0"
+
+	descriptorFileName = "Podfile"
+	lockFileName       = "Podfile.lock"
 )
 
 var (
@@ -34,7 +38,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	var podPositions []*sarif.Location
 	for _, descriptorPath := range descriptorPaths {
 		descriptorPath = filepath.Clean(descriptorPath)
-		if !strings.HasSuffix(descriptorPath, "Podfile") {
+		if !strings.HasSuffix(descriptorPath, descriptorFileName) {
 			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
 			continue
 		}
@@ -92,7 +96,7 @@ func parsePodLine(line, directDependencyName, directDependencyVersion, descripto
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
 	for _, descriptorPath := range descriptorPaths {
 		descriptorPath = filepath.Clean(descriptorPath)
-		if !strings.HasSuffix(descriptorPath, "Podfile") {
+		if !strings.HasSuffix(descriptorPath, descriptorFileName) {
 			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
 			continue
 		}
@@ -180,11 +184,11 @@ func extractPodsSection(filePath string) (string, error) {
 }
 
 func GetDependenciesData(currentDir string) (string, error) {
-	_, err := os.Stat(filepath.Join(currentDir, "Podfile.lock"))
+	_, err := os.Stat(filepath.Join(currentDir, lockFileName))
 	if err != nil {
 		return "", err
 	}
-	result, err := extractPodsSection(filepath.Join(currentDir, "Podfile.lock"))
+	result, err := extractPodsSection(filepath.Join(currentDir, lockFileName))
 	if err != nil {
 		return "", err
 	}
@@ -199,10 +203,20 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, _, err = getPodVersionAndExecPath()
+	_, podExecPath, err := getPodVersionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		return
+	}
+	// Check if lock file exists, if not run 'pod install'
+	lockFilePath := filepath.Join(currentDir, lockFileName)
+	if _, err := os.Stat(lockFilePath); os.IsNotExist(err) {
+		if params.SkipAutoInstall {
+			return nil, nil, fmt.Errorf("Podfile.lock not found and skip auto install is enabled")
+		}
+		if _, err = runPodCmd(podExecPath, currentDir, []string{"install"}); err != nil {
+			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", err)
+		}
 	}
 	// Calculate pod dependencies
 	data, err := GetDependenciesData(currentDir)
