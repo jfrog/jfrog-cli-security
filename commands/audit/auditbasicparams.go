@@ -28,7 +28,6 @@ type AuditParamsInterface interface {
 	Args() []string
 	InstallCommandName() string
 	InstallCommandArgs() []string
-	SetInstallCommandArgs(installCommandArgs []string) *AuditBasicParams
 	SetNpmScope(depType string) *AuditBasicParams
 	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
 	MaxTreeDepth() string
@@ -222,6 +221,8 @@ func (abp *AuditBasicParams) SetNpmScope(depType string) *AuditBasicParams {
 		abp.args = []string{"--dev"}
 	case "prodOnly":
 		abp.args = []string{"--prod"}
+	case "legacyPeerDeps":
+		abp.installCommandArgs = append(abp.installCommandArgs, "--legacy-peer-deps")
 	}
 	return abp
 }
