@@ -661,6 +661,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			jas.GetAnalyzerManagerXscEnvVars(
 				isNewFlow,
 				auditParams.GetMultiScanId(),
+				auditParams.GetXrayVersion(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,

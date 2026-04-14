@@ -417,6 +417,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 		name           string
 		newFlow        bool
 		msi            string
+		xrayVersion    string
 		gitRepoUrl     string
 		projectKey     string
 		watches        []string
@@ -432,19 +433,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Java),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
 			name:           "Multiple technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:           "Zero technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:         "With git repo url",
@@ -457,6 +459,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -472,6 +475,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				projectEnvVariable:          "projectKey",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -487,6 +491,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				watchesEnvVariable:          "watch1,watch2",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -499,12 +504,26 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Go),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "true",
+				jfXrayVersionEnvVariable:    "",
+			},
+		},
+		{
+			name:         "With xray version set",
+			msi:          "msi",
+			xrayVersion:  "3.111.0",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "3.111.0",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.xrayVersion, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }
