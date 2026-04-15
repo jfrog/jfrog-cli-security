@@ -58,7 +58,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, Nuget is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "Nuget"),
+						Target:       filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -99,7 +100,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, yarn is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "yarn"),
+						Target:       filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -233,7 +235,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// Requested tech npm had no other descriptors at root; add JAS-only target for requested directory
 					ScanTarget: results.ScanTarget{
-						Target: dir,
+						Target:       dir,
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
