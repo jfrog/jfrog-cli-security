@@ -1031,6 +1031,24 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	})
 }
 
+func TestAuditNewScaCycloneDxPnpm(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	output, err := testAuditCommandNewSca(t, filepath.Join("package-managers", "npm", "pnpm-lock"), auditCommandTestParams{
+		WithSbom: true,
+		Format:   format.CycloneDx,
+	})
+	assert.NoError(t, err)
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /* root */ + 2 /* direct */, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 2, Direct: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1},
+		},
+	})
+}
+
 func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
 	output, err := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
@@ -1153,6 +1171,24 @@ func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 10},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 6},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxUV(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	output, err := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "uv", "uv"), auditCommandTestParams{
+		WithSbom: true,
+		Format:   format.CycloneDx,
+	})
+	assert.NoError(t, err)
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 18, BomComponents: 1 /* root */ + 8 /* direct */ + 1 /* file (secret)*/, Licenses: 5},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 8},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 16, Sast: 1, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 7, NotApplicable: 9},
 		},
 	})
 }
