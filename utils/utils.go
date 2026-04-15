@@ -34,9 +34,8 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL = "https://jfrog.com/help/r/jfrog-security-user-guide/products/"
-	XrayInfoURL          = "https://jfrog.com/xray/"
-	JasInfoURL           = "https://jfrog.com/devops-native-security/"
+	BaseDocumentationURL = "https://docs.jfrog.com/security/docs/"
+	JasInfoURL           = BaseDocumentationURL + "advanced-security"
 
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
