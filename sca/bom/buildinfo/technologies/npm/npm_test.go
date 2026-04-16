@@ -187,3 +187,130 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildNpmAuthTokenKey(t *testing.T) {
+	testCases := []struct {
+		name        string
+		registryUrl string
+		expectedKey string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:        "https artifactory registry with trailing slash",
+			registryUrl: "https://myrt.jfrog.io/artifactory/api/npm/my-repo/",
+			expectedKey: "//myrt.jfrog.io/artifactory/api/npm/my-repo/:_authToken",
+		},
+		{
+			name:        "http artifactory registry without trailing slash",
+			registryUrl: "http://myrt.jfrog.io/artifactory/api/npm/my-repo",
+			expectedKey: "//myrt.jfrog.io/artifactory/api/npm/my-repo:_authToken",
+		},
+		{
+			name:        "reverse-proxy registry without /artifactory context root",
+			registryUrl: "https://npm.company.com/api/npm/my-repo/",
+			expectedKey: "//npm.company.com/api/npm/my-repo/:_authToken",
+		},
+		{
+			name:        "registry with port",
+			registryUrl: "https://myrt.jfrog.io:8443/artifactory/api/npm/my-repo/",
+			expectedKey: "//myrt.jfrog.io:8443/artifactory/api/npm/my-repo/:_authToken",
+		},
+		{
+			name:        "missing scheme separator",
+			registryUrl: "myrt.jfrog.io/artifactory/api/npm/my-repo/",
+			expectErr:   true,
+			errContains: "expected a scheme-prefixed URL",
+		},
+		{
+			name:        "scheme separator only — no host",
+			registryUrl: "https://",
+			expectErr:   true,
+			errContains: "missing host",
+		},
+		{
+			name:        "empty registry",
+			registryUrl: "",
+			expectErr:   true,
+			errContains: "expected a scheme-prefixed URL",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			authKey, err := buildNpmAuthTokenKey(tc.registryUrl)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errContains)
+				assert.Empty(t, authKey)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedKey, authKey)
+		})
+	}
+}
+
+func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
+	testCases := []struct {
+		name           string
+		registryUrl    string
+		expectedRtUrl  string
+		expectedRepo   string
+		expectErr      bool
+		errContains    string
+	}{
+		{
+			name:          "standard artifactory registry with trailing slash",
+			registryUrl:   "https://myrt.jfrog.io/artifactory/api/npm/my-repo/",
+			expectedRtUrl: "https://myrt.jfrog.io/artifactory/",
+			expectedRepo:  "my-repo",
+		},
+		{
+			name:          "standard artifactory registry without trailing slash",
+			registryUrl:   "https://myrt.jfrog.io/artifactory/api/npm/my-repo",
+			expectedRtUrl: "https://myrt.jfrog.io/artifactory/",
+			expectedRepo:  "my-repo",
+		},
+		{
+			name:          "reverse-proxy registry without /artifactory context root",
+			registryUrl:   "https://npm.company.com/api/npm/my-repo/",
+			expectedRtUrl: "https://npm.company.com/",
+			expectedRepo:  "my-repo",
+		},
+		{
+			name:          "registry with sub-path after repo (e.g. scoped lookup) ignores extra segments",
+			registryUrl:   "https://myrt.jfrog.io/artifactory/api/npm/my-repo/-/foo",
+			expectedRtUrl: "https://myrt.jfrog.io/artifactory/",
+			expectedRepo:  "my-repo",
+		},
+		{
+			name:        "non-artifactory npm registry",
+			registryUrl: "https://registry.npmjs.org/",
+			expectErr:   true,
+			errContains: "does not appear to be an Artifactory npm registry",
+		},
+		{
+			name:        "artifactory api/npm path with empty repository",
+			registryUrl: "https://myrt.jfrog.io/artifactory/api/npm/",
+			expectErr:   true,
+			errContains: "could not extract repository name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rtUrl, repo, err := parseArtifactoryNpmRegistryUrl(tc.registryUrl)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errContains)
+				assert.Empty(t, rtUrl)
+				assert.Empty(t, repo)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedRtUrl, rtUrl)
+			assert.Equal(t, tc.expectedRepo, repo)
+		})
+	}
+}
