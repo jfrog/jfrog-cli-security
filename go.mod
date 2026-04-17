@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.3
 	github.com/beevik/etree v1.6.0
-	github.com/go-git/go-git/v5 v5.16.5
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.6.0
@@ -69,7 +69,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gfleury/go-bitbucket-v1 v0.0.0-20240917142304-df385efaac68 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.7.0 // indirect
+	github.com/go-git/go-billy/v5 v5.8.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
