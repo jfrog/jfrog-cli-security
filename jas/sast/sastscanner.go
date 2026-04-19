@@ -18,7 +18,7 @@ import (
 const (
 	sastScannerType   = "sast"
 	sastScanCommand   = "zd"
-	sastDocsUrlSuffix = "advanced-security/features-and-capabilities/sast"
+	sastDocsUrlSuffix = "sast-1"
 )
 
 type SastScanManager struct {
