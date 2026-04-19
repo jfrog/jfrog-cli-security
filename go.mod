@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/CycloneDX/cyclonedx-go v0.10.0
 	github.com/beevik/etree v1.6.0
-	github.com/go-git/go-git/v5 v5.17.1
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.6.0
