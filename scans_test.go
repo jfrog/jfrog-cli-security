@@ -135,12 +135,14 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 
 func TestXrayBinaryScanCycloneDx(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx})
+	output := testXrayBinaryScanJASArtifact(t, "restorebuddy-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx, WithLicense: true})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 4},
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 20, Licenses: 14, BomComponents: 41 /* components */ + 6 /* files (secrets) */},
+		SbomComponents:    &validations.SbomCount{Root: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, Undetermined: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 17, Secrets: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 5, NotCovered: 7, Undetermined: 3, Inactive: 3},
 		},
 	})
 }
@@ -160,12 +162,12 @@ func TestXrayBinaryScanJsonDocker(t *testing.T) {
 
 func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.SimpleJson})
+	output := testXrayBinaryScanJASArtifact(t, "restorebuddy-client.tar.gz", false, binaryScanParams{Format: format.SimpleJson, WithLicense: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 4},
+		Total: &validations.TotalCount{Vulnerabilities: 20, Licenses: 14},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, Undetermined: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 17, Secrets: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 5, NotCovered: 7, Undetermined: 3, Inactive: 3},
 		},
 	})
 }
@@ -196,7 +198,7 @@ func TestXrayBinaryScanSelectiveScan(t *testing.T) {
 			withoutCa: true,
 			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
 				// Expect only SCA vulnerabilities
-				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 3, "SCA vulnerabilities count mismatch - should be 3 or more")
+				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 17, "SCA vulnerabilities count mismatch - should be 17 or more")
 				// All other vulnerability types should be 0
 				assert.Equal(t, 0, issueCount.SecretsVulnerabilities, "Secrets vulnerabilities count mismatch - should be 0")
 				assert.Equal(t, 0, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 0")
@@ -204,11 +206,24 @@ func TestXrayBinaryScanSelectiveScan(t *testing.T) {
 			},
 		},
 		{
+			name:      "SCA and Contextual Analysis scan",
+			subScans:  []utils.SubScanType{utils.ScaScan, utils.ContextualAnalysisScan},
+			withoutCa: false,
+			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
+				// Expect only SCA vulnerabilities
+				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 17, "SCA vulnerabilities count mismatch - should be 17 or more")
+				// All other vulnerability types should be 0
+				assert.Equal(t, 0, issueCount.SecretsVulnerabilities, "Secrets vulnerabilities count mismatch - should be 0")
+				assert.Equal(t, 2, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 2")
+				assert.Equal(t, 3, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 3")
+			},
+		},
+		{
 			name:     "Secrets only scan",
 			subScans: []utils.SubScanType{utils.SecretsScan},
 			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
 				// Expect only Secrets vulnerabilities
-				assert.GreaterOrEqual(t, issueCount.SecretsVulnerabilities, 1, "Secrets vulnerabilities count mismatch - should be 1 or more")
+				assert.GreaterOrEqual(t, issueCount.SecretsVulnerabilities, 3, "Secrets vulnerabilities count mismatch - should be 3 or more")
 				// All other vulnerability types should be 0
 				assert.Equal(t, 0, issueCount.ScaVulnerabilities, "SCA vulnerabilities count mismatch - should be 0")
 				assert.Equal(t, 0, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 0")
@@ -219,7 +234,7 @@ func TestXrayBinaryScanSelectiveScan(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output := testXrayBinaryScanJASArtifact(t, "backupfriend-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx, WithSubScans: tc.subScans, WithoutContextualAnalysis: tc.withoutCa})
+			output := testXrayBinaryScanJASArtifact(t, "restorebuddy-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx, WithSubScans: tc.subScans, WithoutContextualAnalysis: tc.withoutCa})
 			tc.validate(t, validations.GetCycloneDxActualValues(t, output))
 		})
 	}
