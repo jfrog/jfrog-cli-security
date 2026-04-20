@@ -1081,7 +1081,7 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 		SbomComponents:    &validations.SbomCount{Direct: 2, Transitive: 2, Root: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 4},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 4},
 		},
 	})
 }
