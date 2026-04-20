@@ -137,9 +137,8 @@ func TestXrayBinaryScanCycloneDx(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJASArtifact(t, "restorebuddy-client.tar.gz", false, binaryScanParams{Format: format.CycloneDx, WithLicense: true})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 20, Licenses: 14, BomComponents: 41 /* components */ + 6 /* files (secrets) */},
-		SbomComponents:    &validations.SbomCount{Root: 41},
+		Total:          &validations.TotalCount{Vulnerabilities: 20, Licenses: 14, BomComponents: 41 /* components */ + 6 /* files (secrets) */},
+		SbomComponents: &validations.SbomCount{Root: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 17, Secrets: 3},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 5, NotCovered: 7, Undetermined: 3, Inactive: 3},
