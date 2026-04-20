@@ -1,9 +1,12 @@
 package sast
 
 import (
+	"gopkg.in/yaml.v3"
+	"os"
 	"path/filepath"
 	"testing"
 
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -11,6 +14,7 @@ import (
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -23,7 +27,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, "", nil)
 	assert.NoError(t, err)
 
 	// Assert
@@ -47,7 +51,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "", sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -62,7 +66,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -85,7 +89,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -198,9 +202,102 @@ func TestSastRules(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "test-rules.json")
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "test-rules.json", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
 	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
 	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
+}
+
+func TestSastChangedFilesFromGitContext(t *testing.T) {
+	gitCtxWithFiles := &xscservices.XscGitInfoContext{}
+	gitCtxWithFiles.ChangedFiles = []string{"pkg/a.go", "pkg/b.go"}
+
+	tests := []struct {
+		name     string
+		envValue string
+		gitCtx   *xscservices.XscGitInfoContext
+		wantNil  bool
+		want     []string
+	}{
+		{name: "nil_context", envValue: "true", gitCtx: nil, wantNil: true},
+		{name: "env_false", envValue: "false", gitCtx: gitCtxWithFiles, wantNil: true},
+		{name: "env_empty", envValue: "", gitCtx: gitCtxWithFiles, wantNil: true},
+		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: &xscservices.XscGitInfoContext{}, wantNil: true},
+		{name: "returns_changed_files", envValue: "true", gitCtx: gitCtxWithFiles, want: []string{"pkg/a.go", "pkg/b.go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(ChangedFilesModeEnvVar, tt.envValue)
+			got := SastChangedFilesFromGitContext(tt.gitCtx)
+			if tt.wantNil {
+				assert.Nil(t, got)
+			} else {
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+	require.NoError(t, err)
+
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	require.NoError(t, err)
+	module := jfrogAppsConfigForTest.Modules[0]
+	sastScanner := module.Scanners.Sast
+	if sastScanner == nil {
+		sastScanner = &jfrogappsconfig.SastScanner{}
+	}
+	expectedDefaultRoots, err := jas.GetSourceRoots(module, &sastScanner.Scanner)
+	require.NoError(t, err)
+
+	changed := []string{"src/a.go", "src/b.go"}
+	ssm, err := newSastScanManager(scanner, scannerTempDir, false, "", changed)
+	require.NoError(t, err)
+
+	type yamlCfg struct {
+		Scans []struct {
+			Roots []string `yaml:"roots,omitempty"`
+		} `yaml:"scans,omitempty"`
+	}
+
+	t.Run("env_true_uses_changed_files_as_roots", func(t *testing.T) {
+		t.Setenv(ChangedFilesModeEnvVar, "true")
+		require.NoError(t, ssm.createConfigFile(module, false, changed, nil))
+		data, err := os.ReadFile(ssm.configFileName)
+		require.NoError(t, err)
+		var cfg yamlCfg
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		assert.Equal(t, changed, cfg.Scans[0].Roots)
+	})
+
+	t.Run("env_false_ignores_changed_files", func(t *testing.T) {
+		t.Setenv(ChangedFilesModeEnvVar, "false")
+		require.NoError(t, ssm.createConfigFile(module, false, changed, nil))
+		data, err := os.ReadFile(ssm.configFileName)
+		require.NoError(t, err)
+		var cfg yamlCfg
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		assert.Equal(t, expectedDefaultRoots, cfg.Scans[0].Roots)
+	})
+
+	t.Run("env_true_nil_changed_files_uses_default_roots", func(t *testing.T) {
+		t.Setenv(ChangedFilesModeEnvVar, "true")
+		require.NoError(t, ssm.createConfigFile(module, false, nil, nil))
+		data, err := os.ReadFile(ssm.configFileName)
+		require.NoError(t, err)
+		var cfg yamlCfg
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		assert.Equal(t, expectedDefaultRoots, cfg.Scans[0].Roots)
+	})
 }
