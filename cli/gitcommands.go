@@ -182,25 +182,21 @@ func GetCountContributorsParams(c *components.Context) (*contributors.CountContr
 	// DetailedSummery
 	params.DetailedSummery = c.GetBoolFlagValue(flags.DetailedSummary)
 	// CacheValidity
-	if !c.IsFlagSet(flags.CacheValidity) {
-		params.CacheValidity = contributors.DefaultCacheValidity
-	} else {
-		cacheValidity, err := c.GetIntFlagValue(flags.CacheValidity)
-		if err != nil {
-			return nil, err
-		}
-		if cacheValidity < 0 {
-			return nil, errorutils.CheckErrorf("Invalid value for '--%s=%d'. Must be 0 (skip cache) or a positive number of days.", flags.CacheValidity, cacheValidity)
-		}
-		params.CacheValidity = cacheValidity
+	cacheValidity, err := c.WithDefaultIntFlagValue(flags.CacheValidity, contributors.DefaultCacheValidity)
+	if err != nil {
+		return nil, err
 	}
+	if cacheValidity < 0 {
+		return nil, errorutils.CheckErrorf("Invalid value for '--%s=%d'. Must be 0 (skip cache) or a positive number of days.", flags.CacheValidity, cacheValidity)
+	}
+	params.CacheValidity = cacheValidity
 	// Threads
 	threads, err := c.GetIntFlagValue(flags.Threads)
 	if err != nil {
 		return nil, err
 	}
 	if threads <= 0 {
-		return nil, errorutils.CheckErrorf("Invalid value for '--%s=%d'. If set, should be a positive number.", flags.GitThreads, threads)
+		return nil, errorutils.CheckErrorf("Invalid value for '--%s=%d'. If set, should be a positive number.", flags.Threads, threads)
 	}
 	params.Threads = threads
 	return &params, nil

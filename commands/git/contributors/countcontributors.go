@@ -262,6 +262,9 @@ func (cc *CountContributorsCommand) Run() error {
 	}
 
 	repoResults, scanErr := runRepoScanTasks(tasks, threads)
+	if scanErr != nil {
+		return scanErr
+	}
 
 	// Merge results sequentially.
 	uniqueContributors := make(map[BasicContributor]Contributor)
@@ -283,10 +286,6 @@ func (cc *CountContributorsCommand) Run() error {
 			mergeDetailedContributors(detailedContributors, rr.detailedContributors)
 			mergeDetailedRepos(detailedRepos, rr.detailedRepos)
 		}
-	}
-
-	if scanErr != nil {
-		return scanErr
 	}
 
 	// Create the report.
@@ -355,7 +354,7 @@ func buildRepoScanTasks(vcsCountContributors []VcsCountContributors) ([]repoScan
 		cacheDir := ""
 		if vcc.params.CacheValidity >= 0 {
 			if dir, cacheErr := getRepoCacheDir(vcc.params.BasicGitServerParams, vcc.params.MonthsNum); cacheErr != nil {
-				log.Warn("Contributors cache: failed to determine cache directory: %v. Continuing without cache.", cacheErr)
+				log.Warn(fmt.Sprintf("Contributors cache: failed to determine cache directory: %v. Continuing without cache.", cacheErr))
 			} else {
 				cacheDir = dir
 			}
@@ -390,7 +389,7 @@ func runRepoScanTasks(tasks []repoScanTask, threads int) ([]repoScanResult, erro
 	var mu sync.Mutex
 	var taskErrors []error
 
-	runner := parallel.NewRunner(threads, 20000, false)
+	runner := parallel.NewRunner(threads, uint(len(tasks)), false)
 	for _, task := range tasks {
 		if _, addErr := runner.AddTask(func(threadId int) error {
 			result := task.vcc.scanRepo(task.repo, task.baseOptions, task.cacheDir, task.cacheValidity, threadId)
