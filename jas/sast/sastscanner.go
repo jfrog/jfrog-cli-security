@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -22,19 +23,79 @@ const (
 	sastScanCommand   = "zd"
 	sastDocsUrlSuffix = "sast-1"
 
-	sastChangedFilesModeEnvVar = "JAS_SAST_CHANGED_FILES_MODE"
+	// ChangedFilesModeEnvVar enables using GitContext changed files (scoped per target) as SAST scan roots.
+	ChangedFilesModeEnvVar = "JAS_SAST_CHANGED_FILES_MODE"
 )
 
-// SastChangedFilesFromGitContext returns gitCtx.ChangedFiles when sastChangedFilesModeEnvVar is "true",
-// gitCtx is non-nil, and ChangedFiles is non-empty; otherwise nil.
-func SastChangedFilesFromGitContext(gitCtx *xscservices.XscGitInfoContext) []string {
-	if gitCtx == nil || os.Getenv(sastChangedFilesModeEnvVar) != "true" {
+// SastChangedFilesForTarget returns absolute paths of git changed files that belong to targetPath
+// (relative to commonParent), when ChangedFilesModeEnvVar is "true". Returns nil if nothing matches
+// or if gitCtx, commonParent, or targetPath are unusable.
+func SastChangedFilesForTarget(gitCtx *xscservices.XscGitInfoContext, targetPath, commonParent string) []string {
+	if gitCtx == nil || os.Getenv(ChangedFilesModeEnvVar) != "true" {
 		return nil
 	}
 	if len(gitCtx.ChangedFiles) == 0 {
 		return nil
 	}
-	return gitCtx.ChangedFiles
+	if strings.TrimSpace(commonParent) == "" || strings.TrimSpace(targetPath) == "" {
+		return nil
+	}
+	commonAbs, err := filepath.Abs(filepath.Clean(commonParent))
+	if err != nil {
+		return nil
+	}
+	targetRel := filepath.ToSlash(utils.GetRelativePath(targetPath, commonParent))
+
+	var out []string
+	for _, cf := range gitCtx.ChangedFiles {
+		cfSlash, ok := normalizeRepoRelativeChangedPath(commonAbs, cf)
+		if !ok {
+			continue
+		}
+		if !changedFileBelongsToTarget(targetRel, cfSlash) {
+			continue
+		}
+		joined := filepath.Join(commonAbs, filepath.FromSlash(cfSlash))
+		absPath, err := filepath.Abs(filepath.Clean(joined))
+		if err != nil {
+			continue
+		}
+		out = append(out, absPath)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeRepoRelativeChangedPath(commonAbs, cf string) (slashPath string, ok bool) {
+	cf = strings.TrimSpace(cf)
+	if cf == "" {
+		return "", false
+	}
+	if filepath.IsAbs(cf) {
+		cleaned := filepath.Clean(cf)
+		r, err := filepath.Rel(commonAbs, cleaned)
+		if err != nil {
+			return "", false
+		}
+		r = filepath.ToSlash(filepath.Clean(r))
+		if r == ".." || strings.HasPrefix(r, "../") {
+			return "", false
+		}
+		return r, true
+	}
+	return filepath.ToSlash(filepath.Clean(cf)), true
+}
+
+func changedFileBelongsToTarget(targetRel, cfSlash string) bool {
+	if targetRel == "" {
+		return true
+	}
+	if cfSlash == targetRel {
+		return true
+	}
+	return strings.HasPrefix(cfSlash, targetRel+"/")
 }
 
 type SastScanManager struct {
@@ -132,7 +193,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	if err != nil {
 		return err
 	}
-	if len(sastChangedFiles) > 0 {
+	if len(sastChangedFiles) > 0 && os.Getenv(ChangedFilesModeEnvVar) == "true" {
 		log.Debug(fmt.Sprintf("Using SAST Changed Files mode with %d changed files", len(sastChangedFiles)))
 		roots = sastChangedFiles
 	}

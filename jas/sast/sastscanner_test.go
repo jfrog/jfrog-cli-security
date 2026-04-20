@@ -209,31 +209,77 @@ func TestSastRules(t *testing.T) {
 	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
 }
 
-func TestSastChangedFilesFromGitContext(t *testing.T) {
+func TestSastChangedFilesForTarget(t *testing.T) {
+	base := t.TempDir()
+	modA := filepath.Join(base, "modA")
+	modB := filepath.Join(base, "modB")
+	require.NoError(t, os.MkdirAll(modA, 0o755))
+	require.NoError(t, os.MkdirAll(modB, 0o755))
+
 	gitCtxWithFiles := &xscservices.XscGitInfoContext{}
-	gitCtxWithFiles.ChangedFiles = []string{"pkg/a.go", "pkg/b.go"}
+	gitCtxWithFiles.ChangedFiles = []string{"modA/a.go", "modA/b.go", "modB/x.go"}
 
 	tests := []struct {
-		name     string
-		envValue string
-		gitCtx   *xscservices.XscGitInfoContext
-		wantNil  bool
-		want     []string
+		name         string
+		envValue     string
+		gitCtx       *xscservices.XscGitInfoContext
+		targetPath   string
+		commonParent string
+		wantNil      bool
+		want         []string
 	}{
-		{name: "nil_context", envValue: "true", gitCtx: nil, wantNil: true},
-		{name: "env_false", envValue: "false", gitCtx: gitCtxWithFiles, wantNil: true},
-		{name: "env_empty", envValue: "", gitCtx: gitCtxWithFiles, wantNil: true},
-		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: &xscservices.XscGitInfoContext{}, wantNil: true},
-		{name: "returns_changed_files", envValue: "true", gitCtx: gitCtxWithFiles, want: []string{"pkg/a.go", "pkg/b.go"}},
+		{name: "nil_context", envValue: "true", gitCtx: nil, targetPath: base, commonParent: base, wantNil: true},
+		{name: "env_false", envValue: "false", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: base, wantNil: true},
+		{name: "env_empty", envValue: "", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: base, wantNil: true},
+		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: &xscservices.XscGitInfoContext{}, targetPath: modA, commonParent: base, wantNil: true},
+		{name: "empty_common_parent", envValue: "true", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: "", wantNil: true},
+		{name: "empty_target_path", envValue: "true", gitCtx: gitCtxWithFiles, targetPath: "", commonParent: base, wantNil: true},
+		{
+			name:         "target_is_common_parent_returns_all_as_abs",
+			envValue:     "true",
+			gitCtx:       gitCtxWithFiles,
+			targetPath:   base,
+			commonParent: base,
+			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
+		},
+		{
+			name:         "filters_to_modA_only",
+			envValue:     "true",
+			gitCtx:       gitCtxWithFiles,
+			targetPath:   modA,
+			commonParent: base,
+			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+		},
+		{
+			name:         "prefix_foo_does_not_match_foobar",
+			envValue:     "true",
+			gitCtx:       &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
+			targetPath:   filepath.Join(base, "foo"),
+			commonParent: base,
+			want:         []string{filepath.Join(base, "foo", "x.go")},
+		},
+		{
+			name:     "absolute_changed_file_under_repo",
+			envValue: "true",
+			gitCtx: func() *xscservices.XscGitInfoContext {
+				c := &xscservices.XscGitInfoContext{}
+				c.ChangedFiles = []string{filepath.Join(base, "modA", "abs.go")}
+				return c
+			}(),
+			targetPath:   modA,
+			commonParent: base,
+			want:         []string{filepath.Join(base, "modA", "abs.go")},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(ChangedFilesModeEnvVar, tt.envValue)
-			got := SastChangedFilesFromGitContext(tt.gitCtx)
+			got := SastChangedFilesForTarget(tt.gitCtx, tt.targetPath, tt.commonParent)
 			if tt.wantNil {
 				assert.Nil(t, got)
 			} else {
-				assert.Equal(t, tt.want, got)
+				require.Len(t, got, len(tt.want))
+				assert.ElementsMatch(t, tt.want, got)
 			}
 		})
 	}
