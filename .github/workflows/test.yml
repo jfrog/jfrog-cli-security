@@ -311,7 +311,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
  
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"

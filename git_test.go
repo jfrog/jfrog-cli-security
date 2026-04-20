@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -109,6 +110,10 @@ func TestGitAuditSimpleJson(t *testing.T) {
 func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 	// XRAY-136444 will be fixed in 3.141.7
 	integration.InitAuditNewScaTests(t, "3.141.7")
+	if coreutils.IsWindows() {
+		// On windows tests are failing due to the bug in Xray Server, should be fixed at XRAY-138079
+		securityTestUtils.SkipTestIfDurationNotPassed(t, "09-04-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
+	}
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
 
@@ -266,8 +271,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 10, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, NotCovered: 5, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 9, NotCovered: 3, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},
@@ -294,8 +299,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 5, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},

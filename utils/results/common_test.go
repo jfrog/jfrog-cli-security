@@ -1577,7 +1577,7 @@ func TestCompTreeToSbom(t *testing.T) {
 				},
 				{
 					Ref:          "pkg:docker/my-dependency@2.0.0",
-					Dependencies: &[]string{"pkg:docker/my-sub-dependency@3.0.0", "pkg:docker/my-other-dependency@4.0.0"},
+					Dependencies: &[]string{"pkg:docker/my-other-dependency@4.0.0", "pkg:docker/my-sub-dependency@3.0.0"},
 				},
 				{
 					Ref:          "pkg:maven/my-java-app@1.0.0",
@@ -1585,11 +1585,77 @@ func TestCompTreeToSbom(t *testing.T) {
 				},
 				{
 					Ref:          "pkg:maven/my-java-dependency@2.0.0",
-					Dependencies: &[]string{"pkg:maven/my-java-sub-dependency@3.0.0", "pkg:maven/dependency@4.0.0"},
+					Dependencies: &[]string{"pkg:maven/dependency@4.0.0", "pkg:maven/my-java-sub-dependency@3.0.0"},
 				},
 				{
 					Ref:          "pkg:maven/my-java-other-dependency@4.0.0",
 					Dependencies: &[]string{"pkg:maven/my-java-sub-dependency@3.0.0"},
+				},
+			},
+		},
+		{
+			name: "duplicate dependencies are deduplicated",
+			compTrees: []*xrayUtils.BinaryGraphNode{
+				{
+					Id: "docker://image:1.0",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{Id: "docker://dep-a:1.0"},
+						{Id: "docker://dep-a:1.0"},
+						{Id: "docker://dep-b:2.0"},
+						{Id: "docker://dep-b:2.0"},
+						{Id: "docker://dep-b:2.0"},
+					},
+				},
+			},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					PackageURL: "pkg:docker/image@1.0",
+					BOMRef:     "pkg:docker/image@1.0",
+					Name:       "image",
+					Version:    "1.0",
+					Type:       "library",
+				},
+				{
+					PackageURL: "pkg:docker/dep-a@1.0",
+					BOMRef:     "pkg:docker/dep-a@1.0",
+					Name:       "dep-a",
+					Version:    "1.0",
+					Type:       "library",
+				},
+				{
+					PackageURL: "pkg:docker/dep-b@2.0",
+					BOMRef:     "pkg:docker/dep-b@2.0",
+					Name:       "dep-b",
+					Version:    "2.0",
+					Type:       "library",
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "pkg:docker/image@1.0",
+					Dependencies: &[]string{"pkg:docker/dep-a@1.0", "pkg:docker/dep-b@2.0"},
+				},
+			},
+		},
+		{
+			name: "duplicate licenses are deduplicated",
+			compTrees: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "gav://lib:1.0",
+					Licenses: []string{"MIT", "MIT", "Apache-2.0", "MIT", "Apache-2.0"},
+				},
+			},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					PackageURL: "pkg:maven/lib@1.0",
+					BOMRef:     "pkg:maven/lib@1.0",
+					Name:       "lib",
+					Version:    "1.0",
+					Type:       "library",
+					Licenses: &cyclonedx.Licenses{
+						{License: &cyclonedx.License{ID: "MIT"}},
+						{License: &cyclonedx.License{ID: "Apache-2.0"}},
+					},
 				},
 			},
 		},

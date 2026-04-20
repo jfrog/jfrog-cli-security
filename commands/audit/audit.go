@@ -174,8 +174,10 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func shouldIncludeSnippetDetection(params *AuditParams) bool {
 	if profile := params.GetConfigProfile(); profile != nil && len(profile.Modules) > 0 {
-		if profile.Modules[0].ScanConfig.ScaScannerConfig.EnableSnippetDetection {
-			return true
+		for _, module := range profile.Modules {
+			if module.ScanConfig.ScaScannerConfig.EnableSnippetDetection {
+				return true
+			}
 		}
 	}
 	if params.resultsContext.IncludeSnippetDetection {
@@ -282,14 +284,14 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
-	if !cmdResults.EntitledForJas {
+	if !cmdResults.Entitlements.Jas {
 		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
-	if cmdResults.EntitledForJas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
+	if cmdResults.Entitlements.Jas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
 		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
 	}
 	return output.NewResultsWriter(cmdResults).
@@ -377,7 +379,6 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 		xrayplugin.WithSpecificTechnologies(params.Technologies()),
-		xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -418,16 +419,28 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	entitledForJas, err := isEntitledForJas(xrayManager, params)
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetEntitledForJas(entitledForJas)
 	}
+	cmdResults.SetEntitledForJas(entitledForJas)
 	if entitledForJas {
+		// Validate required installed software
 		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
 			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 				return cmdResults.AddGeneralError(err, false)
 			}
 		}
+		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	if shouldIncludeSnippetDetection(params) {
+		entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
+		if err != nil {
+			return cmdResults.AddGeneralError(err, false)
+		}
+		if !entitledForSnippetDetection {
+			return cmdResults.AddGeneralError(fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it"), false)
+		}
+		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
 	return
 }
@@ -438,6 +451,14 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 		return false, nil
 	}
 	return jas.IsEntitledForJas(xrayManager, auditParams.GetXrayVersion())
+}
+
+func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.XrayServicesManager, auditParams *AuditParams) (entitled bool, err error) {
+	if !isEntitledForJas {
+		return false, nil
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.SnippetDetectionFeatureId)
 }
 
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
@@ -458,7 +479,10 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			// No need to generate the SBOM if we are not going to use it.
 			continue
 		}
-		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
+		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
+			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
+			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
+		),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
 				AllowPartialResults:  params.AllowPartialResults(),
@@ -616,7 +640,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 }
 
 func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, isNewFlow bool) (jasScanner *jas.JasScanner, generalError error) {
-	if !scanResults.EntitledForJas {
+	if !scanResults.Entitlements.Jas {
 		log.Info("Advanced Security is not enabled on this system, so Advanced Security scans were skipped...")
 		return
 	}

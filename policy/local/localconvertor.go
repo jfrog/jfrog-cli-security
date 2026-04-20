@@ -50,24 +50,24 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 	for _, target := range cmdResults.Targets {
 		// SCA violations (from DeprecatedXrayResults)
 		if target.ScaResults != nil {
-			if e := d.generateScaViolations(target, &convertedViolations, cmdResults.EntitledForJas); e != nil {
+			if e := d.generateScaViolations(target, &convertedViolations, cmdResults.Entitlements.Jas); e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to convert SCA violations for target %s: %w", target.Target, e))
 			}
 		}
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
 			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
-				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SecretsScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SecretsScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
-				if e := results.ForEachJasIssue(target.JasResults.JasViolations.IacScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.IacScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.IaC)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
-				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SastScanResults, cmdResults.EntitledForJas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SastScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.Target, e))
 				}
 			}
