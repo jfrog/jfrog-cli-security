@@ -59,22 +59,3 @@ func TestGetActualUrl(t *testing.T) {
 		})
 	}
 }
-
-func TestEffectiveBuildScanIncludeViolations(t *testing.T) {
-	tests := []struct {
-		name            string
-		violationsFlag  bool
-		projectProvided bool
-		want            bool
-	}{
-		{"default path: flag true, no project", true, false, true},
-		{"flag false, no project", false, false, false},
-		{"flag false, project overrides", false, true, true},
-		{"flag true, project", true, true, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, EffectiveBuildScanIncludeViolations(tt.violationsFlag, tt.projectProvided))
-		})
-	}
-}

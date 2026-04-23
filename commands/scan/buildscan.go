@@ -71,12 +71,6 @@ func (bsc *BuildScanCommand) SetIncludeViolations(include bool) *BuildScanComman
 	return bsc
 }
 
-// EffectiveBuildScanIncludeViolations reports whether build-scan should surface violations in CLI results.
-// The --violations flag defaults to true; when --project is set, violations are always included.
-func EffectiveBuildScanIncludeViolations(violationsFlag bool, projectProvided bool) bool {
-	return violationsFlag || projectProvided
-}
-
 func (bsc *BuildScanCommand) SetFailBuild(failBuild bool) *BuildScanCommand {
 	bsc.failBuild = failBuild
 	return bsc
