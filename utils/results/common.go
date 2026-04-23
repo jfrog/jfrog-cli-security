@@ -884,12 +884,12 @@ func SearchTargetResultsByRelativePath(relativeTarget string, technology techuti
 		if best == nil {
 			log.Debug("No target found")
 		} else {
-			log.Debug(fmt.Sprintf("Found target %s", best.ScanTarget.String()))
+			log.Debug(fmt.Sprintf("Found target %s", best.String()))
 		}
 	}()
 	for _, potential := range resultsToCompare.Targets {
 		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
-		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.ScanTarget.String(), relative))
+		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
 		if technology != techutils.NoTech && potential.Technology != technology {
 			// If the technology is not the same, skip the comparison
 			continue
