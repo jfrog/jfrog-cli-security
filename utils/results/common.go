@@ -871,36 +871,36 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-// targetMatchesTechnologyForDiffCompare returns whether potential is an acceptable baseline match
-// when pairing scan targets for diff mode. When technology is NoTech, any baseline row matches
-// (legacy behavior). Otherwise the baseline must match technology, or have unset technology (NoTech)
-// for backward compatibility with older results.
-func targetMatchesTechnologyForDiffCompare(potential *TargetResults, technology techutils.Technology) bool {
-	if technology == techutils.NoTech {
-		return true
-	}
-	return potential.Technology == technology || potential.Technology == techutils.NoTech
-}
-
 func SearchTargetResultsByRelativePath(relativeTarget string, technology techutils.Technology, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
-	if resultsToCompare == nil {
+	if resultsToCompare == nil || len(resultsToCompare.Targets) == 0 {
+		log.Debug(fmt.Sprintf("No targets to compare in results for target '%s'", relativeTarget))
 		return
 	}
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
-	log.Debug(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
+	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, technology.String(), sourceBasePath))
+	defer func() {
+		if best == nil {
+			log.Debug("No target found")
+		} else {
+			log.Debug(fmt.Sprintf("Found target %s", best.ScanTarget.String()))
+		}
+	}()
 	for _, potential := range resultsToCompare.Targets {
-		if !targetMatchesTechnologyForDiffCompare(potential, technology) {
+		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
+		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.ScanTarget.String(), relative))
+		if technology != techutils.NoTech && potential.Technology != technology {
+			// If the technology is not the same, skip the comparison
 			continue
 		}
-		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
-			return potential
+			best = potential
+			break
 		}
 		// Check if the target is a relative path of the source base path
-		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); relativeTarget == relative {
+		if relativeTarget == relative {
 			// Check if this is the best match so far
 			if best == nil || len(best.Target) > len(potential.Target) {
 				best = potential

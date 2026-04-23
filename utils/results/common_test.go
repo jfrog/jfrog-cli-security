@@ -1064,14 +1064,6 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 		require.NotNil(t, found)
 		assert.Equal(t, techutils.Npm, found.Technology)
 	})
-	t.Run("baseline NoTech matches explicit source tech", func(t *testing.T) {
-		legacyBaseline := NewCommandResults(utils.SourceCode)
-		legacyBaseline.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.NoTech})
-		rel := utils.GetRelativePath(sharedDir, legacyBaseline.GetCommonParentPath())
-		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, legacyBaseline)
-		require.NotNil(t, found)
-		assert.Equal(t, techutils.NoTech, found.Technology)
-	})
 }
 
 func TestDepTreeToSbom(t *testing.T) {
