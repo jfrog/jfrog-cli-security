@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
@@ -53,6 +54,29 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
+	// Curation issues per-package HEAD requests to Artifactory, which only
+	// return meaningful curation JSON for packages Artifactory has resolved.
+	// The jfrog-cli yarn integration only resolves through Artifactory for
+	// Yarn V2/V3, so V1 and V4 would silently bypass Artifactory and produce
+	// unreliable curation results. Reject those versions up front.
+	//
+	// Additionally, yarn (unlike npm with --package-lock-only) has no way to
+	// generate a fresh lockfile without fetching the package tarballs (even
+	// --mode=update-lockfile fetches packages that are missing from the
+	// lockfile). When the configured registry is a curation-enabled repository,
+	// blocked packages cause those fetches to fail with HTTP 403, so curation
+	// cannot generate yarn.lock on the user's behalf. Require a pre-existing
+	// yarn.lock for curation and let the user produce it themselves against a
+	// non-curation registry.
+	if params.IsCurationCmd {
+		if err = verifyYarnVersionSupportedForCuration(executablePath, currentDir); err != nil {
+			return
+		}
+		if err = verifyYarnLockExistsForCuration(currentDir); err != nil {
+			return
+		}
+	}
+
 	packageInfo, err := bibuildutils.ReadPackageInfoFromPackageJsonIfExists(currentDir, nil)
 	if errorutils.CheckError(err) != nil {
 		return
@@ -76,17 +100,65 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
+	// build-info-go's buildYarnV2DependencyMap finds the root workspace by
+	// matching dependency entries that start with packageInfo.FullName()+"@".
+	// When package.json has no "name" (or no "version"), Yarn V2+ falls back
+	// to a synthesized workspace identifier such as "root-workspace-XXXXXXXX",
+	// which never matches that prefix — so root comes back nil and a naive
+	// deref would panic. Recover by scanning the dependency map for the root
+	// workspace entry that yarn V2+ always emits as "<name>@workspace:.".
+	if root == nil {
+		root = findYarnWorkspaceRoot(dependenciesMap)
+	}
+	if root == nil {
+		err = errorutils.CheckErrorf("could not identify the root workspace from yarn dependency output")
+		return
+	}
 	// Parse the dependencies into Xray dependency tree format
-	rootId, err := getXrayDependencyId(root)
+	rootXrayId, err := getXrayDependencyId(root)
 	if err != nil {
 		return
 	}
-	dependencyTree, uniqueDeps, err := parseYarnDependenciesMap(dependenciesMap, rootId)
+	dependencyTree, uniqueDeps, err := parseYarnDependenciesMap(dependenciesMap, rootXrayId)
 	if err != nil {
 		return
 	}
 	dependencyTrees = []*xrayUtils.GraphNode{dependencyTree}
 	return
+}
+
+// verifyYarnVersionSupportedForCuration rejects Yarn versions that the
+// jfrog-cli yarn integration cannot route through Artifactory (V1 and V4),
+// since 'jf curation-audit' depends on Artifactory having resolved every
+// package to return meaningful curation HEAD responses.
+func verifyYarnVersionSupportedForCuration(yarnExecPath, curWd string) error {
+	versionStr, err := bibuildutils.GetVersion(yarnExecPath, curWd)
+	if err != nil {
+		return err
+	}
+	yarnVersion := version.NewVersion(versionStr)
+	if yarnVersion.Compare(yarnV2Version) > 0 || yarnVersion.Compare(yarnV4Version) <= 0 {
+		return errorutils.CheckErrorf("'jf curation-audit' is not supported for Yarn V1 or Yarn V4 (detected: %s). Curation requires Artifactory-resolved installs, which the JFrog CLI Yarn integration only supports for Yarn V2 and V3.", versionStr)
+	}
+	return nil
+}
+
+// verifyYarnLockExistsForCuration enforces that 'jf curation-audit' is run
+// against a project that already has a yarn.lock. Yarn cannot generate one
+// through a curation-enabled repository because every fresh Fetch is subject
+// to the curation policy, and any blocked package returns HTTP 403 (YN0035).
+// Asking the user to pre-generate yarn.lock against a non-curation registry
+// keeps the curation phase to pure HEAD checks against the resolved tree.
+func verifyYarnLockExistsForCuration(curWd string) error {
+	yarnLockPath := filepath.Join(curWd, yarn.YarnLockFileName)
+	exists, err := fileutils.IsFileExists(yarnLockPath, false)
+	if err != nil {
+		return fmt.Errorf("failed to check the existence of '%s' file: %s", yarnLockPath, err.Error())
+	}
+	if !exists {
+		return errorutils.CheckErrorf("'jf curation-audit' requires an existing '%s'. Yarn cannot generate a fresh lockfile through a curation-enabled repository (curation blocks the package downloads required to compute integrity hashes). Please run 'yarn install' against a non-curation registry to produce '%s', then re-run 'jf ca'.", yarn.YarnLockFileName, yarn.YarnLockFileName)
+	}
+	return nil
 }
 
 // Sets up Artifactory server configurations for dependency resolution, if such were provided by the user.
@@ -102,7 +174,7 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	if err != nil {
 		return
 	}
-	// Checking if the current yarn version is Yarn V1 ro Yarn v4, and if so - abort. Resolving dependencies from artifactory is currently not supported for Yarn V1 and V4
+	// Resolving through Artifactory is only supported for Yarn V2 and V3.
 	yarnVersion := version.NewVersion(executableYarnVersion)
 	if yarnVersion.Compare(yarnV2Version) > 0 || yarnVersion.Compare(yarnV4Version) <= 0 {
 		err = errors.New("resolving Yarn dependencies from Artifactory is currently not supported for Yarn V1 and Yarn V4. The current Yarn version is: " + executableYarnVersion)
@@ -194,13 +266,16 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 
 		installCommandArgs = append(installCommandArgs, v1IgnoreScriptsFlag, v1SilentFlag, v1NonInteractiveFlag)
 	} else {
-		// Checks if the version is V2 or V3 to insert the correct flags
 		if yarnVersion.Compare(yarnV3Version) > 0 {
+			// V2
 			installCommandArgs = append(installCommandArgs, v2SkipBuildFlag)
 		} else {
+			// V3 (curation rejects V1 and V4 earlier and requires a pre-existing
+			// yarn.lock, so this branch only ever runs from 'jf audit')
 			installCommandArgs = append(installCommandArgs, v3UpdateLockfileFlag, v3SkipBuildFlag)
 		}
 	}
+	log.Info(fmt.Sprintf("Running 'yarn %s' command.", strings.Join(installCommandArgs, " ")))
 	err = build.RunYarnCommand(yarnExecPath, curWd, installCommandArgs...)
 	return
 }
@@ -215,8 +290,8 @@ func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependen
 		}
 		var subDeps []string
 		for _, subDepPtr := range dependency.Details.Dependencies {
-			var subDepXrayId string
-			subDepXrayId, err = getXrayDependencyId(dependencies[bibuildutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)])
+			subDep := dependencies[bibuildutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]
+			subDepXrayId, err := getXrayDependencyId(subDep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -236,4 +311,20 @@ func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) (string, e
 		return "", err
 	}
 	return techutils.Npm.GetXrayPackageTypeId() + dependencyName + ":" + yarnDependency.Details.Version, nil
+}
+
+// findYarnWorkspaceRoot recovers the project's root workspace entry when
+// build-info-go could not identify it from package.json's name+version. Yarn
+// V2+ always emits the project root with a Value suffixed by "@workspace:."
+// (the dot meaning "the project itself"), regardless of whether package.json
+// declares a name. This lets 'jf audit' / 'jf ca' work on bare package.json
+// files the same way npm does, instead of forcing users to add a name/version.
+func findYarnWorkspaceRoot(dependenciesMap map[string]*bibuildutils.YarnDependency) *bibuildutils.YarnDependency {
+	const rootWorkspaceSuffix = "@workspace:."
+	for _, dep := range dependenciesMap {
+		if dep != nil && strings.HasSuffix(dep.Value, rootWorkspaceSuffix) {
+			return dep
+		}
+	}
+	return nil
 }

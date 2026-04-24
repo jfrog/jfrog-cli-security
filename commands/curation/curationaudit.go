@@ -88,7 +88,8 @@ const (
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
-	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Yarn: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
@@ -384,6 +385,11 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
 	}
+	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
+	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
+	for i, tech := range techs {
+		techs[i] = resolveNpmYarnTech(tech)
+	}
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {
@@ -408,6 +414,26 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 
 	}
 	return nil
+}
+
+// resolveNpmYarnTech upgrades npm→yarn when the project has a yarn.yaml JFrog config
+// but no npm.yaml. This handles the common case where a developer ran 'jf yarn-config' to
+// configure their yarn repository but the project lacks yarn.lock/.yarnrc.yml (so the
+// file-system detector falls back to npm). Yarn is preferred when explicitly configured.
+func resolveNpmYarnTech(tech string) string {
+	if techutils.Technology(tech) != techutils.Npm {
+		return tech
+	}
+	_, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType())
+	if npmConfigExists {
+		return tech
+	}
+	_, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType())
+	if yarnConfigExists {
+		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
+		return techutils.Yarn.String()
+	}
+	return tech
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
@@ -784,7 +810,26 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
-		return err
+		// npm and yarn share the same Artifactory npm API for curation, so their
+		// repository configs are interchangeable. Fall back to the sibling tech's
+		// config when the primary one is missing (e.g. the project was configured
+		// with 'jf yarn-config' but is detected as npm because yarn.lock is absent).
+		primaryErr := err
+		switch tech {
+		case techutils.Npm:
+			resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType())
+		case techutils.Yarn:
+			resolverParams, err = ca.getRepoParams(techutils.Npm.GetProjectType())
+		}
+		if err != nil {
+			// Return the primary tech's error so the user sees the correct command.
+			// Yarn's CLI config command is 'jf yarn-config', not 'jf yarn c'.
+			if tech == techutils.Yarn {
+				return errorutils.CheckErrorf("no config file was found! Before running jf ca on a yarn" +
+					"project for the first time, the project should be configured using the 'jf yarn-config' command")
+			}
+			return primaryErr
+		}
 	}
 	ca.setPackageManagerConfig(resolverParams)
 	return nil
@@ -1066,7 +1111,8 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 
 func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
-	case techutils.Npm:
+	case techutils.Npm, techutils.Yarn:
+		// Yarn packages use npm:// node IDs and the same Artifactory npm API endpoint.
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
 	case techutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
