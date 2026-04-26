@@ -20,7 +20,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -244,8 +243,6 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		log.Warn(fmt.Sprintf("Failed while parsing the response from Xray: components map is empty for target '%s'", target))
-		err = errorutils.CheckErrorf("failed while parsing the response from Xray: components map is empty")
-		return
 	}
 	for currCompId, currComp := range impactedPackages {
 		impactedPackagesIds = append(impactedPackagesIds, currCompId)
