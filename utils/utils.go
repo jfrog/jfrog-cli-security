@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -165,19 +164,6 @@ func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount int, scanStar
 
 func IsCI() bool {
 	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
-}
-
-// IsEnvVarTruthy reports whether the named environment variable is set to a truthy value.
-// Unset or empty (after trim) is false. Values accepted by strconv.ParseBool (e.g. "1", "t", "true", case-insensitive) are true.
-func IsEnvVarTruthy(name string) bool {
-	v := strings.TrimSpace(os.Getenv(name))
-	if v == "" {
-		return false
-	}
-	if b, err := strconv.ParseBool(v); err == nil {
-		return b
-	}
-	return false
 }
 
 // UniqueIntersection returns a new slice of strings that contains elements from both input slices without duplicates

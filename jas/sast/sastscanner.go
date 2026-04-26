@@ -2,6 +2,7 @@ package sast
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,7 +27,7 @@ const (
 	sastDocsUrlSuffix = "sast-1"
 
 	// ChangedFilesModeEnvVar enables using GitContext changed files (scoped per target) as SAST scan roots.
-	ChangedFilesModeEnvVar = "JAS_SAST_CHANGED_FILES_MODE"
+	ChangedFilesModeEnvVar = "JFROG_SAST_CHANGED_FILES_MODE"
 )
 
 type SastScanManager struct {
@@ -43,7 +44,7 @@ type SastScanManager struct {
 
 func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, sastRules string, sastChangedFiles []string, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	// In changed-files mode with nothing in scope, do not fall back to a full module scan. Diff mode (baseline compare) must still run.
-	if utils.IsEnvVarTruthy(ChangedFilesModeEnvVar) && len(sastChangedFiles) == 0 && len(resultsToCompare) == 0 {
+	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true" && len(sastChangedFiles) == 0 && len(resultsToCompare) == 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "SAST changed files mode: no changed files in scope for this target, skipping SAST scan")
 		return
 	}
@@ -129,7 +130,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	if err != nil {
 		return err
 	}
-	if utils.IsEnvVarTruthy(ChangedFilesModeEnvVar) {
+	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true" {
 		log.Debug(fmt.Sprintf("SAST changed files mode: using %d paths as scan roots", len(sastChangedFiles)))
 		roots = sastChangedFiles
 	}
@@ -241,7 +242,7 @@ func SastChangedFilesForTarget(gitCtx *xscservices.XscGitInfoContext, targetPath
 	if gitCtx == nil {
 		return nil
 	}
-	if !utils.IsEnvVarTruthy(ChangedFilesModeEnvVar) {
+	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) != "true" {
 		return nil
 	}
 	if len(gitCtx.ChangedFiles) == 0 {

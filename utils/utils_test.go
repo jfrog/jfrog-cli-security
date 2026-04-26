@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,35 +160,6 @@ func TestMergeMaps(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, MergeMaps(tc.maps...))
-		})
-	}
-}
-
-func TestIsEnvVarTruthy(t *testing.T) {
-	const envName = "JFROG_CLI_TEST_IS_ENV_TRUTHY"
-	tests := []struct {
-		set  string
-		want bool
-	}{
-		{"", false},
-		{"  ", false},
-		{"true", true},
-		{"True", true},
-		{"TRUE", true},
-		{"1", true},
-		{"0", false},
-		{"false", false},
-		{"f", false},
-		{"t", true},
-		{"y", false},
-		{"yes", false},
-		{"on", false},
-		{"maybe", false},
-	}
-	for _, tc := range tests {
-		t.Run(fmt.Sprintf("%q", tc.set), func(t *testing.T) {
-			t.Setenv(envName, tc.set)
-			assert.Equal(t, tc.want, IsEnvVarTruthy(envName), "value %q", tc.set)
 		})
 	}
 }
