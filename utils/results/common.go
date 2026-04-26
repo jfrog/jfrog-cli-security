@@ -243,6 +243,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
+		log.Warn(fmt.Sprintf("Failed while parsing the response from Xray: components map is empty for target '%s'", target))
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: components map is empty")
 		return
 	}
