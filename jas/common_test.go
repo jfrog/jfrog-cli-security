@@ -560,10 +560,11 @@ func TestGetDiffScanTypeValue(t *testing.T) {
 
 func TestGetResultsToCompare(t *testing.T) {
 	testCases := []struct {
-		name             string
-		target           string
-		ResultsToCompare *results.SecurityCommandResults
-		expectedTarget   *results.TargetResults
+		name              string
+		target            string
+		compareTechnology techutils.Technology
+		ResultsToCompare  *results.SecurityCommandResults
+		expectedTarget    *results.TargetResults
 	}{
 		{
 			name:             "No results to compare",
@@ -603,12 +604,24 @@ func TestGetResultsToCompare(t *testing.T) {
 			},
 			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
 		},
+		{
+			name:              "Results to compare - same directory two technologies picks npm",
+			target:            filepath.Join("root", "app"),
+			compareTechnology: techutils.Npm,
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Poetry}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
-			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target))
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target, testCase.compareTechnology))
 		})
 	}
 }
