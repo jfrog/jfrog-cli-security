@@ -209,6 +209,13 @@ func TestSastRules(t *testing.T) {
 	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
 }
 
+// xscGitInfoWithChanged builds an XscGitInfoContext the way the client defines it (GitDiffContext with changed_files).
+// Must match the shape expected by SastChangedFilesForTarget in sastscanner.go.
+func xscGitInfoWithChanged(t *testing.T, files ...string) *xscservices.XscGitInfoContext {
+	t.Helper()
+	return &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: files}}
+}
+
 func TestSastChangedFilesForTarget(t *testing.T) {
 	base := t.TempDir()
 	modA := filepath.Join(base, "modA")
@@ -216,8 +223,7 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 	require.NoError(t, os.MkdirAll(modA, 0o755))
 	require.NoError(t, os.MkdirAll(modB, 0o755))
 
-	gitCtxWithFiles := &xscservices.XscGitInfoContext{}
-	gitCtxWithFiles.ChangedFiles = []string{"modA/a.go", "modA/b.go", "modB/x.go"}
+	threeFiles := xscGitInfoWithChanged(t, "modA/a.go", "modA/b.go", "modB/x.go")
 
 	tests := []struct {
 		name         string
@@ -225,19 +231,20 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 		gitCtx       *xscservices.XscGitInfoContext
 		targetPath   string
 		commonParent string
-		wantNil      bool
-		want         []string
+		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
+		wantEmpty bool
+		want      []string
 	}{
-		{name: "nil_context", envValue: "true", gitCtx: nil, targetPath: base, commonParent: base, wantNil: true},
-		{name: "env_false", envValue: "false", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: base, wantNil: true},
-		{name: "env_empty", envValue: "", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: base, wantNil: true},
-		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: &xscservices.XscGitInfoContext{}, targetPath: modA, commonParent: base, wantNil: true},
-		{name: "empty_common_parent", envValue: "true", gitCtx: gitCtxWithFiles, targetPath: modA, commonParent: "", wantNil: true},
-		{name: "empty_target_path", envValue: "true", gitCtx: gitCtxWithFiles, targetPath: "", commonParent: base, wantNil: true},
+		{name: "nil_context", envValue: "true", gitCtx: nil, targetPath: base, commonParent: base, wantEmpty: true},
+		{name: "env_false", envValue: "false", gitCtx: threeFiles, targetPath: modA, commonParent: base, wantEmpty: true},
+		{name: "env_empty", envValue: "", gitCtx: threeFiles, targetPath: modA, commonParent: base, wantEmpty: true},
+		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, commonParent: base, wantEmpty: true},
+		{name: "empty_common_parent", envValue: "true", gitCtx: threeFiles, targetPath: modA, commonParent: "", wantEmpty: true},
+		{name: "empty_target_path", envValue: "true", gitCtx: threeFiles, targetPath: "", commonParent: base, wantEmpty: true},
 		{
 			name:         "target_is_common_parent_returns_all_as_abs",
 			envValue:     "true",
-			gitCtx:       gitCtxWithFiles,
+			gitCtx:       threeFiles,
 			targetPath:   base,
 			commonParent: base,
 			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
@@ -245,7 +252,7 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 		{
 			name:         "filters_to_modA_only",
 			envValue:     "true",
-			gitCtx:       gitCtxWithFiles,
+			gitCtx:       threeFiles,
 			targetPath:   modA,
 			commonParent: base,
 			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
@@ -259,27 +266,38 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			want:         []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
-			name:     "absolute_changed_file_under_repo",
-			envValue: "true",
-			gitCtx: func() *xscservices.XscGitInfoContext {
-				c := &xscservices.XscGitInfoContext{}
-				c.ChangedFiles = []string{filepath.Join(base, "modA", "abs.go")}
-				return c
-			}(),
+			name:         "absolute_changed_file_under_repo",
+			envValue:     "true",
+			gitCtx:       xscGitInfoWithChanged(t, filepath.Join(base, "modA", "abs.go")),
 			targetPath:   modA,
 			commonParent: base,
 			want:         []string{filepath.Join(base, "modA", "abs.go")},
+		},
+		{
+			name:         "env_1_enables",
+			envValue:     "1",
+			gitCtx:       threeFiles,
+			targetPath:   modA,
+			commonParent: base,
+			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+		},
+		{
+			name:         "deduplicates_same_paths",
+			envValue:     "true",
+			gitCtx:       &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
+			targetPath:   modA,
+			commonParent: base,
+			want:         []string{filepath.Join(base, "modA", "a.go")},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(ChangedFilesModeEnvVar, tt.envValue)
 			got := SastChangedFilesForTarget(tt.gitCtx, tt.targetPath, tt.commonParent)
-			if tt.wantNil {
-				assert.Nil(t, got)
+			if tt.wantEmpty {
+				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
 			} else {
-				require.Len(t, got, len(tt.want))
-				assert.ElementsMatch(t, tt.want, got)
+				assert.ElementsMatch(t, tt.want, got, "SastChangedFilesForTarget per-target paths (order may be sorted in implementation)")
 			}
 		})
 	}
@@ -313,37 +331,61 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 			Roots []string `yaml:"roots,omitempty"`
 		} `yaml:"scans,omitempty"`
 	}
-
-	t.Run("env_true_uses_changed_files_as_roots", func(t *testing.T) {
-		t.Setenv(ChangedFilesModeEnvVar, "true")
-		require.NoError(t, ssm.createConfigFile(module, false, changed, nil))
+	readConfigRoots := func(t *testing.T) []string {
+		t.Helper()
 		data, err := os.ReadFile(ssm.configFileName)
 		require.NoError(t, err)
 		var cfg yamlCfg
 		require.NoError(t, yaml.Unmarshal(data, &cfg))
 		require.Len(t, cfg.Scans, 1)
-		assert.Equal(t, changed, cfg.Scans[0].Roots)
-	})
+		return cfg.Scans[0].Roots
+	}
 
-	t.Run("env_false_ignores_changed_files", func(t *testing.T) {
-		t.Setenv(ChangedFilesModeEnvVar, "false")
-		require.NoError(t, ssm.createConfigFile(module, false, changed, nil))
-		data, err := os.ReadFile(ssm.configFileName)
-		require.NoError(t, err)
-		var cfg yamlCfg
-		require.NoError(t, yaml.Unmarshal(data, &cfg))
-		require.Len(t, cfg.Scans, 1)
-		assert.Equal(t, expectedDefaultRoots, cfg.Scans[0].Roots)
-	})
-
-	t.Run("env_true_nil_changed_files_uses_default_roots", func(t *testing.T) {
-		t.Setenv(ChangedFilesModeEnvVar, "true")
-		require.NoError(t, ssm.createConfigFile(module, false, nil, nil))
-		data, err := os.ReadFile(ssm.configFileName)
-		require.NoError(t, err)
-		var cfg yamlCfg
-		require.NoError(t, yaml.Unmarshal(data, &cfg))
-		require.Len(t, cfg.Scans, 1)
-		assert.Equal(t, expectedDefaultRoots, cfg.Scans[0].Roots)
-	})
+	for _, tc := range []struct {
+		name string
+		env  string
+		// sastForCall is the slice passed to createConfigFile; nil to pass nil.
+		sastForCall []string
+		want        []string
+		emptyRoots  bool
+	}{
+		{
+			name:        "env_true_uses_changed_files_as_roots",
+			env:         "true",
+			sastForCall: changed,
+			want:        changed,
+		},
+		{
+			name:        "env_1_uses_changed_files_as_roots",
+			env:         "1",
+			sastForCall: changed,
+			want:        changed,
+		},
+		{
+			name:        "env_false_ignores_changed_files",
+			env:         "false",
+			sastForCall: changed,
+			want:        expectedDefaultRoots,
+		},
+		{
+			// In changed-files mode, do not use full module roots; RunSastScan skips the analyzer with no diff baseline.
+			name:        "env_true_no_changed_file_list_uses_no_module_roots",
+			env:         "true",
+			sastForCall: nil,
+			emptyRoots:  true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// createConfigFile assigns roots to sastChangedFiles whenever this env is truthy (sastscanner.go);
+			// pass-through nil/empty is intentional in changed-files mode to avoid a full module scan.
+			t.Setenv(ChangedFilesModeEnvVar, tc.env)
+			require.NoError(t, ssm.createConfigFile(module, false, tc.sastForCall, nil))
+			got := readConfigRoots(t)
+			if tc.emptyRoots {
+				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")
+			} else {
+				assert.ElementsMatch(t, tc.want, got)
+			}
+		})
+	}
 }
