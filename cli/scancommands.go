@@ -22,6 +22,7 @@ import (
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/jas/sast"
 
 	maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
@@ -507,6 +508,7 @@ func AuditCmd(c *components.Context) error {
 
 		auditCmd.SetSastRules(sastRulesFile)
 	}
+	auditCmd.SetSastChangedFilesMode(sast.IsChangedFilesMode(false))
 
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {

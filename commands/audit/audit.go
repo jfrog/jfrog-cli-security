@@ -267,7 +267,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId).
+		SetSastChangedFilesMode(sast.IsChangedFilesMode(false)).SetSastRules(auditCmd.sastRules)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -741,6 +742,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
+				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
 				SastChangedFiles:            sast.SastChangedFilesForTarget(scanResults.GitContext, targetResult.Target, scanResults.GetCommonParentPath()),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),

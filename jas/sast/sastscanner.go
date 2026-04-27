@@ -37,31 +37,47 @@ type SastScanManager struct {
 	signedDescriptions bool
 	sastRules          string
 
+	changedFilesMode bool
+
 	resultsToCompareFileName string
 	configFileName           string
 	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, sastRules string, sastChangedFiles []string, targetCount, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	// In changed-files mode with nothing in scope, do not fall back to a full module scan. Diff mode (baseline compare) must still run.
-	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true" && len(sastChangedFiles) == 0 && len(resultsToCompare) == 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "SAST changed files mode: no changed files in scope for this target, skipping SAST scan")
+type SastScanParams struct {
+	Module             jfrogappsconfig.Module
+	SignedDescriptions bool
+	SastRules          string
+	TargetCount        int
+	ThreadId           int
+	SastChangedFiles   []string
+	ChangedFilesMode   bool
+	ResultsToCompare   []*sarif.Run
+}
+
+func IsChangedFilesMode(changedFilesMode bool) bool {
+	return changedFilesMode || strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true"
+}
+
+func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+	if params.ChangedFilesMode && len(params.SastChangedFiles) == 0 {
+		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "SAST changed files mode: no changed files in scope for this target, skipping SAST scan")
 		return
 	}
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), threadId); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), params.ThreadId); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, sastRules, sastChangedFiles, resultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.SastRules, params.SastChangedFiles, params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.SastScan, threadId, module, targetCount))
-	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
+	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Module, params.TargetCount))
+	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, params.Module); err != nil {
 		return
 	}
-	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))
+	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
 }
 
