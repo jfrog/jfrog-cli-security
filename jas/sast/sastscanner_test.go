@@ -27,7 +27,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
 	assert.NoError(t, err)
 
 	// Assert
@@ -51,7 +51,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -66,7 +66,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -89,7 +89,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -202,7 +202,7 @@ func TestSastRules(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "test-rules.json", nil)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
 	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
@@ -222,78 +222,102 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 	modB := filepath.Join(base, "modB")
 	require.NoError(t, os.MkdirAll(modA, 0o755))
 	require.NoError(t, os.MkdirAll(modB, 0o755))
+	// collectSastChangedAbsPaths only keeps paths that exist on disk
+	for _, rel := range []string{
+		"modA/a.go", "modA/b.go", "modB/x.go", "modA/abs.go", "foo/x.go", "foobar/y.go",
+	} {
+		p := filepath.Join(base, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte("// test\n"), 0o644))
+	}
 
 	threeFiles := xscGitInfoWithChanged(t, "modA/a.go", "modA/b.go", "modB/x.go")
 
 	tests := []struct {
-		name         string
-		envValue     string
-		gitCtx       *xscservices.XscGitInfoContext
-		targetPath   string
-		commonParent string
+		name             string
+		envValue         string
+		gitCtx           *xscservices.XscGitInfoContext
+		targetPath       string
+		commonParent     string
+		changedFilesMode bool
 		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
 		wantEmpty bool
 		want      []string
 	}{
-		{name: "nil_context", envValue: "true", gitCtx: nil, targetPath: base, commonParent: base, wantEmpty: true},
-		{name: "env_false", envValue: "false", gitCtx: threeFiles, targetPath: modA, commonParent: base, wantEmpty: true},
-		{name: "env_empty", envValue: "", gitCtx: threeFiles, targetPath: modA, commonParent: base, wantEmpty: true},
-		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, commonParent: base, wantEmpty: true},
-		{name: "empty_common_parent", envValue: "true", gitCtx: threeFiles, targetPath: modA, commonParent: "", wantEmpty: true},
-		{name: "empty_target_path", envValue: "true", gitCtx: threeFiles, targetPath: "", commonParent: base, wantEmpty: true},
+		{name: "nil_context", envValue: "true", gitCtx: nil, targetPath: base, commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{name: "env_false", envValue: "false", gitCtx: threeFiles, targetPath: modA, commonParent: base, changedFilesMode: false, wantEmpty: true},
+		{name: "env_empty", envValue: "", gitCtx: threeFiles, targetPath: modA, commonParent: base, changedFilesMode: false, wantEmpty: true},
+		{name: "empty_changed_files_env_true", envValue: "true", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{name: "empty_common_parent", envValue: "true", gitCtx: threeFiles, targetPath: modA, commonParent: "", changedFilesMode: true, wantEmpty: true},
+		{name: "empty_target_path", envValue: "true", gitCtx: threeFiles, targetPath: "", commonParent: base, changedFilesMode: true, wantEmpty: true},
 		{
-			name:         "target_is_common_parent_returns_all_as_abs",
-			envValue:     "true",
-			gitCtx:       threeFiles,
-			targetPath:   base,
-			commonParent: base,
-			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
+			name:             "target_is_common_parent_returns_all_as_abs",
+			envValue:         "true",
+			gitCtx:           threeFiles,
+			targetPath:       base,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
 		},
 		{
-			name:         "filters_to_modA_only",
-			envValue:     "true",
-			gitCtx:       threeFiles,
-			targetPath:   modA,
-			commonParent: base,
-			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+			name:             "filters_to_modA_only",
+			envValue:         "true",
+			gitCtx:           threeFiles,
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
 		{
-			name:         "prefix_foo_does_not_match_foobar",
-			envValue:     "true",
-			gitCtx:       &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
-			targetPath:   filepath.Join(base, "foo"),
-			commonParent: base,
-			want:         []string{filepath.Join(base, "foo", "x.go")},
+			name:             "prefix_foo_does_not_match_foobar",
+			envValue:         "true",
+			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
+			targetPath:       filepath.Join(base, "foo"),
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
-			name:         "absolute_changed_file_under_repo",
-			envValue:     "true",
-			gitCtx:       xscGitInfoWithChanged(t, filepath.Join(base, "modA", "abs.go")),
-			targetPath:   modA,
-			commonParent: base,
-			want:         []string{filepath.Join(base, "modA", "abs.go")},
+			name:             "absolute_changed_file_under_repo",
+			envValue:         "true",
+			gitCtx:           xscGitInfoWithChanged(t, filepath.Join(base, "modA", "abs.go")),
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "abs.go")},
 		},
 		{
-			name:         "env_1_enables",
-			envValue:     "1",
-			gitCtx:       threeFiles,
-			targetPath:   modA,
-			commonParent: base,
-			want:         []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+			name:             "env_1_enables",
+			envValue:         "1",
+			gitCtx:           threeFiles,
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
 		{
-			name:         "deduplicates_same_paths",
-			envValue:     "true",
-			gitCtx:       &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
-			targetPath:   modA,
-			commonParent: base,
-			want:         []string{filepath.Join(base, "modA", "a.go")},
+			name:             "deduplicates_same_paths",
+			envValue:         "true",
+			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go")},
+		},
+		{
+			name:             "changed_files_mode_off",
+			envValue:         "false",
+			gitCtx:           threeFiles,
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: false,
+			wantEmpty:        true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(ChangedFilesModeEnvVar, tt.envValue)
-			got := SastChangedFilesForTarget(tt.gitCtx, tt.targetPath, tt.commonParent)
+			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.commonParent)
 			if tt.wantEmpty {
 				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
 			} else {
@@ -323,7 +347,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	require.NoError(t, err)
 
 	changed := []string{"src/a.go", "src/b.go"}
-	ssm, err := newSastScanManager(scanner, scannerTempDir, false, "", changed)
+	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil)
 	require.NoError(t, err)
 
 	type yamlCfg struct {
@@ -376,8 +400,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// createConfigFile assigns roots to sastChangedFiles whenever this env is truthy (sastscanner.go);
-			// pass-through nil/empty is intentional in changed-files mode to avoid a full module scan.
+			// createConfigFile uses IsChangedFilesMode: env JFROG_SAST_CHANGED_FILES_MODE or manager flag; see sastscanner.go
 			t.Setenv(ChangedFilesModeEnvVar, tc.env)
 			require.NoError(t, ssm.createConfigFile(module, false, tc.sastForCall, nil))
 			got := readConfigRoots(t)

@@ -186,8 +186,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 				ThreadId:           threadId,
 				SastChangedFiles:   params.SastChangedFiles,
 				ChangedFilesMode:   params.SastChangedFilesMode,
-				// TODO: maybe not needed if changed files mode is enabled
-				ResultsToCompare: getSourceRunsToCompare(params, jasutils.Sast),
+				ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
 			},
 			params.Scanner,
 		)

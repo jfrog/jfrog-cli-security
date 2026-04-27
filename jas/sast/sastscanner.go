@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -56,11 +57,15 @@ type SastScanParams struct {
 }
 
 func IsChangedFilesMode(changedFilesMode bool) bool {
-	return changedFilesMode || strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true"
+	if changedFilesMode {
+		return true
+	}
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar)))
+	return v == "true" || v == "1"
 }
 
 func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if params.ChangedFilesMode && len(params.SastChangedFiles) == 0 {
+	if IsChangedFilesMode(params.ChangedFilesMode) && len(params.SastChangedFiles) == 0 {
 		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "SAST changed files mode: no changed files in scope for this target, skipping SAST scan")
 		return
 	}
@@ -68,7 +73,7 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), params.ThreadId); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.SastRules, params.SastChangedFiles, params.ResultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.ChangedFilesMode, params.SastRules, params.SastChangedFiles, params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -81,11 +86,12 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, sastRules string, sastChangedFiles []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
 		sastRules:          sastRules,
+		changedFilesMode:   changedFilesMode,
 		sastChangedFiles:   sastChangedFiles,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
@@ -146,7 +152,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	if err != nil {
 		return err
 	}
-	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) == "true" {
+	if IsChangedFilesMode(ssm.changedFilesMode) {
 		log.Debug(fmt.Sprintf("SAST changed files mode: using %d paths as scan roots", len(sastChangedFiles)))
 		roots = sastChangedFiles
 	}
@@ -241,6 +247,10 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 			stats.absError++
 			continue
 		}
+		if exists, err := fileutils.IsFileExists(absPath, false); err != nil || !exists {
+			stats.invalidPath++
+			continue
+		}
 		if seen.Exists(absPath) {
 			stats.duplicate++
 			continue
@@ -251,14 +261,11 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 	return out, stats
 }
 
-// SastChangedFilesForTarget returns absolute paths of git changed files that belong to targetPath
-// (relative to commonParent), when ChangedFilesModeEnvVar is truthy (see utils.IsEnvVarTruthy). Returns nil if nothing matches
-// or if gitCtx, commonParent, or targetPath are unusable.
-func SastChangedFilesForTarget(gitCtx *xscservices.XscGitInfoContext, targetPath, commonParent string) []string {
-	if gitCtx == nil {
-		return nil
-	}
-	if strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar))) != "true" {
+// SastChangedFilesForTarget returns absolute paths of changed files under commonParent that belong to targetPath
+// (paths from git are repo-relative or absolute under the repo). Only runs when changedFilesMode is true; only paths
+// that exist on disk are returned. Returns nil if nothing matches or if gitCtx, commonParent, or targetPath are unusable.
+func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGitInfoContext, targetPath, commonParent string) []string {
+	if gitCtx == nil || !changedFilesMode {
 		return nil
 	}
 	if len(gitCtx.ChangedFiles) == 0 {
@@ -280,9 +287,6 @@ func SastChangedFilesForTarget(gitCtx *xscservices.XscGitInfoContext, targetPath
 	if stats.anyDrops() {
 		log.Debug(fmt.Sprintf("SAST changed files: kept %d of %d changed-file entries (dropped: %d invalid/unsafe path, %d outside target, %d path resolution error, %d duplicate after normalization)",
 			len(out), inputCount, stats.invalidPath, stats.outsideTarget, stats.absError, stats.duplicate))
-	}
-	if len(out) == 0 {
-		return nil
 	}
 	slices.Sort(out)
 	return out
