@@ -234,24 +234,29 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 	for _, cf := range changedFiles {
 		cfSlash, ok := normalizeRepoRelativeChangedPath(commonAbs, cf)
 		if !ok {
+			log.Verbose(fmt.Sprintf("SAST changed files: invalid path: %s", cf))
 			stats.invalidPath++
 			continue
 		}
 		if !changedFileBelongsToTarget(targetRel, cfSlash) {
+			log.Verbose(fmt.Sprintf("SAST changed files: outside target: %s", cf))
 			stats.outsideTarget++
 			continue
 		}
 		joined := filepath.Join(commonAbs, filepath.FromSlash(cfSlash))
 		absPath, err := filepath.Abs(filepath.Clean(joined))
 		if err != nil {
+			log.Verbose(fmt.Sprintf("SAST changed files: absolute path error: %s", err.Error()))
 			stats.absError++
 			continue
 		}
 		if exists, err := fileutils.IsFileExists(absPath, false); err != nil || !exists {
+			log.Verbose(fmt.Sprintf("SAST changed files: file does not exist: %s", absPath))
 			stats.invalidPath++
 			continue
 		}
 		if seen.Exists(absPath) {
+			log.Verbose(fmt.Sprintf("SAST changed files: duplicate path: %s", absPath))
 			stats.duplicate++
 			continue
 		}
