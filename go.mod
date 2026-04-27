@@ -152,7 +152,7 @@ require (
 )
 
 // attiasas:add_chagned_files_to_git_ctx
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260427074859-054f5ce6f99e
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260427080430-a2f591c32959
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
