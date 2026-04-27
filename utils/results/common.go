@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -243,10 +243,12 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
-		err = errorutils.CheckErrorf("failed while parsing the response from Xray: components map is empty")
-		return
+		log.Warn(fmt.Sprintf("Failed while parsing the response from Xray: components map is empty for target '%s'", target))
 	}
-	for currCompId, currComp := range impactedPackages {
+	impactedKeys := maps.Keys(impactedPackages)
+	slices.Sort(impactedKeys)
+	for _, currCompId := range impactedKeys {
+		currComp := impactedPackages[currCompId]
 		impactedPackagesIds = append(impactedPackagesIds, currCompId)
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
@@ -259,6 +261,11 @@ func SplitComponents(target string, impactedPackages map[string]services.Compone
 // Gets a slice of the direct dependencies or packages of the scanned component, that depends on the vulnerable package, and converts the impact paths.
 func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.ImpactPathNode) (components []formats.ComponentRow, impactPathsRows [][]formats.ComponentRow) {
 	componentsMap := make(map[string]formats.ComponentRow)
+	type directImpactPath struct {
+		directId string
+		rows     []formats.ComponentRow
+	}
+	var perPath []directImpactPath
 
 	// The first node in the impact path is the scanned component itself. The second one is the direct dependency.
 	impactPathLevel := 1
@@ -289,11 +296,17 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 				PreferredLocation: getComponentLocation(pathNode.FullPath),
 			})
 		}
-		impactPathsRows = append(impactPathsRows, compImpactPathRows)
+		perPath = append(perPath, directImpactPath{directId: componentId, rows: compImpactPathRows})
 	}
 
-	for _, row := range componentsMap {
-		components = append(components, row)
+	keys := maps.Keys(componentsMap)
+	slices.Sort(keys)
+	for _, k := range keys {
+		components = append(components, componentsMap[k])
+	}
+	sort.SliceStable(perPath, func(i, j int) bool { return perPath[i].directId < perPath[j].directId })
+	for _, p := range perPath {
+		impactPathsRows = append(impactPathsRows, p.rows)
 	}
 	return
 }
