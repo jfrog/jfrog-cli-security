@@ -253,12 +253,12 @@ func TestBuildNpmAuthTokenKey(t *testing.T) {
 
 func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
 	testCases := []struct {
-		name           string
-		registryUrl    string
-		expectedRtUrl  string
-		expectedRepo   string
-		expectErr      bool
-		errContains    string
+		name          string
+		registryUrl   string
+		expectedRtUrl string
+		expectedRepo  string
+		expectErr     bool
+		errContains   string
 	}{
 		{
 			name:          "standard artifactory registry with trailing slash",

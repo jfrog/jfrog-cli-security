@@ -130,8 +130,10 @@ const (
 	Rescan              = "rescan"
 	TriggerScanRetries  = "trigger-scan-retries"
 	Vuln                = "vuln"
+	Violations          = "violations"
 	buildPrefix         = "build-"
 	BuildVuln           = buildPrefix + Vuln
+	BuildViolations     = buildPrefix + Violations
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
 	StaticSca           = "static-sca"
@@ -190,7 +192,7 @@ var commandFlags = map[string][]string{
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs, malProjectKey,
 	},
 	BuildScan: {
-		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, BuildViolations, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
 	DockerScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
@@ -293,6 +295,7 @@ var flagsMap = map[string]components.Flag{
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
 	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Defines how many times Xray retries triggering the build scan after a failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
 	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
+	BuildViolations:     components.NewBoolFlag(Violations, fmt.Sprintf("Controls whether policy violations are included in build-scan results. When set to false, violations are excluded from CLI output and from violation enrichment. With --%s, violations are always included regardless of this flag. If disabled, the CLI does not fail on Xray fail_build responses when --%s is used, and the results writer omits violation context accordingly.", Project, Fail), components.WithBoolDefaultValue(true)),
 	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
 	ExcludeTestDeps:     components.NewBoolFlag(ExcludeTestDeps, "[Gradle] Set to true if you'd like to exclude Gradle test dependencies from Xray scanning."),
