@@ -43,9 +43,9 @@ type AuditParams struct {
 	violationGenerator              policy.PolicyHandler
 	sastRules                       string
 	// Diff mode, scan only the files affected by the diff.
-	diffMode         bool
-	filesToScan      []string
-	resultsToCompare *results.SecurityCommandResults
+	diffMode             bool
+	sastChangedFilesMode bool
+	resultsToCompare     *results.SecurityCommandResults
 }
 
 func NewAuditParams() *AuditParams {
@@ -258,13 +258,13 @@ func (params *AuditParams) ToXrayScanGraphParams() (scanGraphParams scangraph.Sc
 	return
 }
 
-func (params *AuditParams) SetFilesToScan(filesToScan []string) *AuditParams {
-	params.filesToScan = filesToScan
+func (params *AuditParams) SetSastChangedFilesMode(sastChangedFilesMode bool) *AuditParams {
+	params.sastChangedFilesMode = sastChangedFilesMode
 	return params
 }
 
-func (params *AuditParams) FilesToScan() []string {
-	return params.filesToScan
+func (params *AuditParams) SastChangedFilesMode() bool {
+	return params.sastChangedFilesMode
 }
 
 func (params *AuditParams) SetResultsToCompare(resultsToCompare *results.SecurityCommandResults) *AuditParams {

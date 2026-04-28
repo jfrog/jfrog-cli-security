@@ -1,9 +1,12 @@
 package sast
 
 import (
+	"gopkg.in/yaml.v3"
+	"os"
 	"path/filepath"
 	"testing"
 
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -11,6 +14,7 @@ import (
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -23,7 +27,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
 	assert.NoError(t, err)
 
 	// Assert
@@ -47,7 +51,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "", sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -62,7 +66,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -85,7 +89,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false, "")
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -198,9 +202,186 @@ func TestSastRules(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, "test-rules.json")
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
 	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
 	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
+}
+
+// xscGitInfoWithChanged builds an XscGitInfoContext the way the client defines it (GitDiffContext with changed_files).
+// Must match the shape expected by SastChangedFilesForTarget in sastscanner.go.
+func xscGitInfoWithChanged(t *testing.T, files ...string) *xscservices.XscGitInfoContext {
+	t.Helper()
+	return &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: files}}
+}
+
+func TestSastChangedFilesForTarget(t *testing.T) {
+	base := t.TempDir()
+	modA := filepath.Join(base, "modA")
+	modB := filepath.Join(base, "modB")
+	require.NoError(t, os.MkdirAll(modA, 0o755))
+	require.NoError(t, os.MkdirAll(modB, 0o755))
+	// collectSastChangedAbsPaths only keeps paths that exist on disk
+	for _, rel := range []string{
+		"modA/a.go", "modA/b.go", "modB/x.go", "modA/abs.go", "foo/x.go", "foobar/y.go",
+	} {
+		p := filepath.Join(base, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte("// test\n"), 0o644))
+	}
+
+	threeFiles := xscGitInfoWithChanged(t, "modA/a.go", "modA/b.go", "modB/x.go")
+
+	tests := []struct {
+		name             string
+		gitCtx           *xscservices.XscGitInfoContext
+		targetPath       string
+		commonParent     string
+		changedFilesMode bool
+		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
+		wantEmpty bool
+		want      []string
+	}{
+		{name: "nil_context", gitCtx: nil, targetPath: base, commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{name: "changed_files_mode_off", gitCtx: threeFiles, targetPath: modA, commonParent: base, changedFilesMode: false, wantEmpty: true},
+		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{name: "empty_common_parent", gitCtx: threeFiles, targetPath: modA, commonParent: "", changedFilesMode: true, wantEmpty: true},
+		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{
+			name:             "target_is_common_parent_returns_all_as_abs",
+			gitCtx:           threeFiles,
+			targetPath:       base,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
+		},
+		{
+			name:             "filters_to_modA_only",
+			gitCtx:           threeFiles,
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+		},
+		{
+			name:             "prefix_foo_does_not_match_foobar",
+			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
+			targetPath:       filepath.Join(base, "foo"),
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "foo", "x.go")},
+		},
+		{
+			name:             "absolute_changed_file_under_repo",
+			gitCtx:           xscGitInfoWithChanged(t, filepath.Join(base, "modA", "abs.go")),
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "abs.go")},
+		},
+		{
+			name:             "deduplicates_same_paths",
+			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
+			targetPath:       modA,
+			commonParent:     base,
+			changedFilesMode: true,
+			want:             []string{filepath.Join(base, "modA", "a.go")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.commonParent)
+			if tt.wantEmpty {
+				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
+			} else {
+				assert.ElementsMatch(t, tt.want, got, "SastChangedFilesForTarget per-target paths (order may be sorted in implementation)")
+			}
+		})
+	}
+}
+
+func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+	require.NoError(t, err)
+
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	require.NoError(t, err)
+	module := jfrogAppsConfigForTest.Modules[0]
+	sastScanner := module.Scanners.Sast
+	if sastScanner == nil {
+		sastScanner = &jfrogappsconfig.SastScanner{}
+	}
+	expectedDefaultRoots, err := jas.GetSourceRoots(module, &sastScanner.Scanner)
+	require.NoError(t, err)
+
+	changed := []string{"src/a.go", "src/b.go"}
+	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil)
+	require.NoError(t, err)
+
+	type yamlCfg struct {
+		Scans []struct {
+			Roots []string `yaml:"roots,omitempty"`
+		} `yaml:"scans,omitempty"`
+	}
+	readConfigRoots := func(t *testing.T) []string {
+		t.Helper()
+		data, err := os.ReadFile(ssm.configFileName)
+		require.NoError(t, err)
+		var cfg yamlCfg
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		return cfg.Scans[0].Roots
+	}
+
+	for _, tc := range []struct {
+		name             string
+		changedFilesMode bool
+		// sastForCall is the slice passed to createConfigFile; nil to pass nil.
+		sastForCall []string
+		want        []string
+		emptyRoots  bool
+	}{
+		{
+			name:             "env_true_uses_changed_files_as_roots",
+			changedFilesMode: true,
+			sastForCall:      changed,
+			want:             changed,
+		},
+		{
+			name:             "env_1_uses_changed_files_as_roots",
+			changedFilesMode: true,
+			sastForCall:      changed,
+			want:             changed,
+		},
+		{
+			name:             "env_false_ignores_changed_files",
+			changedFilesMode: false,
+			sastForCall:      changed,
+			want:             expectedDefaultRoots,
+		},
+		{
+			// In changed-files mode, do not use full module roots; RunSastScan skips the analyzer with no diff baseline.
+			name:             "env_true_no_changed_file_list_uses_no_module_roots",
+			changedFilesMode: true,
+			sastForCall:      nil,
+			emptyRoots:       true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ssm.changedFilesMode = tc.changedFilesMode
+			require.NoError(t, ssm.createConfigFile(module, false, tc.sastForCall, nil))
+			got := readConfigRoots(t)
+			if tc.emptyRoots {
+				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")
+			} else {
+				assert.ElementsMatch(t, tc.want, got)
+			}
+		})
+	}
 }
