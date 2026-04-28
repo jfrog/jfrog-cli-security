@@ -216,7 +216,6 @@ func (s sastChangedFileDropStats) anyDrops() bool {
 }
 
 // collectSastChangedAbsPaths maps repo-relative (or absolute-under-repo) changed file paths to clean absolute
-// paths under commonAbs that belong to targetRel, deduplicating by absolute path.
 func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []string) (out []string, stats sastChangedFileDropStats) {
 	seen := datastructures.MakeSet[string]()
 	for _, cf := range changedFiles {
@@ -247,9 +246,7 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 	return out, stats
 }
 
-// SastChangedFilesForTarget returns absolute paths of changed files under commonParent that belong to targetPath
-// (paths from git are repo-relative or absolute under the repo). Only runs when changedFilesMode is true; only paths
-// that exist on disk are returned. Returns nil if nothing matches or if gitCtx, commonParent, or targetPath are unusable.
+// SastChangedFilesForTarget returns absolute paths of changed files under the root directory that belong to the target path.
 func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGitInfoContext, targetPath, rootDir string) []string {
 	if gitCtx == nil || !changedFilesMode {
 		return nil
