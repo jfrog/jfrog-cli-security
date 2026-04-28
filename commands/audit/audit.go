@@ -477,6 +477,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		// Generate SBOM for the target if requested or for SCA scans.
 		if !shouldGenerateSbom(params) {
 			// No need to generate the SBOM if we are not going to use it.
+			log.Debug(fmt.Sprintf("No need to generate the SBOM for %s as requested by input...", targetResult.Target))
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
