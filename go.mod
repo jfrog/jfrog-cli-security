@@ -159,4 +159,4 @@ require (
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go v1.21.2-0.20260415120606-ae12b01a6920
