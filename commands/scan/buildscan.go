@@ -104,7 +104,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	if bsc.includeVulnerabilities {
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BuildScanIncludeVulnerabilitiesMinVersion)
 		if err != nil {
-			return errors.New("build-scan command with '--vuln' flag is not supported on your current Xray version. " + err.Error())
+			return errors.New("include vulnerabilities is not supported on your current Xray version. " + err.Error())
 		}
 	}
 	buildName, err := bsc.buildConfiguration.GetBuildName()
