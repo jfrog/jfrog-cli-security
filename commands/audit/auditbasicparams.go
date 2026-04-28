@@ -29,6 +29,10 @@ type AuditParamsInterface interface {
 	InstallCommandName() string
 	InstallCommandArgs() []string
 	SetNpmScope(depType string) *AuditBasicParams
+	SetRunNative(runNative bool) *AuditBasicParams
+	RunNative() bool
+	SetLegacyPeerDeps(legacyPeerDeps bool) *AuditBasicParams
+	LegacyPeerDeps() bool
 	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
 	MaxTreeDepth() string
 	OutputFormat() format.OutputFormat
@@ -78,6 +82,8 @@ type AuditBasicParams struct {
 	isRecursiveScan                  bool
 	skipAutoInstall                  bool
 	allowPartialResults              bool
+	runNative                        bool
+	legacyPeerDeps                   bool
 	xrayVersion                      string
 	xscVersion                       string
 	configProfile                    *xscservices.ConfigProfile
@@ -223,6 +229,24 @@ func (abp *AuditBasicParams) SetNpmScope(depType string) *AuditBasicParams {
 		abp.args = []string{"--prod"}
 	}
 	return abp
+}
+
+func (abp *AuditBasicParams) SetRunNative(runNative bool) *AuditBasicParams {
+	abp.runNative = runNative
+	return abp
+}
+
+func (abp *AuditBasicParams) RunNative() bool {
+	return abp.runNative
+}
+
+func (abp *AuditBasicParams) SetLegacyPeerDeps(legacyPeerDeps bool) *AuditBasicParams {
+	abp.legacyPeerDeps = legacyPeerDeps
+	return abp
+}
+
+func (abp *AuditBasicParams) LegacyPeerDeps() bool {
+	return abp.legacyPeerDeps
 }
 
 func (abp *AuditBasicParams) SetConanProfile(file string) *AuditBasicParams {
