@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/CycloneDX/cyclonedx-go v0.10.0
 	github.com/beevik/etree v1.6.0
-	github.com/go-git/go-git/v5 v5.17.1
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.6.0
@@ -15,9 +15,9 @@ require (
 	github.com/jfrog/froggit-go v1.21.1
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260408205330-fb3f40fbcd22
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260402104745-7a0bc2c11d63
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260401130923-f5a15b584a0d
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260423195010-d7aa2c437305
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260427010241-873f53d940b3
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260428070955-750b933dc5c7
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -151,8 +151,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// attiasas:add_scan_no_issue_severity
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260409140914-b53808b747f7
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go master
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 

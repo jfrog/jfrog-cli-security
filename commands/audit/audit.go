@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
+	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
@@ -266,7 +267,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId).
+		SetSastChangedFilesMode(auditCmd.sastChangedFilesMode).SetSastRules(auditCmd.sastRules)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -525,6 +527,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	}
 	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
+		targetResult.Technology,
 		resultsToCompare,
 	)
 	// Let's check if the target results to compare are valid.
@@ -661,6 +664,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			jas.GetAnalyzerManagerXscEnvVars(
 				isNewFlow,
 				auditParams.GetMultiScanId(),
+				auditParams.GetXrayVersion(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,
@@ -724,7 +728,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath()), targetResult.Technology),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
@@ -739,6 +743,8 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
+				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
+				SastChangedFiles:            sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, scanResults.GetCommonParentPath()),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,

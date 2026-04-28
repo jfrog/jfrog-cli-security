@@ -25,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.30.2"
+	defaultAnalyzerManagerVersion             = "1.31.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -35,6 +35,7 @@ const (
 	jfTokenEnvVariable                        = "JF_TOKEN"
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
+	jfXrayVersionEnvVariable                  = "JF_XRAY_VERSION"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
