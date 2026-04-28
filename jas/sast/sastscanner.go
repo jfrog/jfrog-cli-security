@@ -2,7 +2,6 @@ package sast
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,9 +25,6 @@ const (
 	sastScannerType   = "sast"
 	sastScanCommand   = "zd"
 	sastDocsUrlSuffix = "sast-1"
-
-	// ChangedFilesModeEnvVar enables using GitContext changed files (scoped per target) as SAST scan roots.
-	ChangedFilesModeEnvVar = "JFROG_SAST_CHANGED_FILES_MODE"
 )
 
 type SastScanManager struct {
@@ -56,16 +52,8 @@ type SastScanParams struct {
 	ResultsToCompare   []*sarif.Run
 }
 
-func IsChangedFilesMode(changedFilesMode bool) bool {
-	if changedFilesMode {
-		return true
-	}
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(ChangedFilesModeEnvVar)))
-	return v == "true" || v == "1"
-}
-
 func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
-	if IsChangedFilesMode(params.ChangedFilesMode) && len(params.SastChangedFiles) == 0 {
+	if params.ChangedFilesMode && len(params.SastChangedFiles) == 0 {
 		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "SAST changed files mode: no changed files in scope for this target, skipping SAST scan")
 		return
 	}
@@ -152,7 +140,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	if err != nil {
 		return err
 	}
-	if IsChangedFilesMode(ssm.changedFilesMode) {
+	if ssm.changedFilesMode {
 		log.Debug(fmt.Sprintf("SAST changed files mode: using %d paths as scan roots", len(sastChangedFiles)))
 		roots = sastChangedFiles
 	}
