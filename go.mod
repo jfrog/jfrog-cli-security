@@ -15,9 +15,9 @@ require (
 	github.com/jfrog/froggit-go v1.21.1
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260416104146-471c3f71ce61
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260420010255-65b7a8d432af
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260416101832-c47c1246283b
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260423195010-d7aa2c437305
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260427010241-873f53d940b3
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260428070955-750b933dc5c7
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -151,8 +151,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// attiasas:add_chagned_files_to_git_ctx
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260427080430-a2f591c32959
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go master
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
