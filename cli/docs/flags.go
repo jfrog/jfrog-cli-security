@@ -286,7 +286,7 @@ var flagsMap = map[string]components.Flag{
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
 	ExtendedTable:       components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
 	BypassArchiveLimits: components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
-	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values: Low, Medium, High, or Critical."),
+	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values include: Low, Medium, High, Critical, and Scanned - No Issues."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fix version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
 	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Defines how many times Xray retries triggering the build scan after a failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute

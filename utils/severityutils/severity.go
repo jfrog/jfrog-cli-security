@@ -26,12 +26,13 @@ const (
 )
 
 const (
-	Critical    Severity = "Critical"
-	High        Severity = "High"
-	Medium      Severity = "Medium"
-	Low         Severity = "Low"
-	Information Severity = "Information"
-	Unknown     Severity = "Unknown"
+	Critical        Severity = "Critical"
+	High            Severity = "High"
+	Medium          Severity = "Medium"
+	Low             Severity = "Low"
+	Information     Severity = "Information"
+	Unknown         Severity = "Unknown"
+	ScannedNoIssues Severity = "Scanned - No Issues"
 )
 
 func GetSeverityIcon(severity Severity) string {
@@ -50,6 +51,8 @@ func getSeverityEmojiIcon(severity Severity) string {
 		return "🟡"
 	case Information:
 		return "ℹ️"
+	case ScannedNoIssues:
+		return "✅"
 	default:
 		return "❔"
 	}
@@ -160,6 +163,14 @@ var Severities = map[Severity]map[jasutils.ApplicabilityStatus]*SeverityDetails{
 		jasutils.NotCovered:                &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 1, Score: MinCveScore, Emoji: "😐", style: color.New(color.Gray)},
 	},
+	ScannedNoIssues: {
+		jasutils.Applicable:                &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Green)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Green)},
+		jasutils.NotScanned:                &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Green)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Green)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Green)},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 0, Score: MinCveScore, Emoji: "✅", style: color.New(color.Gray)},
+	},
 }
 
 func supportedSeverities() (severities []string) {
@@ -172,6 +183,9 @@ func supportedSeverities() (severities []string) {
 // -- Parsing functions, only for supported values --
 
 func ParseToSeverity(severity string) (parsed Severity, err error) {
+	if strings.EqualFold(strings.TrimSpace(severity), ScannedNoIssues.String()) {
+		return ScannedNoIssues, nil
+	}
 	formattedSeverity := cases.Title(language.Und).String(severity)
 	switch formattedSeverity {
 	case Critical.String():
@@ -186,6 +200,8 @@ func ParseToSeverity(severity string) (parsed Severity, err error) {
 		parsed = Information
 	case Unknown.String():
 		parsed = Unknown
+	case ScannedNoIssues.String():
+		parsed = ScannedNoIssues
 	default:
 		err = errorutils.CheckErrorf("severity '%s' is not supported, only the following severities are supported: %s", severity, coreutils.ListToText(supportedSeverities()))
 	}
@@ -303,6 +319,8 @@ func SeverityToSarifSeverityLevel(severity Severity) SarifSeverityLevel {
 		return LevelNote
 	case Information:
 		return LevelInfo
+	case ScannedNoIssues:
+		return LevelNone
 	default:
 		return LevelNone
 	}
@@ -336,6 +354,8 @@ func SeverityToCycloneDxSeverity(severity Severity) cyclonedx.Severity {
 		return cyclonedx.SeverityLow
 	case Information:
 		return cyclonedx.SeverityInfo
+	case ScannedNoIssues:
+		return cyclonedx.SeverityNone
 	default:
 		return cyclonedx.SeverityUnknown
 	}
@@ -353,6 +373,8 @@ func CycloneDxSeverityToSeverity(severity cyclonedx.Severity) Severity {
 		return Low
 	case cyclonedx.SeverityInfo:
 		return Information
+	case cyclonedx.SeverityNone:
+		return ScannedNoIssues
 	default:
 		return Unknown
 	}
@@ -370,6 +392,8 @@ func XraySeverityToSeverity(severity xrayUtils.Severity) Severity {
 		return Low
 	case xrayUtils.Information:
 		return Information
+	case xrayUtils.ScannedNoIssues:
+		return ScannedNoIssues
 	default:
 		return Unknown
 	}
