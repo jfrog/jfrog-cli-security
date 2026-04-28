@@ -34,6 +34,7 @@ type JasRunnerParams struct {
 	ScansToPerform      []utils.SubScanType
 	// Diff mode flags
 	SourceResultsToCompare *results.TargetResults
+	SastChangedFiles       []string
 	DiffMode               bool
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
@@ -42,8 +43,9 @@ type JasRunnerParams struct {
 	ApplicableScanType          applicability.ApplicabilityScanType
 	ThirdPartyApplicabilityScan bool
 	// SAST scan flags
-	SignedDescriptions bool
-	SastRules          string
+	SastChangedFilesMode bool
+	SignedDescriptions   bool
+	SastRules            string
 	// Outputs
 	TargetCount     int
 	ScanResults     *results.TargetResults
@@ -175,7 +177,19 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, params.SastRules, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.Sast)...)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(
+			sast.SastScanParams{
+				Module:             params.Module,
+				SignedDescriptions: params.SignedDescriptions,
+				SastRules:          params.SastRules,
+				TargetCount:        params.TargetCount,
+				ThreadId:           threadId,
+				SastChangedFiles:   params.SastChangedFiles,
+				ChangedFilesMode:   params.SastChangedFilesMode,
+				ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
+			},
+			params.Scanner,
+		)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
