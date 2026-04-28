@@ -26,13 +26,12 @@ const (
 )
 
 const (
-	Critical    Severity = "Critical"
-	High        Severity = "High"
-	Medium      Severity = "Medium"
-	Low         Severity = "Low"
-	Information Severity = "Information"
-	Unknown     Severity = "Unknown"
-	// ScannedNoIssues is returned by Xray when the target was scanned with no issues (matches server string).
+	Critical        Severity = "Critical"
+	High            Severity = "High"
+	Medium          Severity = "Medium"
+	Low             Severity = "Low"
+	Information     Severity = "Information"
+	Unknown         Severity = "Unknown"
 	ScannedNoIssues Severity = "Scanned - No Issues"
 )
 
