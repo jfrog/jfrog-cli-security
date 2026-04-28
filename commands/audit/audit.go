@@ -268,7 +268,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId).
-		SetSastChangedFilesMode(auditCmd.sastChangedFilesMode).SetSastRules(auditCmd.sastRules)
+		SetRootDir(auditCmd.rootDir).SetSastChangedFilesMode(auditCmd.sastChangedFilesMode).SetSastRules(auditCmd.sastRules)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -759,7 +759,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
 				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
-				SastChangedFiles:            sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, scanResults.GetCommonParentPath()),
+				SastChangedFiles:            sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
@@ -773,6 +773,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getRootDir(rootDir string, scanResults *results.SecurityCommandResults) string {
+	if rootDir != "" {
+		return rootDir
+	}
+	return scanResults.GetCommonParentPath()
 }
 
 func getSignedDescriptions(currentFormat format.OutputFormat) bool {

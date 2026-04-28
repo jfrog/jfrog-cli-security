@@ -209,7 +209,7 @@ func TestSastRules(t *testing.T) {
 	assert.Equal(t, filepath.Join(scannerTempDir, "results.sarif"), sastScanManager.resultsFileName)
 }
 
-// xscGitInfoWithChanged builds an XscGitInfoContext the way the client defines it (GitDiffContext with changed_files).
+// xscGitInfoWithChanged builds an XscGitInfoContext the way the client defines it (GitDiffContext with changed files).
 // Must match the shape expected by SastChangedFilesForTarget in sastscanner.go.
 func xscGitInfoWithChanged(t *testing.T, files ...string) *xscservices.XscGitInfoContext {
 	t.Helper()
@@ -237,22 +237,22 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 		name             string
 		gitCtx           *xscservices.XscGitInfoContext
 		targetPath       string
-		commonParent     string
+		rootDir          string
 		changedFilesMode bool
 		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
 		wantEmpty bool
 		want      []string
 	}{
-		{name: "nil_context", gitCtx: nil, targetPath: base, commonParent: base, changedFilesMode: true, wantEmpty: true},
-		{name: "changed_files_mode_off", gitCtx: threeFiles, targetPath: modA, commonParent: base, changedFilesMode: false, wantEmpty: true},
-		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, commonParent: base, changedFilesMode: true, wantEmpty: true},
-		{name: "empty_common_parent", gitCtx: threeFiles, targetPath: modA, commonParent: "", changedFilesMode: true, wantEmpty: true},
-		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", commonParent: base, changedFilesMode: true, wantEmpty: true},
+		{name: "nil_context", gitCtx: nil, targetPath: base, rootDir: base, changedFilesMode: true, wantEmpty: true},
+		{name: "changed_files_mode_off", gitCtx: threeFiles, targetPath: modA, rootDir: base, changedFilesMode: false, wantEmpty: true},
+		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, rootDir: base, changedFilesMode: true, wantEmpty: true},
+		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", changedFilesMode: true, wantEmpty: true},
+		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, changedFilesMode: true, wantEmpty: true},
 		{
-			name:             "target_is_common_parent_returns_all_as_abs",
+			name:             "target_is_repo_root_returns_all_as_abs",
 			gitCtx:           threeFiles,
 			targetPath:       base,
-			commonParent:     base,
+			rootDir:          base,
 			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
 		},
@@ -260,7 +260,7 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			name:             "filters_to_modA_only",
 			gitCtx:           threeFiles,
 			targetPath:       modA,
-			commonParent:     base,
+			rootDir:          base,
 			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
@@ -268,15 +268,16 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			name:             "prefix_foo_does_not_match_foobar",
 			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
 			targetPath:       filepath.Join(base, "foo"),
-			commonParent:     base,
+			rootDir:          base,
 			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
-			name:             "absolute_changed_file_under_repo",
-			gitCtx:           xscGitInfoWithChanged(t, filepath.Join(base, "modA", "abs.go")),
+			// belong-to-target matching uses repo-relative paths (as git reports); resolve to absolute under rootDir afterward.
+			name:             "repo_relative_changed_file_under_target",
+			gitCtx:           xscGitInfoWithChanged(t, "modA/abs.go"),
 			targetPath:       modA,
-			commonParent:     base,
+			rootDir:          base,
 			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "abs.go")},
 		},
@@ -284,14 +285,14 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			name:             "deduplicates_same_paths",
 			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
 			targetPath:       modA,
-			commonParent:     base,
+			rootDir:          base,
 			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go")},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.commonParent)
+			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.rootDir)
 			if tt.wantEmpty {
 				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
 			} else {
