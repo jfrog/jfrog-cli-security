@@ -22,6 +22,7 @@ type AuditParams struct {
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
+	rootDir           string
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
@@ -69,6 +70,15 @@ func (params *AuditParams) InstallFunc() func(tech string) error {
 
 func (params *AuditParams) WorkingDirs() []string {
 	return params.workingDirs
+}
+
+func (params *AuditParams) SetRootDir(rootDir string) *AuditParams {
+	params.rootDir = rootDir
+	return params
+}
+
+func (params *AuditParams) RootDir() string {
+	return params.rootDir
 }
 
 func (params *AuditParams) SetMultiScanId(msi string) *AuditParams {

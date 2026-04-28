@@ -220,19 +220,12 @@ func (s sastChangedFileDropStats) anyDrops() bool {
 func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []string) (out []string, stats sastChangedFileDropStats) {
 	seen := datastructures.MakeSet[string]()
 	for _, cf := range changedFiles {
-		cfSlash, ok := normalizeRepoRelativeChangedPath(commonAbs, cf)
-		if !ok {
-			log.Verbose(fmt.Sprintf("SAST changed files: invalid path: %s", cf))
-			stats.invalidPath++
-			continue
-		}
-		if !changedFileBelongsToTarget(targetRel, cfSlash) {
+		if !changedFileBelongsToTarget(targetRel, cf) {
 			log.Verbose(fmt.Sprintf("SAST changed files: outside target: %s", cf))
 			stats.outsideTarget++
 			continue
 		}
-		joined := filepath.Join(commonAbs, filepath.FromSlash(cfSlash))
-		absPath, err := filepath.Abs(filepath.Clean(joined))
+		absPath, err := filepath.Abs(filepath.Clean(filepath.Join(commonAbs, filepath.FromSlash(cf))))
 		if err != nil {
 			log.Verbose(fmt.Sprintf("SAST changed files: absolute path error: %s", err.Error()))
 			stats.absError++
@@ -257,7 +250,7 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 // SastChangedFilesForTarget returns absolute paths of changed files under commonParent that belong to targetPath
 // (paths from git are repo-relative or absolute under the repo). Only runs when changedFilesMode is true; only paths
 // that exist on disk are returned. Returns nil if nothing matches or if gitCtx, commonParent, or targetPath are unusable.
-func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGitInfoContext, targetPath, commonParent string) []string {
+func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGitInfoContext, targetPath, rootDir string) []string {
 	if gitCtx == nil || !changedFilesMode {
 		return nil
 	}
@@ -265,44 +258,19 @@ func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGit
 		log.Debug("SAST changed files: git context has no changed files; skipping per-file roots")
 		return nil
 	}
-	if strings.TrimSpace(commonParent) == "" || strings.TrimSpace(targetPath) == "" {
+	if strings.TrimSpace(rootDir) == "" || strings.TrimSpace(targetPath) == "" {
 		log.Debug("SAST changed files: empty common parent or target path; skipping per-file roots")
 		return nil
 	}
-	commonAbs, err := filepath.Abs(filepath.Clean(commonParent))
-	if err != nil {
-		log.Debug(fmt.Sprintf("SAST changed files: could not resolve common parent: %s", err.Error()))
-		return nil
-	}
-	targetRel := filepath.ToSlash(utils.GetRelativePath(targetPath, commonParent))
+	targetRel := filepath.ToSlash(utils.GetRelativePath(targetPath, rootDir))
 	inputCount := len(gitCtx.ChangedFiles)
-	out, stats := collectSastChangedAbsPaths(commonAbs, targetRel, gitCtx.ChangedFiles)
+	out, stats := collectSastChangedAbsPaths(rootDir, targetRel, gitCtx.ChangedFiles)
 	if stats.anyDrops() {
 		log.Debug(fmt.Sprintf("SAST changed files: kept %d of %d changed-file entries (dropped: %d invalid/unsafe path, %d outside target, %d path resolution error, %d duplicate after normalization)",
 			len(out), inputCount, stats.invalidPath, stats.outsideTarget, stats.absError, stats.duplicate))
 	}
 	slices.Sort(out)
 	return out
-}
-
-func normalizeRepoRelativeChangedPath(commonAbs, cf string) (slashPath string, ok bool) {
-	cf = strings.TrimSpace(cf)
-	if cf == "" {
-		return "", false
-	}
-	if filepath.IsAbs(cf) {
-		cleaned := filepath.Clean(cf)
-		r, err := filepath.Rel(commonAbs, cleaned)
-		if err != nil {
-			return "", false
-		}
-		r = filepath.ToSlash(filepath.Clean(r))
-		if r == ".." || strings.HasPrefix(r, "../") {
-			return "", false
-		}
-		return r, true
-	}
-	return filepath.ToSlash(filepath.Clean(cf)), true
 }
 
 func changedFileBelongsToTarget(targetRel, cfSlash string) bool {
