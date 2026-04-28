@@ -477,8 +477,9 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		// Get the apps config module and assign it to the target result for JAS scans.
 		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, jfrogAppsConfig)
 		// Generate SBOM for the target if requested or for SCA scans.
-		if !params.resultsContext.IncludeSbom && len(params.ScansToPerform()) > 0 && !slices.Contains(params.ScansToPerform(), utils.ScaScan) {
+		if !shouldGenerateSbom(params) {
 			// No need to generate the SBOM if we are not going to use it.
+			log.Debug(fmt.Sprintf("No need to generate the SBOM for %s as requested by input...", targetResult.Target))
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
@@ -496,6 +497,20 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		)
 	}
 	logScanTargetsInfo(cmdResults)
+}
+
+func shouldGenerateSbom(params *AuditParams) bool {
+	if params.resultsContext.IncludeSbom {
+		return true
+	}
+	scansToPerform := params.ScansToPerform()
+	if slices.Contains(scansToPerform, utils.ScaScan) {
+		return true
+	}
+	if params.configProfile != nil && len(params.configProfile.Modules) > 0 {
+		return params.configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+	}
+	return len(scansToPerform) == 0
 }
 
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
