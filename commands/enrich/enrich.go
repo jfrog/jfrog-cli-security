@@ -4,10 +4,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"text/tabwriter"
 
+	coreformat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 
@@ -31,14 +35,22 @@ import (
 	orderedJson "github.com/virtuald/go-ordered-json"
 )
 
-type FileContext func(string) parallel.TaskFunc
-type indexFileHandlerFunc func(file string)
+type (
+	FileContext          func(string) parallel.TaskFunc
+	indexFileHandlerFunc func(file string)
+)
 
 type EnrichCommand struct {
 	serverDetails *config.ServerDetails
 	spec          *spec.SpecFiles
 	threads       int
 	progress      ioUtils.ProgressMgr
+	outputFormat  coreformat.OutputFormat
+}
+
+func (enrichCmd *EnrichCommand) SetOutputFormat(format coreformat.OutputFormat) *EnrichCommand {
+	enrichCmd.outputFormat = format
+	return enrichCmd
 }
 
 func (enrichCmd *EnrichCommand) SetProgress(progress ioUtils.ProgressMgr) {
@@ -129,6 +141,69 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 	return nil
 }
 
+func AppendVulnsFromXMLToJson(cmdResults *results.SecurityCommandResults) error {
+	fileName := getScaScanFileName(cmdResults)
+	doc := etree.NewDocument()
+	if err := doc.ReadFromFile(fileName); err != nil {
+		return fmt.Errorf("error reading XML file: %s", err.Error())
+	}
+	root := doc.Root()
+	if root == nil {
+		return fmt.Errorf("error parsing XML: no root element found")
+	}
+	data := xmlElementToOrderedJson(root)
+	xrayResults := cmdResults.GetScaScansXrayResults()
+	if len(xrayResults) == 0 {
+		return fmt.Errorf("xray scan results are empty")
+	} else if len(xrayResults) > 1 {
+		log.Warn("Received %d results, parsing only first result", len(xrayResults))
+	}
+	var vulnerabilities []map[string]string
+	for _, vuln := range xrayResults[0].Vulnerabilities {
+		for component := range vuln.Components {
+			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
+			vulnerabilities = append(vulnerabilities, vulnerability)
+		}
+	}
+	data = append(data, orderedJson.Member{Key: "vulnerabilities", Value: vulnerabilities})
+	return output.PrintJson(data)
+}
+
+func xmlElementToOrderedJson(el *etree.Element) orderedJson.OrderedObject {
+	var obj orderedJson.OrderedObject
+	tagCount := map[string]int{}
+	for _, child := range el.ChildElements() {
+		tagCount[child.Tag]++
+	}
+	seen := map[string]bool{}
+	for _, child := range el.ChildElements() {
+		if seen[child.Tag] {
+			continue
+		}
+		seen[child.Tag] = true
+		if tagCount[child.Tag] > 1 {
+			var arr []interface{}
+			for _, sibling := range el.ChildElements() {
+				if sibling.Tag == child.Tag {
+					if len(sibling.ChildElements()) == 0 {
+						arr = append(arr, strings.TrimSpace(sibling.Text()))
+					} else {
+						arr = append(arr, xmlElementToOrderedJson(sibling))
+					}
+				}
+			}
+			obj = append(obj, orderedJson.Member{Key: child.Tag, Value: arr})
+		} else {
+			if len(child.ChildElements()) == 0 {
+				obj = append(obj, orderedJson.Member{Key: child.Tag, Value: strings.TrimSpace(child.Text())})
+			} else {
+				obj = append(obj, orderedJson.Member{Key: child.Tag, Value: xmlElementToOrderedJson(child)})
+			}
+		}
+	}
+	return obj
+}
+
 func isXML(scaResults []*results.TargetResults) (bool, error) {
 	if len(scaResults) == 0 {
 		return false, errors.New("unable to retrieve results")
@@ -180,7 +255,6 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		if err = enrichCmd.progress.Quit(); err != nil {
 			return err
 		}
-
 	}
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
@@ -192,18 +266,27 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		return errorutils.CheckError(scanResults.GetErrors())
 	}
 
+	if enrichCmd.outputFormat == coreformat.Table {
+		if err = enrichCmd.printVulnerabilitiesTable(scanResults, os.Stdout); err != nil {
+			return
+		}
+		log.Info("Enrich process completed successfully.")
+		return
+	}
 	isXml, err := isXML(scanResults.Targets)
 	if err != nil {
 		return
 	}
 	if isXml {
-		if err = AppendVulnsToXML(scanResults); err != nil {
+		if enrichCmd.outputFormat == coreformat.Json {
+			if err = AppendVulnsFromXMLToJson(scanResults); err != nil {
+				return
+			}
+		} else if err = AppendVulnsToXML(scanResults); err != nil {
 			return
 		}
-	} else {
-		if err = AppendVulnsToJson(scanResults); err != nil {
-			return
-		}
+	} else if err = AppendVulnsToJson(scanResults); err != nil {
+		return
 	}
 	log.Info("Enrich process completed successfully.")
 	return nil
@@ -215,6 +298,27 @@ func NewEnrichCommand() *EnrichCommand {
 
 func (enrichCmd *EnrichCommand) CommandName() string {
 	return "xr_enrich"
+}
+
+func (enrichCmd *EnrichCommand) printVulnerabilitiesTable(cmdResults *results.SecurityCommandResults, w io.Writer) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "COMPONENT\tCVE-ID"); err != nil {
+		return err
+	}
+	for _, xrayResult := range cmdResults.GetScaScansXrayResults() {
+		for _, vuln := range xrayResult.Vulnerabilities {
+			cveID := ""
+			if len(vuln.Cves) > 0 {
+				cveID = vuln.Cves[0].Id
+			}
+			for component := range vuln.Components {
+				if _, err := fmt.Fprintf(tw, "%s\t%s\n", component, cveID); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return tw.Flush()
 }
 
 func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
