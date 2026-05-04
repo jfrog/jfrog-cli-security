@@ -209,12 +209,12 @@ func TestXrayBinaryScanSelectiveScan(t *testing.T) {
 			subScans:  []utils.SubScanType{utils.ScaScan, utils.ContextualAnalysisScan},
 			withoutCa: false,
 			validate: func(t *testing.T, issueCount validations.ValidationCountActualValues) {
-				// Expect only SCA vulnerabilities
+				// Expect SCA vulnerabilities and contextual analysis statuses
 				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 17, "SCA vulnerabilities count mismatch - should be 17 or more")
+				assert.Equal(t, 3, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 3")
+				assert.Equal(t, 3, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 3")
 				// All other vulnerability types should be 0
 				assert.Equal(t, 0, issueCount.SecretsVulnerabilities, "Secrets vulnerabilities count mismatch - should be 0")
-				assert.Equal(t, 2, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 2")
-				assert.Equal(t, 3, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 3")
 			},
 		},
 		{

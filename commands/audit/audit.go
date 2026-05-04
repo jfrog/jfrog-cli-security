@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
+	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
@@ -266,7 +267,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId).
+		SetRootDir(auditCmd.rootDir).SetSastChangedFilesMode(auditCmd.sastChangedFilesMode).SetSastRules(auditCmd.sastRules)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -475,8 +477,9 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		// Get the apps config module and assign it to the target result for JAS scans.
 		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, jfrogAppsConfig)
 		// Generate SBOM for the target if requested or for SCA scans.
-		if !params.resultsContext.IncludeSbom && len(params.ScansToPerform()) > 0 && !slices.Contains(params.ScansToPerform(), utils.ScaScan) {
+		if !shouldGenerateSbom(params) {
 			// No need to generate the SBOM if we are not going to use it.
+			log.Debug(fmt.Sprintf("No need to generate the SBOM for %s as requested by input...", targetResult.Target))
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
@@ -494,6 +497,20 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		)
 	}
 	logScanTargetsInfo(cmdResults)
+}
+
+func shouldGenerateSbom(params *AuditParams) bool {
+	if params.resultsContext.IncludeSbom {
+		return true
+	}
+	scansToPerform := params.ScansToPerform()
+	if slices.Contains(scansToPerform, utils.ScaScan) {
+		return true
+	}
+	if params.configProfile != nil && len(params.configProfile.Modules) > 0 {
+		return params.configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+	}
+	return len(scansToPerform) == 0
 }
 
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
@@ -525,6 +542,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	}
 	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
+		targetResult.Technology,
 		resultsToCompare,
 	)
 	// Let's check if the target results to compare are valid.
@@ -661,6 +679,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			jas.GetAnalyzerManagerXscEnvVars(
 				isNewFlow,
 				auditParams.GetMultiScanId(),
+				auditParams.GetXrayVersion(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,
@@ -724,7 +743,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath()), targetResult.Technology),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
@@ -739,6 +758,8 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
+				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
+				SastChangedFiles:            sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
@@ -752,6 +773,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getRootDir(rootDir string, scanResults *results.SecurityCommandResults) string {
+	if rootDir != "" {
+		return rootDir
+	}
+	return scanResults.GetCommonParentPath()
 }
 
 func getSignedDescriptions(currentFormat format.OutputFormat) bool {

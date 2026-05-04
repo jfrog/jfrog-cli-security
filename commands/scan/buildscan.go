@@ -31,6 +31,7 @@ type BuildScanCommand struct {
 	outputFormat           outputFormat.OutputFormat
 	buildConfiguration     *build.BuildConfiguration
 	includeVulnerabilities bool
+	includeViolations      bool
 	failBuild              bool
 	printExtendedTable     bool
 	rescan                 bool
@@ -38,7 +39,7 @@ type BuildScanCommand struct {
 }
 
 func NewBuildScanCommand() *BuildScanCommand {
-	return &BuildScanCommand{}
+	return &BuildScanCommand{includeViolations: true}
 }
 
 func (bsc *BuildScanCommand) SetServerDetails(server *config.ServerDetails) *BuildScanCommand {
@@ -62,6 +63,11 @@ func (bsc *BuildScanCommand) SetBuildConfiguration(buildConfiguration *build.Bui
 
 func (bsc *BuildScanCommand) SetIncludeVulnerabilities(include bool) *BuildScanCommand {
 	bsc.includeVulnerabilities = include
+	return bsc
+}
+
+func (bsc *BuildScanCommand) SetIncludeViolations(include bool) *BuildScanCommand {
+	bsc.includeViolations = include
 	return bsc
 }
 
@@ -98,7 +104,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	if bsc.includeVulnerabilities {
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BuildScanIncludeVulnerabilitiesMinVersion)
 		if err != nil {
-			return errors.New("build-scan command with '--vuln' flag is not supported on your current Xray version. " + err.Error())
+			return errors.New("include vulnerabilities is not supported on your current Xray version. " + err.Error())
 		}
 	}
 	buildName, err := bsc.buildConfiguration.GetBuildName()
@@ -151,7 +157,8 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		buildScanResults.MoreDetailsUrl = cliUrl + endpoint
 	}
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
-	isFailBuildResponse = buildScanResults.FailBuild
+	// When violations are omitted from CLI output, do not treat Xray fail_build (policy violations) as a CLI failure for --fail.
+	isFailBuildResponse = buildScanResults.FailBuild && bsc.includeViolations
 
 	cmdResults := results.NewCommandResults(utils.Build).
 		SetXrayVersion(xrayVersion).
@@ -164,16 +171,17 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	})
 
-	// Enrich violations with generated violations from local policies
-	if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("failed to enrich with violations: %s", err.Error()), false)
+	if bsc.includeViolations {
+		// Enrich violations with generated violations from local policies
+		if err = policy.EnrichWithGeneratedViolations(local.NewDeprecatedViolationGenerator(), cmdResults); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich with violations: %s", err.Error()), false)
+		}
 	}
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
 		SetPlatformUrl(bsc.serverDetails.Url).
-		// In build-scan we always want to print the violations.
-		SetHasViolationContext(true).
+		SetHasViolationContext(bsc.includeViolations).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable)
 
