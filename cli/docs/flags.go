@@ -130,8 +130,10 @@ const (
 	Rescan              = "rescan"
 	TriggerScanRetries  = "trigger-scan-retries"
 	Vuln                = "vuln"
+	Violations          = "violations"
 	buildPrefix         = "build-"
 	BuildVuln           = buildPrefix + Vuln
+	BuildViolations     = buildPrefix + Violations
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
 	StaticSca           = "static-sca"
@@ -160,6 +162,8 @@ const (
 	DockerImageName       = "image"
 	SolutionPath          = "solution-path"
 	IncludeCachedPackages = "include-cached-packages"
+	LegacyPeerDeps        = "legacy-peer-deps"
+	RunNative             = "run-native"
 
 	// Unique git flags
 	InputFile       = "input-file"
@@ -188,7 +192,7 @@ var commandFlags = map[string][]string{
 		Url, XrayUrl, user, password, accessToken, ServerId, Threads, InsecureTls, OutputFormat, MinSeverity, AnalyzerManagerCustomPath, WorkingDirs, malProjectKey,
 	},
 	BuildScan: {
-		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, BuildViolations, OutputFormat, Fail, ExtendedTable, Rescan, InsecureTls, TriggerScanRetries,
 	},
 	DockerScan: {
 		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, InsecureTls,
@@ -218,7 +222,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, LegacyPeerDeps, RunNative,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
@@ -286,11 +290,12 @@ var flagsMap = map[string]components.Flag{
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
 	ExtendedTable:       components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
 	BypassArchiveLimits: components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
-	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values: Low, Medium, High, or Critical."),
+	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. Acceptable values include: Low, Medium, High, Critical, and Scanned - No Issues."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fix version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
 	TriggerScanRetries:  components.NewStringFlag(TriggerScanRetries, "Defines how many times Xray retries triggering the build scan after a failure.", components.WithIntDefaultValue(12)), // 5 seconds * 12 = 1 minute
 	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
+	BuildViolations:     components.NewBoolFlag(Violations, fmt.Sprintf("Controls whether policy violations are included in build-scan results. When set to false, violations are excluded from CLI output and from violation enrichment. With --%s, violations are always included regardless of this flag. If disabled, the CLI does not fail on Xray fail_build responses when --%s is used, and the results writer omits violation context accordingly.", Project, Fail), components.WithBoolDefaultValue(true)),
 	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
 	ExcludeTestDeps:     components.NewBoolFlag(ExcludeTestDeps, "[Gradle] Set to true if you'd like to exclude Gradle test dependencies from Xray scanning."),
@@ -340,6 +345,8 @@ var flagsMap = map[string]components.Flag{
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
+	LegacyPeerDeps:                components.NewBoolFlag(LegacyPeerDeps, "[npm] Pass --legacy-peer-deps to npm install to bypass peer-dependency version conflicts."),
+	RunNative:                     components.NewBoolFlag(RunNative, "[npm] Use the native npm client for dependency resolution. Reads Artifactory URL and repository from the project's .npmrc registry — no 'jf npm-config' required. Respects .npmrc and Volta configuration."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),

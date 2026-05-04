@@ -10,6 +10,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -1030,6 +1031,39 @@ func TestSearchTargetResultsByRelativePath(t *testing.T) {
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}
+}
+
+func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t *testing.T) {
+	sharedDir := filepath.Join("root", "app")
+	cmdResults := NewCommandResults(utils.SourceCode)
+	// Order intentionally Poetry before Npm (simulates nondeterministic map iteration).
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
+
+	// Same absolute path for every target ⇒ common parent equals that path ⇒ relative key is "" (see utils.GetRelativePath).
+	relativeKey := utils.GetRelativePath(sharedDir, cmdResults.GetCommonParentPath())
+	require.Equal(t, "", relativeKey)
+
+	t.Run("picks npm when requested", func(t *testing.T) {
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Npm)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Npm, found.FirstTechnology())
+		assert.Equal(t, sharedDir, found.Target)
+	})
+	t.Run("picks poetry when requested", func(t *testing.T) {
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Poetry)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Poetry, found.FirstTechnology())
+	})
+	t.Run("reversed slice order still picks npm", func(t *testing.T) {
+		reversed := NewCommandResults(utils.SourceCode)
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
+		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
+		found := SearchTargetResultsByRelativePath(rel, reversed, techutils.Npm)
+		require.NotNil(t, found)
+		assert.Equal(t, techutils.Npm, found.FirstTechnology())
+	})
 }
 
 func TestDepTreeToSbom(t *testing.T) {
@@ -3039,6 +3073,152 @@ func TestCdxEvidencesToLocations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expected, CdxEvidencesToLocations(test.component))
+		})
+	}
+}
+
+func TestSplitComponents(t *testing.T) {
+	emptyMap := make(map[string]services.Component)
+	targetNpmApp := "npm://myapp:1.0.0"
+	loc := func(f string) *formats.Location { return &formats.Location{File: f} }
+	tests := []struct {
+		name            string
+		target          string
+		impacted        map[string]services.Component
+		wantPackageIds  []string
+		wantFixedV      [][]string
+		wantDirect      [][]formats.ComponentRow
+		wantImpactPaths [][][]formats.ComponentRow
+	}{
+		{
+			name:     "empty map returns no error and empty slices",
+			target:   "mvn://org.example:app:1.0.0",
+			impacted: nil,
+		},
+		{
+			name:     "empty non-nil map returns no error and empty slices",
+			target:   "npm://@scope/lib:1.0.0",
+			impacted: emptyMap,
+		},
+		{
+			name:   "single component without impact paths",
+			target: "mvn://com.example:lib:2.0.0",
+			impacted: map[string]services.Component{
+				"pkg:generic/foo@1": {
+					FixedVersions: []string{"1.0.1"},
+					ImpactPaths:   nil,
+				},
+			},
+			wantPackageIds:  []string{"pkg:generic/foo@1"},
+			wantFixedV:      [][]string{{"1.0.1"}},
+			wantDirect:      [][]formats.ComponentRow{nil},
+			wantImpactPaths: [][][]formats.ComponentRow{nil},
+		},
+		{
+			name:   "multiple components each with one 2-node impact path",
+			target: targetNpmApp,
+			impacted: map[string]services.Component{
+				"npm://a-vuln:1.0.0": {
+					FixedVersions: []string{"1.0.1"},
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "npm://myapp:1.0.0", FullPath: "package.json"},
+						{ComponentId: "npm://a-vuln:1.0.0", FullPath: "node_modules/a"},
+					}},
+				},
+				"npm://b-vuln:1.0.0": {
+					FixedVersions: []string{"1.0.0"},
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "npm://myapp:1.0.0", FullPath: "package.json"},
+						{ComponentId: "npm://b-vuln:1.0.0", FullPath: "node_modules/b"},
+					}},
+				},
+			},
+			wantPackageIds: []string{"npm://a-vuln:1.0.0", "npm://b-vuln:1.0.0"},
+			wantFixedV:     [][]string{{"1.0.1"}, {"1.0.0"}},
+			wantDirect: [][]formats.ComponentRow{
+				{{
+					Id:                "npm://a-vuln:1.0.0",
+					Name:              "a-vuln",
+					Version:           "1.0.0",
+					PreferredLocation: loc("node_modules/a"),
+				}},
+				{{
+					Id:                "npm://b-vuln:1.0.0",
+					Name:              "b-vuln",
+					Version:           "1.0.0",
+					PreferredLocation: loc("node_modules/b"),
+				}},
+			},
+			wantImpactPaths: [][][]formats.ComponentRow{
+				{{
+					{Id: "npm://myapp:1.0.0", Name: "myapp", Version: "1.0.0", PreferredLocation: loc("package.json")},
+					{Id: "npm://a-vuln:1.0.0", Name: "a-vuln", Version: "1.0.0", PreferredLocation: loc("node_modules/a")},
+				}},
+				{{
+					{Id: "npm://myapp:1.0.0", Name: "myapp", Version: "1.0.0", PreferredLocation: loc("package.json")},
+					{Id: "npm://b-vuln:1.0.0", Name: "b-vuln", Version: "1.0.0", PreferredLocation: loc("node_modules/b")},
+				}},
+			},
+		},
+		{
+			name:   "one vulnerable component with two impact paths, two different direct dependencies",
+			target: targetNpmApp,
+			impacted: map[string]services.Component{
+				"npm://a-vuln:1.0.0": {
+					FixedVersions: nil,
+					ImpactPaths: [][]services.ImpactPathNode{
+						{
+							{ComponentId: "npm://myapp:1.0.0", FullPath: "package.json"},
+							{ComponentId: "npm://dep-zzz:0.0.0", FullPath: "node_modules/zzz"},
+							{ComponentId: "npm://a-vuln:1.0.0", FullPath: "node_modules/a"},
+						},
+						{
+							{ComponentId: "npm://myapp:1.0.0", FullPath: "package.json"},
+							{ComponentId: "npm://dep-aaa:0.0.0", FullPath: "node_modules/aaa"},
+							{ComponentId: "npm://a-vuln:1.0.0", FullPath: "node_modules/a"},
+						},
+					},
+				},
+			},
+			wantPackageIds: []string{"npm://a-vuln:1.0.0"},
+			wantFixedV:     [][]string{nil},
+			wantDirect: [][]formats.ComponentRow{{
+				{
+					Id:                "npm://dep-aaa:0.0.0",
+					Name:              "dep-aaa",
+					Version:           "0.0.0",
+					PreferredLocation: loc("node_modules/aaa"),
+				},
+				{
+					Id:                "npm://dep-zzz:0.0.0",
+					Name:              "dep-zzz",
+					Version:           "0.0.0",
+					PreferredLocation: loc("node_modules/zzz"),
+				},
+			}},
+			// Direct deps and path rows are sorted by direct-dependency id (dep-aaa before dep-zzz).
+			wantImpactPaths: [][][]formats.ComponentRow{{
+				{
+					{Id: "npm://myapp:1.0.0", Name: "myapp", Version: "1.0.0", PreferredLocation: loc("package.json")},
+					{Id: "npm://dep-aaa:0.0.0", Name: "dep-aaa", Version: "0.0.0", PreferredLocation: loc("node_modules/aaa")},
+					{Id: "npm://a-vuln:1.0.0", Name: "a-vuln", Version: "1.0.0", PreferredLocation: loc("node_modules/a")},
+				},
+				{
+					{Id: "npm://myapp:1.0.0", Name: "myapp", Version: "1.0.0", PreferredLocation: loc("package.json")},
+					{Id: "npm://dep-zzz:0.0.0", Name: "dep-zzz", Version: "0.0.0", PreferredLocation: loc("node_modules/zzz")},
+					{Id: "npm://a-vuln:1.0.0", Name: "a-vuln", Version: "1.0.0", PreferredLocation: loc("node_modules/a")},
+				},
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ids, fixed, direct, impPaths, err := SplitComponents(tt.target, tt.impacted)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantPackageIds, ids, "package ids")
+			assert.Equal(t, tt.wantFixedV, fixed, "fixed versions")
+			assert.ElementsMatch(t, tt.wantDirect, direct, "direct components")
+			assert.ElementsMatch(t, tt.wantImpactPaths, impPaths, "impact paths")
 		})
 	}
 }

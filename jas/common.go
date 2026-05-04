@@ -132,8 +132,8 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, di
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
-func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string) (resultsToCompare *results.TargetResults) {
-	return results.SearchTargetResultsByRelativePath(relativeTarget, js.ResultsToCompare)
+func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string, technologies ...techutils.Technology) (resultsToCompare *results.TargetResults) {
+	return results.SearchTargetResultsByRelativePath(relativeTarget, js.ResultsToCompare, technologies...)
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
@@ -512,8 +512,12 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
-	envVars := map[string]string{utils.JfMsiEnvVariable: msi, newFlowEnvVariable: strconv.FormatBool(newFlow)}
+func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, xrayVersion string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
+	envVars := map[string]string{
+		utils.JfMsiEnvVariable:   msi,
+		newFlowEnvVariable:       strconv.FormatBool(newFlow),
+		jfXrayVersionEnvVariable: xrayVersion,
+	}
 	if gitRepoUrl != "" {
 		envVars[gitRepoEnvVariable] = gitRepoUrl
 	}

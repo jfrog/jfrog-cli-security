@@ -583,6 +583,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 			jas.GetAnalyzerManagerXscEnvVars(
 				false,
 				msi,
+				scanCmd.xrayVersion,
 				// Passing but empty since not supported for binary scans
 				scanCmd.resultsContext.GitRepoHttpsCloneUrl,
 				scanCmd.resultsContext.ProjectKey,

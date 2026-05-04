@@ -448,10 +448,12 @@ func BuildScan(c *components.Context) error {
 	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
+	includeViolations := EffectiveIncludeViolations(c.GetBoolFlagValue(flags.Violations), isProjectProvided(c))
 	buildScanCmd := scan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
 		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
-		SetIncludeVulnerabilities(getProject(c) == "" || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
+		SetIncludeVulnerabilities(!includeViolations || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
+		SetIncludeViolations(includeViolations).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
 		SetTriggerScanRetries(fetchRetries).
 		SetBuildConfiguration(buildConfiguration).
@@ -739,6 +741,8 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
+	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))
+	curationAuditCommand.SetRunNative(c.GetBoolFlagValue(flags.RunNative))
 	return curationAuditCommand, nil
 }
 

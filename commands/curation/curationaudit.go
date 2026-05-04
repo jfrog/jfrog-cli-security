@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -38,6 +39,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -214,6 +216,13 @@ type treeAnalyzer struct {
 	parallelRequests      int
 	downloadUrls          map[string]string
 	includeCachedPackages bool
+	// cancelled is set to true when an unrecoverable error (e.g. 401) occurs so that
+	// the producer goroutine stops queuing new tasks and in-flight tasks bail out early.
+	cancelled atomic.Bool
+	// authErr holds the first authentication error encountered during HEAD requests.
+	// Stored via atomic.Value so it can be retrieved after the parallel runner finishes
+	// and returned once — avoiding double-printing via errorsQueue.AddError.
+	authErr atomic.Value
 }
 
 type CurationAuditCommand struct {
@@ -449,6 +458,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		// Npm params
 		NpmIgnoreNodeModules:    true,
 		NpmOverwritePackageLock: true,
+		NpmRunNative:            ca.RunNative(),
+		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
@@ -462,6 +473,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	params, err := ca.getBuildInfoParamsByTech()
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
+	}
+	// When --run-native is set for npm, the Artifactory details are already populated from .npmrc.
+	// Skip the npm.yaml config file lookup to avoid requiring 'jf npm-config'.
+	if ca.RunNative() && tech == techutils.Npm {
+		params.IgnoreConfigFile = true
 	}
 	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
@@ -529,6 +545,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	packagesStatusMap := sync.Map{}
 	// if error returned we still want to produce a report, so we don't fail the next step
 	err = analyzer.fetchNodesStatus(depTreeResult.FlatTree, &packagesStatusMap, rootNodes)
+	// Auth errors are unrecoverable — skip building a misleading partial report.
+	if analyzer.cancelled.Load() {
+		return err
+	}
 	analyzer.GraphsRelations(depTreeResult.FullDepTrees, &packagesStatusMap,
 		&packagesStatus)
 	sort.Slice(packagesStatus, func(i, j int) bool {
@@ -756,11 +776,51 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return nil
 	}
 
+	// When --run-native is set for npm, read the Artifactory URL and repo name from the
+	// project's .npmrc via native npm config — no jf npm-config/npm.yaml required.
+	if ca.RunNative() && tech == techutils.Npm {
+		return ca.setRepoFromNpmrc()
+	}
+
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
 		return err
 	}
 	ca.setPackageManagerConfig(resolverParams)
+	return nil
+}
+
+// setRepoFromNpmrc builds PackageManagerConfig by reading the npm registry URL from the
+// native npm configuration (respecting .npmrc and Volta), then parsing the Artifactory
+// base URL and repository name from it.
+// Authentication is taken from the jfrog-cli.conf server entry (via ca.ServerDetails()) —
+// the same credentials the user configured with 'jf c'. Only the Artifactory URL and
+// repository name are sourced from .npmrc, so 'jf npm-config' is not required.
+func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
+	registryConfig, err := npmtech.GetNativeNpmRegistryConfig()
+	if err != nil {
+		return fmt.Errorf("--run-native: failed to read Artifactory details from .npmrc: %w", err)
+	}
+
+	// Use auth from the jfrog server config (jfrog-cli.conf) — it holds properly stored
+	// credentials. Only override the ArtifactoryUrl with what .npmrc reports so the
+	// Curation HEAD requests go to the right repository.
+	serverDetails, err := ca.ServerDetails()
+	if err != nil || serverDetails == nil {
+		// No server configured — fall back to whatever auth .npmrc provides.
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			AccessToken:    registryConfig.AuthToken,
+		}
+	} else {
+		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
@@ -831,6 +891,9 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	go func() {
 		defer consumerProducer.Done()
 		for _, node := range graph.Nodes {
+			if nc.cancelled.Load() {
+				break
+			}
 			if _, ok := rootNodeIds[node.Id]; ok {
 				continue
 			}
@@ -848,6 +911,11 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	if err := errorsQueue.GetError(); err != nil {
 		multiErrors = errors.Join(err, multiErrors)
 	}
+	// Auth errors are stored silently (not via errorsQueue) to avoid double-printing.
+	// Surface them here so they propagate as a single error to the caller.
+	if authErr, ok := nc.authErr.Load().(error); ok {
+		multiErrors = errors.Join(authErr, multiErrors)
+	}
 	return multiErrors
 }
 
@@ -860,8 +928,22 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		name = scope + "/" + name
 	}
 	for _, packageUrl := range packageUrls {
+		if nc.cancelled.Load() {
+			return nil
+		}
 		requestDetails := nc.httpClientDetails.Clone()
 		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, requestDetails)
+		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
+			// Store the error silently (not returned) so errorsQueue.AddError is never
+			// called and the message is not logged here. fetchNodesStatus picks it up
+			// after the runner finishes and returns it once to the caller.
+			if nc.cancelled.CompareAndSwap(false, true) {
+				nc.authErr.Store(fmt.Errorf("authentication failed (401 Unauthorized) for Curation request to %s (package %s:%s).\n"+
+					"The credentials configured via 'jf c' are not valid for the Artifactory instance at that URL.\n"+
+					"Run 'jf c' to update your server configuration, or verify that the correct server-id is configured", packageUrl, name, version))
+			}
+			return nil
+		}
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
 				return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)

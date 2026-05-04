@@ -440,6 +440,105 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
+func TestShouldGenerateSbom(t *testing.T) {
+	configProfileWithSca := services.ConfigProfile{
+		Modules: []services.Module{{
+			ScanConfig: services.ScanConfig{
+				ScaScannerConfig: services.ScaScannerConfig{
+					EnableScaScan: true,
+				},
+			},
+		}},
+	}
+	configProfileWithoutSca := services.ConfigProfile{
+		Modules: []services.Module{{
+			ScanConfig: services.ScanConfig{
+				ScaScannerConfig: services.ScaScannerConfig{
+					EnableScaScan: false,
+				},
+			},
+		}},
+	}
+
+	testCases := []struct {
+		name       string
+		params     *AuditParams
+		expectSbom bool
+	}{
+		{
+			name: "include sbom requested explicitly",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{IncludeSbom: true})
+				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+				return params
+			}(),
+			expectSbom: true,
+		},
+		{
+			name: "no specific scans requested",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{})
+				params.SetScansToPerform(nil)
+				return params
+			}(),
+			expectSbom: true,
+		},
+		{
+			name: "explicit sca scan requested",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{})
+				params.SetScansToPerform([]utils.SubScanType{utils.ScaScan})
+				return params
+			}(),
+			expectSbom: true,
+		},
+		{
+			name: "non sca scans with include sbom requested explicitly",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{IncludeSbom: true})
+				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+				return params
+			}(),
+			expectSbom: true,
+		},
+		{
+			name: "non sca scans without config profile",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{})
+				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+				return params
+			}(),
+			expectSbom: false,
+		},
+		{
+			name: "non sca scans with sca enabled in config profile",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{})
+				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+				params.SetConfigProfile(&configProfileWithSca)
+				return params
+			}(),
+			expectSbom: true,
+		},
+		{
+			name: "non sca scans with sca disabled in config profile",
+			params: func() *AuditParams {
+				params := NewAuditParams().SetResultsContext(results.ResultContext{})
+				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+				params.SetConfigProfile(&configProfileWithoutSca)
+				return params
+			}(),
+			expectSbom: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.params))
+		})
+	}
+}
+
 // Note: Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
 func TestAuditWithConfigProfile(t *testing.T) {
 	testcases := []struct {

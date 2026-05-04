@@ -342,6 +342,14 @@ func (tech Technology) ToFormal() string {
 	return technologiesData[tech].formal
 }
 
+func ToFormalString(technologies []Technology) string {
+	formals := make([]string, len(technologies))
+	for i, tech := range technologies {
+		formals[i] = tech.ToFormal()
+	}
+	return strings.Join(formals, ", ")
+}
+
 func (tech Technology) String() string {
 	return string(tech)
 }

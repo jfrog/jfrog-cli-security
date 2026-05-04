@@ -7,6 +7,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,6 +25,8 @@ func TestParseSeverity(t *testing.T) {
 		{input: "MedIum", isSarifFormat: false, expectedOutput: "Medium", expectedError: nil},
 		{input: "inFormation", isSarifFormat: false, expectedOutput: "Information", expectedError: nil},
 		{input: "unknown", isSarifFormat: false, expectedOutput: "Unknown", expectedError: nil},
+		{input: "Scanned - No Issues", isSarifFormat: false, expectedOutput: "Scanned - No Issues", expectedError: nil},
+		{input: "  scanned - no issues  ", isSarifFormat: false, expectedOutput: "Scanned - No Issues", expectedError: nil},
 		// Test supported sarif level
 		{input: "error", isSarifFormat: true, expectedOutput: "High", expectedError: nil},
 		{input: "warning", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
@@ -61,6 +64,7 @@ func TestGetSeverityScoreFloat64(t *testing.T) {
 		{"Medium MissingContext", Medium, jasutils.MissingContext, 6.9},
 		{"Low NotCovered", Low, jasutils.NotCovered, 3.9},
 		{"Unknown NotApplicable", Unknown, jasutils.NotApplicable, 0.0},
+		{"ScannedNoIssues Applicable", ScannedNoIssues, jasutils.Applicable, 0.0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,6 +109,7 @@ func TestSeverityToCycloneDxSeverity(t *testing.T) {
 		{"Medium", Medium, cyclonedx.SeverityMedium},
 		{"Low", Low, cyclonedx.SeverityLow},
 		{"Unknown", Unknown, cyclonedx.SeverityUnknown},
+		{"ScannedNoIssues", ScannedNoIssues, cyclonedx.SeverityNone},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,6 +130,7 @@ func TestCycloneDxSeverityToSeverity(t *testing.T) {
 		{"Medium", cyclonedx.SeverityMedium, Medium},
 		{"Low", cyclonedx.SeverityLow, Low},
 		{"Unknown", cyclonedx.SeverityUnknown, Unknown},
+		{"None", cyclonedx.SeverityNone, ScannedNoIssues},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -146,6 +152,7 @@ func TestCreateSeverityRating(t *testing.T) {
 		{"Critical Applicable", Critical, jasutils.Applicable, &cyclonedx.Service{Name: "testsvc"}, cyclonedx.SeverityCritical, 10.0},
 		{"High NotApplicable", High, jasutils.NotApplicable, &cyclonedx.Service{Name: "svc2"}, cyclonedx.SeverityHigh, 8.9},
 		{"Low NotCovered", Low, jasutils.NotCovered, &cyclonedx.Service{Name: "svc3"}, cyclonedx.SeverityLow, 3.9},
+		{"ScannedNoIssues Applicable", ScannedNoIssues, jasutils.Applicable, &cyclonedx.Service{Name: "svc4"}, cyclonedx.SeverityNone, 0.0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,6 +161,22 @@ func TestCreateSeverityRating(t *testing.T) {
 			assert.Equal(t, tc.expSeverity, rating.Severity)
 			assert.NotNil(t, rating.Score)
 			assert.InDelta(t, tc.expScore, *rating.Score, 0.0001)
+		})
+	}
+}
+
+func TestXraySeverityToSeverity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    xrayUtils.Severity
+		expected Severity
+	}{
+		{"ScannedNoIssues", xrayUtils.ScannedNoIssues, ScannedNoIssues},
+		{"Critical", xrayUtils.Critical, Critical},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, XraySeverityToSeverity(tc.input))
 		})
 	}
 }

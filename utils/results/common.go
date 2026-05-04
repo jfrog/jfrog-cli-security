@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -243,10 +243,12 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
-		err = errorutils.CheckErrorf("failed while parsing the response from Xray: components map is empty")
-		return
+		log.Warn(fmt.Sprintf("Failed while parsing the response from Xray: components map is empty for target '%s'", target))
 	}
-	for currCompId, currComp := range impactedPackages {
+	impactedKeys := maps.Keys(impactedPackages)
+	slices.Sort(impactedKeys)
+	for _, currCompId := range impactedKeys {
+		currComp := impactedPackages[currCompId]
 		impactedPackagesIds = append(impactedPackagesIds, currCompId)
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
@@ -259,6 +261,11 @@ func SplitComponents(target string, impactedPackages map[string]services.Compone
 // Gets a slice of the direct dependencies or packages of the scanned component, that depends on the vulnerable package, and converts the impact paths.
 func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.ImpactPathNode) (components []formats.ComponentRow, impactPathsRows [][]formats.ComponentRow) {
 	componentsMap := make(map[string]formats.ComponentRow)
+	type directImpactPath struct {
+		directId string
+		rows     []formats.ComponentRow
+	}
+	var perPath []directImpactPath
 
 	// The first node in the impact path is the scanned component itself. The second one is the direct dependency.
 	impactPathLevel := 1
@@ -289,11 +296,17 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 				PreferredLocation: getComponentLocation(pathNode.FullPath),
 			})
 		}
-		impactPathsRows = append(impactPathsRows, compImpactPathRows)
+		perPath = append(perPath, directImpactPath{directId: componentId, rows: compImpactPathRows})
 	}
 
-	for _, row := range componentsMap {
-		components = append(components, row)
+	keys := maps.Keys(componentsMap)
+	slices.Sort(keys)
+	for _, k := range keys {
+		components = append(components, componentsMap[k])
+	}
+	sort.SliceStable(perPath, func(i, j int) bool { return perPath[i].directId < perPath[j].directId })
+	for _, p := range perPath {
+		impactPathsRows = append(impactPathsRows, p.rows)
 	}
 	return
 }
@@ -871,22 +884,36 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
-	if resultsToCompare == nil {
+func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults, technologies ...techutils.Technology) (targetResults *TargetResults) {
+	if resultsToCompare == nil || len(resultsToCompare.Targets) == 0 {
+		log.Debug(fmt.Sprintf("No targets to compare in results for target '%s'", relativeTarget))
 		return
 	}
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
-	log.Debug(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
+	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, techutils.ToFormalString(technologies), sourceBasePath))
+	defer func() {
+		if best == nil {
+			log.Debug("No target found")
+		} else {
+			log.Debug(fmt.Sprintf("Found target %s", best.String()))
+		}
+	}()
 	for _, potential := range resultsToCompare.Targets {
-		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
+		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
+		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
+		if len(technologies) > 0 && !utils.ElementsEqual[techutils.Technology](potential.Technologies, technologies) {
+			// If the technology is not the same, skip the comparison
+			continue
+		}
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
-			return potential
+			best = potential
+			break
 		}
 		// Check if the target is a relative path of the source base path
-		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); relativeTarget == relative {
+		if relativeTarget == relative {
 			// Check if this is the best match so far
 			if best == nil || len(best.Target) > len(potential.Target) {
 				best = potential

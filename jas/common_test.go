@@ -425,6 +425,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 		name           string
 		newFlow        bool
 		msi            string
+		xrayVersion    string
 		gitRepoUrl     string
 		projectKey     string
 		watches        []string
@@ -440,19 +441,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Java),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
 			name:           "Multiple technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:           "Zero technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:         "With git repo url",
@@ -465,6 +467,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -480,6 +483,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				projectEnvVariable:          "projectKey",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -495,6 +499,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				watchesEnvVariable:          "watch1,watch2",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -507,12 +512,26 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Go),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "true",
+				jfXrayVersionEnvVariable:    "",
+			},
+		},
+		{
+			name:         "With xray version set",
+			msi:          "msi",
+			xrayVersion:  "3.111.0",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "3.111.0",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.xrayVersion, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }
@@ -570,6 +589,7 @@ func TestGetResultsToCompare(t *testing.T) {
 	testCases := []struct {
 		name             string
 		target           string
+		compareTechs     []techutils.Technology
 		ResultsToCompare *results.SecurityCommandResults
 		expectedTarget   *results.TargetResults
 	}{
@@ -611,12 +631,38 @@ func TestGetResultsToCompare(t *testing.T) {
 			},
 			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
 		},
+		{
+			name:         "Results to compare - same directory two technologies picks npm",
+			target:       filepath.Join("root", "app"),
+			compareTechs: []techutils.Technology{techutils.Npm},
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Poetry}}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Npm}}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Npm}}},
+		},
+		{
+			name:   "Results to compare - same directory multi-technology target matches when technologies match",
+			target: filepath.Join("root", "mono"),
+			compareTechs: []techutils.Technology{
+				techutils.Npm, techutils.Go,
+			},
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Maven}}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Npm, techutils.Go}}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Npm, techutils.Go}}},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
-			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target))
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target, testCase.compareTechs...))
 		})
 	}
 }
