@@ -759,7 +759,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
 				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
-				SastChangedFiles:            sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
+				ChangedFiles:                sast.SastChangedFilesForTarget(auditParams.SastChangedFilesMode(), scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
