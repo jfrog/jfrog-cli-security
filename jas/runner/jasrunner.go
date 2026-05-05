@@ -34,7 +34,7 @@ type JasRunnerParams struct {
 	ScansToPerform      []utils.SubScanType
 	// Diff mode flags
 	SourceResultsToCompare *results.TargetResults
-	SastChangedFiles       []string
+	ChangedFiles           []string
 	DiffMode               bool
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
@@ -184,8 +184,8 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 				SastRules:          params.SastRules,
 				TargetCount:        params.TargetCount,
 				ThreadId:           threadId,
-				SastChangedFiles:   params.SastChangedFiles,
-				ChangedFilesMode:   params.SastChangedFilesMode,
+				SastChangedFiles:   params.ChangedFiles,
+				ChangedFilesMode:   params.SastChangedFilesMode || (params.ConfigProfile != nil && params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableFastDiffMode),
 				ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
 			},
 			params.Scanner,
