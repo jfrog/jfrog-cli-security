@@ -290,8 +290,8 @@ func collectSastChangedAbsPaths(commonAbs, targetRel string, changedFiles []stri
 }
 
 // SastChangedFilesForTarget returns absolute paths of changed files under the root directory that belong to the target path.
-func SastChangedFilesForTarget(changedFilesMode bool, gitCtx *xscservices.XscGitInfoContext, targetPath, rootDir string) []string {
-	if gitCtx == nil || !changedFilesMode {
+func SastChangedFilesForTarget(gitCtx *xscservices.XscGitInfoContext, targetPath, rootDir string) []string {
+	if gitCtx == nil {
 		return nil
 	}
 	if len(gitCtx.ChangedFiles) == 0 {
