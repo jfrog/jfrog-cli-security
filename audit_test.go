@@ -30,6 +30,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
@@ -573,12 +574,22 @@ func testXrayAuditPip(t *testing.T, outFormat format.OutputFormat, requirementsF
 
 func TestXrayAuditCocoapods(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
-	output := testXrayAuditCocoapods(t, format.Json)
+	output := testXrayAuditCocoapods(t, format.Json, "cocoapods-project")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
 
-func testXrayAuditCocoapods(t *testing.T, format format.OutputFormat) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "cocoapods"))
+func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
+	if coreutils.IsWindows() {
+		t.Skip("Skipping: CocoaPods auto-install (pod install) requires macOS/Linux with Xcode.")
+		return
+	}
+	output := testXrayAuditCocoapods(t, format.SimpleJson, "cocoapods-no-lock-file")
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
+}
+
+func testXrayAuditCocoapods(t *testing.T, format format.OutputFormat, projectName string) string {
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "cocoapods", projectName))
 	defer cleanUp()
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	defer cleanUpHome()
