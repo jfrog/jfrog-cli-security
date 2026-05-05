@@ -234,10 +234,10 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 	threeFiles := xscGitInfoWithChanged(t, "modA/a.go", "modA/b.go", "modB/x.go")
 
 	tests := []struct {
-		name             string
-		gitCtx           *xscservices.XscGitInfoContext
-		targetPath       string
-		rootDir          string
+		name       string
+		gitCtx     *xscservices.XscGitInfoContext
+		targetPath string
+		rootDir    string
 		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
 		wantEmpty bool
 		want      []string
@@ -247,40 +247,40 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", wantEmpty: true},
 		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, wantEmpty: true},
 		{
-			name:             "target_is_repo_root_returns_all_as_abs",
-			gitCtx:           threeFiles,
-			targetPath:       base,
-			rootDir:          base,
-			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
+			name:       "target_is_repo_root_returns_all_as_abs",
+			gitCtx:     threeFiles,
+			targetPath: base,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
 		},
 		{
-			name:             "filters_to_modA_only",
-			gitCtx:           threeFiles,
-			targetPath:       modA,
-			rootDir:          base,
-			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+			name:       "filters_to_modA_only",
+			gitCtx:     threeFiles,
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
 		{
-			name:             "prefix_foo_does_not_match_foobar",
-			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
-			targetPath:       filepath.Join(base, "foo"),
-			rootDir:          base,
-			want:             []string{filepath.Join(base, "foo", "x.go")},
+			name:       "prefix_foo_does_not_match_foobar",
+			gitCtx:     &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
+			targetPath: filepath.Join(base, "foo"),
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
 			// belong-to-target matching uses repo-relative paths (as git reports); resolve to absolute under rootDir afterward.
-			name:             "repo_relative_changed_file_under_target",
-			gitCtx:           xscGitInfoWithChanged(t, "modA/abs.go"),
-			targetPath:       modA,
-			rootDir:          base,
-			want:             []string{filepath.Join(base, "modA", "abs.go")},
+			name:       "repo_relative_changed_file_under_target",
+			gitCtx:     xscGitInfoWithChanged(t, "modA/abs.go"),
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "abs.go")},
 		},
 		{
-			name:             "deduplicates_same_paths",
-			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
-			targetPath:       modA,
-			rootDir:          base,
-			want:             []string{filepath.Join(base, "modA", "a.go")},
+			name:       "deduplicates_same_paths",
+			gitCtx:     &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go")},
 		},
 	}
 	for _, tt := range tests {
