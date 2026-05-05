@@ -238,22 +238,19 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 		gitCtx           *xscservices.XscGitInfoContext
 		targetPath       string
 		rootDir          string
-		changedFilesMode bool
 		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
 		wantEmpty bool
 		want      []string
 	}{
-		{name: "nil_context", gitCtx: nil, targetPath: base, rootDir: base, changedFilesMode: true, wantEmpty: true},
-		{name: "changed_files_mode_off", gitCtx: threeFiles, targetPath: modA, rootDir: base, changedFilesMode: false, wantEmpty: true},
-		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, rootDir: base, changedFilesMode: true, wantEmpty: true},
-		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", changedFilesMode: true, wantEmpty: true},
-		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, changedFilesMode: true, wantEmpty: true},
+		{name: "nil_context", gitCtx: nil, targetPath: base, rootDir: base, wantEmpty: true},
+		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, rootDir: base, wantEmpty: true},
+		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", wantEmpty: true},
+		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, wantEmpty: true},
 		{
 			name:             "target_is_repo_root_returns_all_as_abs",
 			gitCtx:           threeFiles,
 			targetPath:       base,
 			rootDir:          base,
-			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
 		},
 		{
@@ -261,7 +258,6 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			gitCtx:           threeFiles,
 			targetPath:       modA,
 			rootDir:          base,
-			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
 		{
@@ -269,7 +265,6 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
 			targetPath:       filepath.Join(base, "foo"),
 			rootDir:          base,
-			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
@@ -278,7 +273,6 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			gitCtx:           xscGitInfoWithChanged(t, "modA/abs.go"),
 			targetPath:       modA,
 			rootDir:          base,
-			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "abs.go")},
 		},
 		{
@@ -286,13 +280,12 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
 			targetPath:       modA,
 			rootDir:          base,
-			changedFilesMode: true,
 			want:             []string{filepath.Join(base, "modA", "a.go")},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.rootDir)
+			got := SastChangedFilesForTarget(tt.gitCtx, tt.targetPath, tt.rootDir)
 			if tt.wantEmpty {
 				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
 			} else {
