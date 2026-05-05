@@ -492,3 +492,20 @@ func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
 		}
 	}
 }
+
+func ElementsEqual[T comparable](slice1 []T, slice2 []T) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	freq := make(map[T]int, len(slice1))
+	for _, v := range slice1 {
+		freq[v]++
+	}
+	for _, v := range slice2 {
+		freq[v]--
+		if freq[v] < 0 {
+			return false
+		}
+	}
+	return true
+}

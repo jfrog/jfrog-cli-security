@@ -163,3 +163,60 @@ func TestMergeMaps(t *testing.T) {
 		})
 	}
 }
+
+func TestElementsEqual(t *testing.T) {
+	testCases := []struct {
+		name     string
+		slice1   []string
+		slice2   []string
+		expected bool
+	}{
+		{
+			name:     "Both empty",
+			slice1:   []string{},
+			slice2:   []string{},
+			expected: true,
+		},
+		{
+			name:     "Equal single element",
+			slice1:   []string{"a"},
+			slice2:   []string{"a"},
+			expected: true,
+		},
+		{
+			name:     "Same elements different order",
+			slice1:   []string{"a", "b", "c"},
+			slice2:   []string{"c", "a", "b"},
+			expected: true,
+		},
+		{
+			name:     "Different lengths",
+			slice1:   []string{"a", "b"},
+			slice2:   []string{"a"},
+			expected: false,
+		},
+		{
+			name:     "Same length different elements",
+			slice1:   []string{"a", "b"},
+			slice2:   []string{"a", "c"},
+			expected: false,
+		},
+		{
+			name:     "Duplicate mismatch",
+			slice1:   []string{"a", "a", "b"},
+			slice2:   []string{"a", "b", "b"},
+			expected: false,
+		},
+		{
+			name:     "Equal with duplicates",
+			slice1:   []string{"a", "a", "b"},
+			slice2:   []string{"a", "b", "a"},
+			expected: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, ElementsEqual(tc.slice1, tc.slice2))
+		})
+	}
+}

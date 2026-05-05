@@ -3,6 +3,7 @@ package audit
 import (
 	"time"
 
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
@@ -18,10 +19,13 @@ import (
 )
 
 type AuditParams struct {
+	// Where to scan
+	appsConfig     *jfrogappsconfig.JFrogAppsConfig
+	workingDirs    []string
+	isSingleTarget bool
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext
-	workingDirs       []string
 	rootDir           string
 	installFunc       func(tech string) error
 	fixableOnly       bool
@@ -202,6 +206,15 @@ func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditPara
 	return params
 }
 
+func (params *AuditParams) SetIsSingleTarget(isSingleTarget bool) *AuditParams {
+	params.isSingleTarget = isSingleTarget
+	return params
+}
+
+func (params *AuditParams) IsSingleTarget() bool {
+	return params.isSingleTarget
+}
+
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
 	return &services.XrayGraphScanParams{
 		RepoPath:               params.resultsContext.RepoPath,
@@ -222,7 +235,7 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 	bomParams = technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:         params.GetXrayVersion(),
 		Progress:            params.Progress(),
-		ExclusionPattern:    technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
+		ExclusionPattern:    technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
 		AllowPartialResults: params.AllowPartialResults(),
 		// Artifactory repository info
 		ServerDetails:          serverDetails,
@@ -273,6 +286,15 @@ func (params *AuditParams) SetSastChangedFilesMode(sastChangedFilesMode bool) *A
 	return params
 }
 
+func (params *AuditParams) SetDeprecatedAppsConfig(appsConfig *jfrogappsconfig.JFrogAppsConfig) *AuditParams {
+	params.appsConfig = appsConfig
+	return params
+}
+
+func (params *AuditParams) DeprecatedAppsConfig() *jfrogappsconfig.JFrogAppsConfig {
+	return params.appsConfig
+}
+
 func (params *AuditParams) SastChangedFilesMode() bool {
 	return params.sastChangedFilesMode
 }
@@ -299,15 +321,14 @@ func (params *AuditParams) DiffMode() bool {
 // Our solution for this case is to send all dependencies to the CA scanner.
 // When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
 // Only npm is supported for this flag.
-func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(target results.ScanTarget) bool {
 	if params.bomGenerator == nil {
 		return false
 	}
-	// Check if bomGenerator is BuildInfo type, if not, return false
 	if _, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); !success {
 		return false
 	}
-	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+	return target.HasTechnology(techutils.Pip) || (params.thirdPartyApplicabilityScan && target.HasTechnology(techutils.Npm))
 }
 
 func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {

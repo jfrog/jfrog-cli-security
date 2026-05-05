@@ -967,7 +967,9 @@ func testXrayAuditGem(t *testing.T, format string) string {
 func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTestParams) (string, error) {
 	// Must have one target, in new SCA mode the flow should not 'dirty' the local environment
 	// No need to copy or change directories just point to the project directory
-	params.WorkingDirsToScan = []string{filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", project)}
+	if len(params.WorkingDirsToScan) == 0 {
+		params.WorkingDirsToScan = []string{filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", project)}
+	}
 	params.WithStaticSca = true
 	// No **/tests/** exclusion, we are scanning projects in the test resources path
 	params.CustomExclusion = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "dist"}
@@ -995,6 +997,27 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
+		},
+	})
+}
+
+func TestAuditNewScaSimpleJsonMultipleWorkingDirs(t *testing.T) {
+	securityIntegrationTestUtils.InitAuditNewScaTests(t, utils.StaticScanMinVersion)
+	testResourcesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects")
+	output, err := testAuditCommandNewSca(t, "", auditCommandTestParams{
+		WorkingDirsToScan: []string{
+			filepath.Join(testResourcesPath, "jas", "jas-npm"),
+			filepath.Join(testResourcesPath, "package-managers", "go", "simple-project"),
+		},
+		WithSbom: true,
+		Format:   format.SimpleJson,
+	})
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Vulnerabilities: 10},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan: &validations.ScanCount{Sca: 7, Sast: 2, Secrets: 1},
 		},
 	})
 }

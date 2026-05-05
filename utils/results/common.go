@@ -884,7 +884,7 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-func SearchTargetResultsByRelativePath(relativeTarget string, technology techutils.Technology, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults, technologies ...techutils.Technology) (targetResults *TargetResults) {
 	if resultsToCompare == nil || len(resultsToCompare.Targets) == 0 {
 		log.Debug(fmt.Sprintf("No targets to compare in results for target '%s'", relativeTarget))
 		return
@@ -892,7 +892,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, technology techuti
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
-	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, technology.String(), sourceBasePath))
+	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, techutils.ToFormalString(technologies), sourceBasePath))
 	defer func() {
 		if best == nil {
 			log.Debug("No target found")
@@ -903,7 +903,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, technology techuti
 	for _, potential := range resultsToCompare.Targets {
 		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
 		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
-		if technology != techutils.NoTech && potential.Technology != technology {
+		if len(technologies) > 0 && !utils.ElementsEqual[techutils.Technology](potential.Technologies, technologies) {
 			// If the technology is not the same, skip the comparison
 			continue
 		}

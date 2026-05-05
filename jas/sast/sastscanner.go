@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -42,10 +43,10 @@ type SastScanManager struct {
 }
 
 type SastScanParams struct {
-	Module             jfrogappsconfig.Module
 	SignedDescriptions bool
 	SastRules          string
 	TargetCount        int
+	Target             results.ScanTarget
 	ThreadId           int
 	SastChangedFiles   []string
 	ChangedFilesMode   bool
@@ -66,12 +67,19 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Module, params.TargetCount))
-	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, params.Module); err != nil {
+	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
+	if vulnerabilitiesResults, violationsResults, err = runSastScan(sastScanManager, params); err != nil {
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
+}
+
+func runSastScan(sastScanManager *SastScanManager, params SastScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+	if params.Target.DeprecatedAppsConfigModule == nil {
+		return sastScanManager.scanner.Run(sastScanManager, params.Target)
+	}
+	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SastScan))
 }
 
 func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
@@ -95,14 +103,30 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 	return
 }
 
-func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFile(module, ssm.signedDescriptions, ssm.sastChangedFiles, ssm.scanner.ScannersExclusions.SastExcludePatterns, ssm.scanner.Exclusions...); err != nil {
+func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = ssm.deprecatedCreateConfigFile(module, ssm.signedDescriptions, ssm.sastChangedFiles, centralConfigExclusions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
 		return
 	}
-	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, sastDocsUrlSuffix, ssm.scanner.MinSeverity)
+	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, sastDocsUrlSuffix, ssm.scanner.MinSeverity, module.SourceRoot)
+	if err != nil {
+		return
+	}
+	groupResultsByLocation(vulnerabilitiesSarifRuns)
+	groupResultsByLocation(violationsSarifRuns)
+	return
+}
+
+func (ssm *SastScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = ssm.createConfigFileForTarget(target); err != nil {
+		return
+	}
+	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
+		return
+	}
+	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, sastDocsUrlSuffix, ssm.scanner.MinSeverity, target.Target, target.Include...)
 	if err != nil {
 		return
 	}
@@ -131,7 +155,7 @@ type sastParameters struct {
 	SignedDescriptions bool `yaml:"signed_descriptions,omitempty"`
 }
 
-func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, sastChangedFiles []string, centralConfigExclusions []string, exclusions ...string) error {
+func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, sastChangedFiles []string, centralConfigExclusions []string, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -156,7 +180,26 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
-				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
+				ExcludePatterns: jas.GetJasExcludePatterns(module, &sastScanner.Scanner, centralConfigExclusions, exclusions...),
+				UserRules:       ssm.sastRules,
+			},
+		},
+	}
+	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, jasutils.Sast)
+}
+
+func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget) error {
+	configFileContent := sastScanConfig{
+		Scans: []scanConfiguration{
+			{
+				Type:                   sastScannerType,
+				Roots:                  jas.GetRootsFromTarget(target),
+				Output:                 ssm.resultsFileName,
+				PathToResultsToCompare: ssm.resultsToCompareFileName,
+				SastParameters: sastParameters{
+					SignedDescriptions: ssm.signedDescriptions,
+				},
+				ExcludePatterns: jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.SastScan)),
 				UserRules:       ssm.sastRules,
 			},
 		},

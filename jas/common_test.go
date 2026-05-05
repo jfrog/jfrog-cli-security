@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -69,11 +70,18 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogAppsConfig.Module{}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
 
 	module = jfrogAppsConfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
-	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
+	assert.True(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.Sast))
+
+	// no module
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.IaC))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Sast))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Secrets))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.MaliciousCode))
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Applicability))
 }
 
 var getSourceRootsCases = []struct {
@@ -122,12 +130,12 @@ var getExcludePatternsCases = []struct {
 	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"exclude-dir-1", "exclude-dir-2"}}},
 }
 
-func TestGetExcludePatterns(t *testing.T) {
+func TestGetJasExcludePatterns(t *testing.T) {
 	module := jfrogAppsConfig.Module{ExcludePatterns: []string{"exclude-root"}}
 	for _, testCase := range getExcludePatternsCases {
 		t.Run("", func(t *testing.T) {
 			scanner := testCase.scanner
-			actualExcludePatterns := GetExcludePatterns(module, scanner, []string{})
+			actualExcludePatterns := GetJasExcludePatterns(module, scanner, []string{})
 			if scanner == nil {
 				assert.ElementsMatch(t, module.ExcludePatterns, actualExcludePatterns)
 				return
@@ -579,11 +587,11 @@ func TestGetDiffScanTypeValue(t *testing.T) {
 
 func TestGetResultsToCompare(t *testing.T) {
 	testCases := []struct {
-		name              string
-		target            string
-		compareTechnology techutils.Technology
-		ResultsToCompare  *results.SecurityCommandResults
-		expectedTarget    *results.TargetResults
+		name             string
+		target           string
+		compareTechs     []techutils.Technology
+		ResultsToCompare *results.SecurityCommandResults
+		expectedTarget   *results.TargetResults
 	}{
 		{
 			name:             "No results to compare",
@@ -624,23 +632,37 @@ func TestGetResultsToCompare(t *testing.T) {
 			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
 		},
 		{
-			name:              "Results to compare - same directory two technologies picks npm",
-			target:            filepath.Join("root", "app"),
-			compareTechnology: techutils.Npm,
+			name:         "Results to compare - same directory two technologies picks npm",
+			target:       filepath.Join("root", "app"),
+			compareTechs: []techutils.Technology{techutils.Npm},
 			ResultsToCompare: &results.SecurityCommandResults{
 				Targets: []*results.TargetResults{
-					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Poetry}},
-					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Poetry}}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Npm}}},
 				},
 			},
-			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technologies: []techutils.Technology{techutils.Npm}}},
+		},
+		{
+			name:   "Results to compare - same directory multi-technology target matches when technologies match",
+			target: filepath.Join("root", "mono"),
+			compareTechs: []techutils.Technology{
+				techutils.Npm, techutils.Go,
+			},
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Maven}}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Npm, techutils.Go}}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "mono"), Technologies: []techutils.Technology{techutils.Npm, techutils.Go}}},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
-			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target, testCase.compareTechnology))
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target, testCase.compareTechs...))
 		})
 	}
 }
@@ -660,7 +682,7 @@ func TestProcessSarifRuns(t *testing.T) {
 		sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file2")), 0, 0, 0, 0, "snippet", "rule1", "error"),
 	))
 
-	processSarifRuns(dummyReport.Runs, wd, "docs URL", severityutils.High)
+	processSarifRuns(dummyReport.Runs, "docs URL", severityutils.High, wd)
 	run := dummyReport.Runs[0]
 
 	// Check Invocation added.
@@ -688,6 +710,121 @@ func TestProcessSarifRuns(t *testing.T) {
 	// Check file paths are relative and with / separators.
 	result := run.Results[0]
 	require.Equal(t, "dir/file2", sarifutils.GetLocationFileName(result.Locations[0]))
+}
+
+func TestShouldSkipScannerByConfigProfile(t *testing.T) {
+	enabledProfile := &xscServices.ConfigProfile{
+		ProfileName: "test-profile",
+		Modules: []xscServices.Module{{
+			ScanConfig: xscServices.ScanConfig{
+				ScaScannerConfig:                xscServices.ScaScannerConfig{EnableScaScan: true},
+				ContextualAnalysisScannerConfig: xscServices.CaScannerConfig{EnableCaScan: true},
+				IacScannerConfig:                xscServices.IacScannerConfig{EnableIacScan: true},
+				SecretsScannerConfig:            xscServices.SecretsScannerConfig{EnableSecretsScan: true},
+				SastScannerConfig:               xscServices.SastScannerConfig{EnableSastScan: true},
+			},
+		}},
+	}
+
+	tests := []struct {
+		name     string
+		target   results.ScanTarget
+		profile  *xscServices.ConfigProfile
+		scanType utils.SubScanType
+		jasType  jasutils.JasScanType
+		expected bool
+	}{
+		{
+			name:     "Nil config profile - should not skip",
+			target:   results.ScanTarget{Target: "/project"},
+			profile:  nil,
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: false,
+		},
+		{
+			name:     "Scan enabled - should not skip",
+			target:   results.ScanTarget{Target: "/project", CentralConfigModules: enabledProfile.Modules},
+			profile:  enabledProfile,
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: false,
+		},
+		{
+			name: "Scan disabled - should skip",
+			target: results.ScanTarget{Target: "/project", CentralConfigModules: []xscServices.Module{{
+				ScanConfig: xscServices.ScanConfig{
+					SecretsScannerConfig: xscServices.SecretsScannerConfig{EnableSecretsScan: false},
+				},
+			}}},
+			profile: &xscServices.ConfigProfile{
+				ProfileName: "disabled-profile",
+				Modules: []xscServices.Module{{
+					ScanConfig: xscServices.ScanConfig{
+						SecretsScannerConfig: xscServices.SecretsScannerConfig{EnableSecretsScan: false},
+					},
+				}},
+			},
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: true,
+		},
+		{
+			name:   "Target excluded by GeneralExcludePatterns - should skip",
+			target: results.ScanTarget{Target: "/project/test-dir", CentralConfigModules: enabledProfile.Modules},
+			profile: &xscServices.ConfigProfile{
+				ProfileName:   "exclude-profile",
+				GeneralConfig: xscServices.GeneralConfig{GeneralExcludePatterns: []string{"*test*"}},
+				Modules:       enabledProfile.Modules,
+			},
+			scanType: utils.SecretsScan,
+			jasType:  jasutils.Secrets,
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ShouldSkipScannerByConfigProfile(tt.target, tt.profile, tt.scanType, tt.jasType))
+		})
+	}
+}
+
+func TestGetJasExcludePatternsForTarget(t *testing.T) {
+	tests := []struct {
+		name                    string
+		target                  results.ScanTarget
+		centralConfigExclusions []string
+		expected                []string
+	}{
+		{
+			name:                    "Central config exclusions take precedence",
+			target:                  results.ScanTarget{Target: "/project"},
+			centralConfigExclusions: []string{"**/vendor/**", "**/generated/**"},
+			expected:                []string{"**/vendor/**", "**/generated/**"},
+		},
+		{
+			name:                    "Default SCA exclusions map to default JAS exclusions",
+			target:                  results.ScanTarget{Target: "/project", Exclude: utils.DefaultScaExcludePatterns},
+			centralConfigExclusions: nil,
+			expected:                utils.DefaultJasExcludePatterns,
+		},
+		{
+			name:                    "Custom exclusions are converted to file exclude patterns",
+			target:                  results.ScanTarget{Target: "/project", Exclude: []string{"custom-dir"}},
+			centralConfigExclusions: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetJasExcludePatternsForTarget(tt.target, tt.centralConfigExclusions)
+			if tt.expected != nil {
+				assert.ElementsMatch(t, tt.expected, result)
+			} else {
+				// For custom exclusions, just verify we got a non-empty result (converted patterns)
+				assert.NotEmpty(t, result)
+			}
+		})
+	}
 }
 
 func TestIsAnySoftwareInstalled(t *testing.T) {

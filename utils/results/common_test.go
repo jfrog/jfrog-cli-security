@@ -1027,7 +1027,7 @@ func TestSearchTargetResultsByRelativePath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			foundTarget := SearchTargetResultsByRelativePath(tc.target, techutils.NoTech, tc.cmdResults)
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}
@@ -1037,32 +1037,32 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 	sharedDir := filepath.Join("root", "app")
 	cmdResults := NewCommandResults(utils.SourceCode)
 	// Order intentionally Poetry before Npm (simulates nondeterministic map iteration).
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
 
 	// Same absolute path for every target ⇒ common parent equals that path ⇒ relative key is "" (see utils.GetRelativePath).
 	relativeKey := utils.GetRelativePath(sharedDir, cmdResults.GetCommonParentPath())
 	require.Equal(t, "", relativeKey)
 
 	t.Run("picks npm when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Npm, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.FirstTechnology())
 		assert.Equal(t, sharedDir, found.Target)
 	})
 	t.Run("picks poetry when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Poetry, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Poetry)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Poetry, found.Technology)
+		assert.Equal(t, techutils.Poetry, found.FirstTechnology())
 	})
 	t.Run("reversed slice order still picks npm", func(t *testing.T) {
 		reversed := NewCommandResults(utils.SourceCode)
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
 		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
-		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, reversed)
+		found := SearchTargetResultsByRelativePath(rel, reversed, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.FirstTechnology())
 	})
 }
 
