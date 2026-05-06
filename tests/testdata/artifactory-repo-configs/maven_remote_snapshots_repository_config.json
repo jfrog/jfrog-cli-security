@@ -2,5 +2,5 @@
   "key": "${MAVEN_REMOTE_SNAPSHOTS_REPO}",
   "rclass": "remote",
   "packageType": "maven",
-  "url": "https://repository.apache.org/snapshots"
+  "url": "https://oss.sonatype.org/content/repositories/snapshots"
 }
