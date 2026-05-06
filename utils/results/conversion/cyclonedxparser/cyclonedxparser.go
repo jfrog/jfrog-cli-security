@@ -92,6 +92,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 		return results.ErrResetConvertor
 	}
 	cdc.currentTarget = target
+	// TODO: add to target component the include info as well if exists, similar to sarifutils.CreateNewInvocation
 	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target))
 	return
 }

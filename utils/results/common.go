@@ -772,6 +772,9 @@ func CollectRuns(runs ...[]*sarif.Run) []*sarif.Run {
 	return flat
 }
 
+// TODO: targetTech should be `...techutils.Technology` and we should resolve first by response
+// if it is not known (pypi, mvn/gradle) try from other.... need to replicate cases to see what logic for multi tech support
+// need to remove `FirstTechnology()` func from usages
 // Resolve the actual technology from multiple sources:
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
 	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
