@@ -56,7 +56,7 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
 	// Set violations params
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}

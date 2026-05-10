@@ -166,3 +166,22 @@ func TestCurationAuditCommandFlags_UseWrapperAuditFlag(t *testing.T) {
 	}
 	assert.True(t, found, "useWrapperAudit flag should be present in CurationAudit command flags. If this test fails, it means the flag was removed from cli/docs/flags.go")
 }
+
+func TestEffectiveIncludeViolations(t *testing.T) {
+	tests := []struct {
+		name            string
+		violationsFlag  bool
+		projectProvided bool
+		want            bool
+	}{
+		{"default path: flag true, no project", true, false, true},
+		{"flag false, no project", false, false, false},
+		{"flag false, project overrides", false, true, true},
+		{"flag true, project", true, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, EffectiveIncludeViolations(tt.violationsFlag, tt.projectProvided))
+		})
+	}
+}

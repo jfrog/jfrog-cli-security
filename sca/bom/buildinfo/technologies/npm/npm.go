@@ -3,6 +3,7 @@ package npm
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
@@ -18,8 +19,20 @@ import (
 )
 
 const (
-	IgnoreScriptsFlag = "--ignore-scripts"
+	IgnoreScriptsFlag     = "--ignore-scripts"
+	LegacyPeerDepsFlag    = "--legacy-peer-deps"
+	artifactoryApiNpmPath = "/api/npm/"
+	// npmAuthTokenSuffix is the npm config-key suffix used to look up a registry's auth token in .npmrc
+	// (e.g. //registry.example.com/:_authToken=...). It is a key name, not a credential value.
+	npmAuthTokenSuffix = ":_authToken" // #nosec G101 -- Not credentials, this is the npm config-key suffix.
 )
+
+// NpmrcRegistryConfig holds Artifactory connection details parsed from the native npm registry config.
+type NpmrcRegistryConfig struct {
+	ArtifactoryUrl string
+	RepoName       string
+	AuthToken      string
+}
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
@@ -65,14 +78,91 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 }
 
 // Generates a .npmrc file to configure an Artifactory server as the resolver server.
+// Skipped when NpmRunNative is set — the project's existing .npmrc is used as-is for dependency resolution.
 func configNpmResolutionServerIfNeeded(params *technologies.BuildInfoBomGeneratorParams) (clearResolutionServerFunc func() error, err error) {
-	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
-	if params.DependenciesRepository == "" {
+	if params.DependenciesRepository == "" || params.NpmRunNative {
 		return
 	}
-
 	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(params.ServerDetails, params.DependenciesRepository)
 	return
+}
+
+// GetNativeNpmRegistryConfig reads the npm registry URL from the native npm configuration
+// (respecting .npmrc, Volta, and other environment settings) and parses it as an
+// Artifactory npm repository URL to extract the RT base URL, repo name, and auth token.
+func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
+	_, npmExecPath, err := biutils.GetNpmVersionAndExecPath(log.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to locate npm executable: %w", err)
+	}
+
+	registryData, _, err := biutils.RunNpmCmd(npmExecPath, "", []string{"config", "get", "registry"}, log.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read npm registry from native config: %w", err)
+	}
+	registryUrl := strings.TrimSpace(string(registryData))
+
+	rtBaseUrl, repoName, err := parseArtifactoryNpmRegistryUrl(registryUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	authKey, err := buildNpmAuthTokenKey(registryUrl)
+	if err != nil {
+		return nil, err
+	}
+	tokenData, _, _ := biutils.RunNpmCmd(npmExecPath, "", []string{"config", "get", authKey}, log.Logger)
+	authToken := strings.TrimSpace(string(tokenData))
+	if authToken == "undefined" || authToken == "null" {
+		authToken = ""
+	}
+
+	return &NpmrcRegistryConfig{
+		ArtifactoryUrl: rtBaseUrl,
+		RepoName:       repoName,
+		AuthToken:      authToken,
+	}, nil
+}
+
+// buildNpmAuthTokenKey returns the npm config key used to look up the auth token for a
+// given registry URL — the registry URL with its scheme stripped and ":_authToken" appended,
+// e.g. https://myrt.jfrog.io/artifactory/api/npm/my-repo/ → //myrt.jfrog.io/artifactory/api/npm/my-repo/:_authToken
+//
+// Returns a typed error (without slicing) when the registry value is malformed and lacks
+// the "://" separator, so callers see an actionable message instead of a runtime panic.
+// The original URL is preserved verbatim (including any trailing slash) so the lookup
+// matches exactly what npm stored in .npmrc.
+func buildNpmAuthTokenKey(registryUrl string) (string, error) {
+	_, schemeRelative, ok := strings.Cut(registryUrl, "://")
+	if !ok {
+		return "", fmt.Errorf("npm registry %q is malformed: expected a scheme-prefixed URL (e.g. https://...)", registryUrl)
+	}
+	if schemeRelative == "" {
+		return "", fmt.Errorf("npm registry %q is malformed: missing host", registryUrl)
+	}
+	return "//" + schemeRelative + npmAuthTokenSuffix, nil
+}
+
+// parseArtifactoryNpmRegistryUrl extracts the Artifactory base URL and repository name from
+// a registry URL containing "/api/npm/<repo>/".
+// Supports both standard URLs (https://<host>/artifactory/api/npm/<repo>/) and
+// reverse-proxy URLs where the "/artifactory" context root is stripped
+// (e.g. https://npm.company.com/api/npm/<repo>/).
+func parseArtifactoryNpmRegistryUrl(registryUrl string) (rtBaseUrl, repoName string, err error) {
+	apiNpmIdx := strings.Index(registryUrl, artifactoryApiNpmPath)
+	if apiNpmIdx == -1 {
+		return "", "", fmt.Errorf("npm registry %q does not appear to be an Artifactory npm registry (expected %q in URL)", registryUrl, artifactoryApiNpmPath)
+	}
+	rtBaseUrl = registryUrl[:apiNpmIdx] + "/"
+	afterApiNpm := registryUrl[apiNpmIdx+len(artifactoryApiNpmPath):]
+	repoName = strings.TrimSuffix(afterApiNpm, "/")
+	if slashIdx := strings.Index(repoName, "/"); slashIdx != -1 {
+		repoName = repoName[:slashIdx]
+	}
+	if repoName == "" {
+		return "", "", fmt.Errorf("could not extract repository name from npm registry URL %q", registryUrl)
+	}
+	return rtBaseUrl, repoName, nil
 }
 
 func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biutils.NpmTreeDepListParam {
@@ -81,9 +171,13 @@ func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biuti
 			Args: addIgnoreScriptsFlag([]string{}),
 		}
 	}
+	installCommandArgs := params.InstallCommandArgs
+	if params.NpmLegacyPeerDeps {
+		installCommandArgs = appendUniqueFlag(installCommandArgs, LegacyPeerDepsFlag)
+	}
 	npmTreeDepParam := biutils.NpmTreeDepListParam{
 		Args:                 addIgnoreScriptsFlag(params.Args),
-		InstallCommandArgs:   params.InstallCommandArgs,
+		InstallCommandArgs:   installCommandArgs,
 		IgnoreNodeModules:    params.NpmIgnoreNodeModules,
 		OverwritePackageLock: params.NpmOverwritePackageLock,
 	}
@@ -92,10 +186,15 @@ func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biuti
 
 // Add the --ignore-scripts to prevent execution of npm scripts during npm install.
 func addIgnoreScriptsFlag(npmArgs []string) []string {
-	if !slices.Contains(npmArgs, IgnoreScriptsFlag) {
-		return append(npmArgs, IgnoreScriptsFlag)
+	return appendUniqueFlag(npmArgs, IgnoreScriptsFlag)
+}
+
+// appendUniqueFlag appends flag to npmArgs unless it is already present.
+func appendUniqueFlag(npmArgs []string, flag string) []string {
+	if slices.Contains(npmArgs, flag) {
+		return npmArgs
 	}
-	return npmArgs
+	return append(npmArgs, flag)
 }
 
 // Parse the dependencies into an Xray dependency tree format

@@ -126,6 +126,12 @@ func getProject(c *components.Context) string {
 	return os.Getenv(coreutils.Project)
 }
 
+// EffectiveIncludeViolations reports whether the command should surface violations in CLI results.
+// The --violations flag defaults to true; when --project is set, violations are always included.
+func EffectiveIncludeViolations(violationsFlag bool, projectProvided bool) bool {
+	return violationsFlag || projectProvided
+}
+
 func isSnippetDetectionEnabled(c *components.Context) bool {
 	if c.IsFlagSet(flags.Snippet) {
 		return c.GetBoolFlagValue(flags.Snippet)

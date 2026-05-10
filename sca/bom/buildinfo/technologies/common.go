@@ -58,6 +58,8 @@ type BuildInfoBomGeneratorParams struct {
 	// Npm params
 	NpmIgnoreNodeModules    bool
 	NpmOverwritePackageLock bool
+	NpmRunNative            bool
+	NpmLegacyPeerDeps       bool
 	// Pnpm params
 	MaxTreeDepth string
 	// Docker params

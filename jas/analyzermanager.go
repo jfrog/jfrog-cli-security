@@ -35,6 +35,7 @@ const (
 	jfTokenEnvVariable                        = "JF_TOKEN"
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
+	jfXrayVersionEnvVariable                  = "JF_XRAY_VERSION"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
