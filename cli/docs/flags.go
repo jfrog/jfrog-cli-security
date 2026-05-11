@@ -166,6 +166,7 @@ const (
 	RunNative             = "run-native"
 
 	// Unique git flags
+	gitPrefix       = "git-"
 	InputFile       = "input-file"
 	ScmType         = "scm-type"
 	ScmApiUrl       = "scm-api-url"
@@ -174,6 +175,8 @@ const (
 	RepoName        = "repo-name"
 	Months          = "months"
 	DetailedSummary = "detailed-summary"
+	CacheValidity   = "cache-validity"
+	GitThreads      = gitPrefix + Threads
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -225,7 +228,7 @@ var commandFlags = map[string][]string{
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, LegacyPeerDeps, RunNative,
 	},
 	GitCountContributors: {
-		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
+		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
 	},
 	SastServer: {
 		Port,
@@ -373,6 +376,8 @@ var flagsMap = map[string]components.Flag{
 	RepoName:        components.NewStringFlag(RepoName, "List of semicolon-separated(;) repositories names to analyze, If not provided all repositories related to the provided owner will be analyzed."),
 	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(contributors.DefaultContContributorsMonths)),
 	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),
+	CacheValidity:   components.NewStringFlag(CacheValidity, "Number of days a cached repository result remains valid. Set to 0 to ignore cache and force a full re-scan.", components.WithIntDefaultValue(contributors.DefaultCacheValidity)),
+	GitThreads:      components.NewStringFlag(Threads, "Number of parallel threads for scanning repositories.", components.WithIntDefaultValue(contributors.DefaultThreads)),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {
