@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -212,11 +213,14 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	lockFilePath := filepath.Join(currentDir, lockFileName)
 	if _, err := os.Stat(lockFilePath); os.IsNotExist(err) {
 		if params.SkipAutoInstall {
-			return nil, nil, fmt.Errorf("the Podfile.lock file was not found and skip auto install is enabled")
+			return nil, nil, &biutils.ErrProjectNotInstalled{UninstalledDir: currentDir}
 		}
+		log.Debug("Running 'pod install' command to install dependencies...")
 		if _, err = runPodCmd(podExecPath, currentDir, []string{"install"}); err != nil {
 			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", err)
 		}
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("failed to check if lock file exists: %w", err)
 	}
 	// Calculate pod dependencies
 	data, err := GetDependenciesData(currentDir)
