@@ -281,7 +281,7 @@ func MaliciousScanCmd(c *components.Context) error {
 	if err = validateConnectionInputs(serverDetails); err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -437,7 +437,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -526,7 +526,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
@@ -789,7 +789,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}

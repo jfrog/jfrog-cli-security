@@ -1,6 +1,11 @@
 package contributors
 
 import (
+	"context"
+	"fmt"
+	"sort"
+	"time"
+
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/stretchr/testify/assert"
@@ -8,7 +13,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func getCommitsListForTest(t *testing.T) []vcsclient.CommitInfo {
@@ -318,6 +322,271 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 		})
 	}
 }
+
+// ---- merge helpers tests ----
+
+func TestMergeContributors(t *testing.T) {
+	key1 := BasicContributor{Email: "a@example.com", Repo: "repo1"}
+	key2 := BasicContributor{Email: "b@example.com", Repo: "repo1"}
+
+	contrib1 := Contributor{Email: "a@example.com", Name: "A"}
+	contrib2 := Contributor{Email: "b@example.com", Name: "B"}
+	contrib1Alt := Contributor{Email: "a@example.com", Name: "A-alt"}
+
+	t.Run("empty src", func(t *testing.T) {
+		dst := map[BasicContributor]Contributor{key1: contrib1}
+		mergeContributors(dst, map[BasicContributor]Contributor{})
+		assert.Equal(t, contrib1, dst[key1])
+		assert.Len(t, dst, 1)
+	})
+	t.Run("non-overlapping keys merged", func(t *testing.T) {
+		dst := map[BasicContributor]Contributor{key1: contrib1}
+		mergeContributors(dst, map[BasicContributor]Contributor{key2: contrib2})
+		assert.Equal(t, contrib1, dst[key1])
+		assert.Equal(t, contrib2, dst[key2])
+	})
+	t.Run("collision: dst wins", func(t *testing.T) {
+		dst := map[BasicContributor]Contributor{key1: contrib1}
+		mergeContributors(dst, map[BasicContributor]Contributor{key1: contrib1Alt})
+		assert.Equal(t, contrib1, dst[key1], "existing entry should not be overwritten")
+	})
+}
+
+func TestMergeDetailedContributors(t *testing.T) {
+	detail1 := ContributorDetailedSummary{RepoPath: "repo1", LastCommit: LastCommit{Date: "2024-01-01T00:00:00Z"}}
+	detail2 := ContributorDetailedSummary{RepoPath: "repo2", LastCommit: LastCommit{Date: "2024-02-01T00:00:00Z"}}
+	detailAlt := ContributorDetailedSummary{RepoPath: "repo1", LastCommit: LastCommit{Date: "2024-03-01T00:00:00Z"}}
+
+	t.Run("empty src", func(t *testing.T) {
+		dst := map[string]map[string]ContributorDetailedSummary{
+			"alice": {"repo1": detail1},
+		}
+		mergeDetailedContributors(dst, map[string]map[string]ContributorDetailedSummary{})
+		assert.Equal(t, detail1, dst["alice"]["repo1"])
+	})
+	t.Run("new email and new repo merged", func(t *testing.T) {
+		dst := map[string]map[string]ContributorDetailedSummary{
+			"alice": {"repo1": detail1},
+		}
+		src := map[string]map[string]ContributorDetailedSummary{
+			"alice": {"repo2": detail2},
+			"bob":   {"repo1": detail1},
+		}
+		mergeDetailedContributors(dst, src)
+		assert.Equal(t, detail2, dst["alice"]["repo2"])
+		assert.Equal(t, detail1, dst["bob"]["repo1"])
+	})
+	t.Run("collision: dst wins", func(t *testing.T) {
+		dst := map[string]map[string]ContributorDetailedSummary{
+			"alice": {"repo1": detail1},
+		}
+		mergeDetailedContributors(dst, map[string]map[string]ContributorDetailedSummary{
+			"alice": {"repo1": detailAlt},
+		})
+		assert.Equal(t, detail1, dst["alice"]["repo1"], "existing entry should not be overwritten")
+	})
+}
+
+func TestMergeDetailedRepos(t *testing.T) {
+	summary1 := RepositoryDetailedSummary{Email: "alice@example.com", LastCommit: LastCommit{Date: "2024-01-01T00:00:00Z"}}
+	summary2 := RepositoryDetailedSummary{Email: "bob@example.com", LastCommit: LastCommit{Date: "2024-02-01T00:00:00Z"}}
+	summaryAlt := RepositoryDetailedSummary{Email: "alice@example.com", LastCommit: LastCommit{Date: "2024-03-01T00:00:00Z"}}
+
+	t.Run("empty src", func(t *testing.T) {
+		dst := map[string]map[string]RepositoryDetailedSummary{
+			"repo1": {"alice@example.com": summary1},
+		}
+		mergeDetailedRepos(dst, map[string]map[string]RepositoryDetailedSummary{})
+		assert.Equal(t, summary1, dst["repo1"]["alice@example.com"])
+	})
+	t.Run("new repo and new author merged", func(t *testing.T) {
+		dst := map[string]map[string]RepositoryDetailedSummary{
+			"repo1": {"alice@example.com": summary1},
+		}
+		src := map[string]map[string]RepositoryDetailedSummary{
+			"repo1": {"bob@example.com": summary2},
+			"repo2": {"alice@example.com": summary1},
+		}
+		mergeDetailedRepos(dst, src)
+		assert.Equal(t, summary2, dst["repo1"]["bob@example.com"])
+		assert.Equal(t, summary1, dst["repo2"]["alice@example.com"])
+	})
+	t.Run("collision: dst wins", func(t *testing.T) {
+		dst := map[string]map[string]RepositoryDetailedSummary{
+			"repo1": {"alice@example.com": summary1},
+		}
+		mergeDetailedRepos(dst, map[string]map[string]RepositoryDetailedSummary{
+			"repo1": {"alice@example.com": summaryAlt},
+		})
+		assert.Equal(t, summary1, dst["repo1"]["alice@example.com"], "existing entry should not be overwritten")
+	})
+}
+
+// ---- getRepositoriesListToScan tests ----
+
+func TestGetRepositoriesListToScan(t *testing.T) {
+	t.Run("explicit repos returned as-is", func(t *testing.T) {
+		vcc := &VcsCountContributors{
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{
+					Repositories: []string{"repo-a", "repo-b"},
+				},
+			},
+		}
+		repos, err := vcc.getRepositoriesListToScan()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"repo-a", "repo-b"}, repos)
+	})
+
+	t.Run("nil vcsClient returns error", func(t *testing.T) {
+		vcc := &VcsCountContributors{
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "owner"},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "missing vcs client")
+	})
+
+	t.Run("ListRepositoriesByOwner error propagated", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, _ string) ([]string, error) {
+				return nil, fmt.Errorf("api failure")
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "my-org"},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "api failure")
+	})
+
+	t.Run("empty result from ListRepositoriesByOwner returns error", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, _ string) ([]string, error) {
+				return []string{}, nil
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{
+					Owner:     "empty-org",
+					ScmType:   vcsutils.GitHub,
+					ScmApiUrl: "https://api.github.com",
+				},
+			},
+		}
+		_, err := vcc.getRepositoriesListToScan()
+		assert.ErrorContains(t, err, "no repositories found for owner empty-org")
+	})
+
+	t.Run("ListRepositoriesByOwner success", func(t *testing.T) {
+		mock := &mockVcsClient{
+			listRepositoriesByOwnerFn: func(_ context.Context, owner string) ([]string, error) {
+				assert.Equal(t, "my-org", owner)
+				return []string{"repo-x", "repo-y", "repo-z"}, nil
+			},
+		}
+		vcc := &VcsCountContributors{
+			vcsClient: mock,
+			params: CountContributorsParams{
+				BasicGitServerParams: BasicGitServerParams{Owner: "my-org"},
+			},
+		}
+		repos, err := vcc.getRepositoriesListToScan()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"repo-x", "repo-y", "repo-z"}, repos)
+	})
+}
+
+// ---- parallel scan test ----
+
+func TestScanAndCollectCommitsInfo_Parallel(t *testing.T) {
+	ts1 := convertDateStrToTimestamp(t, "2024-01-10T10:00:00Z")
+	ts2 := convertDateStrToTimestamp(t, "2024-02-10T10:00:00Z")
+	ts3 := convertDateStrToTimestamp(t, "2024-03-10T10:00:00Z")
+	ts4 := convertDateStrToTimestamp(t, "2024-04-10T10:00:00Z")
+
+	commitsByRepo := map[string][]vcsclient.CommitInfo{
+		"repo1": {
+			{AuthorEmail: "email1@example.com", AuthorName: "Email1", Timestamp: ts1},
+			{AuthorEmail: "email2@example.com", AuthorName: "Email2", Timestamp: ts2},
+		},
+		"repo2": {
+			{AuthorEmail: "email2@example.com", AuthorName: "Email2", Timestamp: ts3},
+			{AuthorEmail: "email3@example.com", AuthorName: "Email3", Timestamp: ts4},
+		},
+		"repo3": {},
+	}
+
+	mock := &mockVcsClient{
+		getCommitsWithQueryOptionsFn: func(_ context.Context, _, repo string, opts vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
+			// Return commits only on page 1; empty on subsequent pages to stop pagination.
+			if opts.Page == 1 {
+				return commitsByRepo[repo], nil
+			}
+			return nil, nil
+		},
+	}
+
+	vcc := VcsCountContributors{
+		vcsClient: mock,
+		params: CountContributorsParams{
+			BasicGitServerParams: BasicGitServerParams{Owner: "test-owner"},
+			MonthsNum:            1,
+			Threads:              3,
+			CacheValidity:        -1, // disable cache
+		},
+	}
+
+	baseOptions := vcsclient.GitCommitsQueryOptions{
+		Since:       time.Now().AddDate(0, -1, 0),
+		ListOptions: vcsclient.ListOptions{Page: 1, PerPage: vcsutils.NumberOfCommitsToFetch},
+	}
+	repos := []string{"repo1", "repo2", "repo3"}
+	tasks := make([]repoScanTask, len(repos))
+	for i, repo := range repos {
+		tasks[i] = repoScanTask{vcc: vcc, repo: repo, baseOptions: baseOptions, idx: i}
+	}
+
+	repoResults, err := runRepoScanTasks(tasks, 3)
+	assert.NoError(t, err)
+
+	// Merge results the same way Run() does.
+	var scannedRepos, skippedRepos []string
+	uniqueContributors := make(map[BasicContributor]Contributor)
+	totalCommits := 0
+	for _, rr := range repoResults {
+		if rr.skipped {
+			skippedRepos = append(skippedRepos, rr.repo)
+		} else {
+			scannedRepos = append(scannedRepos, rr.repo)
+			totalCommits += rr.totalCommits
+			mergeContributors(uniqueContributors, rr.uniqueContributors)
+		}
+	}
+
+	// All three repos should be scanned (none skipped).
+	sort.Strings(scannedRepos)
+	assert.Equal(t, []string{"repo1", "repo2", "repo3"}, scannedRepos)
+	assert.Empty(t, skippedRepos)
+
+	// repo1 has 2 commits, repo2 has 2, repo3 has 0.
+	assert.Equal(t, 4, totalCommits)
+
+	// 4 unique (email, repo) pairs: email1+repo1, email2+repo1, email2+repo2, email3+repo2.
+	assert.Len(t, uniqueContributors, 4)
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email1@example.com", Repo: "repo1"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo1"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email2@example.com", Repo: "repo2"})
+	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email3@example.com", Repo: "repo2"})
+}
+
+// ---- helpers ----
 
 func convertDateStrToTimestamp(t *testing.T, dateStr string) int64 {
 	date, err := time.Parse(time.RFC3339, dateStr)
