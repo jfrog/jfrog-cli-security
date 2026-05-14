@@ -368,7 +368,7 @@ func TestDetectScansToPerform(t *testing.T) {
 			wd:   dir,
 			params: func() *AuditParams {
 				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")})
-				param.SetIsSingleTarget(true).SetIsRecursiveScan(false)
+				param.SetIsRecursiveScan(false)
 				return param
 			},
 			expected: []*results.TargetResults{
@@ -387,7 +387,7 @@ func TestDetectScansToPerform(t *testing.T) {
 			wd:   dir,
 			params: func() *AuditParams {
 				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
-				param.SetIsSingleTarget(true).SetIsRecursiveScan(false)
+				param.SetIsRecursiveScan(false)
 				return param
 			},
 			expected: []*results.TargetResults{
@@ -450,7 +450,6 @@ func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
-	params.SetIsSingleTarget(true)
 	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
 
 	detectScanTargets(cmdRes, params)
@@ -492,7 +491,6 @@ func TestDetectScanTargetsSingleTargetCliExcludedCwdWithNonExcludedInclude(t *te
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
 	params.SetWorkingDirs([]string{siblingNpm})
-	params.SetIsSingleTarget(true)
 	params.SetExclusions([]string{"*parent_only_excluded_for_agg*"})
 
 	detectScanTargets(cmdRes, params)

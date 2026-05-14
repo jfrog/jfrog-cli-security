@@ -146,11 +146,11 @@ func toAuditParams(params GitAuditParams) (*sourceAudit.AuditParams, error) {
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator)
 	auditParams.SetCustomBomGenBinaryPath(params.customBomGenBinaryPath).SetCustomAnalyzerManagerBinaryPath(params.customAnalyzerManagerBinaryPath)
 	// Basic params
-	_, includeDirs, isRecursiveScan, isSingleTarget, err := sourceAudit.GetTargetsInfo(auditParams)
+	_, includeDirs, isRecursiveScan, err := sourceAudit.GetTargetsInfo(params.workingDirs, params.bomGenerator, params.scansToPerform, params.includeSbom, params.repositoryLocalPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get targets info: %v", err)
 	}
-	auditParams.SetWorkingDirs(includeDirs).SetIsSingleTarget(isSingleTarget).SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
+	auditParams.SetWorkingDirs(includeDirs).SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
 	return auditParams, nil
 }
 

@@ -774,7 +774,7 @@ func TestShouldSkipScannerByConfigProfile(t *testing.T) {
 			target: results.ScanTarget{Target: "/project/test-dir", CentralConfigModules: enabledProfile.Modules},
 			profile: &xscServices.ConfigProfile{
 				ProfileName:   "exclude-profile",
-				GeneralConfig: xscServices.GeneralConfig{GeneralExcludePatterns: []string{"*test*"}},
+				GeneralConfig: xscServices.GeneralConfig{},
 				Modules:       enabledProfile.Modules,
 			},
 			scanType: utils.SecretsScan,

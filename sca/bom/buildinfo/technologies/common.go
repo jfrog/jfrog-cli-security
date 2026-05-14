@@ -87,7 +87,6 @@ func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive 
 	if configProfile != nil {
 		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
 	}
-
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}

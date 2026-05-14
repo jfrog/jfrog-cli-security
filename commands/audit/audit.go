@@ -24,7 +24,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
@@ -193,46 +192,34 @@ func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 			}
 		} else if len(workingDirs) == 1 {
 			log.Info("Scanning path:", workingDirs[0])
+		} else {
+			log.Debug("Scanning current directory...")
 		}
 		return
 	}
 	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
-func getRelatedWorkingDirs(auditCmd *AuditCommand) (projectPath string, workingDirs []string, isRecursiveScan bool, err error) {
-	if !isNewFlow(auditCmd.bomGenerator) && (utils.IsScanRequested(utils.SourceCode, utils.ScaScan, auditCmd.ScansToPerform()...) || auditCmd.IncludeSbom) {
-		// Old flow:
-		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
-		// We apply a recursive scan on the root repository
-		isRecursiveScan = len(auditCmd.workingDirs) == 0
-	}
-	workingDirs, err = coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansToPerform []utils.SubScanType, includeSbom bool, rootDir string) (projectPath string, includeDirs []string, isRecursiveScan bool, err error) {
+	includeDirs, err = utils.GetFullPathsWorkingDirs(workingDirs)
 	if err != nil {
 		return
 	}
-	logScanPaths(workingDirs, isRecursiveScan)
-	projectPath = utils.GetCommonParentDir(workingDirs...)
-	return
-}
-
-func GetTargetsInfo(params *AuditParams) (projectPath string, includeDirs []string, isRecursiveScan, isSingleTarget bool, err error) {
-	includeDirs, err = utils.GetFullPathsWorkingDirs(params.workingDirs)
-	if err != nil {
-		return
-	}
-	if isNewFlow(params.bomGenerator) {
-		// In new flow, we always scan a single target. the SBOM lib can support multiple tech and directories. no need to detect them.
-		isSingleTarget = true
-	} else if utils.IsScanRequested(utils.SourceCode, utils.ScaScan, params.ScansToPerform()...) || params.IncludeSbom {
+	if !isNewFlow(bomGenerator) && (utils.IsScanRequested(utils.SourceCode, utils.ScaScan, scansToPerform...) || includeSbom) {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
-		isRecursiveScan = len(params.workingDirs) == 0
+		isRecursiveScan = len(workingDirs) == 0
 	}
 	logScanPaths(includeDirs, isRecursiveScan)
-	if params.rootDir != "" {
-		projectPath = params.rootDir
+	if rootDir != "" {
+		projectPath = rootDir
 	} else {
-		projectPath = utils.GetCommonParentDir(includeDirs...)
+		if currentDir, e := coreutils.GetWorkingDirectory(); e != nil {
+			log.Warn(fmt.Sprintf("Failed to get working directory: %s", e.Error()))
+			projectPath = utils.GetCommonParentDir(includeDirs...)
+		} else {
+			projectPath = currentDir
+		}
 	}
 	return
 }
@@ -245,7 +232,7 @@ func isNewFlow(bomGenerator bom.SbomGenerator) bool {
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	projectPath, includeDirs, isRecursiveScan, isSingleTarget, err := GetTargetsInfo(&auditCmd.AuditParams)
+	projectPath, includeDirs, isRecursiveScan, err := GetTargetsInfo(auditCmd.workingDirs, auditCmd.bomGenerator, auditCmd.scansToPerform, auditCmd.IncludeSbom, auditCmd.rootDir)
 	if err != nil {
 		return
 	}
@@ -271,7 +258,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetRtResultRepository(auditCmd.rtResultRepository).
 		SetUploadCdxResults(auditCmd.uploadCdxResults).
 		SetWorkingDirs(includeDirs).
-		SetIsSingleTarget(isSingleTarget).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())).
@@ -561,11 +547,6 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 }
 
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
-	// flags/frogbot config working dirs (1st priority)
-	explicitWorkingDirs := params.WorkingDirs()
-	// config profile include/exclude patterns (2nd priority)
-	configProfile := params.GetConfigProfile()
-
 	cwd, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("failed to get working directory: %s", err.Error()), false)
@@ -573,7 +554,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 	}
 	// Create scan targets
 	if isNewFlow(params.bomGenerator) {
-		createSingleScanTarget(cmdResults, params, cwd)
+		createScanTargetsFromConfigs(cmdResults, params, cwd)
 	} else {
 		// Old flow:
 		detectScaTargetsFromTechnologies(cmdResults, params, cwd)
@@ -581,82 +562,85 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 	}
 }
 
-// isScanRootExcludedByCli returns true when path (after Abs) matches CLI --exclusions
-// and should not be registered as its own scan target. Empty exclusions always returns false.
-func isScanRootExcludedByCli(path string, exclusions []string) bool {
-	if len(exclusions) == 0 {
-		return false
-	}
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Skipping CLI exclusion check for %q: %v", path, err))
-		return false
-	}
-	return utils.IsPathExcluded(absPath, exclusions)
-}
-
+// New flow: creates targets from config profile modules or working dirs input.
 func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
-	modulesPathsFromRoot := params.WorkingDirs()
-	configProfile := params.GetConfigProfile()
-
 	rootDir := params.rootDir
 	if rootDir == "" {
 		rootDir = cwd
 	}
-
-	if configProfile != nil {
-		modulesPathsFromRoot = []string{}
-		for _, module := range configProfile.Modules {
-			if module.PathFromRoot == "" || module.PathFromRoot == "." {
-				
-			modulesPathsFromRoot = append(modulesPathsFromRoot, filepath.Join(params.rootDir, module.PathFromRoot))
+	configProfile := params.GetConfigProfile()
+	if configProfile == nil {
+		includeDirs := params.WorkingDirs()
+		msg := fmt.Sprintf("No config profile found. Creating single scan target from root directory: %s", rootDir)
+		if len(includeDirs) > 0 {
+			msg += fmt.Sprintf(" and working dirs: %s", strings.Join(includeDirs, ", "))
 		}
+		log.Debug(msg)
+		if scanTarget := createScanTarget(rootDir, params.Exclusions(), includeDirs...); scanTarget != nil {
+			scanTarget.Technologies = detectTechnologiesInTarget(*scanTarget, params)
+			cmdResults.NewScanResults(*scanTarget)
+		}
+		return
+	}
+	log.Debug("Creating scan targets from config profile:", configProfile.ProfileName)
+	for _, module := range configProfile.Modules {
+		moduleRoot := rootDir
+		if module.PathFromRoot != "" && module.PathFromRoot != "." {
+			moduleRoot = filepath.Join(rootDir, module.PathFromRoot)
+		}
+		scanTarget := createScanTarget(moduleRoot, module.ExcludePatterns, module.IncludePatterns...)
+		if scanTarget == nil {
+			continue
+		}
+		scanTarget.Technologies = detectTechnologiesInTarget(*scanTarget, params)
+		scanTarget.CentralConfigModules = []xscServices.Module{module}
+		cmdResults.NewScanResults(*scanTarget)
 	}
 }
 
-func createSingleScanTarget(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
-	exclusions := params.Exclusions()
-	scanTarget := results.ScanTarget{Target: cwd, Exclude: exclusions}
-	// Resolve working dirs to include (omit paths that match CLI exclusions and non-existent dirs).
+// Create a scan target from the given root directory, exclude patterns and optionally include patterns.
+func createScanTarget(root string, exclude []string, includes ...string) *results.ScanTarget {
+	// Check if root is excluded
+	if utils.IsPathExcluded(root, exclude) {
+		log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", root, strings.Join(exclude, ", ")))
+		return nil
+	}
 	dirs := datastructures.MakeSet[string]()
-	for _, dir := range params.workingDirs {
-		if !fileutils.IsPathExists(dir, false) {
-			log.Warn("The working directory", dir, "doesn't exist. Skipping...")
+	// Validate include patterns
+	for _, includePattern := range includes {
+		// Check if the include pattern is a file or a directory.
+		if isDir, err := fileutils.IsDirExists(includePattern, false); err != nil {
+			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
+			continue
+		} else if isDir && !utils.IsPathExcluded(includePattern, exclude) {
+			dirs.Add(includePattern)
 			continue
 		}
-		// check path is not cwd
-		if dir == cwd {
-			continue
-		}
-		if isScanRootExcludedByCli(dir, exclusions) {
-			log.Warn("The working directory", dir, "matches CLI exclusion patterns. Skipping...")
-			continue
-		}
-		dirs.Add(dir)
-	}
-	scanTarget.Include = dirs.ToSlice()
-	cwdExcluded := isScanRootExcludedByCli(cwd, exclusions)
-	// When cwd matches exclusions and there are no additional roots to scan, do not register a target.
-	if cwdExcluded && len(scanTarget.Include) == 0 {
-		log.Warn("Current directory matches CLI exclusion patterns and no additional working directories were provided. No scan targets will be generated.")
-		return
-	}
-	// If cwd is excluded but explicit working dirs remain, keep one aggregate target (Target stays cwd)
-	// and only detect technologies under non-excluded Include paths — see jas.GetRootsFromTarget.
-	// Detect technologies
-	detectedTechnologies := datastructures.MakeSet[techutils.Technology]()
-	for _, included := range jas.GetRootsFromTarget(scanTarget) {
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == cwd, params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), included == cwd, scanTarget.Exclude...))
+		// the pattern is not a directory, so we need to list the directories in the pattern.
+		log.Debug(fmt.Sprintf("The pattern '%s' is not a directory, listing directories in the pattern...", includePattern))
+		includeDirs, err := utils.ListDirs(root, includePattern == root, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, includePattern == root), includePattern)
 		if err != nil {
-			log.Warn("Couldn't detect technologies in", included, "directory.", err.Error())
+			log.Warn(fmt.Sprintf("Failed to list directories for '%s': %s", includePattern, err.Error()))
+			continue
+		}
+		dirs.AddElements(includeDirs...)
+	}
+	return &results.ScanTarget{Target: root, Include: dirs.ToSlice(), Exclude: exclude}
+}
+
+func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditParams) (technologies []techutils.Technology) {
+	detectedTechnologies := datastructures.MakeSet[techutils.Technology]()
+	for _, included := range jas.GetRootsFromTarget(target) {
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(included, included == target.Target, otherParams.Technologies(), nil, utils.GetExcludePattern(target.Exclude, utils.DefaultScaExcludePatterns, included == target.Target))
+		if err != nil {
+			log.Warn(fmt.Sprintf("Couldn't detect technologies in '%s' directory: %s", included, err.Error()))
 			continue
 		}
 		for tech := range techToWorkingDirs {
 			detectedTechnologies.Add(tech)
 		}
 	}
-	scanTarget.Technologies = detectedTechnologies.ToSlice()
-	cmdResults.NewScanResults(scanTarget)
+	return detectedTechnologies.ToSlice()
 }
 
 func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
@@ -677,8 +661,14 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 	}
 }
 
+// Old flow: creates targets from technologies detected in the working directories.
 func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	exclusions := params.Exclusions()
+	if configProfile := params.GetConfigProfile(); configProfile != nil {
+		// TODO: support matching multiple config modules to the scan targets
+		exclusions = append(exclusions, configProfile.Modules[0].ExcludePatterns...)
+		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
+	}
 	potentialScanTargets := []string{cwd}
 	if len(params.workingDirs) > 0 {
 		potentialScanTargets = params.workingDirs
@@ -688,12 +678,8 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
 			continue
 		}
-		if isScanRootExcludedByCli(requestedDirectory, exclusions) {
-			log.Warn("The working directory", requestedDirectory, "matches CLI exclusion patterns. Skipping...")
-			continue
-		}
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), exclusions...))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), utils.GetExcludePattern(exclusions, utils.DefaultScaExcludePatterns, params.IsRecursiveScan()))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -708,40 +694,36 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				cmdResults.NewScanResults(results.ScanTarget{
-					Target:       requestedDirectory,
-					Technologies: []techutils.Technology{tech},
-					Exclude:      exclusions,
-				})
-			}
-			for workingDir, descriptors := range workingDirs {
-				if isScanRootExcludedByCli(workingDir, exclusions) {
+				scanTarget := createScanTarget(requestedDirectory, exclusions)
+				if scanTarget == nil {
 					continue
 				}
+				scanTarget.Technologies = []techutils.Technology{tech}
+				cmdResults.NewScanResults(*scanTarget)
+			}
+			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				targetResults := cmdResults.NewScanResults(results.ScanTarget{
-					Target:       workingDir,
-					Technologies: []techutils.Technology{tech},
-					Exclude:      exclusions,
-				})
+				scanTarget := createScanTarget(workingDir, exclusions)
+				if scanTarget == nil {
+					continue
+				}
+				scanTarget.Technologies = []techutils.Technology{tech}
+				targetResults := cmdResults.NewScanResults(*scanTarget)
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
 				}
+				cmdResults.NewScanResults(*scanTarget)
 			}
 		}
 	}
 	// If no scan targets were detected, we should still proceed with the scans.
 	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
-		only := potentialScanTargets[0]
-		if !isScanRootExcludedByCli(only, exclusions) {
-			cmdResults.NewScanResults(results.ScanTarget{
-				Target:  only,
-				Exclude: exclusions,
-			})
+		if scanTarget := createScanTarget(cwd, exclusions); scanTarget != nil {
+			cmdResults.NewScanResults(*scanTarget)
 		}
 	}
 	// Load deprecated apps config information for all targets
-	if params.DeprecatedAppsConfig() == nil && !isNewFlow(params.bomGenerator) {
+	if params.DeprecatedAppsConfig() == nil {
 		jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
 		if err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)

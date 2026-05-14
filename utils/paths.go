@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,9 +15,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const (
@@ -57,7 +57,7 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string, err error) {
+func GetCurationCacheFolderByTech(tech string) (projectDir string, err error) {
 	pathHash, errFromHash := getProjectPathHash()
 	if errFromHash != nil {
 		err = errFromHash
@@ -67,7 +67,7 @@ func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string,
 	if err != nil {
 		return "", err
 	}
-	projectDir = filepath.Join(curationFolder, tech.String(), pathHash)
+	projectDir = filepath.Join(curationFolder, tech, pathHash)
 	return
 }
 
@@ -108,12 +108,74 @@ func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
 }
 
 func IsPathExcluded(path string, exclusions []string) bool {
+	if len(exclusions) == 0 {
+		return false
+	}
 	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, true), path)
 	if err != nil {
 		log.Warn("Failed to check if path is excluded:", err.Error())
 		return false
 	}
 	return match
+}
+
+func GetExcludePattern(excludePatterns []string, defaultExcludePatterns []string, isRecursive bool) string {
+	exclusions := excludePatterns
+	if len(exclusions) == 0 {
+		exclusions = defaultExcludePatterns
+	}
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, isRecursive)
+}
+
+func IsPathMatchesPatterns(path string, isRecursive bool, patterns ...string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	match, err := regexp.MatchString(fspatterns.PreparePathPattern(clientUtils.WildCardPattern, isRecursive, patterns...), path)
+	if err != nil {
+		log.Warn("Failed to check if path matches pattern:", err.Error())
+		return false
+	}
+	return match
+}
+
+func ListFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			dirs = append(dirs, path)
+		} else {
+			files = append(files, path)
+		}
+	}
+	return
+}
+
+func ListDirs(rootPath string, isRecursive, preserveSymlink bool, excludePattern string, includePatterns ...string) (dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, true, preserveSymlink, excludePattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			// Validate if the directory matches any of the include patterns
+			if len(includePatterns) > 0 && !IsPathMatchesPatterns(path, isRecursive, includePatterns...) {
+				log.Verbose(fmt.Sprintf("Skipping directory %s as it does not match any of the include patterns: %s", path, strings.Join(includePatterns, ", ")))
+				continue
+			}
+			dirs = append(dirs, path)
+		}
+	}
+	return
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {

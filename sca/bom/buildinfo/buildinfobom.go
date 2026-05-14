@@ -279,7 +279,7 @@ func getCurationCacheFolderAndLogMsg(params technologies.BuildInfoBomGeneratorPa
 
 func getCurationCacheByTech(tech techutils.Technology) (string, error) {
 	if tech == techutils.Maven || tech == techutils.Go {
-		return utils.GetCurationCacheFolderByTech(tech)
+		return utils.GetCurationCacheFolderByTech(tech.String())
 	}
 	return "", nil
 }

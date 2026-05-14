@@ -395,14 +395,6 @@ func ShouldSkipScannerByConfigProfile(target results.ScanTarget, configProfile *
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, configProfile.ProfileName))
 		return true
 	}
-	// validate target is excluded by config profile exclude patterns
-	excludePatterns := configProfile.GeneralConfig.GeneralExcludePatterns
-	if len(excludePatterns) > 0 {
-		if utils.IsPathExcluded(target.Target, excludePatterns) {
-			log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by config profile exclude patterns...", jasType))
-			return true
-		}
-	}
 	return false
 }
 

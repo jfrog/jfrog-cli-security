@@ -20,8 +20,8 @@ import (
 
 type AuditParams struct {
 	// Where to scan
-	appsConfig     *jfrogappsconfig.JFrogAppsConfig
-	workingDirs    []string
+	appsConfig  *jfrogappsconfig.JFrogAppsConfig
+	workingDirs []string
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext

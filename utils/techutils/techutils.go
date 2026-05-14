@@ -16,7 +16,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -448,7 +448,7 @@ func detectedTechnologiesListInPath(path string, recursive bool) (technologies [
 // If requestedTechs is empty, all technologies will be checked.
 // If excludePathPattern is not empty, files/directories that match the wildcard pattern will be excluded from the search.
 func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs []string, requestedDescriptors map[Technology][]string, excludePathPattern string) (technologiesDetected map[Technology]map[string][]string, err error) {
-	filesList, dirsList, err := listFilesAndDirs(path, recursive, true, true, excludePathPattern)
+	filesList, dirsList, err := utils.ListFilesAndDirs(path, recursive, true, true, excludePathPattern)
 	if err != nil {
 		return
 	}
@@ -476,24 +476,6 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 	}
 	if techCount > 0 {
 		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
-	}
-	return
-}
-
-func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
-	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
-	if err != nil {
-		return
-	}
-	for _, path := range filesOrDirsInPath {
-		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
-			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
-			continue
-		} else if isDir {
-			dirs = append(dirs, path)
-		} else {
-			files = append(files, path)
-		}
 	}
 	return
 }

@@ -27,6 +27,7 @@ type GitAuditParams struct {
 	scansToPerform []utils.SubScanType
 	includeSbom    bool
 	threads        int
+	workingDirs    []string
 	exclusions     []string
 	// Output params
 	outputFormat  format.OutputFormat
@@ -133,6 +134,11 @@ func (gap *GitAuditParams) SetThreads(threads int) *GitAuditParams {
 
 func (gap *GitAuditParams) SetExclusions(exclusions []string) *GitAuditParams {
 	gap.exclusions = exclusions
+	return gap
+}
+
+func (gap *GitAuditParams) SetWorkingDirs(workingDirs []string) *GitAuditParams {
+	gap.workingDirs = workingDirs
 	return gap
 }
 

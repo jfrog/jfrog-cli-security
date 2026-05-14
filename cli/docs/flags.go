@@ -219,7 +219,7 @@ var commandFlags = map[string][]string{
 		// Violations params
 		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
-		Threads, ExclusionsAudit,
+		Threads, ExclusionsAudit, WorkingDirs,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
