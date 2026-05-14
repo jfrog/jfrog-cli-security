@@ -60,8 +60,10 @@ func (sjc *CmdResultsSimpleJsonConverter) Reset(metadata results.ResultsMetaData
 	}
 	sjc.entitledForJas = metadata.Entitlements.Jas
 	sjc.multipleRoots = multipleTargets
-	if metadata.GeneralError != nil {
-		sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{ErrorMessage: metadata.GeneralError.Error()})
+	if scanErrors := metadata.GetAllErrors(); len(scanErrors) > 0 {
+		for _, scanError := range scanErrors {
+			sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{ErrorMessage: scanError.ActualError.Error()})
+		}
 	}
 	return
 }

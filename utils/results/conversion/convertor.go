@@ -117,7 +117,12 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 			// Skip this target as it's not in the include list
 			continue
 		}
-		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
+		allTargetErrors := targetScansResults.GetAllErrors()
+		targetErrors := []error{}
+		for _, targetError := range allTargetErrors {
+			targetErrors = append(targetErrors, targetError.ActualError)
+		}
+		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetErrors...); err != nil {
 			return
 		}
 		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults); err != nil {

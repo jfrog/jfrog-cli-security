@@ -185,7 +185,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
 	if fileCollectingErr != nil {
-		scanResults.GeneralError = errors.Join(scanResults.GeneralError, fileCollectingErr)
+		scanResults.AddGeneralError(fileCollectingErr, false)
 	}
 
 	if scanResults.GetErrors() != nil {

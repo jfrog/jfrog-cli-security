@@ -432,8 +432,10 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 			targetResults := scanCmd.getBinaryTargetResults(cmdResults, filePath, threadId)
 			// Generate SBOM for the file.
 			deprecatedGraph := scanCmd.GenerateBinarySbom(cmdResults.CmdType, targetResults, cmdResults.ResultContext.IncludeSbom, threadId)
-			if len(targetResults.Errors) > 0 {
-				log.Warn(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"Failed to generate SBOM for file %s: %s", targetResults.Target, targetResults.GetErrors()))
+			if notSkippedErrors := targetResults.GetNotSkippedErrors(); len(notSkippedErrors) > 0 {
+				for _, notSkippedError := range notSkippedErrors {
+					log.Warn(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"Failed to generate SBOM for file %s: %s", targetResults.Target, notSkippedError.Error()))
+				}
 				return
 			}
 			// Add a new task to the second producer/consumer

@@ -344,11 +344,11 @@ func (auditCmd *AuditCommand) CommandName() string {
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
 	// Prepare the command for the scan.
-	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
+	if cmdResults = prepareToScan(auditParams); cmdResults.GetErrors() != nil {
 		return
 	}
 	// Run Scanners
-	if runParallelAuditScans(cmdResults, auditParams); cmdResults.GeneralError != nil {
+	if runParallelAuditScans(cmdResults, auditParams); cmdResults.GetErrors() != nil {
 		return
 	}
 	// Process the scan results and run additional steps if needed.
@@ -360,23 +360,23 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 		params.Progress().SetHeadlineMsg("Preparing to scan")
 	}
 	// Initialize Results struct
-	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
+	if cmdResults = initAuditCmdResults(params); cmdResults.GetErrors() != nil {
 		return
 	}
 	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), cmdResults.AllowPartialResults)
 	}
 	// Initialize the BOM generator if needed
 	if params.resultsContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.scansToPerform...) {
 		if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
-			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
+			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
 	}
 	populateScanTargets(cmdResults, params)
 	// Initialize the SCA scan strategy
 	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), params.AllowPartialResults())
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), cmdResults.AllowPartialResults)
 	}
 	return
 }
@@ -424,6 +424,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
 	cmdResults.SetGitContext(params.GitContext())
+	cmdResults.SetAllowPartialResults(params.CalculatedAllowPartialResults())
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
@@ -496,7 +497,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
 				TotalTargets:         len(cmdResults.Targets),
-				AllowPartialResults:  params.AllowPartialResults(),
+				AllowPartialResults:  cmdResults.AllowPartialResults,
 				ScanResultsOutputDir: params.scanResultsOutputDir,
 				// Diff mode - SCA
 				DiffMode:              params.DiffMode(),
@@ -762,10 +763,10 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	isNewFlow := isNewFlow(auditParams.bomGenerator)
 	// Add the scans to the parallel runner
 	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalJasScanErr != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), cmdResults.AllowPartialResults)
 	}
 	if generalScaScanError := addScaScansToRunner(auditParallelRunner, auditParams, cmdResults, isNewFlow); generalScaScanError != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), cmdResults.AllowPartialResults)
 	}
 	// Start the parallel runner to run the scans.
 	auditParallelRunner.OnScanEnd(func() {
@@ -793,7 +794,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			TargetCount:         len(scanResults.Targets),
 			ScansToPerform:      auditParams.ScansToPerform(),
 			ConfigProfile:       auditParams.GetConfigProfile(),
-			AllowPartialResults: auditParams.AllowPartialResults(),
+			AllowPartialResults: scanResults.AllowPartialResults,
 			ResultsOutputDir:    auditParams.scanResultsOutputDir,
 			Runner:              auditParallelRunner,
 			// TODO: remove this field once the new flow is fully implemented.
@@ -850,7 +851,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	}
 	auditParallelRunner.JasWg.Add(1)
 	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTask(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, isNewFlow), func(taskErr error) {
-		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
+		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), scanResults.AllowPartialResults)
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
 	}
@@ -879,7 +880,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
 			if !isNewFlow && targetResult.DeprecatedAppsConfigModule == nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), scanResults.AllowPartialResults)
 				continue
 			}
 			params := runner.JasRunnerParams{
@@ -908,10 +909,10 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
-				AllowPartialResults:         auditParams.AllowPartialResults(),
+				AllowPartialResults:         scanResults.AllowPartialResults,
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), scanResults.AllowPartialResults)
 				// We assign nil to 'generalError' after handling it to prevent it to propagate further, so it will not be captured twice - once here, and once in the error handling function of createJasScansTasks
 				generalError = nil
 			}
@@ -959,7 +960,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
 		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), params.AllowPartialResults())
+			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
 	}
 	return cmdResults

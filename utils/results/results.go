@@ -50,20 +50,42 @@ type SecurityCommandResults struct {
 
 type ResultsMetaData struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId        string                         `json:"multi_scan_id,omitempty"`
-	XrayVersion        string                         `json:"xray_version"`
-	XscVersion         string                         `json:"xsc_version,omitempty"`
-	Entitlements       Entitlements                   `json:"entitlements"`
-	SecretValidation   bool                           `json:"secret_validation"`
-	CmdType            utils.CommandType              `json:"command_type"`
-	ResultContext      ResultContext                  `json:"result_context"`
-	GitContext         *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime          time.Time                      `json:"start_time"`
-	ResultsPlatformUrl string                         `json:"results_platform_url,omitempty"`
+	MultiScanId         string                         `json:"multi_scan_id,omitempty"`
+	XrayVersion         string                         `json:"xray_version"`
+	XscVersion          string                         `json:"xsc_version,omitempty"`
+	Entitlements        Entitlements                   `json:"entitlements"`
+	SecretValidation    bool                           `json:"secret_validation"`
+	CmdType             utils.CommandType              `json:"command_type"`
+	ResultContext       ResultContext                  `json:"result_context"`
+	GitContext          *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime           time.Time                      `json:"start_time"`
+	ResultsPlatformUrl  string                         `json:"results_platform_url,omitempty"`
+	AllowPartialResults bool                           `json:"allow_partial_results,omitempty"`
 	// GeneralError that occurred during the command execution
-	GeneralError error `json:"general_error,omitempty"`
+	GeneralErrors []SkippableError `json:"general_errors,omitempty"`
 }
 
+func (rm *ResultsMetaData) GetAllErrors() (allErrors []SkippableError) {
+	for _, generalError := range rm.GeneralErrors {
+		allErrors = append(allErrors, generalError)
+	}
+	return allErrors
+}
+
+func (rm *ResultsMetaData) GetNotSkippedErrors() (notSkippedErrors []error) {
+	for _, generalError := range rm.GetAllErrors() {
+		if generalError.Skip {
+			continue
+		}
+		notSkippedErrors = append(notSkippedErrors, generalError.ActualError)
+	}
+	return notSkippedErrors
+}
+
+type SkippableError struct {
+	ActualError error `json:"error"`
+	Skip        bool  `json:"skip"`
+}
 type Entitlements struct {
 	Jas              bool `json:"jas"`
 	SnippetDetection bool `json:"snippet_detection"`
@@ -189,8 +211,8 @@ type TargetResults struct {
 	JasResults    *JasScansResults `json:"jas_scans,omitempty"`
 	ResultsStatus ResultsStatus    `json:"status,omitempty"`
 	// Errors that occurred during the scans
-	Errors      []error    `json:"errors,omitempty"`
-	errorsMutex sync.Mutex `json:"-"`
+	TargetErrors []SkippableError `json:"errors,omitempty"`
+	errorsMutex  sync.Mutex       `json:"-"`
 }
 
 type ScaScanResults struct {
@@ -406,6 +428,11 @@ func (r *SecurityCommandResults) SetGitContext(gitContext *xscServices.XscGitInf
 	return r
 }
 
+func (r *SecurityCommandResults) SetAllowPartialResults(allowPartialResults bool) *SecurityCommandResults {
+	r.AllowPartialResults = allowPartialResults
+	return r
+}
+
 func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
 	r.ResultsPlatformUrl = resultsPlatformUrl
 	return r
@@ -415,12 +442,14 @@ func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string
 // Adds a general error to the command results in different phases of its execution.
 // Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
 func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError bool) *SecurityCommandResults {
-	if allowSkippingError && err != nil {
-		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
+	if err == nil {
 		return r
 	}
+	if allowSkippingError {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
+	}
 	r.errorsMutex.Lock()
-	r.GeneralError = errors.Join(r.GeneralError, err)
+	r.GeneralErrors = append(r.GeneralErrors, SkippableError{ActualError: err, Skip: allowSkippingError})
 	r.errorsMutex.Unlock()
 	return r
 }
@@ -491,14 +520,26 @@ func (r *SecurityCommandResults) HasJasScansResults(scanType jasutils.JasScanTyp
 	return false
 }
 
-func (r *SecurityCommandResults) GetErrors() (err error) {
-	err = r.GeneralError
+func (r *SecurityCommandResults) GetAllErrors() []SkippableError {
+	errors := r.ResultsMetaData.GetAllErrors()
 	for _, target := range r.Targets {
-		if targetErr := target.GetErrors(); targetErr != nil {
-			err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr))
+		errors = append(errors, target.TargetErrors...)
+	}
+	return errors
+}
+
+func (r *SecurityCommandResults) GetErrors() (err error) {
+	for _, generalError := range r.ResultsMetaData.GetNotSkippedErrors() {
+		err = errors.Join(err, generalError)
+	}
+	for _, target := range r.Targets {
+		if targetErrs := target.GetNotSkippedErrors(); len(targetErrs) > 0 {
+			for _, targetErr := range targetErrs {
+				err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr.Error()))
+			}
 		}
 	}
-	return
+	return err
 }
 
 func (r *SecurityCommandResults) GetTechnologies(additionalTechs ...techutils.Technology) []techutils.Technology {
@@ -577,8 +618,27 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	return targetResults
 }
 
+func (sr *TargetResults) GetAllErrors() []SkippableError {
+	errors := []SkippableError{}
+	for _, targetErr := range sr.TargetErrors {
+		errors = append(errors, targetErr)
+	}
+	return errors
+}
+
+func (sr *TargetResults) GetNotSkippedErrors() []error {
+	errors := []error{}
+	for _, targetErr := range sr.TargetErrors {
+		if targetErr.Skip {
+			continue
+		}
+		errors = append(errors, targetErr.ActualError)
+	}
+	return errors
+}
+
 func (sr *TargetResults) GetErrors() (err error) {
-	for _, targetErr := range sr.Errors {
+	for _, targetErr := range sr.GetNotSkippedErrors() {
 		err = errors.Join(err, targetErr)
 	}
 	return
@@ -680,13 +740,16 @@ func (sr *TargetResults) HasFindings() bool {
 }
 
 func (sr *TargetResults) AddTargetError(err error, allowSkippingError bool) error {
-	if allowSkippingError && err != nil {
-		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
+	if err == nil {
 		return nil
 	}
 	sr.errorsMutex.Lock()
-	sr.Errors = append(sr.Errors, err)
+	sr.TargetErrors = append(sr.TargetErrors, SkippableError{ActualError: err, Skip: allowSkippingError})
 	sr.errorsMutex.Unlock()
+	if allowSkippingError {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
+		return nil
+	}
 	return err
 }
 
