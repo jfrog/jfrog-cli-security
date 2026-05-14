@@ -264,6 +264,7 @@ func (st ScanTarget) String() (str string) {
 		str = st.Target
 	}
 	if st.Name != "" {
+		// If project name is provided, use it instead of the target path
 		str = st.Name
 	}
 	if len(st.Technologies) == 0 {
@@ -433,7 +434,8 @@ func (r *SecurityCommandResults) IncludesLicenses() bool {
 	return r.ResultContext.IncludeLicenses
 }
 
-func (r *SecurityCommandResults) IncludeSbom() bool {
+// Is the result includes sbom
+func (r *SecurityCommandResults) IncludesSbom() bool {
 	return r.ResultContext.IncludeSbom
 }
 

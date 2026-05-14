@@ -149,7 +149,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		PlatformUrl:            rw.platformUrl,
 		IsMultipleRoots:        rw.isMultipleRoots,
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
-		IncludeSbom:            rw.commandResults.IncludeSbom(),
+		IncludeSbom:            rw.commandResults.IncludesSbom(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
 		HasViolationContext:    rw.showViolations || rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
@@ -291,7 +291,7 @@ func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTabl
 			}
 		}
 	}
-	if !rw.commandResults.IncludeSbom() {
+	if !rw.commandResults.ResultContext.IncludeSbom {
 		return
 	}
 	return PrintSbomTable(tableContent, rw.commandResults.CmdType)

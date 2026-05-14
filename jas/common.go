@@ -170,11 +170,9 @@ type ScannerCmd interface {
 }
 
 func (a *JasScanner) DeprecatedRun(scannerCmd ScannerCmd, module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	func() {
-		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module, centralConfigExclusions); err != nil {
-			return
-		}
-	}()
+	if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.DeprecatedRun(module, centralConfigExclusions); err != nil {
+		return
+	}
 	return
 }
 
@@ -187,11 +185,6 @@ func GetRootsFromTarget(target results.ScanTarget) []string {
 		return target.Include
 	}
 	return []string{target.Target}
-}
-
-func GetWorkingDirsFromTarget(target results.ScanTarget) []string {
-	wd := []string{target.Target}
-	return append(wd, target.Include...)
 }
 
 func ReadJasScanRunsFromFile(fileName, informationUrlSuffix string, minSeverity severityutils.Severity, target string, includeDirs ...string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {

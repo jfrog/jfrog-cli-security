@@ -177,6 +177,8 @@ const (
 	DetailedSummary = "detailed-summary"
 	CacheValidity   = "cache-validity"
 	GitThreads      = gitPrefix + Threads
+
+	UseConfigProfile = "use-config-profile"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -218,7 +220,7 @@ var commandFlags = map[string][]string{
 		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
-		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom,
+		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params
@@ -362,6 +364,8 @@ var flagsMap = map[string]components.Flag{
 
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
 	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
+
+	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to true to use a config profile for the audit.", components.SetHiddenBoolFlag()),
 
 	// Docker flags
 	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),

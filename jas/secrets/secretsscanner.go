@@ -58,14 +58,14 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 	}
 	startTime := time.Now()
 	log.Info(jas.GetStartJasScanLog(utils.SecretsScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
-	if vulnerabilitiesResults, violationsResults, err = runSecretsScan(secretScanManager, params); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = secretScanManager.runSecretsScan(params); err != nil {
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
 }
 
-func runSecretsScan(secretScanManager *SecretScanManager, params SecretsScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func (secretScanManager *SecretScanManager) runSecretsScan(params SecretsScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	if params.Target.DeprecatedAppsConfigModule == nil {
 		return secretScanManager.scanner.Run(secretScanManager, params.Target)
 	}

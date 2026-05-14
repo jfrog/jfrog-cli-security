@@ -68,7 +68,7 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 	assert.Len(t, jfrogAppsConfig.Modules, 1)
 }
 
-func TestShouldSkipScanner(t *testing.T) {
+func TestShouldSkipScannerByModule(t *testing.T) {
 	module := jfrogAppsConfig.Module{}
 	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
 

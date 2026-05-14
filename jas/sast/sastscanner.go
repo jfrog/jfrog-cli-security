@@ -68,14 +68,14 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	}
 	startTime := time.Now()
 	log.Info(jas.GetStartJasScanLog(utils.SastScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
-	if vulnerabilitiesResults, violationsResults, err = runSastScan(sastScanManager, params); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = sastScanManager.runSastScan(params); err != nil {
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
 }
 
-func runSastScan(sastScanManager *SastScanManager, params SastScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func (sastScanManager *SastScanManager) runSastScan(params SastScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	if params.Target.DeprecatedAppsConfigModule == nil {
 		return sastScanManager.scanner.Run(sastScanManager, params.Target)
 	}

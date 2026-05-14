@@ -51,14 +51,14 @@ func RunIacScan(scanner *jas.JasScanner, params IacScanParams) (vulnerabilitiesR
 	}
 	startTime := time.Now()
 	log.Info(jas.GetStartJasScanLog(utils.IacScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
-	if vulnerabilitiesResults, violationsResults, err = runIacScan(iacScanManager, params); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = iacScanManager.runIacScan(params); err != nil {
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
 	return
 }
 
-func runIacScan(iacScanManager *IacScanManager, params IacScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func (iacScanManager *IacScanManager) runIacScan(params IacScanParams) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	if params.Target.DeprecatedAppsConfigModule == nil {
 		return iacScanManager.scanner.Run(iacScanManager, params.Target)
 	}

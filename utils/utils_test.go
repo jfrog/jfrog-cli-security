@@ -213,6 +213,18 @@ func TestElementsEqual(t *testing.T) {
 			slice2:   []string{"a", "b", "a"},
 			expected: true,
 		},
+		{
+			name:     "Different with duplicates",
+			slice1:   []string{"a", "b", "c"},
+			slice2:   []string{"a", "b", "b"},
+			expected: false,
+		},
+		{
+			name:     "Different with duplicates in different order",
+			slice1:   []string{"a", "b", "b"},
+			slice2:   []string{"a", "c", "b"},
+			expected: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

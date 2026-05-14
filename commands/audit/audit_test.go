@@ -440,6 +440,76 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
+func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_cli_audit")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetIsSingleTarget(true)
+	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedOnly := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
+	assert.NoError(t, os.MkdirAll(excludedOnly, 0o755))
+	createEmptyFile(t, filepath.Join(excludedOnly, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetWorkingDirs([]string{excludedOnly})
+	params.SetIsRecursiveScan(false)
+	params.SetExclusions([]string{"*cli_exclude_workdir_only_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsSingleTargetCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_for_agg")
+	siblingNpm := filepath.Join(baseDir, "sibling_npm_for_agg_test")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	assert.NoError(t, os.MkdirAll(siblingNpm, 0o755))
+	createEmptyFile(t, filepath.Join(siblingNpm, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetWorkingDirs([]string{siblingNpm})
+	params.SetIsSingleTarget(true)
+	params.SetExclusions([]string{"*parent_only_excluded_for_agg*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Len(t, cmdRes.Targets, 1)
+	tr := cmdRes.Targets[0]
+	tr.DeprecatedAppsConfigModule = nil
+	assert.Len(t, tr.Include, 1)
+	assert.Equal(t, siblingNpm, tr.Include[0])
+	hasNpm := false
+	for _, tech := range tr.Technologies {
+		if tech == techutils.Npm {
+			hasNpm = true
+		}
+	}
+	assert.True(t, hasNpm, "expected Npm among detected technologies")
+}
+
 func TestShouldGenerateSbom(t *testing.T) {
 	configProfileWithSca := services.ConfigProfile{
 		Modules: []services.Module{{

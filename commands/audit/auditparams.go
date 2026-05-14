@@ -22,7 +22,6 @@ type AuditParams struct {
 	// Where to scan
 	appsConfig     *jfrogappsconfig.JFrogAppsConfig
 	workingDirs    []string
-	isSingleTarget bool
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
 	gitContext        *xscServices.XscGitInfoContext
@@ -47,6 +46,7 @@ type AuditParams struct {
 	rtResultRepository              string
 	violationGenerator              policy.PolicyHandler
 	sastRules                       string
+	IncludeSbom                     bool
 	// Diff mode, scan only the files affected by the diff.
 	diffMode             bool
 	sastChangedFilesMode bool
@@ -206,15 +206,6 @@ func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditPara
 	return params
 }
 
-func (params *AuditParams) SetIsSingleTarget(isSingleTarget bool) *AuditParams {
-	params.isSingleTarget = isSingleTarget
-	return params
-}
-
-func (params *AuditParams) IsSingleTarget() bool {
-	return params.isSingleTarget
-}
-
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
 	return &services.XrayGraphScanParams{
 		RepoPath:               params.resultsContext.RepoPath,
@@ -365,4 +356,9 @@ func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *Aud
 
 func (params *AuditParams) RtResultRepository() string {
 	return params.rtResultRepository
+}
+
+func (params *AuditParams) SetIncludeSbom(include bool) *AuditParams {
+	params.resultsContext.IncludeSbom = include
+	return params
 }

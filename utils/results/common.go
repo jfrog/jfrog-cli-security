@@ -906,7 +906,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 	for _, potential := range resultsToCompare.Targets {
 		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
 		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
-		if len(technologies) > 0 && !utils.ElementsEqual[techutils.Technology](potential.Technologies, technologies) {
+		if len(technologies) > 0 && !utils.ElementsEqual(potential.Technologies, technologies) {
 			// If the technology is not the same, skip the comparison
 			continue
 		}

@@ -555,6 +555,38 @@ func TestPrepareSimpleJsonVulnerabilities_Technology(t *testing.T) {
 				"XRAY-300": techutils.Maven,
 			},
 		},
+		{
+			name:   "Target with multiple technologies and issues",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Maven, techutils.Npm}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-400",
+					Summary:    "vuln with npm tech",
+					Severity:   "Medium",
+					Technology: "npm",
+					Components: map[string]services.Component{
+						"npm://dep:4.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "npm://dep:4.0.0"}}},
+						},
+					},
+				},
+				{
+					IssueId:    "XRAY-500",
+					Summary:    "vuln with maven tech",
+					Severity:   "Low",
+					Technology: "maven",
+					Components: map[string]services.Component{
+						"maven://dep:5.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "maven://dep:5.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-400": techutils.Npm,
+				"XRAY-500": techutils.Maven,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

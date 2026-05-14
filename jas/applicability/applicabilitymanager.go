@@ -65,7 +65,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 	}
 	startTime := time.Now()
 	log.Info(jas.GetStartJasScanLog(utils.ContextualAnalysisScan, params.ThreadId, params.Target.DeprecatedAppsConfigModule, params.TargetCount))
-	if results, err = runApplicabilityScan(applicabilityScanManager, params); err != nil {
+	if results, err = applicabilityScanManager.runApplicabilityScan(params); err != nil {
 		return
 	}
 	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
@@ -75,7 +75,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 	return
 }
 
-func runApplicabilityScan(applicabilityScanManager *ApplicabilityScanManager, params ContextualAnalysisScanParams) (vulnerabilitiesSarifRuns []*sarif.Run, err error) {
+func (applicabilityScanManager *ApplicabilityScanManager) runApplicabilityScan(params ContextualAnalysisScanParams) (vulnerabilitiesSarifRuns []*sarif.Run, err error) {
 	if params.Target.DeprecatedAppsConfigModule == nil {
 		// Applicability scan does not produce violations.
 		vulnerabilitiesSarifRuns, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Target)
