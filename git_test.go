@@ -67,7 +67,7 @@ func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, e
 }
 
 func getDummyGitRepoUrl() string {
-	return fmt.Sprintf("https://github.com/jfrog/dummy-repo-url%s.git", securityTests.GetUniqueSuffix())
+	return fmt.Sprintf("https://test.git.provider.com/jfrog/dummy-repo-url%s.git", securityTests.GetUniqueSuffix())
 }
 
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
