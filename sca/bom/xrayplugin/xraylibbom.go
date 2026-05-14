@@ -5,6 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -22,6 +23,10 @@ type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
 	specificTechs    []techutils.Technology
+
+	// Artifactory Repository params
+	ServerDetails          *config.ServerDetails
+	DependenciesRepository string
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
@@ -35,6 +40,15 @@ func WithSpecificTechnologies(technologies []string) bom.SbomGeneratorOption {
 			for _, tech := range technologies {
 				sbg.specificTechs = append(sbg.specificTechs, techutils.Technology(tech))
 			}
+		}
+	}
+}
+
+func WithCentralRemoteReleasesDetails(serverDetails *config.ServerDetails, dependenciesRepository string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.ServerDetails = serverDetails
+			sbg.DependenciesRepository = dependenciesRepository
 		}
 	}
 }
@@ -77,7 +91,7 @@ func (sbg *XrayLibBomGenerator) PrepareGenerator() (err error) {
 		return
 	}
 	// Download the xray-lib plugin if needed
-	return plugin.DownloadXrayLibPluginIfNeeded()
+	return plugin.DownloadXrayLibPluginIfNeeded(sbg.DependenciesRepository, sbg.ServerDetails)
 }
 
 func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -119,7 +133,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		BomRef:         cdxutils.GetFileRef(target.Target),
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
-		IgnorePatterns: target.Exclude,
+		IgnorePatterns: target.GetCentralConfigExclusions(utils.ScaScan),
 		IncludeDirs:    target.Include,
 		Ecosystems:     sbg.specificTechs,
 	}

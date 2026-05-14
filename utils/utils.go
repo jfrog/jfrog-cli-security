@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -390,9 +391,9 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }
 
-func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
 	// Get JPD / Releases remote details to download the resource from.
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return err
 	}

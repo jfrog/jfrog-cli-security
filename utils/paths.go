@@ -127,9 +127,17 @@ func GetExcludePattern(excludePatterns []string, defaultExcludePatterns []string
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, isRecursive)
 }
 
-func IsPathMatchesPatterns(path string, isRecursive bool, patterns ...string) bool {
+func IsPathMatchesPatterns(rootPath, path string, isRecursive, fromRelativePath bool, patterns ...string) bool {
 	if len(patterns) == 0 {
 		return false
+	}
+	if fromRelativePath {
+		relativePath, err := filepath.Rel(rootPath, path)
+		if err != nil {
+			log.Warn("Failed to get relative path:", err.Error())
+			return false
+		}
+		path = relativePath
 	}
 	match, err := regexp.MatchString(fspatterns.PreparePathPattern(clientUtils.WildCardPattern, isRecursive, patterns...), path)
 	if err != nil {
@@ -157,8 +165,8 @@ func ListFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, pre
 	return
 }
 
-func ListDirs(rootPath string, isRecursive, preserveSymlink bool, excludePattern string, includePatterns ...string) (dirs []string, err error) {
-	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, true, preserveSymlink, excludePattern)
+func ListDirs(rootPath string, isRecursive, patternsFromRelativePath, preserveSymlink bool, excludePattern string, includePatterns ...string) (dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, patternsFromRelativePath, preserveSymlink, excludePattern)
 	if err != nil {
 		return
 	}
@@ -168,7 +176,7 @@ func ListDirs(rootPath string, isRecursive, preserveSymlink bool, excludePattern
 			continue
 		} else if isDir {
 			// Validate if the directory matches any of the include patterns
-			if len(includePatterns) > 0 && !IsPathMatchesPatterns(path, isRecursive, includePatterns...) {
+			if len(includePatterns) > 0 && !IsPathMatchesPatterns(rootPath, path, isRecursive, patternsFromRelativePath, includePatterns...) {
 				log.Verbose(fmt.Sprintf("Skipping directory %s as it does not match any of the include patterns: %s", path, strings.Join(includePatterns, ", ")))
 				continue
 			}
@@ -258,8 +266,14 @@ func ToURI(path string) string {
 	return u.String()
 }
 
-func GetReleasesRemoteDetails(artifact, downloadPath string) (server *config.ServerDetails, fullRemotePath string, err error) {
-	var remoteRepo string
+func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, fullRemotePath string, err error) {
+	if remoteServerDetails != nil && remoteRepo != "" {
+		// Config profile server and repo details are provided
+		server = remoteServerDetails
+		fullRemotePath = path.Join(remoteRepo, downloadPath)
+		return
+	}
+	// Try to get releases remote details from environment variable
 	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
 	if err != nil {
 		return
@@ -268,7 +282,7 @@ func GetReleasesRemoteDetails(artifact, downloadPath string) (server *config.Ser
 		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
 		return
 	}
-	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The %s will be downloaded directly from releases.jfrog.io if needed.", artifact))
+	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
 	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
 	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
 }

@@ -355,7 +355,7 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	if cmdResults.Entitlements.Jas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
 		if scanCmd.customAnalyzerManagerPath == "" {
 			AnalyzerErrGroup.Go(func() error {
-				return jas.DownloadAnalyzerManagerIfNeeded(0)
+				return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 			})
 		} else {
 			log.Debug("Using custom analyzer manager binary path, skipping download")

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
@@ -471,11 +470,18 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
 	}
 	techCount := len(technologiesDetected)
+	detectedTechs := datastructures.MakeSet[Technology]()
+	for tech := range technologiesDetected {
+		if tech == NoTech {
+			continue
+		}
+		detectedTechs.Add(tech)
+	}
 	if _, exist := technologiesDetected[NoTech]; exist {
 		techCount--
 	}
 	if techCount > 0 {
-		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
+		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, detectedTechs.ToSlice()))
 	}
 	return
 }

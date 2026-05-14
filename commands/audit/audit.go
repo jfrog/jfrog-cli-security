@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -184,16 +185,19 @@ func shouldIncludeSnippetDetection(params *AuditParams) bool {
 
 func logScanPaths(workingDirs []string, isRecursiveScan bool) {
 	if len(workingDirs) <= 1 {
-		if isRecursiveScan {
+		switch isRecursiveScan {
+		case true:
 			if len(workingDirs) == 0 {
 				log.Info("Detecting recursively targets for scan in current directory")
 			} else {
 				log.Info("Detecting recursively targets for scan in path:", workingDirs[0])
 			}
-		} else if len(workingDirs) == 1 {
-			log.Info("Scanning path:", workingDirs[0])
-		} else {
-			log.Debug("Scanning current directory...")
+		case false:
+			if len(workingDirs) == 0 {
+				log.Debug("Scanning current directory...")
+			} else {
+				log.Info("Scanning path:", workingDirs[0])
+			}
 		}
 		return
 	}
@@ -383,6 +387,10 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
 	}
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get server details: %w", err)
+	}
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
@@ -390,14 +398,13 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithSpecificTechnologies(params.Technologies()),
 	}
+	if params.configProfile != nil && params.configProfile.GeneralConfig.ScannersDownloadPath != "" {
+		bomGenOptions = append(bomGenOptions, xrayplugin.WithCentralRemoteReleasesDetails(serverDetails, params.configProfile.GeneralConfig.ScannersDownloadPath))
+	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create scan graph params: %w", err)
-	}
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get server details: %w", err)
 	}
 	scanOptions = []scan.SbomScanOption{
 		// Xray Scan Graph Strategy Options
@@ -613,12 +620,12 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
 			continue
 		} else if isDir && !utils.IsPathExcluded(includePattern, exclude) {
-			dirs.Add(includePattern)
+			dirs.Add(path.Join(root, includePattern))
 			continue
 		}
 		// the pattern is not a directory, so we need to list the directories in the pattern.
 		log.Debug(fmt.Sprintf("The pattern '%s' is not a directory, listing directories in the pattern...", includePattern))
-		includeDirs, err := utils.ListDirs(root, includePattern == root, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, includePattern == root), includePattern)
+		includeDirs, err := utils.ListDirs(root, includePattern == root, true, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, includePattern == root), includePattern)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Failed to list directories for '%s': %s", includePattern, err.Error()))
 			continue
@@ -858,7 +865,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}()
 		// First download the analyzer manager if needed
 		if auditParams.customAnalyzerManagerBinaryPath == "" {
-			if generalError = jas.DownloadAnalyzerManagerIfNeeded(threadId); generalError != nil {
+			if generalError = jas.DownloadAnalyzerManagerIfNeeded(auditParams.configProfile.GeneralConfig.ScannersDownloadPath, serverDetails, threadId); generalError != nil {
 				return fmt.Errorf("failed to download analyzer manager: %s", generalError.Error())
 			}
 			if scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {

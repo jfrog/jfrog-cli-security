@@ -365,7 +365,7 @@ var flagsMap = map[string]components.Flag{
 	AddSastRules: components.NewStringFlag(AddSastRules, "Incorporate any additional SAST rules (in JSON format, with absolute path) into this local scan."),
 	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
-	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to true to use a config profile for the audit.", components.SetHiddenBoolFlag()),
+	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to false to override config profile for the audit.", components.WithBoolDefaultValue(true), components.SetHiddenBoolFlag()),
 
 	// Docker flags
 	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),

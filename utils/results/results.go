@@ -267,14 +267,17 @@ func (st ScanTarget) String() (str string) {
 		// If project name is provided, use it instead of the target path
 		str = st.Name
 	}
-	if len(st.Technologies) == 0 {
+	targetTechnologies := datastructures.MakeSet[string]()
+	for _, tech := range st.Technologies {
+		if tech == techutils.NoTech {
+			continue
+		}
+		targetTechnologies.Add(tech.ToFormal())
+	}
+	if targetTechnologies.Size() == 0 {
 		str += " [unknown]"
 	} else {
-		techNames := make([]string, 0, len(st.Technologies))
-		for _, t := range st.Technologies {
-			techNames = append(techNames, t.String())
-		}
-		str += fmt.Sprintf(" [%s]", strings.Join(techNames, ", "))
+		str += fmt.Sprintf(" [%s]", strings.Join(targetTechnologies.ToSlice(), ", "))
 	}
 	return
 }
@@ -312,6 +315,9 @@ func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) 
 func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
 	exclusions := datastructures.MakeSet[string]()
 	for _, module := range st.CentralConfigModules {
+		// Always add the general exclude patterns from the module
+		exclusions.AddElements(module.ExcludePatterns...)
+		// Add the exclude patterns for the specific scan type
 		switch scanType {
 		case utils.ScaScan:
 			exclusions.AddElements(module.ScanConfig.ScaScannerConfig.ExcludePatterns...)

@@ -178,7 +178,7 @@ func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 
 func (cmd *MaliciousScanCommand) setAnalyzerManagerPath(scanner *jas.JasScanner) error {
 	if cmd.customAnalyzerManagerPath == "" {
-		if err := jas.DownloadAnalyzerManagerIfNeeded(0); err != nil {
+		if err := jas.DownloadAnalyzerManagerIfNeeded("", nil, 0); err != nil {
 			return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
 		}
 		var err error
