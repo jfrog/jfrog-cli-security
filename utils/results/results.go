@@ -677,7 +677,10 @@ func (ssr *ScaScanResults) HasFindings() bool {
 	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
 }
 
-func (jsr *JasScansResults) GetApplicabilityScanResults() (results []*sarif.Run) {
+func (jsr *JasScansResults) GetApplicabilityScanResults() []*sarif.Run {
+	if jsr == nil {
+		return nil
+	}
 	return jsr.ApplicabilityScanResults
 }
 
