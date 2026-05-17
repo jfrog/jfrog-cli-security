@@ -152,7 +152,7 @@ require (
 )
 
 // attiasas:config_profile_patterns
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260517081536-723b93e4d45b
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260517091804-0a66c2f3d4f9
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 

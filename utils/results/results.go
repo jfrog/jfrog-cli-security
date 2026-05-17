@@ -66,10 +66,7 @@ type ResultsMetaData struct {
 }
 
 func (rm *ResultsMetaData) GetAllErrors() (allErrors []SkippableError) {
-	for _, generalError := range rm.GeneralErrors {
-		allErrors = append(allErrors, generalError)
-	}
-	return allErrors
+	return append(allErrors, rm.GeneralErrors...)
 }
 
 func (rm *ResultsMetaData) GetNotSkippedErrors() (notSkippedErrors []error) {
@@ -583,7 +580,7 @@ func (r *SecurityCommandResults) GetAllErrors() []SkippableError {
 }
 
 func (r *SecurityCommandResults) GetErrors() (err error) {
-	for _, generalError := range r.ResultsMetaData.GetNotSkippedErrors() {
+	for _, generalError := range r.GetNotSkippedErrors() {
 		err = errors.Join(err, generalError)
 	}
 	for _, target := range r.Targets {
@@ -672,12 +669,8 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	return targetResults
 }
 
-func (sr *TargetResults) GetAllErrors() []SkippableError {
-	errors := []SkippableError{}
-	for _, targetErr := range sr.TargetErrors {
-		errors = append(errors, targetErr)
-	}
-	return errors
+func (sr *TargetResults) GetAllErrors() (errors []SkippableError) {
+	return append(errors, sr.TargetErrors...)
 }
 
 func (sr *TargetResults) GetNotSkippedErrors() []error {
