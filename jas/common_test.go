@@ -314,12 +314,11 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 
 func TestGetJasEnvVars(t *testing.T) {
 	tests := []struct {
-		name            string
-		serverDetails   *config.ServerDetails
-		validateSecrets bool
-		diffMode        JasDiffScanEnvValue
-		extraEnvVars    map[string]string
-		expectedOutput  map[string]string
+		name           string
+		serverDetails  *config.ServerDetails
+		diffMode       JasDiffScanEnvValue
+		extraEnvVars   map[string]string
+		expectedOutput map[string]string
 	}{
 		{
 			name: "Valid server details",
@@ -330,30 +329,27 @@ func TestGetJasEnvVars(t *testing.T) {
 				AccessToken: "token",
 			},
 			expectedOutput: map[string]string{
-				jfPlatformUrlEnvVariable:      "url",
-				jfUserEnvVariable:             "user",
-				jfPasswordEnvVariable:         "password",
-				jfTokenEnvVariable:            "token",
-				JfSecretValidationEnvVariable: "false",
+				jfPlatformUrlEnvVariable: "url",
+				jfUserEnvVariable:        "user",
+				jfPasswordEnvVariable:    "password",
+				jfTokenEnvVariable:       "token",
 			},
 		},
 		{
-			name: "With validate secrets",
+			name: "With extra env vars",
 			serverDetails: &config.ServerDetails{
 				Url:         "url",
 				User:        "user",
 				Password:    "password",
 				AccessToken: "token",
 			},
-			extraEnvVars:    map[string]string{"test": "testValue"},
-			validateSecrets: true,
+			extraEnvVars: map[string]string{"test": "testValue"},
 			expectedOutput: map[string]string{
-				jfPlatformUrlEnvVariable:      "url",
-				jfUserEnvVariable:             "user",
-				jfPasswordEnvVariable:         "password",
-				jfTokenEnvVariable:            "token",
-				JfSecretValidationEnvVariable: "true",
-				"test":                        "testValue",
+				jfPlatformUrlEnvVariable: "url",
+				jfUserEnvVariable:        "user",
+				jfPasswordEnvVariable:    "password",
+				jfTokenEnvVariable:       "token",
+				"test":                   "testValue",
 			},
 		},
 		{
@@ -400,18 +396,17 @@ func TestGetJasEnvVars(t *testing.T) {
 			},
 			diffMode: FirstScanDiffScanEnvValue,
 			expectedOutput: map[string]string{
-				jfPlatformUrlEnvVariable:      "url",
-				jfUserEnvVariable:             "user",
-				jfPasswordEnvVariable:         "password",
-				jfTokenEnvVariable:            "token",
-				JfSecretValidationEnvVariable: "false",
-				DiffScanEnvVariable:           string(FirstScanDiffScanEnvValue),
+				jfPlatformUrlEnvVariable: "url",
+				jfUserEnvVariable:        "user",
+				jfPasswordEnvVariable:    "password",
+				jfTokenEnvVariable:       "token",
+				DiffScanEnvVariable:      string(FirstScanDiffScanEnvValue),
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.diffMode, test.extraEnvVars)
+			envVars, err := getJasEnvVars(test.serverDetails, test.diffMode, test.extraEnvVars)
 			assert.NoError(t, err)
 			for expectedKey, expectedValue := range test.expectedOutput {
 				assert.Equal(t, expectedValue, envVars[expectedKey])

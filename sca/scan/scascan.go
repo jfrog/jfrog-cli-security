@@ -111,8 +111,8 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If the scan is turned off in the config profile, skip it.
 	if params.ConfigProfile != nil {
-		if !params.ScanResults.IsScanRequestedByCentralConfig(utils.ScaScan) {
-			log.Debug(fmt.Sprintf("%sSkipping SCA as requested by '%s' config profile...", logPrefix, params.ConfigProfile.ProfileName))
+		if centralConfiguredSkip := params.ScanResults.IsScanRequestedByCentralConfig(utils.ScaScan); centralConfiguredSkip != nil && *centralConfiguredSkip {
+			log.Debug(fmt.Sprintf("%sSkipping SCA for %s as requested by '%s' config profile...", logPrefix, params.ScanResults.Target, params.ConfigProfile.ProfileName))
 			return false, nil
 		}
 	}

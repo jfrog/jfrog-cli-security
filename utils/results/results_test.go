@@ -149,6 +149,101 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 	}
 }
 
+func TestScanTarget_ShouldValidateSecrets(t *testing.T) {
+	moduleWithValidation := xscServices.Module{
+		ScanConfig: xscServices.ScanConfig{
+			SecretsScannerConfig: xscServices.SecretsScannerConfig{
+				EnableSecretsScan: true,
+				ValidateSecrets:   true,
+			},
+		},
+	}
+	moduleWithoutValidation := xscServices.Module{
+		ScanConfig: xscServices.ScanConfig{
+			SecretsScannerConfig: xscServices.SecretsScannerConfig{
+				EnableSecretsScan: true,
+				ValidateSecrets:   false,
+			},
+		},
+	}
+	moduleValidationDisabledSecrets := xscServices.Module{
+		ScanConfig: xscServices.ScanConfig{
+			SecretsScannerConfig: xscServices.SecretsScannerConfig{
+				EnableSecretsScan: false,
+				ValidateSecrets:   true,
+			},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		target       ScanTarget
+		cliRequested bool
+		expected     bool
+	}{
+		{
+			name:         "No modules - CLI requested",
+			target:       ScanTarget{},
+			cliRequested: true,
+			expected:     true,
+		},
+		{
+			name:         "No modules - CLI not requested",
+			target:       ScanTarget{},
+			cliRequested: false,
+			expected:     false,
+		},
+		{
+			name:         "Module with validate_secrets enabled",
+			target:       ScanTarget{CentralConfigModules: []xscServices.Module{moduleWithValidation}},
+			cliRequested: false,
+			expected:     true,
+		},
+		{
+			name:         "Module with validate_secrets disabled - CLI ignored",
+			target:       ScanTarget{CentralConfigModules: []xscServices.Module{moduleWithoutValidation}},
+			cliRequested: true,
+			expected:     false,
+		},
+		{
+			name:         "ValidateSecrets without EnableSecretsScan - false",
+			target:       ScanTarget{CentralConfigModules: []xscServices.Module{moduleValidationDisabledSecrets}},
+			cliRequested: true,
+			expected:     false,
+		},
+		{
+			name: "Any module with validation enabled",
+			target: ScanTarget{CentralConfigModules: []xscServices.Module{
+				moduleWithoutValidation,
+				moduleWithValidation,
+			}},
+			cliRequested: false,
+			expected:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.target.ShouldValidateSecrets(tt.cliRequested))
+		})
+	}
+}
+
+func TestSecurityCommandResults_IsSecretValidationActive(t *testing.T) {
+	moduleWithValidation := xscServices.Module{
+		ScanConfig: xscServices.ScanConfig{
+			SecretsScannerConfig: xscServices.SecretsScannerConfig{
+				EnableSecretsScan: true,
+				ValidateSecrets:   true,
+			},
+		},
+	}
+	cmdResults := NewCommandResults(utils.SourceCode).SetSecretValidation(true)
+	cmdResults.NewScanResults(ScanTarget{CentralConfigModules: []xscServices.Module{moduleWithValidation}})
+
+	assert.True(t, cmdResults.IsSecretValidationActive(false))
+	assert.False(t, NewCommandResults(utils.SourceCode).SetSecretValidation(false).IsSecretValidationActive(true))
+}
+
 func TestScanTarget_GetCentralConfigExclusions(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -150,7 +150,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			return
 		}
 	}
-	if targetScansResults.ScaResults == nil || !utils.IsScanRequested(cmdType, utils.ScaScan, params.RequestedScans...) {
+	if targetScansResults.ScaResults == nil || !utils.IsScanRequested(cmdType, utils.ScaScan, targetScansResults.IsScanRequestedByCentralConfig(utils.ScaScan), params.RequestedScans...) {
 		// Nothing to parse, no SCA results
 		return
 	}

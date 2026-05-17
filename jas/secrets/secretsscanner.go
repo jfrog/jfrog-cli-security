@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ type SecretScanManager struct {
 	scanner  *jas.JasScanner
 	scanType SecretsScanType
 
+	validateSecrets          bool
 	resultsToCompareFileName string
 	configFileName           string
 	resultsFileName          string
@@ -39,6 +41,7 @@ type SecretsScanParams struct {
 	ThreadId         int
 	TargetCount      int
 	ScanType         SecretsScanType
+	ValidateSecrets  bool
 	ResultsToCompare []*sarif.Run
 	Target           results.ScanTarget
 }
@@ -52,7 +55,7 @@ func RunSecretsScan(scanner *jas.JasScanner, params SecretsScanParams) (vulnerab
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), params.ThreadId); err != nil {
 		return
 	}
-	secretScanManager, err := newSecretsScanManager(scanner, params.ScanType, scannerTempDir, params.ResultsToCompare...)
+	secretScanManager, err := newSecretsScanManager(scanner, params.ScanType, params.ValidateSecrets, scannerTempDir, params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -72,10 +75,11 @@ func (secretScanManager *SecretScanManager) runSecretsScan(params SecretsScanPar
 	return secretScanManager.scanner.DeprecatedRun(secretScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SecretsScan))
 }
 
-func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
+func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, validateSecrets bool, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
 	manager = &SecretScanManager{
 		scanner:         scanner,
 		scanType:        scanType,
+		validateSecrets: validateSecrets,
 		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
 	}
@@ -157,7 +161,9 @@ func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget)
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
-	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails, s.scanner.EnvVars)
+	envVars := utils.MergeMaps(s.scanner.EnvVars)
+	envVars[jas.JfSecretValidationEnvVariable] = strconv.FormatBool(s.validateSecrets)
+	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails, envVars)
 }
 
 func maskSecret(secret string) string {

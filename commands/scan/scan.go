@@ -338,7 +338,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
-			if utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+			if cmdResults.IsJASRequested(scanCmd.scansToPerform...) {
 				if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 					return xrayManager, cmdResults.AddGeneralError(err, false)
 				}
@@ -352,7 +352,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandResults, xrayManager *xrayClient.XrayServicesManager) (err error) {
 	// Download (if needed) the analyzer manager in a background routine.
 	AnalyzerErrGroup := new(errgroup.Group)
-	if cmdResults.Entitlements.Jas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+	if cmdResults.Entitlements.Jas && cmdResults.IsJASRequested(scanCmd.scansToPerform...) {
 		if scanCmd.customAnalyzerManagerPath == "" {
 			AnalyzerErrGroup.Go(func() error {
 				return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
@@ -365,7 +365,7 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	}
 	// Prepare the BOM generator for SCA scans in a background routine.
 	scaErrGroup := new(errgroup.Group)
-	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, scanCmd.scansToPerform...) {
+	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, cmdResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		scaErrGroup.Go(func() error {
 			return scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator()
 		})
@@ -459,7 +459,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 }
 
 func (scanCmd *ScanCommand) GenerateBinarySbom(cmdType utils.CommandType, targetResults *results.TargetResults, includeSbom bool, threadId int) (deprecatedGraph *xrayClientUtils.BinaryGraphNode) {
-	if !includeSbom && !utils.IsScanRequested(cmdType, utils.ScaScan, scanCmd.scansToPerform...) {
+	if !includeSbom && !utils.IsScanRequested(cmdType, utils.ScaScan, targetResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "Skipping SBOM generation as requested by input...")
 		return
 	}
@@ -488,7 +488,7 @@ func (scanCmd *ScanCommand) GenerateBinarySbom(cmdType utils.CommandType, target
 func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, deprecatedGraph *xrayClientUtils.BinaryGraphNode, scanThreadId int) (targetCompId string, graphScanResults *services.ScanResponse, err error) {
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	// If the scan is not requested, skip it.
-	if !utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, scanCmd.scansToPerform...) {
+	if !utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, targetResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		log.Debug(scanLogPrefix + fmt.Sprintf("Skipping SCA for %s as requested by input...", targetResults.Target))
 		return
 	}
@@ -580,7 +580,6 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	// Prepare Jas scans
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
-			secretValidation,
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(
 				false,
@@ -610,11 +609,12 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	}
 	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	jasParams := runner.JasRunnerParams{
-		Runner:          jasFileProducerConsumer,
-		ServerDetails:   scanCmd.serverDetails,
-		Scanner:         scanner,
-		TargetOutputDir: scanCmd.outputDir,
-		ScansToPerform:  scanCmd.scansToPerform,
+		Runner:           jasFileProducerConsumer,
+		ServerDetails:    scanCmd.serverDetails,
+		Scanner:          scanner,
+		SecretValidation: secretValidation,
+		TargetOutputDir:  scanCmd.outputDir,
+		ScansToPerform:   scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
 			if graphScanResults == nil {
 				// No SCA scan results, return empty CVE lists.

@@ -116,7 +116,10 @@ func GetAllSupportedScans() []SubScanType {
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
-func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
+func IsScanRequested(cmdType CommandType, subScan SubScanType, centralConfigRequestedParam *bool, requestedScans ...SubScanType) bool {
+	if centralConfigRequestedParam != nil {
+		return *centralConfigRequestedParam
+	}
 	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
@@ -125,13 +128,6 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return slices.Contains(requestedScans, subScan)
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
-}
-
-func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
-	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
-		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
-		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
 func getScanFindingName(scanType SubScanType) string {

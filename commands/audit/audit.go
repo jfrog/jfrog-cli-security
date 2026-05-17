@@ -209,7 +209,7 @@ func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansT
 	if err != nil {
 		return
 	}
-	if !isNewFlow(bomGenerator) && (utils.IsScanRequested(utils.SourceCode, utils.ScaScan, scansToPerform...) || includeSbom) {
+	if !isNewFlow(bomGenerator) && (utils.IsScanRequested(utils.SourceCode, utils.ScaScan, nil, scansToPerform...) || includeSbom) {
 		// Only in case of SCA scan / SBOM requested and if no workingDirs were provided by the user
 		// We apply a recursive scan on the root repository
 		isRecursiveScan = len(workingDirs) == 0
@@ -368,7 +368,7 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), cmdResults.AllowPartialResults)
 	}
 	// Initialize the BOM generator if needed
-	if params.resultsContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.scansToPerform...) {
+	if params.resultsContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, cmdResults.IsScanRequestedByCentralConfig(utils.ScaScan), params.scansToPerform...) {
 		if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
@@ -441,7 +441,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetEntitledForJas(entitledForJas)
 	if entitledForJas {
 		// Validate required installed software
-		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
+		if cmdResults.IsJASRequested(params.ScansToPerform()...) {
 			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 				return cmdResults.AddGeneralError(err, false)
 			}
@@ -811,7 +811,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Info("Advanced Security is not enabled on this system, so Advanced Security scans were skipped...")
 		return
 	}
-	if !utils.IsJASRequested(scanResults.CmdType, auditParams.ScansToPerform()...) {
+	if !scanResults.IsJASRequested(auditParams.ScansToPerform()...) {
 		log.Debug("Advanced Security scans were not initiated, so Advanced Security scans were skipped...")
 		return
 	}
@@ -823,7 +823,6 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	auditParallelRunner.ResultsMu.Lock()
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
-			scanResults.SecretValidation,
 			jas.GetDiffScanTypeValue(auditParams.diffMode, auditParams.resultsToCompare),
 			jas.GetAnalyzerManagerXscEnvVars(
 				isNewFlow,
@@ -866,7 +865,11 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}()
 		// First download the analyzer manager if needed
 		if auditParams.customAnalyzerManagerBinaryPath == "" {
-			if generalError = jas.DownloadAnalyzerManagerIfNeeded(auditParams.configProfile.GeneralConfig.ScannersDownloadPath, serverDetails, threadId); generalError != nil {
+			centralConfigDownloadPath := ""
+			if auditParams.configProfile != nil {
+				centralConfigDownloadPath = auditParams.configProfile.GeneralConfig.ScannersDownloadPath
+			}
+			if generalError = jas.DownloadAnalyzerManagerIfNeeded(centralConfigDownloadPath, serverDetails, threadId); generalError != nil {
 				return fmt.Errorf("failed to download analyzer manager: %s", generalError.Error())
 			}
 			if scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
@@ -891,6 +894,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ScansToPerform:         auditParams.ScansToPerform(),
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath()), targetResult.Technologies...),
 				SecretsScanType:        secrets.SecretsScannerType,
+				SecretValidation:       scanResults.SecretValidation && targetResult.ShouldValidateSecrets(slices.Contains(auditParams.ScansToPerform(), utils.SecretTokenValidationScan)),
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.

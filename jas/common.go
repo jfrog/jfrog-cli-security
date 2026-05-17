@@ -92,9 +92,9 @@ func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOpt
 	return
 }
 
-func WithEnvVars(validateSecrets bool, diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
+func WithEnvVars(diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
-		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, diffMode, envVars)
+		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, diffMode, envVars)
 		return
 	}
 }
@@ -120,12 +120,11 @@ func WithMinSeverity(minSeverity severityutils.Severity) JasScannerOption {
 	}
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, diffMode JasDiffScanEnvValue, vars map[string]string) (map[string]string, error) {
+func getJasEnvVars(serverDetails *config.ServerDetails, diffMode JasDiffScanEnvValue, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
 		return nil, err
 	}
-	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if diffMode != NotDiffScanEnvValue {
 		amBasicVars[DiffScanEnvVariable] = string(diffMode)
 	}
@@ -391,8 +390,8 @@ func ShouldSkipScannerByConfigProfile(target results.ScanTarget, configProfile *
 		return false
 	}
 	log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", configProfile.ProfileName, jasType))
-	if !target.IsScanRequestedByCentralConfig(scanType) {
-		log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, configProfile.ProfileName))
+	if centralConfiguredToRun := target.IsScanRequestedByCentralConfig(scanType); centralConfiguredToRun != nil && !*centralConfiguredToRun {
+		log.Debug(fmt.Sprintf("Skipping %s scan as not requested by '%s' config profile...", jasType, configProfile.ProfileName))
 		return true
 	}
 	return false

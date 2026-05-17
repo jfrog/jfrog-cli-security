@@ -304,34 +304,50 @@ func (st ScanTarget) String() (str string) {
 	return
 }
 
-func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) bool {
+func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) *bool {
+	if len(st.CentralConfigModules) == 0 {
+		return nil
+	}
 	for _, module := range st.CentralConfigModules {
 		switch scanType {
 		case utils.ScaScan:
 			if module.ScanConfig.ScaScannerConfig.EnableScaScan {
-				return true
+				return utils.NewBoolPtr(true)
 			}
 		case utils.ContextualAnalysisScan:
 			if module.ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && module.ScanConfig.ScaScannerConfig.EnableScaScan {
-				return true
+				return utils.NewBoolPtr(true)
 			}
 		case utils.IacScan:
 			if module.ScanConfig.IacScannerConfig.EnableIacScan {
-				return true
+				return utils.NewBoolPtr(true)
 			}
 		case utils.SecretsScan:
 			if module.ScanConfig.SecretsScannerConfig.EnableSecretsScan {
-				return true
+				return utils.NewBoolPtr(true)
 			}
 		case utils.SastScan:
 			if module.ScanConfig.SastScannerConfig.EnableSastScan {
-				return true
+				return utils.NewBoolPtr(true)
 			}
 		default:
-			return false
+			return utils.NewBoolPtr(false)
 		}
 	}
-	return false
+	return utils.NewBoolPtr(false)
+}
+
+func (st ScanTarget) ShouldValidateSecrets(cliRequested bool) bool {
+	if len(st.CentralConfigModules) > 0 {
+		for _, module := range st.CentralConfigModules {
+			cfg := module.ScanConfig.SecretsScannerConfig
+			if cfg.EnableSecretsScan && cfg.ValidateSecrets {
+				return true
+			}
+		}
+		return false
+	}
+	return cliRequested
 }
 
 func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
@@ -411,6 +427,44 @@ func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnipp
 func (r *SecurityCommandResults) SetSecretValidation(secretValidation bool) *SecurityCommandResults {
 	r.SecretValidation = secretValidation
 	return r
+}
+
+func (r *SecurityCommandResults) IsJASRequested(requestedScans ...utils.SubScanType) bool {
+	return utils.IsScanRequested(r.CmdType, utils.ContextualAnalysisScan, r.IsScanRequestedByCentralConfig(utils.ContextualAnalysisScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.SecretsScan, r.IsScanRequestedByCentralConfig(utils.SecretsScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.IacScan, r.IsScanRequestedByCentralConfig(utils.IacScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.SastScan, r.IsScanRequestedByCentralConfig(utils.SastScan), requestedScans...)
+}
+
+func (r *SecurityCommandResults) IsScanRequestedByCentralConfig(scanType utils.SubScanType) (requested *bool) {
+	hadModules := false
+	for _, target := range r.Targets {
+		if len(target.CentralConfigModules) == 0 {
+			continue
+		}
+		hadModules = true
+		if targetRequested := target.IsScanRequestedByCentralConfig(scanType); targetRequested != nil && *targetRequested {
+			return targetRequested
+		}
+	}
+	if hadModules {
+		return utils.NewBoolPtr(false)
+	}
+	return nil
+}
+
+// IsSecretValidationActive returns whether secret token validation is requested for any scan target.
+// SecretValidation on the command results reflects system entitlement; cliRequested reflects the --validate-secrets flag.
+func (r *SecurityCommandResults) IsSecretValidationActive(cliRequested bool) bool {
+	if !r.SecretValidation {
+		return false
+	}
+	for _, target := range r.Targets {
+		if target.ShouldValidateSecrets(cliRequested) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {

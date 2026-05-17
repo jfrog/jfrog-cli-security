@@ -37,7 +37,8 @@ type JasRunnerParams struct {
 	ChangedFiles           []string
 	DiffMode               bool
 	// Secret scan flags
-	SecretsScanType secrets.SecretsScanType
+	SecretsScanType  secrets.SecretsScanType
+	SecretValidation bool
 	// Contextual Analysis scan flags
 	CvesProvider                CveProvider
 	ApplicableScanType          applicability.ApplicabilityScanType
@@ -132,6 +133,7 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 			ThreadId:         threadId,
 			TargetCount:      params.TargetCount,
 			ScanType:         params.SecretsScanType,
+			ValidateSecrets:  params.SecretValidation,
 			ResultsToCompare: getSourceRunsToCompare(params, jasutils.Secrets),
 			Target:           params.ScanResults.ScanTarget,
 		}

@@ -153,7 +153,6 @@ func (cmd *MaliciousScanCommand) initializeCommandResults(xrayVersion string, en
 func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
-			false,
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(false, "", "", "", cmd.project, nil),
 		),
