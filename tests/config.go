@@ -35,15 +35,16 @@ var (
 
 // Test flags
 var (
-	TestUnit        *bool
-	TestArtifactory *bool
-	TestXray        *bool
-	TestXsc         *bool
-	TestScan        *bool
-	TestDockerScan  *bool
-	TestCuration    *bool
-	TestEnrich      *bool
-	TestGit         *bool
+	TestUnit          *bool
+	TestArtifactory   *bool
+	TestXray          *bool
+	TestXsc           *bool
+	TestScan          *bool
+	TestDockerScan    *bool
+	TestCuration      *bool
+	TestEnrich        *bool
+	TestMaliciousScan *bool
+	TestGit           *bool
 
 	TestAuditGeneral    *bool
 	TestAuditNewSca     *bool
@@ -124,6 +125,7 @@ func init() {
 	TestAuditPython = flag.Bool("test.audit.Python", false, "Run Python technologies (Pip, PipEnv, Poetry) audit integration tests")
 	TestAuditCocoapods = flag.Bool("test.audit.Cocoapods", false, "Run Cocoapods technologies audit integration tests")
 	TestAuditSwift = flag.Bool("test.audit.Swift", false, "Run Swift technologies audit integration tests")
+	TestMaliciousScan = flag.Bool("test.maliciousScan", false, "Run Malicious scan command integration tests")
 
 	JfrogUrl = flag.String("jfrog.url", getTestUrlDefaultValue(), "JFrog platform url")
 	JfrogUser = flag.String("jfrog.user", getTestUserDefaultValue(), "JFrog platform  username")
@@ -140,7 +142,7 @@ func init() {
 func InitTestFlags() {
 	flag.Parse()
 	// If no test types flags were set, run all types
-	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditNewSca, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestGit)
+	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditNewSca, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestMaliciousScan, TestGit)
 	if shouldRunAllTests {
 		log.Info("Running all tests. To run only specific tests, please specify the desired test flags.")
 		*TestUnit = true
@@ -161,6 +163,7 @@ func InitTestFlags() {
 		*TestDockerScan = true
 		*TestCuration = true
 		*TestEnrich = true
+		*TestMaliciousScan = true
 		*TestGit = true
 	}
 }

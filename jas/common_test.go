@@ -417,6 +417,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 		name           string
 		newFlow        bool
 		msi            string
+		xrayVersion    string
 		gitRepoUrl     string
 		projectKey     string
 		watches        []string
@@ -432,19 +433,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Java),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
 			name:           "Multiple technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:           "Zero technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false"},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:         "With git repo url",
@@ -457,6 +459,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				utils.JfMsiEnvVariable:      "msi",
 				gitRepoEnvVariable:          "gitRepoUrl",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -472,6 +475,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				projectEnvVariable:          "projectKey",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -487,6 +491,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				gitRepoEnvVariable:          "gitRepoUrl",
 				watchesEnvVariable:          "watch1,watch2",
 				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "",
 			},
 		},
 		{
@@ -499,12 +504,26 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 				JfLanguageEnvVariable:       string(techutils.Go),
 				utils.JfMsiEnvVariable:      "msi",
 				newFlowEnvVariable:          "true",
+				jfXrayVersionEnvVariable:    "",
+			},
+		},
+		{
+			name:         "With xray version set",
+			msi:          "msi",
+			xrayVersion:  "3.111.0",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				newFlowEnvVariable:          "false",
+				jfXrayVersionEnvVariable:    "3.111.0",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.newFlow, test.msi, test.xrayVersion, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }
@@ -560,10 +579,11 @@ func TestGetDiffScanTypeValue(t *testing.T) {
 
 func TestGetResultsToCompare(t *testing.T) {
 	testCases := []struct {
-		name             string
-		target           string
-		ResultsToCompare *results.SecurityCommandResults
-		expectedTarget   *results.TargetResults
+		name              string
+		target            string
+		compareTechnology techutils.Technology
+		ResultsToCompare  *results.SecurityCommandResults
+		expectedTarget    *results.TargetResults
 	}{
 		{
 			name:             "No results to compare",
@@ -603,12 +623,24 @@ func TestGetResultsToCompare(t *testing.T) {
 			},
 			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
 		},
+		{
+			name:              "Results to compare - same directory two technologies picks npm",
+			target:            filepath.Join("root", "app"),
+			compareTechnology: techutils.Npm,
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Poetry}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("root", "app"), Technology: techutils.Npm}},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
-			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target))
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target, testCase.compareTechnology))
 		})
 	}
 }
@@ -656,4 +688,53 @@ func TestProcessSarifRuns(t *testing.T) {
 	// Check file paths are relative and with / separators.
 	result := run.Results[0]
 	require.Equal(t, "dir/file2", sarifutils.GetLocationFileName(result.Locations[0]))
+}
+
+func TestIsAnySoftwareInstalled(t *testing.T) {
+	tests := []struct {
+		name         string
+		alternatives []string
+		expected     bool
+	}{
+		{
+			name:         "single tool found",
+			alternatives: []string{"go"},
+			expected:     true,
+		},
+		{
+			name:         "single tool not found",
+			alternatives: []string{"nonexistent_tool_xyz_12345"},
+			expected:     false,
+		},
+		{
+			name:         "first alternative found",
+			alternatives: []string{"go", "nonexistent_tool_xyz_12345"},
+			expected:     true,
+		},
+		{
+			name:         "second alternative found",
+			alternatives: []string{"nonexistent_tool_xyz_12345", "go"},
+			expected:     true,
+		},
+		{
+			name:         "no alternatives found",
+			alternatives: []string{"nonexistent_tool_xyz_12345", "another_missing_tool_67890"},
+			expected:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isAnySoftwareInstalled(tt.alternatives))
+		})
+	}
+}
+
+func TestFormatMissingSoftwareError(t *testing.T) {
+	singleErr := formatMissingSoftwareError([]string{"git"})
+	assert.Contains(t, singleErr.Error(), "'git'")
+	assert.NotContains(t, singleErr.Error(), "any of")
+
+	multiErr := formatMissingSoftwareError([]string{"unzip", "7z"})
+	assert.Contains(t, multiErr.Error(), "'unzip', '7z'")
+	assert.Contains(t, multiErr.Error(), "any of")
 }

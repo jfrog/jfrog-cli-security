@@ -136,7 +136,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
-	if !cmdResults.EntitledForJas {
+	if !cmdResults.Entitlements.Jas {
 		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf git audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" {

@@ -25,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.30.2"
+	defaultAnalyzerManagerVersion             = "1.33.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -35,6 +35,7 @@ const (
 	jfTokenEnvVariable                        = "JF_TOKEN"
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
+	jfXrayVersionEnvVariable                  = "JF_XRAY_VERSION"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
@@ -60,8 +61,12 @@ const (
 
 type JasDiffScanEnvValue string
 
-var scannersRequiredInstalledSoftware = []string{
-	"git", "unzip", "curl",
+// scannersRequiredInstalledSoftware lists groups of executables needed by the scanner at runtime.
+// Each inner slice represents a single capability, and  entry within a group can satisfies the requirement
+var scannersRequiredInstalledSoftware = [][]string{
+	{"git"},
+	{"unzip", "7z"},
+	{"curl"},
 }
 
 var exitCodeErrorsMap = map[int]string{
@@ -333,10 +338,30 @@ func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd strin
 }
 
 func ValidateRequiredInstalledSoftware() (err error) {
-	for _, software := range scannersRequiredInstalledSoftware {
-		if softwarePath, e := exec.LookPath(software); e != nil || softwarePath == "" {
-			err = errors.Join(err, fmt.Errorf("could not find the required '%s' executable in the system PATH to run the Advanced Security Scans", software))
+	for _, alternatives := range scannersRequiredInstalledSoftware {
+		if !isAnySoftwareInstalled(alternatives) {
+			err = errors.Join(err, formatMissingSoftwareError(alternatives))
 		}
 	}
 	return
+}
+
+func isAnySoftwareInstalled(alternatives []string) bool {
+	for _, software := range alternatives {
+		if softwarePath, e := exec.LookPath(software); e == nil && softwarePath != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func formatMissingSoftwareError(alternatives []string) error {
+	if len(alternatives) == 1 {
+		return fmt.Errorf("could not find the required '%s' executable in the system PATH to run the Advanced Security Scans", alternatives[0])
+	}
+	quoted := make([]string, len(alternatives))
+	for i, alt := range alternatives {
+		quoted[i] = "'" + alt + "'"
+	}
+	return fmt.Errorf("could not find any of the required executables (%s) in the system PATH to run the Advanced Security Scans", strings.Join(quoted, ", "))
 }

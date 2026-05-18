@@ -23,7 +23,7 @@ import (
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 
-	// maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
+	maliciousScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/maliciousscan"
 	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	sastServerDocs "github.com/jfrog/jfrog-cli-security/cli/docs/sastserver"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
@@ -79,15 +79,15 @@ func getAuditAndScansCommands() []components.Command {
 			Category:    securityCategory,
 			Action:      EnrichCmd,
 		},
-		// {
-		// 	Name:        "malicious-scan",
-		// 	Aliases:     []string{"ms"},
-		// 	Flags:       flags.GetCommandFlags(flags.MaliciousScan),
-		// 	Description: maliciousScanDocs.GetDescription(),
-		// 	Arguments:   maliciousScanDocs.GetArguments(),
-		// 	Category:    securityCategory,
-		// 	Action:      MaliciousScanCmd,
-		// },
+		{
+			Name:        "malicious-scan",
+			Aliases:     []string{"ms"},
+			Flags:       flags.GetCommandFlags(flags.MaliciousScan),
+			Description: maliciousScanDocs.GetDescription(),
+			Arguments:   maliciousScanDocs.GetArguments(),
+			Category:    securityCategory,
+			Action:      MaliciousScanCmd,
+		},
 		{
 			Name:        "build-scan",
 			Aliases:     []string{"bs"},
@@ -281,7 +281,7 @@ func MaliciousScanCmd(c *components.Context) error {
 	if err = validateConnectionInputs(serverDetails); err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -437,7 +437,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -448,10 +448,12 @@ func BuildScan(c *components.Context) error {
 	if err = validateConnectionAndViolationContextInputs(c, serverDetails, format); err != nil {
 		return err
 	}
+	includeViolations := EffectiveIncludeViolations(c.GetBoolFlagValue(flags.Violations), isProjectProvided(c))
 	buildScanCmd := scan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
 		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
-		SetIncludeVulnerabilities(getProject(c) == "" || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
+		SetIncludeVulnerabilities(!includeViolations || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
+		SetIncludeViolations(includeViolations).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
 		SetTriggerScanRetries(fetchRetries).
 		SetBuildConfiguration(buildConfiguration).
@@ -524,7 +526,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
@@ -739,6 +741,8 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
+	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))
+	curationAuditCommand.SetRunNative(c.GetBoolFlagValue(flags.RunNative))
 	return curationAuditCommand, nil
 }
 
@@ -785,7 +789,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
 		return err
 	}
@@ -846,6 +850,7 @@ func UploadCdxCmd(c *components.Context) error {
 	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
 		SetServerDetails(serverDetails).
 		SetUploadRepository(c.GetStringFlagValue(flags.UploadRepoPath)).
-		SetProjectKey(c.GetStringFlagValue(flags.Project))
+		SetProjectKey(c.GetStringFlagValue(flags.Project)).
+		SetPrintDeploymentView(true)
 	return commandsCommon.Exec(uploadCmd)
 }

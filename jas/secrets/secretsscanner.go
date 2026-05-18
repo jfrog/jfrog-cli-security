@@ -16,7 +16,7 @@ import (
 
 const (
 	secretsScanCommand   = "sec"
-	secretsDocsUrlSuffix = "advanced-security/features-and-capabilities/secrets-scans"
+	secretsDocsUrlSuffix = "secrets-scans-1"
 
 	SecretsScannerType            SecretsScanType = "secrets-scan"         // #nosec
 	SecretsScannerDockerScanType  SecretsScanType = "secrets-docker-scan"  // #nosec

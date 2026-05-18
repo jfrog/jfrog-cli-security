@@ -442,6 +442,54 @@ func TestMatchVulnerabilityToRemediationOptions(t *testing.T) {
 			description:              "Should ignore remediation steps when component name doesn't match",
 		},
 		{
+			name: "Go component with v-prefix version mismatch between API and BOM",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:  "golang-component-ref",
+						Name:    "golang.org/x/crypto",
+						Version: "0.33.0",
+					},
+				},
+			},
+			vulnerability: &cyclonedx.Vulnerability{
+				ID: "CVE-2023-1234",
+				Affects: &[]cyclonedx.Affects{
+					{
+						Ref: "golang-component-ref",
+					},
+				},
+			},
+			remediationOptions: utils.CveRemediationResponse{
+				"CVE-2023-1234": []utils.Option{
+					{
+						Type: utils.InLock,
+						Steps: map[utils.FixStrategy][]utils.OptionStep{
+							utils.QuickestFixStrategy: {
+								{
+									StepType: utils.FixVersion,
+									PkgVersion: utils.PackageVersionKey{
+										Name:    "golang.org/x/crypto",
+										Version: "v0.33.0",
+									},
+									UpgradeTo: utils.PackageVersionKey{
+										Version: "v0.40.0",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedAffectedVersions: []cyclonedx.AffectedVersions{
+				{
+					Version: "v0.40.0",
+					Status:  cyclonedx.VulnerabilityStatusNotAffected,
+				},
+			},
+			description: "Should match Go component when API returns v-prefixed version but BOM stores without prefix",
+		},
+		{
 			name: "Component version mismatch should be ignored",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{

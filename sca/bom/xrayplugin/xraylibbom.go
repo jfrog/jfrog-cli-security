@@ -16,6 +16,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+// SnippetDetectionFeatureId is "curation" because snippet detection is gated by the curation entitlement on the Xray server.
+const SnippetDetectionFeatureId = "curation"
+
 type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
@@ -104,10 +107,11 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
 	startTime := time.Now()
 	envVars := sbg.getPluginEnvVars()
-	scanner, logPath, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
+	scanner, logPath, killPlugin, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
+	defer killPlugin()
 	startLog := "Generating SBOM"
 	if sbg.totalTargets > 1 {
 		startLog += fmt.Sprintf(" for target: %s", target.Target)

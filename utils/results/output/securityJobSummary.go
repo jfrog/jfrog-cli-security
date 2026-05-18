@@ -223,7 +223,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails
 }
 
 func ifNoJasNoGHAS(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails) (extended bool, err error) {
-	if !cmdResults.EntitledForJas {
+	if !cmdResults.Entitlements.Jas {
 		return
 	}
 	return commandsummary.CheckExtendedSummaryEntitled(serverDetails.Url)

@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
+	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
@@ -174,8 +175,10 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func shouldIncludeSnippetDetection(params *AuditParams) bool {
 	if profile := params.GetConfigProfile(); profile != nil && len(profile.Modules) > 0 {
-		if profile.Modules[0].ScanConfig.ScaScannerConfig.EnableSnippetDetection {
-			return true
+		for _, module := range profile.Modules {
+			if module.ScanConfig.ScaScannerConfig.EnableSnippetDetection {
+				return true
+			}
 		}
 	}
 	if params.resultsContext.IncludeSnippetDetection {
@@ -264,7 +267,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId).
+		SetRootDir(auditCmd.rootDir).SetSastChangedFilesMode(auditCmd.sastChangedFilesMode).SetSastRules(auditCmd.sastRules)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -282,14 +286,14 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
-	if !cmdResults.EntitledForJas {
+	if !cmdResults.Entitlements.Jas {
 		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
-	if cmdResults.ResultsPlatformUrl != "" {
+	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
-	if cmdResults.EntitledForJas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
+	if cmdResults.Entitlements.Jas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
 		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
 	}
 	return output.NewResultsWriter(cmdResults).
@@ -377,7 +381,6 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 		xrayplugin.WithSpecificTechnologies(params.Technologies()),
-		xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -418,16 +421,28 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	entitledForJas, err := isEntitledForJas(xrayManager, params)
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetEntitledForJas(entitledForJas)
 	}
+	cmdResults.SetEntitledForJas(entitledForJas)
 	if entitledForJas {
+		// Validate required installed software
 		if utils.IsJASRequested(cmdResults.CmdType, params.ScansToPerform()...) {
 			if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 				return cmdResults.AddGeneralError(err, false)
 			}
 		}
+		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	if shouldIncludeSnippetDetection(params) {
+		entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
+		if err != nil {
+			return cmdResults.AddGeneralError(err, false)
+		}
+		if !entitledForSnippetDetection {
+			return cmdResults.AddGeneralError(fmt.Errorf("snippet detection is requested but the JFrog instance is not entitled for it"), false)
+		}
+		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
 	return
 }
@@ -438,6 +453,14 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 		return false, nil
 	}
 	return jas.IsEntitledForJas(xrayManager, auditParams.GetXrayVersion())
+}
+
+func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.XrayServicesManager, auditParams *AuditParams) (entitled bool, err error) {
+	if !isEntitledForJas {
+		return false, nil
+	}
+	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
+	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.SnippetDetectionFeatureId)
 }
 
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
@@ -454,11 +477,15 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		// Get the apps config module and assign it to the target result for JAS scans.
 		targetResult.AppsConfigModule = jas.GetModule(targetResult.Target, jfrogAppsConfig)
 		// Generate SBOM for the target if requested or for SCA scans.
-		if !params.resultsContext.IncludeSbom && len(params.ScansToPerform()) > 0 && !slices.Contains(params.ScansToPerform(), utils.ScaScan) {
+		if !shouldGenerateSbom(params) {
 			// No need to generate the SBOM if we are not going to use it.
+			log.Debug(fmt.Sprintf("No need to generate the SBOM for %s as requested by input...", targetResult.Target))
 			continue
 		}
-		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
+		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
+			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
+			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
+		),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
 				AllowPartialResults:  params.AllowPartialResults(),
@@ -470,6 +497,20 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		)
 	}
 	logScanTargetsInfo(cmdResults)
+}
+
+func shouldGenerateSbom(params *AuditParams) bool {
+	if params.resultsContext.IncludeSbom {
+		return true
+	}
+	scansToPerform := params.ScansToPerform()
+	if slices.Contains(scansToPerform, utils.ScaScan) {
+		return true
+	}
+	if params.configProfile != nil && len(params.configProfile.Modules) > 0 {
+		return params.configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+	}
+	return len(scansToPerform) == 0
 }
 
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
@@ -501,6 +542,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 	}
 	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
+		targetResult.Technology,
 		resultsToCompare,
 	)
 	// Let's check if the target results to compare are valid.
@@ -616,7 +658,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 }
 
 func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, isNewFlow bool) (jasScanner *jas.JasScanner, generalError error) {
-	if !scanResults.EntitledForJas {
+	if !scanResults.Entitlements.Jas {
 		log.Info("Advanced Security is not enabled on this system, so Advanced Security scans were skipped...")
 		return
 	}
@@ -637,6 +679,7 @@ func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			jas.GetAnalyzerManagerXscEnvVars(
 				isNewFlow,
 				auditParams.GetMultiScanId(),
+				auditParams.GetXrayVersion(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
 				auditParams.resultsContext.Watches,
@@ -700,7 +743,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath()), targetResult.Technology),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
@@ -715,6 +758,8 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),
+				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
+				ChangedFiles:                sast.SastChangedFilesForTarget(scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
 				ScanResults:                 targetResult,
 				TargetCount:                 len(scanResults.Targets),
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
@@ -728,6 +773,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getRootDir(rootDir string, scanResults *results.SecurityCommandResults) string {
+	if rootDir != "" {
+		return rootDir
+	}
+	return scanResults.GetCommonParentPath()
 }
 
 func getSignedDescriptions(currentFormat format.OutputFormat) bool {
@@ -744,7 +796,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	var err error
 	uploadPath := ""
 	if params.uploadCdxResults {
-		log.Info("Finished scanning. Uploading scan results to Artifactory")
+		log.Debug("Finished scanning. Uploading scan results to Artifactory")
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}

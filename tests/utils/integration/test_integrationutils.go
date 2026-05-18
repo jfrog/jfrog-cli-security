@@ -201,6 +201,13 @@ func InitEnrichTest(t *testing.T, minVersion string) {
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
+func InitMaliciousScanTest(t *testing.T, minVersion string) {
+	if !*configTests.TestMaliciousScan {
+		t.Skip(getSkipTestMsg("Malicious scan command integration", "--test.maliciousScan"))
+	}
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
+}
+
 func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	if !*configTests.TestGit {
 		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))

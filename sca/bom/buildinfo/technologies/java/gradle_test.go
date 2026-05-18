@@ -142,6 +142,18 @@ func TestGradleTreesWithConfig_UsingIncludedBuilds(t *testing.T) {
 	}
 }
 
+func TestGradleWrapperWithoutExecutePermission(t *testing.T) {
+	// Simulate gradlew committed without the execute bit (e.g. 100644 in git).
+	// Frogbot clones branches and the gradlew file may lack +x; the scan must still succeed.
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle-example-config"))
+	defer cleanUp()
+	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0644))
+
+	modulesDependencyTrees, _, err := buildGradleDependencyTree(&DepTreeParams{UseWrapper: true})
+	assert.NoError(t, err)
+	assert.NotNil(t, modulesDependencyTrees)
+}
+
 func TestIsGradleWrapperExist(t *testing.T) {
 	// Check Gradle wrapper doesn't exist
 	isWrapperExist, err := isGradleWrapperExist()

@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v56/github"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/froggit-go/vcsutils"
+	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
@@ -27,6 +30,7 @@ const (
 	Gitlab                        = scmTypeName("gitlab")
 	BitbucketServer               = scmTypeName("bitbucket")
 	DefaultContContributorsMonths = 1
+	DefaultThreads                = 10
 	getCommitsRetryNumber         = 5
 	GithubTokenEnvVar             = "JFROG_CLI_GITHUB_TOKEN"    // #nosec G101
 	GitlabTokenEnvVar             = "JFROG_CLI_GITLAB_TOKEN"    // #nosec G101
@@ -171,6 +175,10 @@ type CountContributorsParams struct {
 	MonthsNum int
 	// Detailed summery flag.
 	DetailedSummery bool
+	// Number of parallel threads to use when scanning repositories.
+	Threads int
+	// Number of days a cached repository result remains valid. 0 = skip cache.
+	CacheValidity int
 	// Progress bar.
 	Progress ioUtils.ProgressMgr
 }
@@ -212,32 +220,72 @@ func (vs *ScmType) GetOptionalScmTypeTokenEnvVars() string {
 	return fmt.Sprintf("%s or %s", streamsStr, envVars[len(envVars)-1])
 }
 
+// repoScanResult holds the result of scanning a single repository.
+type repoScanResult struct {
+	repo                 string
+	uniqueContributors   map[BasicContributor]Contributor
+	detailedContributors map[string]map[string]ContributorDetailedSummary
+	detailedRepos        map[string]map[string]RepositoryDetailedSummary
+	totalCommits         int
+	skipped              bool
+}
+
+// repoScanTask holds everything needed to scan a single repository in parallel.
+type repoScanTask struct {
+	vcc           VcsCountContributors
+	repo          string
+	baseOptions   vcsclient.GitCommitsQueryOptions
+	cacheDir      string
+	cacheValidity time.Duration
+	idx           int
+}
+
 func (cc *CountContributorsCommand) Run() error {
-	log.Info("The CLI outputs may include an estimation of the contributing developers based on the input provided by the user. They may be based on third-party resources and databases and JFrog does not guarantee that the CLI outputs are accurate and/or complete. The CLI outputs are not legal advice and you are solely responsible for your use of it. CLI outputs are provided “as is” and any representation or warranty of or concerning any third-party technology is strictly between the user and the third-party owner or distributor of the third-party technology.")
+	log.Info("The CLI outputs may include an estimation of the contributing developers based on the input provided by the user. They may be based on third-party resources and databases and JFrog does not guarantee that the CLI outputs are accurate and/or complete. The CLI outputs are not legal advice and you are solely responsible for your use of it. CLI outputs are provided \"as is\" and any representation or warranty of or concerning any third-party technology is strictly between the user and the third-party owner or distributor of the third-party technology.")
 	if cc.Progress != nil {
 		cc.Progress.SetHeadlineMsg("Calculating Git contributors information")
 	}
 
+	vcsCountContributors, err := cc.getVcsCountContributors()
+	if err != nil {
+		return err
+	}
+
+	tasks, err := buildRepoScanTasks(vcsCountContributors)
+	if err != nil {
+		return err
+	}
+
+	threads := cc.Threads
+	if threads <= 0 {
+		threads = DefaultThreads
+	}
+
+	repoResults, scanErr := runRepoScanTasks(tasks, threads)
+	if scanErr != nil {
+		return scanErr
+	}
+
+	// Merge results sequentially.
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
 	var totalScannedRepos []string
 	var totalSkippedRepos []string
 	totalCommitsNumber := 0
-	vcsCountContributors, err := cc.getVcsCountContributors()
-	if err != nil {
-		return err
-	}
-	// Scan all repos from all provided git servers.
-	for _, vcc := range vcsCountContributors {
-		repositories, err := vcc.getRepositoriesListToScan()
-		if err != nil {
-			return err
+	for _, rr := range repoResults {
+		if rr.repo == "" {
+			continue
 		}
-		scannedRepos, skippedRepos, commitsNumber := vcc.scanAndCollectCommitsInfo(repositories, uniqueContributors, detailedContributors, detailedRepos)
-		totalScannedRepos = append(totalScannedRepos, scannedRepos...)
-		totalSkippedRepos = append(totalSkippedRepos, skippedRepos...)
-		totalCommitsNumber += commitsNumber
+		if rr.skipped {
+			totalSkippedRepos = append(totalSkippedRepos, rr.repo)
+		} else {
+			totalScannedRepos = append(totalScannedRepos, rr.repo)
+			totalCommitsNumber += rr.totalCommits
+			mergeContributors(uniqueContributors, rr.uniqueContributors)
+			mergeDetailedContributors(detailedContributors, rr.detailedContributors)
+			mergeDetailedRepos(detailedRepos, rr.detailedRepos)
+		}
 	}
 
 	// Create the report.
@@ -275,7 +323,13 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 		if err = param.validate(); err != nil {
 			return nil, err
 		}
-		p := CountContributorsParams{BasicGitServerParams: param, MonthsNum: cc.MonthsNum, DetailedSummery: cc.DetailedSummery}
+		p := CountContributorsParams{
+			BasicGitServerParams: param,
+			MonthsNum:            cc.MonthsNum,
+			DetailedSummery:      cc.DetailedSummery,
+			Threads:              cc.Threads,
+			CacheValidity:        cc.CacheValidity,
+		}
 		vcsClient, err := vcsclient.NewClientBuilder(param.ScmType).ApiEndpoint(param.ScmApiUrl).Token(param.Token).Build()
 		if err != nil {
 			return nil, err
@@ -285,37 +339,129 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 	return contributors, nil
 }
 
-func (cc *VcsCountContributors) scanAndCollectCommitsInfo(repositories []string, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) (scannedRepos, skippedRepos []string, totalCommits int) {
-	// initialize commits query options.
-	commitsListOptions := vcsclient.GitCommitsQueryOptions{
-		Since: time.Now().AddDate(0, -1*cc.params.MonthsNum, 0),
-		ListOptions: vcsclient.ListOptions{
-			Page:    1,
-			PerPage: vcsutils.NumberOfCommitsToFetch,
-		},
-	}
-	for _, repo := range repositories {
-		// Get repository's commits using pagination until there are no more commits.
-		commits, getCommitsErr := cc.GetCommitsWithQueryOptions(repo, commitsListOptions)
-		for {
-			if getCommitsErr != nil {
-				skippedRepos = append(skippedRepos, repo)
-				break
-			}
-			if len(commits) == 0 {
-				break
-			}
-			cc.saveCommitsInfoInMaps(repo, commits, uniqueContributors, detailedContributors, detailedRepos)
+// buildRepoScanTasks iterates all VCS servers sequentially, lists their repositories,
+// and returns a flat slice of repoScanTask ready for parallel execution.
+// Fails fast if any server's repository listing fails.
+func buildRepoScanTasks(vcsCountContributors []VcsCountContributors) ([]repoScanTask, error) {
+	var tasks []repoScanTask
+	for _, vcc := range vcsCountContributors {
+		repositories, err := vcc.getRepositoriesListToScan()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list repositories for %q: %w", vcc.params.Owner, err)
+		}
 
-			commitsListOptions.Page++
-			totalCommits += len(commits)
-			commits, getCommitsErr = cc.GetCommitsWithQueryOptions(repo, commitsListOptions)
+		cacheValidity := time.Duration(vcc.params.CacheValidity) * 24 * time.Hour
+		cacheDir := ""
+		if vcc.params.CacheValidity >= 0 {
+			if dir, cacheErr := getRepoCacheDir(vcc.params.BasicGitServerParams, vcc.params.MonthsNum); cacheErr != nil {
+				log.Warn(fmt.Sprintf("Contributors cache: failed to determine cache directory: %v. Continuing without cache.", cacheErr))
+			} else {
+				cacheDir = dir
+			}
 		}
-		if getCommitsErr == nil {
-			scannedRepos = append(scannedRepos, repo)
+		baseOptions := vcsclient.GitCommitsQueryOptions{
+			Since: time.Now().AddDate(0, -1*vcc.params.MonthsNum, 0),
+			ListOptions: vcsclient.ListOptions{
+				Page:    1,
+				PerPage: vcsutils.NumberOfCommitsToFetch,
+			},
+		}
+
+		for _, repo := range repositories {
+			tasks = append(tasks, repoScanTask{
+				vcc:           vcc,
+				repo:          repo,
+				baseOptions:   baseOptions,
+				cacheDir:      cacheDir,
+				cacheValidity: cacheValidity,
+				idx:           len(tasks),
+			})
 		}
 	}
-	return
+	return tasks, nil
+}
+
+// runRepoScanTasks scans all repositories using a single parallel runner.
+// Errors from scan failures or enqueue failures are collected and returned joined.
+// Failed-to-enqueue repos are marked as skipped, consistent with scan failures.
+func runRepoScanTasks(tasks []repoScanTask, threads int) ([]repoScanResult, error) {
+	repoResults := make([]repoScanResult, len(tasks))
+	var mu sync.Mutex
+	var taskErrors []error
+
+	runner := parallel.NewRunner(threads, uint(len(tasks)), false)
+	for _, task := range tasks {
+		if _, addErr := runner.AddTask(func(threadId int) error {
+			result := task.vcc.scanRepo(task.repo, task.baseOptions, task.cacheDir, task.cacheValidity, threadId)
+			mu.Lock()
+			repoResults[task.idx] = result
+			if result.skipped {
+				taskErrors = append(taskErrors, fmt.Errorf("failed to scan repository %q", task.repo))
+			}
+			mu.Unlock()
+			return nil
+		}); addErr != nil {
+			// Failed to enqueue: mark repo as skipped, same treatment as a scan failure.
+			mu.Lock()
+			repoResults[task.idx] = repoScanResult{repo: task.repo, skipped: true}
+			taskErrors = append(taskErrors, fmt.Errorf("failed to enqueue repository %q: %w", task.repo, addErr))
+			mu.Unlock()
+		}
+	}
+	runner.Done()
+	runner.Run()
+
+	if len(taskErrors) > 0 {
+		return repoResults, errors.Join(taskErrors...)
+	}
+	return repoResults, nil
+}
+
+// scanRepo scans a single repository (with cache) and returns its result.
+func (cc *VcsCountContributors) scanRepo(repo string, baseOptions vcsclient.GitCommitsQueryOptions, cacheDir string, cacheValidity time.Duration, threadId int) repoScanResult {
+	logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
+	log.Info(logPrefix + fmt.Sprintf("Scanning repository %q", repo))
+
+	// Try cache first.
+	if cacheDir != "" {
+		if cached := readRepoCache(cacheDir, repo, cacheValidity); cached != nil {
+			log.Info(logPrefix + fmt.Sprintf("Using cached data for repository %q (%d commits)", repo, cached.totalCommits))
+			return *cached
+		}
+	}
+
+	result := repoScanResult{
+		repo:                 repo,
+		uniqueContributors:   make(map[BasicContributor]Contributor),
+		detailedContributors: make(map[string]map[string]ContributorDetailedSummary),
+		detailedRepos:        make(map[string]map[string]RepositoryDetailedSummary),
+	}
+
+	// Paginate through commits.
+	opts := baseOptions
+	opts.Page = 1
+	for {
+		commits, err := cc.GetCommitsWithQueryOptions(repo, opts)
+		if err != nil {
+			log.Warn(logPrefix + fmt.Sprintf("Skipping repository %q: failed to fetch commits: %v", repo, err))
+			result.skipped = true
+			return result
+		}
+		if len(commits) == 0 {
+			break
+		}
+		cc.saveCommitsInfoInMaps(repo, commits, result.uniqueContributors, result.detailedContributors, result.detailedRepos)
+		result.totalCommits += len(commits)
+		opts.Page++
+	}
+
+	log.Info(logPrefix + fmt.Sprintf("Done scanning repository %q: %d commits found", repo, result.totalCommits))
+
+	// Persist to cache (even skipped=false means success here).
+	if cacheDir != "" {
+		writeRepoCache(cacheDir, repo, result, cc.params.MonthsNum)
+	}
+	return result
 }
 
 // getRepositoriesListToScan returns a list of repositories to scan.
@@ -328,24 +474,11 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 	if cc.vcsClient == nil {
 		return nil, errors.New("failed to get repositories list, missing vcs client")
 	}
-	reposMap, err := cc.vcsClient.ListRepositories(context.Background())
+	repos, err := cc.vcsClient.ListRepositoriesByOwner(context.Background(), cc.params.Owner)
 	if err != nil {
 		return nil, err
 	}
-	return cc.getOwnersMatchingRepos(reposMap)
-}
-
-// getOwnersMatchingRepos gets all projects and their repo map and look for the specific owner.
-func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
-	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {
-		// Matching owner name without considering lower/upper cases.
-		normalizedSearchKey := strings.ToUpper(cc.params.Owner)
-		for owner, repoList := range reposMap {
-			if strings.ToUpper(owner) == normalizedSearchKey {
-				return repoList, nil
-			}
-		}
 		return nil, fmt.Errorf("no repositories found for owner %s in %s at URL %s", cc.params.Owner, cc.params.ScmType, cc.params.ScmApiUrl)
 	}
 	return repos, nil
@@ -475,6 +608,41 @@ func (cc *CountContributorsCommand) aggregateReportResults(uniqueContributors ma
 	}
 
 	return report
+}
+
+// mergeContributors merges src into dst (dst wins on key collision — first-seen is latest commit).
+func mergeContributors(dst, src map[BasicContributor]Contributor) {
+	for k, v := range src {
+		if _, exists := dst[k]; !exists {
+			dst[k] = v
+		}
+	}
+}
+
+func mergeDetailedContributors(dst, src map[string]map[string]ContributorDetailedSummary) {
+	for email, repoMap := range src {
+		if dst[email] == nil {
+			dst[email] = make(map[string]ContributorDetailedSummary)
+		}
+		for repo, detail := range repoMap {
+			if _, exists := dst[email][repo]; !exists {
+				dst[email][repo] = detail
+			}
+		}
+	}
+}
+
+func mergeDetailedRepos(dst, src map[string]map[string]RepositoryDetailedSummary) {
+	for repo, authorMap := range src {
+		if dst[repo] == nil {
+			dst[repo] = make(map[string]RepositoryDetailedSummary)
+		}
+		for email, detail := range authorMap {
+			if _, exists := dst[repo][email]; !exists {
+				dst[repo][email] = detail
+			}
+		}
+	}
 }
 
 // Returns the Server details. The usage report is sent to this server.

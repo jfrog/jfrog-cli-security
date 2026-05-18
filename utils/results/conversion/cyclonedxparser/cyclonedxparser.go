@@ -73,7 +73,7 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error
 }
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(metadata results.ResultsMetaData, statusCodes results.ResultsStatus, multipleTargets bool) (err error) {
-	cdc.entitledForJas = metadata.EntitledForJas
+	cdc.entitledForJas = metadata.Entitlements.Jas
 	cdc.gitContext = metadata.GitContext
 	cdc.xrayVersion = metadata.XrayVersion
 	// Reset the BOM

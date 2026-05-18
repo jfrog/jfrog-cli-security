@@ -44,7 +44,6 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	// Set the results platform URL in the command results and log it
 	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
 		cmdResults.SetResultsPlatformUrl(resultsUrl)
-		log.Info(GetCommandResultsPlatformUrlMessage(cmdResults, false))
 	}
 	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
 }
