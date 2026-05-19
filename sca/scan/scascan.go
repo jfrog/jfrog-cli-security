@@ -103,7 +103,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If the scan is not requested, skip it.
 	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, utils.ScaScan) {
-		log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by input...", logPrefix, params.ScanResults.ScanTarget.String()))
+		log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by input...", logPrefix, params.ScanResults.String()))
 		return false, nil
 	}
 	if params.ScanResults == nil {
@@ -113,7 +113,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	if centralConfiguredToRun := params.ScanResults.IsScanRequestedByCentralConfig(utils.ScaScan); centralConfiguredToRun != nil {
 		log.Debug(fmt.Sprintf("Using config profile '%s' to determine if SCA should be performed...", params.ConfigProfile.ProfileName))
 		if !*centralConfiguredToRun {
-			log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by '%s' config profile...", logPrefix, params.ScanResults.ScanTarget.String(), params.ConfigProfile.ProfileName))
+			log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by '%s' config profile...", logPrefix, params.ScanResults.String(), params.ConfigProfile.ProfileName))
 			return false, nil
 		}
 	}

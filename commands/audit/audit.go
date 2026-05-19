@@ -537,7 +537,7 @@ func shouldGenerateSbom(targetResult *results.TargetResults, params *AuditParams
 	userRequestedSpecificScans := len(scansToPerform) > 0
 	if userRequestedSpecificScans {
 		if targetResult != nil {
-			log.Debug(fmt.Sprintf("Skipping SBOM generation for '%s' as requested by input...", targetResult.ScanTarget.String()))
+			log.Debug(fmt.Sprintf("Skipping SBOM generation for '%s' as requested by input...", targetResult.String()))
 		} else {
 			log.Debug("Skipping SBOM generation as requested by input...")
 		}
