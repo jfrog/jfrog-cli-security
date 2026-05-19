@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-security/policy/local"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -367,7 +368,9 @@ func TestDetectScansToPerform(t *testing.T) {
 			name: "Single target with one working dir (npm)",
 			wd:   dir,
 			params: func() *AuditParams {
-				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")})
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
 				param.SetIsRecursiveScan(false)
 				return param
 			},
@@ -387,7 +390,28 @@ func TestDetectScansToPerform(t *testing.T) {
 			wd:   dir,
 			params: func() *AuditParams {
 				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
-				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "maven", "pom.xml")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single target root directory with one include directory (maven) - new flow",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
 				return param
 			},
 			expected: []*results.TargetResults{
@@ -476,7 +500,7 @@ func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
 	assert.Empty(t, cmdRes.Targets)
 }
 
-func TestDetectScanTargetsSingleTargetCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
+func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
 
@@ -490,6 +514,7 @@ func TestDetectScanTargetsSingleTargetCliExcludedCwdWithNonExcludedInclude(t *te
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
 	params.SetWorkingDirs([]string{siblingNpm})
 	params.SetExclusions([]string{"*parent_only_excluded_for_agg*"})
 
@@ -509,28 +534,25 @@ func TestDetectScanTargetsSingleTargetCliExcludedCwdWithNonExcludedInclude(t *te
 }
 
 func TestShouldGenerateSbom(t *testing.T) {
-	configProfileWithSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: true,
-				},
+	configProfileModulesWithSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: true,
 			},
-		}},
-	}
-	configProfileWithoutSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: false,
-				},
+		},
+	}}
+	configProfileModulesWithoutSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: false,
 			},
-		}},
-	}
+		},
+	}}
 
 	testCases := []struct {
 		name       string
 		params     *AuditParams
+		scanResults *results.TargetResults
 		expectSbom bool
 	}{
 		{
@@ -583,9 +605,9 @@ func TestShouldGenerateSbom(t *testing.T) {
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithSca)
 				return params
 			}(),
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithSca}},
 			expectSbom: true,
 		},
 		{
@@ -593,16 +615,16 @@ func TestShouldGenerateSbom(t *testing.T) {
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithoutSca)
 				return params
 			}(),
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithoutSca}},
 			expectSbom: false,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.params))
+			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.scanResults, testCase.params))
 		})
 	}
 }

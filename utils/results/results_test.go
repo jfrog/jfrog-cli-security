@@ -30,7 +30,7 @@ func TestScanTarget_String(t *testing.T) {
 		{
 			name:     "Target with name overrides path",
 			target:   ScanTarget{Target: "/path/to/project", Name: "my-project", Technologies: []techutils.Technology{techutils.Go}},
-			expected: "my-project [go]",
+			expected: "my-project [Go]",
 		},
 		{
 			name: "Target with include dirs",
@@ -39,7 +39,7 @@ func TestScanTarget_String(t *testing.T) {
 				Include:      []string{"/root/sub1", "/root/sub2"},
 				Technologies: []techutils.Technology{techutils.Maven},
 			},
-			expected: "/root {sub1, sub2} [maven]",
+			expected: "/root {sub1, sub2} [Maven]",
 		},
 		{
 			name: "Target with include dirs and name - name wins",
@@ -49,7 +49,7 @@ func TestScanTarget_String(t *testing.T) {
 				Name:         "override-name",
 				Technologies: []techutils.Technology{techutils.Pip},
 			},
-			expected: "override-name [pip]",
+			expected: "override-name [Pip]",
 		},
 		{
 			name: "Target with multiple technologies",
@@ -57,7 +57,7 @@ func TestScanTarget_String(t *testing.T) {
 				Target:       "/path/to/project",
 				Technologies: []techutils.Technology{techutils.Npm, techutils.Go},
 			},
-			expected: "/path/to/project [npm, go]",
+			expected: "/path/to/project [npm, Go]",
 		},
 	}
 	for _, tt := range tests {
@@ -82,37 +82,37 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 		name     string
 		target   ScanTarget
 		scanType utils.SubScanType
-		expected bool
+		expected *bool
 	}{
 		{
-			name:     "No modules - returns false",
+			name:     "No modules - returns nil",
 			target:   ScanTarget{},
 			scanType: utils.ScaScan,
-			expected: false,
+			expected: nil,
 		},
 		{
 			name:     "SCA enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.ScaScan,
-			expected: true,
+			expected: utils.NewBoolPtr(true),
 		},
 		{
 			name:     "IaC enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.IacScan,
-			expected: true,
+			expected: utils.NewBoolPtr(true),
 		},
 		{
 			name:     "Secrets enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.SecretsScan,
-			expected: true,
+			expected: utils.NewBoolPtr(true),
 		},
 		{
 			name:     "SAST enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.SastScan,
-			expected: true,
+			expected: utils.NewBoolPtr(true),
 		},
 		{
 			name: "Applicability requires both CA and SCA enabled",
@@ -123,13 +123,13 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 				},
 			}}},
 			scanType: utils.ContextualAnalysisScan,
-			expected: false,
+			expected: utils.NewBoolPtr(false),
 		},
 		{
 			name:     "Applicability with both CA and SCA enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.ContextualAnalysisScan,
-			expected: true,
+			expected: utils.NewBoolPtr(true),
 		},
 		{
 			name: "SCA disabled",
@@ -139,7 +139,7 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 				},
 			}}},
 			scanType: utils.ScaScan,
-			expected: false,
+			expected: utils.NewBoolPtr(false),
 		},
 	}
 	for _, tt := range tests {

@@ -27,10 +27,10 @@ func TestIsPathExcluded(t *testing.T) {
 			expected:   false,
 		},
 		{
-			name:       "Empty exclusions - matches all (PrepareExcludePathPattern behavior)",
+			name:       "Empty exclusions - path is not excluded",
 			path:       "/project/src/main.go",
 			exclusions: []string{},
-			expected:   true,
+			expected:   false,
 		},
 		{
 			name:       "Multiple patterns - one matches",

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -236,7 +235,7 @@ func isNewFlow(bomGenerator bom.SbomGenerator) bool {
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	projectPath, includeDirs, isRecursiveScan, err := GetTargetsInfo(auditCmd.workingDirs, auditCmd.bomGenerator, auditCmd.scansToPerform, auditCmd.IncludeSbom, auditCmd.rootDir)
+	projectPath, includeDirs, isRecursiveScan, err := GetTargetsInfo(auditCmd.workingDirs, auditCmd.bomGenerator, auditCmd.scansToPerform, auditCmd.resultsContext.IncludeSbom, auditCmd.rootDir)
 	if err != nil {
 		return
 	}
@@ -274,7 +273,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.gitRepoHttpsCloneUrl,
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
-			auditCmd.IncludeSbom,
+			auditCmd.resultsContext.IncludeSbom,
 			auditCmd.IncludeSnippetDetection,
 		)).
 		SetGitContext(auditCmd.GitContext()).
@@ -485,9 +484,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	// Populate target information for the scans
 	for _, targetResult := range cmdResults.Targets {
 		// Generate SBOM for the target if requested or for SCA scans.
-		if !shouldGenerateSbom(params) {
-			// No need to generate the SBOM if we are not going to use it.
-			log.Debug(fmt.Sprintf("No need to generate the SBOM for %s as requested by input...", targetResult.Target))
+		if !shouldGenerateSbom(targetResult, params) {
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
@@ -508,18 +505,46 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	logScanTargetsInfo(cmdResults)
 }
 
-func shouldGenerateSbom(params *AuditParams) bool {
+func shouldGenerateSbom(targetResult *results.TargetResults, params *AuditParams) bool {
 	if params.resultsContext.IncludeSbom {
+		log.Verbose("Sbom is requested by input...")
 		return true
 	}
 	scansToPerform := params.ScansToPerform()
 	if slices.Contains(scansToPerform, utils.ScaScan) {
+		log.Verbose("Sbom is requested for SCA scan...")
 		return true
 	}
-	if params.configProfile != nil && len(params.configProfile.Modules) > 0 {
-		return params.configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+	if targetResult != nil {
+		if centralConfiguredToRun := targetResult.IsScanRequestedByCentralConfig(utils.ScaScan); centralConfiguredToRun != nil {
+			profileName := ""
+			if params.configProfile != nil {
+				profileName = params.configProfile.ProfileName
+			}
+			log.Debug(fmt.Sprintf("Using config profile '%s' to determine if SBOM should be generated...", profileName))
+			if !*centralConfiguredToRun {
+				log.Debug(fmt.Sprintf("Skipping SBOM generation as SCA scan is not requested by '%s' config profile...", profileName))
+				return false
+			}
+			return true
+		}
 	}
-	return len(scansToPerform) == 0
+	if configProfile := params.GetConfigProfile(); configProfile != nil && len(configProfile.Modules) > 0 {
+		enableSca := configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+		log.Debug(fmt.Sprintf("Using config profile '%s' to determine if SBOM should be generated...", configProfile.ProfileName))
+		return enableSca
+	}
+	userRequestedSpecificScans := len(scansToPerform) > 0
+	if userRequestedSpecificScans {
+		if targetResult != nil {
+			log.Debug(fmt.Sprintf("Skipping SBOM generation for '%s' as requested by input...", targetResult.ScanTarget.String()))
+		} else {
+			log.Debug("Skipping SBOM generation as requested by input...")
+		}
+		return false
+	}
+	// If we got here, we should generate the SBOM (all scans are requested)
+	return true
 }
 
 func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
@@ -608,11 +633,6 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 
 // Create a scan target from the given root directory, exclude patterns and optionally include patterns.
 func createScanTarget(root string, exclude []string, includes ...string) *results.ScanTarget {
-	// Check if root is excluded
-	if utils.IsPathExcluded(root, exclude) {
-		log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", root, strings.Join(exclude, ", ")))
-		return nil
-	}
 	dirs := datastructures.MakeSet[string]()
 	// Validate include patterns
 	for _, includePattern := range includes {
@@ -621,7 +641,11 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
 			continue
 		} else if isDir && !utils.IsPathExcluded(includePattern, exclude) {
-			dirs.Add(path.Join(root, includePattern))
+			includePath := includePattern
+			if !filepath.IsAbs(includePattern) {
+				includePath = filepath.Join(root, includePattern)
+			}
+			dirs.Add(includePath)
 			continue
 		}
 		// the pattern is not a directory, so we need to list the directories in the pattern.
@@ -633,7 +657,15 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 		}
 		dirs.AddElements(includeDirs...)
 	}
-	return &results.ScanTarget{Target: root, Include: dirs.ToSlice(), Exclude: exclude}
+	include := dirs.ToSlice()
+	if utils.IsPathExcluded(root, exclude) {
+		if len(include) == 0 {
+			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", root, strings.Join(exclude, ", ")))
+			return nil
+		}
+		log.Debug(fmt.Sprintf("Root directory '%s' is excluded; creating scan target from %d explicit include path(s)", root, len(include)))
+	}
+	return &results.ScanTarget{Target: root, Include: include, Exclude: exclude}
 }
 
 func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditParams) (technologies []techutils.Technology) {
@@ -681,11 +713,19 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 	if len(params.workingDirs) > 0 {
 		potentialScanTargets = params.workingDirs
 	}
+	dirsToDetect := []string{}
 	for _, requestedDirectory := range potentialScanTargets {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
 			continue
 		}
+		if isExcluded := utils.IsPathExcluded(requestedDirectory, exclusions); isExcluded {
+			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", requestedDirectory, strings.Join(exclusions, ", ")))
+			continue
+		}
+		dirsToDetect = append(dirsToDetect, requestedDirectory)
+	}
+	for _, requestedDirectory := range dirsToDetect {
 		// Detect descriptors and technologies in the requested directory.
 		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), utils.GetExcludePattern(exclusions, utils.DefaultScaExcludePatterns, params.IsRecursiveScan()))
 		if err != nil {
@@ -720,13 +760,12 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 				if tech != techutils.NoTech {
 					targetResults.SetDescriptors(descriptors...)
 				}
-				cmdResults.NewScanResults(*scanTarget)
 			}
 		}
 	}
 	// If no scan targets were detected, we should still proceed with the scans.
-	if len(potentialScanTargets) == 1 && len(cmdResults.Targets) == 0 {
-		if scanTarget := createScanTarget(cwd, exclusions); scanTarget != nil {
+	if len(dirsToDetect) == 1 && params.IsRecursiveScan() && len(cmdResults.Targets) == 0 {
+		if scanTarget := createScanTarget(dirsToDetect[0], exclusions); scanTarget != nil {
 			cmdResults.NewScanResults(*scanTarget)
 		}
 	}

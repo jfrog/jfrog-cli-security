@@ -764,18 +764,6 @@ func TestShouldSkipScannerByConfigProfile(t *testing.T) {
 			jasType:  jasutils.Secrets,
 			expected: true,
 		},
-		{
-			name:   "Target excluded by GeneralExcludePatterns - should skip",
-			target: results.ScanTarget{Target: "/project/test-dir", CentralConfigModules: enabledProfile.Modules},
-			profile: &xscServices.ConfigProfile{
-				ProfileName:   "exclude-profile",
-				GeneralConfig: xscServices.GeneralConfig{},
-				Modules:       enabledProfile.Modules,
-			},
-			scanType: utils.SecretsScan,
-			jasType:  jasutils.Secrets,
-			expected: true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

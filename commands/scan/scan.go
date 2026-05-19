@@ -489,7 +489,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	// If the scan is not requested, skip it.
 	if !utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, targetResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
-		log.Debug(scanLogPrefix + fmt.Sprintf("Skipping SCA for %s as requested by input...", targetResults.Target))
+		log.Debug(scanLogPrefix + fmt.Sprintf("Skipping SCA for '%s' as requested by input...", targetResults.ScanTarget.String()))
 		return
 	}
 	// TODO: Use the following code when binary will also support scan strategy (interface) and not only scan graph.

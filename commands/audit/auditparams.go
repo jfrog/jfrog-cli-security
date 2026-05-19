@@ -46,7 +46,6 @@ type AuditParams struct {
 	rtResultRepository              string
 	violationGenerator              policy.PolicyHandler
 	sastRules                       string
-	IncludeSbom                     bool
 	// Diff mode, scan only the files affected by the diff.
 	diffMode             bool
 	sastChangedFilesMode bool

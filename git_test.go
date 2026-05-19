@@ -58,12 +58,15 @@ func TestCountContributorsFlags(t *testing.T) {
 
 type gitAuditCommandTestParams struct {
 	auditCommandTestParams
+	UseConfigProfile bool
 	// Override the test project repo clone url
 	OverrideRepoCloneUrl string
 }
 
-func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
+func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string, error) {
+	args := append([]string{"git"}, getAuditCmdArgs(params.auditCommandTestParams)...)
+	args = append(args, fmt.Sprintf("--use-config-profile=%t", params.UseConfigProfile))
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
 }
 
 func getDummyGitRepoUrl() string {
@@ -81,7 +84,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
+	output, err := testGitAuditCommand(t, gitAuditParams)
 	if expectError != "" {
 		assert.ErrorContains(t, err, expectError)
 	} else {
