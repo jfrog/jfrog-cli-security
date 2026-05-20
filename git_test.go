@@ -60,6 +60,7 @@ type gitAuditCommandTestParams struct {
 	auditCommandTestParams
 	// Override the test project repo clone url
 	OverrideRepoCloneUrl string
+	OverrideCommitMsg    string
 }
 
 func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
@@ -67,7 +68,11 @@ func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, e
 }
 
 func getDummyGitRepoUrl() string {
-	return fmt.Sprintf("https://test.git.provider.com/jfrog/dummy-repo-url%s.git", securityTests.GetUniqueSuffix())
+	return fmt.Sprintf("https://test.git.provider.com/jfrog-tests/dummy-repo-url%s.git", securityTests.GetUniqueSuffix())
+}
+
+func getDummyCommitMsg(baseMsg string) string {
+	return fmt.Sprintf("commit-message-%s-%s", baseMsg, securityTests.GetUniqueSuffix())
 }
 
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
@@ -79,6 +84,9 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 	if gitAuditParams.OverrideRepoCloneUrl != "" {
 		// Override the git remote url to a dummy one to avoid flaky tests due to collisions in policy/watch created for the same repo.
 		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")
+	}
+	if gitAuditParams.OverrideCommitMsg != "" {
+		assert.NoError(t, exec.Command("git", "commit", "--amend", "--date=now", "-m", gitAuditParams.OverrideCommitMsg).Run(), "Failed to set dummy commit msg")
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
@@ -138,6 +146,7 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 				Watches:       []string{watchName},
 			},
 			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-static-sca-simple-json"),
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
@@ -170,6 +179,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, WithLicense: true, WithVuln: true},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
+			OverrideCommitMsg:      getDummyCommitMsg("git-audit-violations-with-ignore-rule-before"),
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
@@ -203,6 +213,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
+			OverrideCommitMsg:      getDummyCommitMsg("git-audit-violations-with-ignore-rule-after"),
 		},
 		xrayVersion, xscVersion, "",
 		// No Violations should be reported since all violations are ignored.
@@ -267,6 +278,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
+			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
@@ -295,6 +307,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
+			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
