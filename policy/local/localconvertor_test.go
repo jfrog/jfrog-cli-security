@@ -208,7 +208,7 @@ func createScaTestViolation(id, component string, vioType violationutils.Violati
 			Severity:      severity,
 			Watch:         watch,
 		},
-		ImpactedComponent: cyclonedx.Component{
+		ImpactedComponent: &cyclonedx.Component{
 			BOMRef:     fmt.Sprintf("pkg:generic/%s", component),
 			PackageURL: fmt.Sprintf("pkg:generic/%s", component),
 			Type:       cyclonedx.ComponentTypeLibrary,

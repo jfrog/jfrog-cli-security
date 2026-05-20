@@ -54,7 +54,7 @@ type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, 
 type ParseLicenseFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
-type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
+type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) (err error) {
@@ -110,6 +110,13 @@ func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vuln
 			err = errors.Join(err, e)
 			continue
 		}
+		if len(impactedPackagesIds) == 0 {
+			// Vulnerability without any impacted packages, we pass an empty string as the impacted package ID
+			if e := handler(vulnerability, cves, applicabilityStatus, severity, "", []string{}, []formats.ComponentRow{}, [][]formats.ComponentRow{}); e != nil {
+				err = errors.Join(err, e)
+				continue
+			}
+		}
 		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
 			if e := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 				err = errors.Join(err, e)
@@ -154,13 +161,8 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 		}
 		// Get the related components for the vulnerability
 		for _, affectedComponent := range *vulnerability.Affects {
-			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
-			if relatedComponent == nil {
-				log.Verbose(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
-				continue
-			}
 			// Pass the vulnerability to the handler with its related information
-			if e := handler(vulnerability, *relatedComponent, GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); e != nil {
+			if e := handler(vulnerability, cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref), GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); e != nil {
 				err = errors.Join(err, e)
 				continue
 			}
@@ -215,6 +217,13 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 		if err != nil {
 			err = errors.Join(err, e)
 			continue
+		}
+		if len(impactedPackagesIds) == 0 {
+			// License without any impacted packages, we pass an empty string as the impacted package ID
+			if e := handler(license, "", []formats.ComponentRow{}, [][]formats.ComponentRow{}); e != nil {
+				err = errors.Join(err, e)
+				continue
+			}
 		}
 		for compIndex := range impactedPackagesIds {
 			if e := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
@@ -654,6 +663,10 @@ func GetDependencyId(depName, version string) string {
 }
 
 func GetScaIssueId(depName, version, issueId string) string {
+	if depName == "" && version == "" {
+		depName = "unknown"
+		version = "unknown"
+	}
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
 }
 
@@ -1277,6 +1290,11 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 
 func ParseScanGraphLicenseToSbom(destination *cyclonedx.BOM) ParseLicenseFunc {
 	return func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		if impactedPackagesId == "" {
+			// License without any impacted packages, we skip for now
+			log.Warn(fmt.Sprintf("License %s without any impacted component, skip attaching it to the SBOM", license.Key))
+			return nil
+		}
 		// Add the license related component if it is not already existing
 		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
 		// Attach the license to the component
@@ -1298,8 +1316,11 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 	// Prepare the information needed to create the SCA vulnerability
 	xrayService := GetXrayService()
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		// Add the vulnerability related component if it is not already existing
-		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
+		var affectedComponent *cyclonedx.Component
+		if impactedPackagesId != "" {
+			// Add the vulnerability related component if it is not already existing
+			affectedComponent = GetOrCreateScaComponent(destination, impactedPackagesId)
+		}
 		// Extract the vulnerability CVE's information and create the SCA vulnerability for each
 		cveIds, applicability, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, cves, severity, applicabilityStatus, xrayService)
 		extendedInformation := ""
@@ -1318,10 +1339,12 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 				Service:     xrayService,
 			}
 			vulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
-			// Attach the affected impacted library component to the vulnerability
-			cdxutils.AttachComponentAffects(vulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-				return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
-			})
+			if affectedComponent != nil {
+				// Attach the affected impacted library component to the vulnerability
+				cdxutils.AttachComponentAffects(vulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
+				})
+			}
 			// Attach JAS information to the vulnerability
 			AttachApplicabilityToVulnerability(destination, vulnerability, applicability[i])
 		}

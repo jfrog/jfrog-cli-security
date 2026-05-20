@@ -284,6 +284,7 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	if components == nil || len(*components) == 0 {
 		return
 	}
+	// TODO: Support BOM-Link Element: https://cyclonedx.org/docs/1.6/json/#vulnerabilities_items_affects_items_ref_anyOf_i1 (for now we only support BOMRef)
 	for i, comp := range *components {
 		if comp.BOMRef == ref {
 			return &(*components)[i]

@@ -193,11 +193,7 @@ func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedC
 	scaViolation = violationutils.ScaViolation{
 		Violation: convertToBasicViolation(getScaViolationType(violation), violation),
 	}
-	affectedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
-	if affectedComponent == nil {
-		return
-	}
-	scaViolation.ImpactedComponent = *affectedComponent
+	scaViolation.ImpactedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
 	return
 }
 

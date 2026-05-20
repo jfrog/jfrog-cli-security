@@ -349,14 +349,19 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, appli
 
 func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
 	bomIndex := cdxutils.NewBOMIndex(enrichedSbom, true)
-	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-		impactPaths := results.BuildImpactPath(component, bomIndex)
-		directDependencies := results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths)
+	return func(vulnerability cyclonedx.Vulnerability, component *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+		var impactPaths [][]formats.ComponentRow
+		var directDependencies []formats.ComponentRow
+		var compName, compVersion string
+		if component != nil {
+			impactPaths = results.BuildImpactPath(*component, bomIndex)
+			directDependencies = results.ExtractComponentDirectComponentsInBOM(bomIndex, *component, impactPaths)
+			compName, compVersion, _ = techutils.SplitPackageURL(component.PackageURL)
+		}
 		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
 		if e != nil {
 			return
 		}
-		compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 vulnerability.ID,
@@ -589,6 +594,20 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 		params.Summary,
 		params.MarkdownDescription,
 	)
+	if len(params.DirectComponents) == 0 && params.ImpactedPackagesName == "" && params.ImpactedPackagesVersion == "" {
+		log.Debug(fmt.Sprintf("Issue %s without any components, adding a result with the issue id only without any location", issueId))
+		// Issue without any components, lets add a result with the issue id only
+		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
+			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc("unknown", "unknown", issueId, watch))).
+			WithLevel(level.String())
+		// Add properties
+		issueResult = appendScaVulnerabilityPropertiesToSarifResult(issueResult, params.ApplicabilityStatus, params.FixedVersions, params.AddFixedVersionProperty)
+		if isViolation {
+			issueResult = appendViolationContextToSarifResult(issueResult, *params.Violation)
+		}
+		sarifResults = append(sarifResults, issueResult)
+		return
+	}
 	for _, directDependency := range params.DirectComponents {
 		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).

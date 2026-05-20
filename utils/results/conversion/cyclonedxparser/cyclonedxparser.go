@@ -142,9 +142,11 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, 
 	}
 	cdc.addJasService(applicableScan)
 	return results.ForEachScaBomVulnerability(cdc.currentTarget, enrichedSbom, cdc.entitledForJas, results.CollectRuns(applicableScan...),
-		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-			// Add the vulnerability related component if it is not already existing
-			cdc.getOrCreateScaComponent(compToParse)
+		func(vulnToParse cyclonedx.Vulnerability, compToParse *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			if compToParse != nil {
+				// Add the vulnerability related component if it is not already existing
+				cdc.getOrCreateScaComponent(*compToParse)
+			}
 			// Add the vulnerability to the BOM if it is not already existing
 			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
 			// Attach JAS information to the vulnerability
