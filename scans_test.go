@@ -178,7 +178,7 @@ func TestXrayBinaryScanJsonJar(t *testing.T) {
 		Total: &validations.TotalCount{Vulnerabilities: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 40, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 17, NotCovered: 3, NotApplicable: 20},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 6, NotCovered: 3, NotApplicable: 31},
 		},
 	})
 }
