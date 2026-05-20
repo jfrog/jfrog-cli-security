@@ -5,19 +5,19 @@ go 1.26.3
 require (
 	github.com/CycloneDX/cyclonedx-go v0.10.0
 	github.com/beevik/etree v1.6.0
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260514141440-b2463b51dc3a
+	github.com/jfrog/build-info-go v1.13.1-0.20260519074839-e2d81022f459
 	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260515045427-eb0cec44a4e2
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260515092054-cca97077293d
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260508101905-a17af78a38d7
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260519160146-908527b450ff
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260518073856-78c118beaa69
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
