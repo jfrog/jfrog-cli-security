@@ -284,7 +284,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
 				ValidateScan:                &validations.ScanCount{Sca: 20, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 13, NotCovered: 7, Inactive: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 15, NotCovered: 7, Inactive: 2},
 			},
 			ExactResultsMatch: true,
 		},

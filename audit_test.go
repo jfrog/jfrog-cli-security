@@ -1184,11 +1184,11 @@ func TestAuditNewScaCycloneDxUV(t *testing.T) {
 	assert.NoError(t, err)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 19, BomComponents: 1 /* root */ + 8 /* direct */ + 1 /* file (secret)*/, Licenses: 5},
+		Total:             &validations.TotalCount{Vulnerabilities: 20, BomComponents: 1 /* root */ + 8 /* direct */ + 1 /* file (secret)*/, Licenses: 5},
 		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 8},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 8, NotApplicable: 9},
+			ValidateScan:                &validations.ScanCount{Sca: 18, Sast: 1, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 9, NotApplicable: 9},
 		},
 	})
 }
