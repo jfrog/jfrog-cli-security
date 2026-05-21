@@ -56,8 +56,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
-const DockerScanCmdHiddenName = "dockerscan"
-const SkipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
+const (
+	DockerScanCmdHiddenName     = "dockerscan"
+	SkipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
+)
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
@@ -71,13 +73,14 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      ScanCmd,
 		},
 		{
-			Name:        "sbom-enrich",
-			Aliases:     []string{"se"},
-			Flags:       flags.GetCommandFlags(flags.Enrich),
-			Description: enrichDocs.GetDescription(),
-			Arguments:   enrichDocs.GetArguments(),
-			Category:    securityCategory,
-			Action:      EnrichCmd,
+			Name:             "sbom-enrich",
+			Aliases:          []string{"se"},
+			Flags:            flags.GetCommandFlags(flags.Enrich),
+			Description:      enrichDocs.GetDescription(),
+			Arguments:        enrichDocs.GetArguments(),
+			Category:         securityCategory,
+			SupportedFormats: []outputFormat.OutputFormat{outputFormat.Json},
+			Action:           EnrichCmd,
 		},
 		{
 			Name:        "malicious-scan",
@@ -211,7 +214,6 @@ func getAuditAndScansCommands() []components.Command {
 }
 
 func SourceMcpCmd(c *components.Context) error {
-
 	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
@@ -266,11 +268,16 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	EnrichCmd := enrich.NewEnrichCommand().
+	format, err := c.GetOutputFormat()
+	if err != nil {
+		return err
+	}
+	enrichCmd := enrich.NewEnrichCommand().
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
-		SetSpec(specFile)
-	return commandsCommon.Exec(EnrichCmd)
+		SetSpec(specFile).
+		SetOutputFormat(format)
+	return commandsCommon.Exec(enrichCmd)
 }
 
 func MaliciousScanCmd(c *components.Context) error {
