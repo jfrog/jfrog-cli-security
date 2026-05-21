@@ -22,21 +22,23 @@ import (
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
-			Name:        "audit",
-			Aliases:     []string{"a"},
-			Description: gitAuditDocs.GetDescription(),
-			Flags:       flags.GetCommandFlags(flags.GitAudit),
-			Hidden:      true,
-			Action:      GitAuditCmd,
+			Name:          "audit",
+			Aliases:       []string{"a"},
+			Description:   gitAuditDocs.GetDescription(),
+			AIDescription: gitAuditDocs.GetAIDescription(),
+			Flags:         flags.GetCommandFlags(flags.GitAudit),
+			Hidden:        true,
+			Action:        GitAuditCmd,
 		},
 		// TODO: Move cc cmd to Frogbot/Script
 		{
-			Name:        "count-contributors",
-			Aliases:     []string{"cc"},
-			Flags:       flags.GetCommandFlags(flags.GitCountContributors),
-			Description: gitContributorsDocs.GetContContributorsDescription(),
-			Hidden:      true,
-			Action:      GitCountContributorsCmd,
+			Name:          "count-contributors",
+			Aliases:       []string{"cc"},
+			Flags:         flags.GetCommandFlags(flags.GitCountContributors),
+			Description:   gitContributorsDocs.GetContContributorsDescription(),
+			AIDescription: gitContributorsDocs.GetContContributorsAIDescription(),
+			Hidden:        true,
+			Action:        GitCountContributorsCmd,
 		},
 	}
 }
