@@ -224,6 +224,9 @@ var commandFlags = map[string][]string{
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, LegacyPeerDeps, RunNative,
 	},
+	GitCountContributors: {
+		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
+	},
 	SastServer: {
 		Port,
 	},

@@ -212,6 +212,29 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func TestIsYarnBerryWorkspaceMember(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkgName string
+		version string
+		want    bool
+	}{
+		{"workspace member — typical", "admin-ui-428bae", "0.0.0", true},
+		{"workspace member — root style", "root-workspace-0b6124", "0.0.0", true},
+		{"real package version 0.0.0", "my-pkg", "0.0.0", false},     // no hex suffix
+		{"real package with hex-looking name", "a-1b2c3d", "1.2.3", false}, // wrong version
+		{"Yarn V1 use.local", "my-pkg", "0.0.0-use.local", false},     // caught by earlier check
+		{"suffix too short", "pkg-4abc", "0.0.0", false},              // 4 chars, not 6
+		{"suffix uppercase", "pkg-4ABC12", "0.0.0", false},            // uppercase hex not matched
+		{"suffix has non-hex", "pkg-4xyzab", "0.0.0", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isYarnBerryWorkspaceMember(tt.pkgName, tt.version))
+		})
+	}
+}
+
 func TestTreeAnalyzerFillGraphRelations(t *testing.T) {
 	tests := getTestCasesForFillGraphRelations()
 	for _, tt := range tests {
@@ -939,6 +962,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			// One HEAD probe 500s, the other 403s. The 500 is logged as a warning
+			// and the walk continues; expect a partial report containing only the
+			// confirmed-blocked package (underscore@1.13.6) plus the error.
 			name:                   "npm tree - two blocked one error",
 			tech:                   techutils.Npm,
 			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
@@ -1693,3 +1719,241 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
+
+// TestValidateRunNativeForTech checks that --run-native is accepted for npm and
+// rejected for all other techs with an error that names the offending tech.
+func TestValidateRunNativeForTech(t *testing.T) {
+	// Sanity: npm is the currently allow-listed tech. Both flag states pass.
+	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
+	assert.NoError(t, validateRunNativeForTech(techutils.Npm, false))
+
+	// The failing-test scenario from the bug report: yarn + --run-native
+	// must exit non-zero with a yarn-named error that points the user at
+	// the supported config flow.
+	t.Run("yarn rejects --run-native with actionable message", func(t *testing.T) {
+		err := validateRunNativeForTech(techutils.Yarn, true)
+		if assert.Error(t, err) {
+			msg := err.Error()
+			// Tech-neutral phrasing — the message must not hard-code
+			// "only supported for npm", because the allow-list is the
+			// source of truth and may grow over time.
+			assert.Contains(t, msg, "--run-native is not supported for 'yarn' projects")
+			assert.Contains(t, msg, "jf yarn-config", "the error must point the user at the supported config flow")
+		}
+		// Without the flag, yarn must pass validation cleanly — the
+		// guard is strictly conditional on --run-native being on.
+		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
+	})
+
+	// Every other supported tech follows the same contract. Catch silent
+	// acceptance for any tech that's in the doc-table-of-supported but
+	// hasn't implemented a native flow — same UX as yarn.
+	otherTechs := []techutils.Technology{
+		techutils.Gradle,
+		techutils.Maven,
+		techutils.Gem,
+		techutils.Pip,
+		techutils.Go,
+		techutils.Nuget,
+		techutils.Dotnet,
+		techutils.Conan,
+		techutils.Pnpm,
+		techutils.Cocoapods,
+		techutils.Swift,
+		techutils.Docker,
+	}
+	for _, tech := range otherTechs {
+		t.Run(tech.String()+" rejects --run-native", func(t *testing.T) {
+			err := validateRunNativeForTech(tech, true)
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), tech.String(),
+					"error message must name the offending tech so users running mixed-tech audits know which sub-audit complained")
+			}
+			assert.NoError(t, validateRunNativeForTech(tech, false))
+		})
+	}
+}
+
+// TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
+// fallback for the resolver-config lookup in auditTree. The exact
+// reason this fallback has to live here, separate from the existing
+// SetRepo fallback, is that auditTree calls
+// SetResolutionRepoInParamsIfExists *before* it reaches SetRepo — and
+// that earlier call is what populates params.DependenciesRepository,
+// which in turn decides whether configureYarnResolutionServerAndRunInstall
+// performs the .yarnrc.yml backup/replace/restore round-trip. Without
+// the round-trip, a 'yarn install' against curation that hits a 403
+// can leave the workspace install state inconsistent and the
+// downstream 'yarn info' enumeration fails with a workspace-assertion
+// error. So the contract under test is twofold:
+//
+//  1. For tech=Yarn with only npm.yaml present, return Npm so the
+//     resolver lookup reads npm.yaml (npm and yarn share the same
+//     Artifactory npm API, so the same repo serves both ecosystems).
+//  2. For any other input (yarn.yaml present, both present, neither
+//     present, or tech≠Yarn) return the input tech unchanged.
+//
+// The Npm-detected case is intentionally not exercised here because
+// resolveNpmYarnTech already upgrades that case to Yarn at the
+// detection layer (see TestResolveNpmYarnTech-style coverage in
+// resolveNpmYarnTech consumers); by the time auditTree sees tech=Npm
+// a matching npm.yaml is guaranteed to exist.
+//
+// Each subtest builds a hermetic .jfrog/projects/ directory, chdirs
+// into it, and isolates JFROG_CLI_HOME_DIR so a real config on the
+// developer's machine can't leak in.
+func TestResolveResolverTechForCuration(t *testing.T) {
+	type setup struct {
+		writeYarnYaml bool
+		writeNpmYaml  bool
+	}
+	testCases := []struct {
+		name string
+		tech techutils.Technology
+		setup
+		want techutils.Technology
+	}{
+		{
+			name:  "yarn with yarn.yaml present — no fallback, lookup must use yarn.yaml directly",
+			tech:  techutils.Yarn,
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn,
+		},
+		{
+			name:  "yarn with only npm.yaml — falls back to npm so the resolver lookup reads npm.yaml",
+			tech:  techutils.Yarn,
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Npm,
+		},
+		{
+			name:  "yarn with both configs — yarn.yaml wins; fallback only triggers when primary is missing",
+			tech:  techutils.Yarn,
+			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
+			want:  techutils.Yarn,
+		},
+		{
+			name: "yarn with neither config — no fallback target; return Yarn so the downstream lookup no-ops cleanly",
+			tech: techutils.Yarn,
+			want: techutils.Yarn,
+		},
+		{
+			name:  "npm input — never rewritten by this helper (resolveNpmYarnTech owns the inverse direction at the detection layer)",
+			tech:  techutils.Npm,
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Npm,
+		},
+		{
+			name:  "non-npm/yarn tech is passed through untouched even when npm.yaml exists",
+			tech:  techutils.Maven,
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Maven,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempProjectDir := t.TempDir()
+			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
+			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+			if tc.writeYarnYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
+			}
+			if tc.writeNpmYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
+			}
+			// Isolate JFROG_CLI_HOME_DIR so a real ~/.jfrog/projects/*.yaml
+			// on the developer's machine can't leak into the fallback
+			// (GetProjectConfFilePath falls back to JFROG_CLI_HOME_DIR
+			// when nothing matches walking up from CWD).
+			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
+			defer restoreHome()
+			restoreCwd := changeDirForTest(t, tempProjectDir)
+			defer restoreCwd()
+
+			got := resolveResolverTechForCuration(tc.tech)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestResolveNpmYarnTech(t *testing.T) {
+	type setup struct {
+		writeYarnYaml bool
+		writeNpmYaml  bool
+	}
+	testCases := []struct {
+		name  string
+		tech  string
+		setup setup
+		want  string
+	}{
+		{
+			name:  "npm with yarn.yaml only — promoted to yarn",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm with both yaml files — npm.yaml wins, no promotion",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "npm with npm.yaml only — stays npm",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "npm with neither yaml — stays npm",
+			tech:  techutils.Npm.String(),
+			setup: setup{},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "yarn input is never rewritten by this helper",
+			tech:  techutils.Yarn.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "non-npm/yarn tech passes through untouched",
+			tech:  techutils.Maven.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Maven.String(),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempProjectDir := t.TempDir()
+			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
+			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+			if tc.setup.writeYarnYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
+			}
+			if tc.setup.writeNpmYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
+			}
+			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
+			defer restoreHome()
+			restoreCwd := changeDirForTest(t, tempProjectDir)
+			defer restoreCwd()
+
+			got := resolveNpmYarnTech(tc.tech)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func changeDirForTest(t *testing.T, dir string) func() {
+	t.Helper()
+	origCwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	return func() {
+		// Restore CWD even if the test fails partway, so the next
+		// subtest's GetProjectConfFilePath walk starts from a known dir.
+		require.NoError(t, os.Chdir(origCwd))
+	}
+}
+

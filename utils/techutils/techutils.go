@@ -1,6 +1,7 @@
 package techutils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -422,6 +423,36 @@ func DetectedTechnologiesList() (technologies []string) {
 	return detectedTechnologiesListInPath(wd, false)
 }
 
+// DetectedTechnologiesListForCurationAudit is the curation-audit variant of
+// DetectedTechnologiesList that additionally re-routes any working directory
+// detected as Npm to Yarn whenever a parent directory is a yarn workspace
+// root that claims it. The promotion is curation-only by design — the
+// generic file-based detector intentionally does not walk upward, and other
+// commands ('jf audit', 'jf scan', etc.) keep the legacy npm-fallback
+// behaviour for yarn workspace members so this change cannot regress them.
+//
+// Used by doCurateAudit so 'jf ca --working-dirs=<workspace member>'
+// resolves through yarn (matching how the project's lockfile was produced)
+// instead of npm (which would synthesise a different dependency set and
+// produce curation answers that don't match what yarn would have resolved).
+func DetectedTechnologiesListForCurationAudit() (technologies []string) {
+	wd, err := os.Getwd()
+	if errorutils.CheckError(err) != nil {
+		return
+	}
+	detected, err := DetectTechnologiesDescriptors(wd, false, []string{}, map[Technology][]string{}, "")
+	if err != nil {
+		return
+	}
+	if len(detected) == 0 {
+		return
+	}
+	promoteYarnWorkspaceMembers(detected)
+	techStringsList := DetectedTechnologiesToSlice(detected)
+	log.Info(fmt.Sprintf("Detected: %s.", strings.Join(techStringsList, ", ")))
+	return techStringsList
+}
+
 func detectedTechnologiesListInPath(path string, recursive bool) (technologies []string) {
 	detectedTechnologies, err := DetectTechnologiesDescriptors(path, recursive, []string{}, map[Technology][]string{}, "")
 	if err != nil {
@@ -703,6 +734,146 @@ func isTechExcludedInWorkingDir(tech Technology, wd string, excludedTechAtWorkin
 		}
 	}
 	return false
+}
+
+// promoteYarnWorkspaceMembers re-routes any working directory currently
+// detected as Npm to Yarn whenever a parent directory is a yarn workspace
+// root that claims it. The detector by default routes a bare package.json
+// dir to npm (it's an npm indicator but only a yarn descriptor), so without
+// this fixup 'jf ca --working-dirs=<member>' on a yarn project would resolve
+// <member> via 'npm ls' — producing curation answers that don't match what
+// yarn would have resolved, and skipping the yarn-specific code paths that
+// understand workspaces, --mode=update-lockfile, and the curation install
+// failure modes.
+//
+// The promotion preserves the descriptor list from the original npm entry
+// (which is always [<member>/package.json] in this scenario) so downstream
+// code that iterates descriptors gets the same shape it would for any
+// yarn dir. If npm has no other dirs after the move, the empty Npm entry
+// is removed so the detector report doesn't claim a phantom npm project.
+func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string][]string) {
+	npmDirs, hasNpm := technologiesDetected[Npm]
+	if !hasNpm {
+		return
+	}
+	for wd, descriptors := range npmDirs {
+		if !isYarnWorkspaceMemberDir(wd) {
+			continue
+		}
+		log.Debug(fmt.Sprintf(
+			"Promoting working directory '%s' from Npm to Yarn: a parent yarn workspace root claims it via its 'workspaces' field.", wd))
+		delete(npmDirs, wd)
+		if _, exist := technologiesDetected[Yarn]; !exist {
+			technologiesDetected[Yarn] = map[string][]string{}
+		}
+		technologiesDetected[Yarn][wd] = descriptors
+	}
+	if len(npmDirs) == 0 {
+		delete(technologiesDetected, Npm)
+	}
+}
+
+// isYarnWorkspaceMemberDir reports whether dir is a yarn workspace member —
+// a child directory whose ownership is declared by a parent's package.json
+// "workspaces" field, with that parent being a yarn-flavoured root.
+//
+// "Yarn-flavoured" requires one of yarn.lock / .yarnrc.yml / .yarnrc /
+// .yarn next to the parent's package.json. Without this guard a sibling
+// npm-workspaces project would be claimed by mistake (npm also uses a
+// "workspaces" field).
+//
+// Walking stops at the first workspace-aware ancestor: yarn's own
+// resolver does not look beyond the first workspaces declaration, so
+// neither should we.
+func isYarnWorkspaceMemberDir(dir string) bool {
+	absTarget, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	cur := filepath.Dir(absTarget)
+	for {
+		pkgPath := filepath.Join(cur, "package.json")
+		if _, statErr := os.Stat(pkgPath); statErr == nil {
+			data, readErr := os.ReadFile(pkgPath)
+			if readErr != nil {
+				return false
+			}
+			var raw struct {
+				Workspaces json.RawMessage `json:"workspaces"`
+			}
+			if jsonErr := json.Unmarshal(data, &raw); jsonErr == nil && len(raw.Workspaces) > 0 {
+				if !DirectoryHasYarnIndicator(cur) {
+					return false
+				}
+				return ancestorClaims(cur, absTarget, raw.Workspaces)
+			}
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return false
+		}
+		cur = parent
+	}
+}
+
+// DirectoryHasYarnIndicator reports whether dir carries any of the files
+// that mark it as a yarn-managed project root. Used to disambiguate between
+// yarn and npm workspaces — both ecosystems share the "workspaces" field in
+// package.json, but only yarn puts these indicators next to it. Shared by
+// curation detection here and by yarn's workspace-root walk in
+// sca/bom/buildinfo/technologies/yarn.
+func DirectoryHasYarnIndicator(dir string) bool {
+	for _, name := range []string{"yarn.lock", ".yarnrc.yml", ".yarnrc", ".yarn"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ancestorClaims reports whether ancestor's "workspaces" patterns expand
+// to a directory equal to absTarget. We resolve patterns relative to
+// ancestor with filepath.Glob (the same expansion yarn V2+ performs) and
+// compare absolute paths, so symlinked or '.'-prefixed paths still match.
+func ancestorClaims(ancestor, absTarget string, workspacesField json.RawMessage) bool {
+	patterns := DecodeYarnWorkspacesField(workspacesField)
+	for _, pattern := range patterns {
+		matches, globErr := filepath.Glob(filepath.Join(ancestor, pattern))
+		if globErr != nil {
+			continue
+		}
+		for _, m := range matches {
+			absMatch, absErr := filepath.Abs(m)
+			if absErr != nil {
+				continue
+			}
+			if absMatch == absTarget {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// DecodeYarnWorkspacesField accepts either form yarn V2+ allows in
+// package.json — the array form (["packages/*"]) or the object form
+// ({"packages": [...]}) — and returns the flat list of glob patterns.
+// Anything else (bare string, number, etc.) is rejected and returns nil
+// so the caller treats the ancestor as not claiming the target. Shared
+// between curation detection here and the yarn package's workspace-root
+// walk to keep the two semantics in sync.
+func DecodeYarnWorkspacesField(raw json.RawMessage) []string {
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return arr
+	}
+	var obj struct {
+		Packages []string `json:"packages"`
+	}
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		return obj.Packages
+	}
+	return nil
 }
 
 // Remove sub directories keys from the given workingDirectoryToFiles map.
