@@ -26,7 +26,7 @@ require (
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.44.0
 	golang.org/x/text v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
