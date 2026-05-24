@@ -75,6 +75,21 @@ func getDummyCommitMsg(baseMsg string) string {
 	return fmt.Sprintf("commit-message-%s-%s", baseMsg, securityTests.GetUniqueSuffix())
 }
 
+const (
+	testGitUserName  = "jfrog-cli-security-test"
+	testGitUserEmail = "jfrog-cli-security-test@jfrog.com"
+)
+
+// amendHeadCommitForTest amends HEAD with a unique message and timestamp.
+// CI runners and some dev machines have no global git user.identity; -c supplies a local identity.
+func amendHeadCommitForTest(t *testing.T, message string) {
+	t.Helper()
+	cmd := exec.Command("git", "-c", "user.name="+testGitUserName, "-c", "user.email="+testGitUserEmail,
+		"commit", "--amend", "--date=now", "-m", message)
+	out, err := cmd.CombinedOutput()
+	assert.NoError(t, err, "Failed to set dummy commit msg: %s", string(out))
+}
+
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams gitAuditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
@@ -86,7 +101,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		assert.NoError(t, exec.Command("git", "remote", "set-url", "origin", gitAuditParams.OverrideRepoCloneUrl).Run(), "Failed to set dummy git remote url")
 	}
 	if gitAuditParams.OverrideCommitMsg != "" {
-		assert.NoError(t, exec.Command("git", "commit", "--amend", "--date=now", "-m", gitAuditParams.OverrideCommitMsg).Run(), "Failed to set dummy commit msg")
+		amendHeadCommitForTest(t, gitAuditParams.OverrideCommitMsg)
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
