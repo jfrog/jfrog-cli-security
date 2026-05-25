@@ -294,7 +294,10 @@ func (sjc *CmdResultsSimpleJsonConverter) createLicenseViolationRow(licenseKey, 
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) createOpRiskViolationRow(opRiskViolation violationutils.OperationalRiskViolation) formats.OperationalRiskViolationRow {
-	compName, compVersion, compType := techutils.SplitPackageURL(opRiskViolation.ImpactedComponent.PackageURL)
+	var compName, compVersion, compType string
+	if opRiskViolation.ImpactedComponent != nil {
+		compName, compVersion, compType = techutils.SplitPackageURL(opRiskViolation.ImpactedComponent.PackageURL)
+	}
 	return formats.OperationalRiskViolationRow{
 		ViolationContext: convertToViolationContext(opRiskViolation.Violation),
 		ImpactedDependencyDetails: formats.ImpactedDependencyDetails{

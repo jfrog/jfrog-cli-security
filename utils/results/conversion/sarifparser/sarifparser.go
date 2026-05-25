@@ -236,7 +236,10 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 			err = errors.Join(err, e)
 			continue
 		}
-		compName, compVersion, _ := techutils.SplitPackageURL(cveViolation.ImpactedComponent.PackageURL)
+		var compName, compVersion string
+		if cveViolation.ImpactedComponent != nil {
+			compName, compVersion, _ = techutils.SplitPackageURL(cveViolation.ImpactedComponent.PackageURL)
+		}
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 sc.currentCmdType,
 			IssueId:                 cveViolation.CveVulnerability.ID,
@@ -258,7 +261,12 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 	}
 	// License violations
 	for _, licenseViolation := range violationsScanResults.License {
-		compName, compVersion, _ := techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
+		var compName, compVersion string
+		summary := licenseViolation.LicenseKey
+		if licenseViolation.ImpactedComponent != nil {
+			compName, compVersion, _ = techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
+			summary = getLicenseViolationSummary(compName, compVersion, licenseViolation.LicenseKey)
+		}
 		markdownDescription, e := getScaLicenseViolationMarkdown(compName, compVersion, licenseViolation.LicenseKey, licenseViolation.DirectComponents)
 		if e != nil {
 			err = errors.Join(err, e)
@@ -267,7 +275,7 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 sc.currentCmdType,
 			IssueId:                 licenseViolation.LicenseKey,
-			Summary:                 getLicenseViolationSummary(compName, compVersion, licenseViolation.LicenseKey),
+			Summary:                 summary,
 			Violation:               &licenseViolation.Violation,
 			MarkdownDescription:     markdownDescription,
 			SeverityScore:           fmt.Sprintf("%.1f", severityutils.GetSeverityScore(licenseViolation.Severity, jasutils.Applicable)),

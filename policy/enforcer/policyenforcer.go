@@ -257,7 +257,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 			if vulnerability.ID != issueId {
 				continue
 			}
-			if impactedComponent != nil {
+			if impactedComponent != nil && vulnerability.Affects != nil {
 				for _, affected := range *vulnerability.Affects {
 					if affected.Ref == impactedComponent.BOMRef {
 						// Found the relevant component in a vulnerability
@@ -429,20 +429,19 @@ func convertToCveViolations(cmdResults *results.SecurityCommandResults, violatio
 
 func getInfectedComponentIds(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) []string {
 	actualInfectedComponentIds := []string{}
-		for _, infectedComponentXrayId := range violation.InfectedComponentIds {
-			if infectedComponentXrayId == "" {
-				log.Warn(fmt.Sprintf("Skipping violation with empty infected component ID for violation ID %s", violation.Id))
-				continue
-			}
-			if affectedComponent, _, _ := locateBomComponentInfo(cmdResults, infectedComponentXrayId, violation); affectedComponent == nil {
-				log.Warn(fmt.Sprintf("Skipping violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
-				continue
-			}
-			actualInfectedComponentIds = append(actualInfectedComponentIds, infectedComponentXrayId)
+	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
+		if infectedComponentXrayId == "" {
+			log.Warn(fmt.Sprintf("Skipping violation with empty infected component ID for violation ID %s", violation.Id))
+			continue
 		}
+		if affectedComponent, _, _ := locateBomComponentInfo(cmdResults, infectedComponentXrayId, violation); affectedComponent == nil {
+			log.Warn(fmt.Sprintf("Skipping violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
+			continue
+		}
+		actualInfectedComponentIds = append(actualInfectedComponentIds, infectedComponentXrayId)
+	}
 	return actualInfectedComponentIds
 }
-
 
 func createCveViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId, cveId string, violation services.XrayViolation) *violationutils.CveViolation {
 	affectedComponent, scaViolation := convertToScaViolation(cmdResults, impactedComponentXrayId, violation)
@@ -482,7 +481,7 @@ func convertToLicenseViolations(cmdResults *results.SecurityCommandResults, viol
 
 func createLicenseViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) violationutils.LicenseViolation {
 	_, scaViolation := convertToScaViolation(cmdResults, impactedComponentXrayId, violation)
-	return  violationutils.LicenseViolation{
+	return violationutils.LicenseViolation{
 		ScaViolation: scaViolation,
 		LicenseKey:   violation.IssueId,
 		LicenseName:  violation.Description,

@@ -149,20 +149,23 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 		return nil
 	}
 	for _, vulnerability := range *bom.Vulnerabilities {
-		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
-			// If there are no affected components, we skip the vulnerability.
-			log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no affected components", vulnerability.BOMRef))
-			continue
-		}
+		severity := cdxRatingToSeverity(vulnerability.Ratings)
 		// Check the CA status of the vulnerability
 		var applicability *formats.Applicability
 		if entitledForJas && len(applicabilityRuns) > 0 {
 			applicability = GetCveApplicabilityField(vulnerability.BOMRef, applicabilityRuns)
 		}
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			// No affected components, pass nil as the affected component and the applicability
+			if e := handler(vulnerability, nil, nil, applicability, severity); e != nil {
+				err = errors.Join(err, e)
+			}
+			return
+		}
 		// Get the related components for the vulnerability
 		for _, affectedComponent := range *vulnerability.Affects {
 			// Pass the vulnerability to the handler with its related information
-			if e := handler(vulnerability, cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref), GetFixedVersions(affectedComponent), applicability, cdxRatingToSeverity(vulnerability.Ratings)); e != nil {
+			if e := handler(vulnerability, cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref), GetFixedVersions(affectedComponent), applicability, severity); e != nil {
 				err = errors.Join(err, e)
 				continue
 			}
