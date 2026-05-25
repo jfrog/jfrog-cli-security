@@ -160,7 +160,7 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 			if e := handler(vulnerability, nil, nil, applicability, severity); e != nil {
 				err = errors.Join(err, e)
 			}
-			return
+			continue
 		}
 		// Get the related components for the vulnerability
 		for _, affectedComponent := range *vulnerability.Affects {
