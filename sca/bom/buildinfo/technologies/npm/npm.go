@@ -21,6 +21,7 @@ import (
 const (
 	IgnoreScriptsFlag     = "--ignore-scripts"
 	LegacyPeerDepsFlag    = "--legacy-peer-deps"
+	disableWorkspacesFlag = "--workspaces=false"
 	artifactoryApiNpmPath = "/api/npm/"
 	// npmAuthTokenSuffix is the npm config-key suffix used to look up a registry's auth token in .npmrc
 	// (e.g. //registry.example.com/:_authToken=...). It is a key name, not a credential value.
@@ -96,7 +97,7 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 		return nil, fmt.Errorf("failed to locate npm executable: %w", err)
 	}
 
-	registryData, _, err := biutils.RunNpmCmd(npmExecPath, "", []string{"config", "get", "registry"}, log.Logger)
+	registryData, _, err := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs("registry"), log.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read npm registry from native config: %w", err)
 	}
@@ -111,7 +112,7 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	tokenData, _, _ := biutils.RunNpmCmd(npmExecPath, "", []string{"config", "get", authKey}, log.Logger)
+	tokenData, _, _ := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs(authKey), log.Logger)
 	authToken := strings.TrimSpace(string(tokenData))
 	if authToken == "undefined" || authToken == "null" {
 		authToken = ""
@@ -122,6 +123,10 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 		RepoName:       repoName,
 		AuthToken:      authToken,
 	}, nil
+}
+
+func npmConfigGetArgs(key string) []string {
+	return []string{"config", "get", key, disableWorkspacesFlag}
 }
 
 // buildNpmAuthTokenKey returns the npm config key used to look up the auth token for a

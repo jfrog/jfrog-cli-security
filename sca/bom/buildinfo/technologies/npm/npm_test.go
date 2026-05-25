@@ -251,6 +251,30 @@ func TestBuildNpmAuthTokenKey(t *testing.T) {
 	}
 }
 
+func TestNpmConfigGetArgsDisableWorkspaces(t *testing.T) {
+	assert.Equal(t, []string{"config", "get", "registry", disableWorkspacesFlag}, npmConfigGetArgs("registry"))
+}
+
+func TestNpmConfigGetRegistryFromWorkspacePackage(t *testing.T) {
+	npmVersion, npmExecPath, err := bibuildutils.GetNpmVersionAndExecPath(&biutils.NullLog{})
+	if err != nil {
+		t.Skipf("npm executable is unavailable: %v", err)
+	}
+	if !npmVersion.AtLeast("7.0.0") {
+		t.Skipf("npm workspaces require npm 7 or newer, got %s", npmVersion.GetVersion())
+	}
+
+	rootDir := t.TempDir()
+	workspaceDir := filepath.Join(rootDir, "containers", "backend")
+	assert.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(rootDir, "package.json"), []byte(`{"private":true,"workspaces":["containers/backend"]}`), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name":"backend","version":"1.0.0"}`), 0o644))
+
+	registryData, _, err := bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry"), &biutils.NullLog{})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, strings.TrimSpace(string(registryData)))
+}
+
 func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
 	testCases := []struct {
 		name          string
