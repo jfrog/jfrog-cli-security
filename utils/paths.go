@@ -139,7 +139,7 @@ func IsPathMatchesPatterns(rootPath, path string, isRecursive, fromRelativePath 
 		}
 		path = relativePath
 	}
-	match, err := regexp.MatchString(fspatterns.PreparePathPattern(clientUtils.WildCardPattern, isRecursive, patterns...), path)
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(patterns, clientUtils.WildCardPattern, isRecursive), path)
 	if err != nil {
 		log.Warn("Failed to check if path matches pattern:", err.Error())
 		return false

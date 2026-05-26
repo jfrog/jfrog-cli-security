@@ -15,7 +15,7 @@ require (
 	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260522105851-297d2027a72e
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260526100850-f85282fe6d9b
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260522091649-43f236276873
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20260522071027-8b60a715d6e4
 	github.com/magiconair/properties v1.8.10
@@ -152,7 +152,7 @@ require (
 )
 
 // attiasas:config_profile_patterns
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260517091804-0a66c2f3d4f9
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260526131529-eb4af500071d
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 

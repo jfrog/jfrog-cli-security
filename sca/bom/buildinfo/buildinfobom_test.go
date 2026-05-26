@@ -93,9 +93,9 @@ func TestMergeResults(t *testing.T) {
 		{
 			name: "appends full dependency trees",
 			existing: &DependencyTreeResult{
-				FlatTree:       &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
-				FullDepTrees:   []*xrayUtils.GraphNode{fullTreeA},
-				DownloadUrls:   map[string]string{},
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
+				FullDepTrees: []*xrayUtils.GraphNode{fullTreeA},
+				DownloadUrls: map[string]string{},
 			},
 			additional: &DependencyTreeResult{
 				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeB}},
