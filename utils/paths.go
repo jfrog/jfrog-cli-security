@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	JfrogCurationDirName = "curation"
+	JfrogCurationDirName     = "curation"
+	JfrogContributorsDirName = "contributors-cache"
 
 	CurationsDir = "JFROG_CLI_CURATION_DIR"
 
@@ -35,6 +36,14 @@ func getJfrogCurationFolder() (string, error) {
 		return "", err
 	}
 	return filepath.Join(jfrogHome, JfrogCurationDirName), nil
+}
+
+func GetContributorsCacheDir() (string, error) {
+	jfrogHome, err := coreutils.GetJfrogHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(jfrogHome, JfrogContributorsDirName), nil
 }
 
 func GetCurationCacheFolder() (string, error) {

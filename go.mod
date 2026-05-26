@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.25.7
+go 1.26.3
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.10.0
@@ -11,13 +11,13 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260429070557-93b98034d295
-	github.com/jfrog/froggit-go v1.21.1
+	github.com/jfrog/build-info-go v1.13.1-0.20260521104402-1e35b9b5b0c6
+	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260501071051-3c8035fc662b
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260521114102-d507b5c64941
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260505115216-b6c67f807bc3
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260522105851-297d2027a72e
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260522091649-43f236276873
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260522071027-8b60a715d6e4
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
