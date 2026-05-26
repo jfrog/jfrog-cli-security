@@ -550,10 +550,10 @@ func TestShouldGenerateSbom(t *testing.T) {
 	}}
 
 	testCases := []struct {
-		name       string
-		params     *AuditParams
+		name        string
+		params      *AuditParams
 		scanResults *results.TargetResults
-		expectSbom bool
+		expectSbom  bool
 	}{
 		{
 			name: "include sbom requested explicitly",
@@ -608,7 +608,7 @@ func TestShouldGenerateSbom(t *testing.T) {
 				return params
 			}(),
 			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithSca}},
-			expectSbom: true,
+			expectSbom:  true,
 		},
 		{
 			name: "non sca scans with sca disabled in config profile",
@@ -618,7 +618,7 @@ func TestShouldGenerateSbom(t *testing.T) {
 				return params
 			}(),
 			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithoutSca}},
-			expectSbom: false,
+			expectSbom:  false,
 		},
 	}
 
