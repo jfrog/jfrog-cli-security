@@ -38,7 +38,7 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 	}
 	configProfile, err := xscService.GetConfigProfileByUrl(cloneRepoUrl)
 	if err != nil {
-		err = fmt.Errorf("failed to get config profile for url '%s': %q", serverDetails.Url, err)
+		err = fmt.Errorf("failed to get config profile for url '%s': %q.", serverDetails.Url, err)
 	}
 	return configProfile, err
 }
