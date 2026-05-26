@@ -796,7 +796,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	var err error
 	uploadPath := ""
 	if params.uploadCdxResults {
-		log.Debug("Finished scanning. Uploading scan results to Artifactory")
+		log.Debug("Finished scanning. Uploading scan results to Artifactory.")
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}
