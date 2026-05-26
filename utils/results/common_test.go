@@ -1047,13 +1047,13 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 	t.Run("picks npm when requested", func(t *testing.T) {
 		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.FirstTechnology())
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 		assert.Equal(t, sharedDir, found.Target)
 	})
 	t.Run("picks poetry when requested", func(t *testing.T) {
 		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Poetry)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Poetry, found.FirstTechnology())
+		assert.Equal(t, techutils.Poetry, found.Technologies[0])
 	})
 	t.Run("reversed slice order still picks npm", func(t *testing.T) {
 		reversed := NewCommandResults(utils.SourceCode)
@@ -1062,8 +1062,33 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
 		found := SearchTargetResultsByRelativePath(rel, reversed, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.FirstTechnology())
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 	})
+}
+
+func TestFormalTechOrCdxCompType_MultiTech(t *testing.T) {
+	assert.Equal(t, "Poetry", FormalTechOrCdxCompType("pypi", true, techutils.Poetry))
+	assert.Equal(t, "Yarn", FormalTechOrCdxCompType("npm", true, techutils.Yarn))
+	assert.Equal(t, "pypi", FormalTechOrCdxCompType("pypi", false, techutils.Poetry))
+}
+
+func TestGetIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []techutils.Technology
+		expected techutils.Technology
+	}{
+		{"empty response npm target", "", "npm", []techutils.Technology{techutils.Npm}, techutils.Npm},
+		{"pip response poetry target", "pip", "pypi", []techutils.Technology{techutils.Poetry}, techutils.Poetry},
+		{"npm response disambiguate", "npm", "npm", []techutils.Technology{techutils.Maven, techutils.Npm}, techutils.Npm},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, GetIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
 }
 
 func TestDepTreeToSbom(t *testing.T) {

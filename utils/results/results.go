@@ -252,15 +252,15 @@ type ScanTarget struct {
 	CentralConfigModules []xscServices.Module `json:"central_config_modules,omitempty"`
 }
 
-// FirstTechnology returns the first technology in the list, or empty if none are set.
-// Use this only in backward-compatible call sites where a single technology is expected
-// (e.g. old-flow BuildInfo BOM generation, legacy issue-technology fallback).
-// For multi-tech aware code, prefer iterating Technologies directly or using HasTechnology().
-func (st ScanTarget) FirstTechnology() techutils.Technology {
-	if len(st.Technologies) == 0 {
-		return ""
+func (st ScanTarget) DetectedTechnologies() []techutils.Technology {
+	technologies := datastructures.MakeSet[techutils.Technology]()
+	for _, tech := range st.Technologies {
+		if tech == techutils.NoTech {
+			continue
+		}
+		technologies.Add(tech)
 	}
-	return st.Technologies[0]
+	return technologies.ToSlice()
 }
 
 func (st ScanTarget) HasTechnology(tech techutils.Technology) bool {
@@ -733,7 +733,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 
 func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	technologiesSet := datastructures.MakeSet[techutils.Technology]()
-	technologiesSet.AddElements(sr.Technologies...)
+	technologiesSet.AddElements(sr.DetectedTechnologies()...)
 	if sr.ScaResults == nil {
 		return technologiesSet.ToSlice()
 	}

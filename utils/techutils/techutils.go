@@ -884,6 +884,94 @@ func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
 	return cdxPackageType
 }
 
+// IsAmbiguousTechnologyString returns true for Xray/CDX types that map to multiple package managers (pypi, gav, npm, etc.).
+func IsAmbiguousTechnologyString(technology string) bool {
+	switch strings.ToLower(technology) {
+	case "", "generic", Pypi, Gav, string(Npm):
+		return true
+	default:
+		return false
+	}
+}
+
+// technologySharesXrayEcosystem reports whether tech belongs to the same Xray ecosystem as xrayType.
+func technologySharesXrayEcosystem(tech Technology, xrayType string) bool {
+	if tech.GetXrayPackageType() == xrayType {
+		return true
+	}
+	switch xrayType {
+	case Pypi:
+		return tech == Pip || tech == Pipenv || tech == Poetry
+	case Gav:
+		return tech == Maven || tech == Gradle
+	case string(Npm):
+		return tech == Npm || tech == Pnpm || tech == Yarn
+	default:
+		return false
+	}
+}
+
+// ComponentPackageTypeToXrayType normalizes a CDX PURL type or Xray component-id type to an Xray package type.
+func ComponentPackageTypeToXrayType(packageType string) string {
+	if packageType == "" {
+		return ""
+	}
+	switch strings.ToLower(packageType) {
+	case Pypi, Gav:
+		return strings.ToLower(packageType)
+	default:
+		return CdxPackageTypeToXrayPackageType(packageType)
+	}
+}
+
+// TechnologiesInTargetsWithXrayType returns target technologies that share the given Xray package type ecosystem.
+func TechnologiesInTargetsWithXrayType(targets []Technology, xrayType string) []Technology {
+	if xrayType == "" {
+		return nil
+	}
+	var matches []Technology
+	for _, tech := range targets {
+		if tech == NoTech {
+			continue
+		}
+		if technologySharesXrayEcosystem(tech, xrayType) {
+			matches = append(matches, tech)
+		}
+	}
+	return matches
+}
+
+func containsTechnology(targets []Technology, tech Technology) bool {
+	for _, t := range targets {
+		if t == tech {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveIssueTechnology picks the most specific technology for an SCA issue using the Xray response, detected target
+// technologies, and the impacted component package type.
+func ResolveIssueTechnology(responseTechnology string, targetTechnologies []Technology, componentPackageType string) Technology {
+	responseTech := ToTechnology(responseTechnology)
+	xrayType := ComponentPackageTypeToXrayType(componentPackageType)
+	candidates := TechnologiesInTargetsWithXrayType(targetTechnologies, xrayType)
+
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) && containsTechnology(candidates, responseTech) {
+		return responseTech
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) {
+		return responseTech
+	}
+	if len(targetTechnologies) == 1 && targetTechnologies[0] != NoTech {
+		return targetTechnologies[0]
+	}
+	return NoTech
+}
+
 // https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
 // Parse a given Package URL (purl) and return the component namespace, name, version, and package type.
 func SplitPackageUrlWithQualifiers(purl string) (packageType, compNamespace, compName, compVersion string, qualifiers map[string]string) {

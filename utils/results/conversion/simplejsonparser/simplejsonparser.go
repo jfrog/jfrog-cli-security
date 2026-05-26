@@ -117,7 +117,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(sbom *cyclonedx.BOM)
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 					ImpactedDependencyVersion: compVersion,
-					ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
+					ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty, sjc.currentTarget.Technologies...),
 					Components:                results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths),
 				},
 				ImpactPaths: impactPaths,
@@ -238,13 +238,13 @@ func (sjc *CmdResultsSimpleJsonConverter) createVulnerabilityOrViolationRowFromC
 			SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
 			ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 			ImpactedDependencyVersion: compVersion,
-			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
+			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty, sjc.currentTarget.Technologies...),
 			Components:                directComponents,
 		},
 		ImpactPaths:              impactPaths,
 		Cves:                     results.CdxVulnToCveRows(vulnerability, contextualAnalysis),
 		FixedVersions:            results.CdxToFixedVersions(fixedVersions),
-		Technology:               results.GetIssueTechnology(compType, sjc.currentTarget.FirstTechnology()),
+		Technology:               results.GetIssueTechnology("", sjc.currentTarget.Technologies, compType),
 		References:               toReferences(vulnerability),
 		Applicable:               applicabilityStatus.ToString(sjc.pretty),
 		JfrogResearchInformation: jfrogResearch,
@@ -276,7 +276,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createLicenseViolationRow(licenseKey, 
 				SeverityDetails:           severityutils.GetAsDetails(severity, jasutils.NotScanned, sjc.pretty),
 				ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 				ImpactedDependencyVersion: compVersion,
-				ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
+				ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty, sjc.currentTarget.Technologies...),
 				Components:                directComponents,
 			},
 			ImpactPaths: impactPaths,
@@ -292,7 +292,7 @@ func (sjc *CmdResultsSimpleJsonConverter) createOpRiskViolationRow(opRiskViolati
 			SeverityDetails:           severityutils.GetAsDetails(opRiskViolation.Severity, jasutils.NotScanned, sjc.pretty),
 			ImpactedDependencyName:    normalizeCdxComponentName(compName, compType),
 			ImpactedDependencyVersion: compVersion,
-			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty),
+			ImpactedDependencyType:    results.FormalTechOrCdxCompType(compType, sjc.pretty, sjc.currentTarget.Technologies...),
 			Components:                opRiskViolation.DirectComponents,
 		},
 		RiskReason:    opRiskViolation.RiskReason,
@@ -418,7 +418,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
 					ImpactedDependencyName:    impactedPackagesName,
 					ImpactedDependencyVersion: impactedPackagesVersion,
-					ImpactedDependencyType:    results.FormalTechOrCdxCompType(impactedPackagesType, pretty),
+					ImpactedDependencyType:    results.FormalTechOrCdxCompType(impactedPackagesType, pretty, target.Technologies...),
 					Components:                directComponents,
 				},
 				FixedVersions:            fixedVersion,
@@ -427,7 +427,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 				References:               vulnerability.References,
 				JfrogResearchInformation: results.ConvertJfrogResearchInformation(vulnerability.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.FirstTechnology()),
+				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.Technologies, impactedPackagesType),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
@@ -437,11 +437,11 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 
 func PrepareSimpleJsonLicenses(target results.ScanTarget, licenses []services.License, pretty bool) ([]formats.LicenseRow, error) {
 	var licensesRows []formats.LicenseRow
-	err := results.ForEachLicense(target, licenses, addSimpleJsonLicense(&licensesRows, pretty))
+	err := results.ForEachLicense(target, licenses, addSimpleJsonLicense(target, &licensesRows, pretty))
 	return licensesRows, err
 }
 
-func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow, pretty bool) results.ParseLicenseFunc {
+func addSimpleJsonLicense(target results.ScanTarget, licenseViolationsRows *[]formats.LicenseRow, pretty bool) results.ParseLicenseFunc {
 	return func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		*licenseViolationsRows = append(*licenseViolationsRows,
@@ -451,7 +451,7 @@ func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow, pretty bo
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					ImpactedDependencyName:    impactedPackagesName,
 					ImpactedDependencyVersion: impactedPackagesVersion,
-					ImpactedDependencyType:    results.FormalTechOrCdxCompType(impactedPackagesType, pretty),
+					ImpactedDependencyType:    results.FormalTechOrCdxCompType(impactedPackagesType, pretty, target.Technologies...),
 					Components:                directComponents,
 				},
 			},

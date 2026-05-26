@@ -772,17 +772,10 @@ func CollectRuns(runs ...[]*sarif.Run) []*sarif.Run {
 	return flat
 }
 
-// TODO: targetTech should be `...techutils.Technology` and we should resolve first by response
-// if it is not known (pypi, mvn/gradle) try from other.... need to replicate cases to see what logic for multi tech support
-// need to remove `FirstTechnology()` func from usages
-// Resolve the actual technology from multiple sources:
-func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
-	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
-		// technology returned in the vulnerability/violation obj is the most specific technology
-		return techutils.ToTechnology(responseTechnology)
-	}
-	// if no technology is provided, use the target technology
-	return targetTech
+// GetIssueTechnology resolves the most specific technology for an issue from the scan response,
+// detected target technologies, and the impacted component package type.
+func GetIssueTechnology(responseTechnology string, targetTechnologies []techutils.Technology, componentPackageType string) techutils.Technology {
+	return techutils.ResolveIssueTechnology(responseTechnology, targetTechnologies, componentPackageType)
 }
 
 // This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
@@ -996,14 +989,18 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 	return
 }
 
-// If pretty is true, return the formal technology name, otherwise return the cdx component type
-func FormalTechOrCdxCompType(cdxCompType string, pretty bool) string {
+// If pretty is true, return the formal technology name, otherwise return the cdx component type.
+// targetTechnologies is used to disambiguate broad types (pypi, gav, npm) when pretty is true.
+func FormalTechOrCdxCompType(cdxCompType string, pretty bool, targetTechnologies ...techutils.Technology) string {
 	if !pretty {
 		return cdxCompType
 	}
 	tech := techutils.CdxPackageTypeToTechnology(cdxCompType)
 	if tech != techutils.NoTech {
 		return tech.ToFormal()
+	}
+	if resolved := GetIssueTechnology("", targetTechnologies, cdxCompType); resolved != techutils.NoTech {
+		return resolved.ToFormal()
 	}
 	return cdxCompType
 }

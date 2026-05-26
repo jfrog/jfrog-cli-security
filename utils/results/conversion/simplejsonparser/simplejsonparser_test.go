@@ -587,6 +587,46 @@ func TestPrepareSimpleJsonVulnerabilities_Technology(t *testing.T) {
 				"XRAY-500": techutils.Maven,
 			},
 		},
+		{
+			name:   "Poetry target with pypi response",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Poetry}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-600",
+					Summary:    "pypi vuln",
+					Severity:   "High",
+					Technology: "pypi",
+					Components: map[string]services.Component{
+						"pypi://dep:6.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "pypi://dep:6.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-600": techutils.Poetry,
+			},
+		},
+		{
+			name:   "Gradle target with gav response",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Gradle}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-800",
+					Summary:    "gav vuln",
+					Severity:   "Low",
+					Technology: "gav",
+					Components: map[string]services.Component{
+						"gav://dep:8.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "gav://dep:8.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-800": techutils.Gradle,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -600,4 +640,21 @@ func TestPrepareSimpleJsonVulnerabilities_Technology(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrepareSimpleJsonVulnerabilities_EmptyComponents(t *testing.T) {
+	target := results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Npm}}
+	vulns := []services.Vulnerability{
+		{
+			IssueId:    "XRAY-NOCOMP",
+			Summary:    "vuln without components",
+			Severity:   "High",
+			Components: map[string]services.Component{},
+		},
+	}
+	rows, err := PrepareSimpleJsonVulnerabilities(target, nil, services.ScanResponse{Vulnerabilities: vulns}, false, false)
+	assert.NoError(t, err)
+	assert.Len(t, rows, 1)
+	assert.Equal(t, "XRAY-NOCOMP", rows[0].IssueId)
+	assert.Equal(t, techutils.Npm, rows[0].Technology)
 }

@@ -561,7 +561,8 @@ func logScanTargetsInfo(cmdResults *results.SecurityCommandResults) {
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Performing scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
+	log.Info(fmt.Sprintf("Performing scans on %d targets", len(cmdResults.Targets)))
+	log.Debug(scanInfo)
 }
 
 func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults) {
