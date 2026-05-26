@@ -204,6 +204,9 @@ func mergeResults(existing, additional *DependencyTreeResult) *DependencyTreeRes
 // We need to merge the additional flat tree into the existing flat tree.
 func mergeFlatTrees(existing, additional *xrayUtils.GraphNode) *xrayUtils.GraphNode {
 	if additional == nil || len(additional.Nodes) == 0 {
+		if existing == nil || len(existing.Nodes) == 0 {
+			return nil
+		}
 		return existing
 	}
 	if existing == nil {

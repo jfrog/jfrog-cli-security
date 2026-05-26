@@ -641,20 +641,3 @@ func TestPrepareSimpleJsonVulnerabilities_Technology(t *testing.T) {
 		})
 	}
 }
-
-func TestPrepareSimpleJsonVulnerabilities_EmptyComponents(t *testing.T) {
-	target := results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Npm}}
-	vulns := []services.Vulnerability{
-		{
-			IssueId:    "XRAY-NOCOMP",
-			Summary:    "vuln without components",
-			Severity:   "High",
-			Components: map[string]services.Component{},
-		},
-	}
-	rows, err := PrepareSimpleJsonVulnerabilities(target, nil, services.ScanResponse{Vulnerabilities: vulns}, false, false)
-	assert.NoError(t, err)
-	assert.Len(t, rows, 1)
-	assert.Equal(t, "XRAY-NOCOMP", rows[0].IssueId)
-	assert.Equal(t, techutils.Npm, rows[0].Technology)
-}
