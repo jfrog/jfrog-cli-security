@@ -252,7 +252,8 @@ func TestBuildNpmAuthTokenKey(t *testing.T) {
 }
 
 func TestNpmConfigGetArgsDisableWorkspaces(t *testing.T) {
-	assert.Equal(t, []string{"config", "get", "registry", disableWorkspacesFlag}, npmConfigGetArgs("registry"))
+	assert.Equal(t, []string{"config", "get", "registry", disableWorkspacesFlag}, npmConfigGetArgs("registry", true))
+	assert.Equal(t, []string{"config", "get", "registry"}, npmConfigGetArgs("registry", false))
 }
 
 func TestNpmConfigGetRegistryFromWorkspacePackage(t *testing.T) {
@@ -270,7 +271,7 @@ func TestNpmConfigGetRegistryFromWorkspacePackage(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(rootDir, "package.json"), []byte(`{"private":true,"workspaces":["containers/backend"]}`), 0o644))
 	assert.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name":"backend","version":"1.0.0"}`), 0o644))
 
-	registryData, _, err := bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry"), &biutils.NullLog{})
+	registryData, _, err := bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry", true), &biutils.NullLog{})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, strings.TrimSpace(string(registryData)))
 }

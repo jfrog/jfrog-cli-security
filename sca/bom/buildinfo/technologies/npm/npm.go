@@ -92,12 +92,13 @@ func configNpmResolutionServerIfNeeded(params *technologies.BuildInfoBomGenerato
 // (respecting .npmrc, Volta, and other environment settings) and parses it as an
 // Artifactory npm repository URL to extract the RT base URL, repo name, and auth token.
 func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
-	_, npmExecPath, err := biutils.GetNpmVersionAndExecPath(log.Logger)
+	npmVersion, npmExecPath, err := biutils.GetNpmVersionAndExecPath(log.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to locate npm executable: %w", err)
 	}
+	disableWorkspaces := npmVersion.AtLeast("7.0.0")
 
-	registryData, _, err := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs("registry"), log.Logger)
+	registryData, _, err := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs("registry", disableWorkspaces), log.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read npm registry from native config: %w", err)
 	}
@@ -112,7 +113,7 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	tokenData, _, _ := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs(authKey), log.Logger)
+	tokenData, _, _ := biutils.RunNpmCmd(npmExecPath, "", npmConfigGetArgs(authKey, disableWorkspaces), log.Logger)
 	authToken := strings.TrimSpace(string(tokenData))
 	if authToken == "undefined" || authToken == "null" {
 		authToken = ""
@@ -125,8 +126,13 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 	}, nil
 }
 
-func npmConfigGetArgs(key string) []string {
-	return []string{"config", "get", key, disableWorkspacesFlag}
+func npmConfigGetArgs(key string, disableWorkspaces bool) []string {
+	args := []string{"config", "get", key}
+	if disableWorkspaces {
+		// npm 7+ can reject `npm config get` inside workspace packages unless workspaces are disabled.
+		args = append(args, disableWorkspacesFlag)
+	}
+	return args
 }
 
 // buildNpmAuthTokenKey returns the npm config key used to look up the auth token for a
