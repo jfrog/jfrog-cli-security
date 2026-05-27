@@ -296,7 +296,7 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	log.Info(command.String())
 	output, err := command.CombinedOutput()
 	if err != nil {
-		err = errorutils.CheckErrorf("'dotnet restore' command failed: %s - %s", err.Error(), output)
+		err = translateRestoreError(output, err, wd)
 	}
 	return
 }
