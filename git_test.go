@@ -16,7 +16,6 @@ import (
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
@@ -299,7 +298,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 				Format:                       format.SimpleJson,
 				Watches:                      []string{watchName},
 				DisableFailOnFailedBuildFlag: true,
-				OnlyScan:                     []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
 				ValidateSecrets:              true,
 			},
 			OverrideRepoCloneUrl: dummyCloneUrl,
@@ -335,7 +334,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 				Watches:                      []string{skipWatchName},
 				DisableFailOnFailedBuildFlag: true,
 				ValidateSecrets:              true,
-				OnlyScan:                     []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
 			},
 			OverrideRepoCloneUrl: dummyCloneUrl,
 			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
