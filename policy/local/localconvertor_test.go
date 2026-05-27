@@ -7,6 +7,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
@@ -190,6 +191,28 @@ func TestGenerateViolations(t *testing.T) {
 	}
 }
 
+func TestGenerateViolations_componentLessSecurityViolation(t *testing.T) {
+	input := createTestResultsWithViolations(false, []services.Violation{
+		{
+			IssueId:       "XRAY-no-comp",
+			Summary:       "summary-no-comp",
+			Severity:      "High",
+			WatchName:     "watch-name",
+			ViolationType: "security",
+			Cves:          []services.Cve{{Id: "CVE-2024-nocomp", CvssV3Score: "7.0", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"}},
+			Components:    map[string]services.Component{},
+		},
+	})
+	converted, err := NewDeprecatedViolationGenerator().GenerateViolations(input)
+	require.NoError(t, err)
+	require.Len(t, converted.Sca, 1)
+	assert.Nil(t, converted.Sca[0].ImpactedComponent)
+	assert.Equal(t, "XRAY-no-comp", converted.Sca[0].ViolationId)
+	assert.Equal(t, "CVE-2024-nocomp", converted.Sca[0].CveVulnerability.BOMRef)
+	assert.Equal(t, "XRAY-no-comp", converted.Sca[0].CveVulnerability.ID)
+	assert.Nil(t, converted.Sca[0].CveVulnerability.Affects)
+}
+
 func createTestResultsWithViolations(entitledForJas bool, violations []services.Violation, applicableRuns ...*sarif.Run) *results.SecurityCommandResults {
 	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(entitledForJas)
 	target := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
@@ -232,7 +255,7 @@ func createCdxVulnerabilityFull(ref, id, description string, cweList []int, comp
 	if otherScore < 5.0 {
 		severity = "low"
 	}
-	return cyclonedx.Vulnerability{
+	vuln := cyclonedx.Vulnerability{
 		BOMRef:      ref,
 		ID:          id,
 		Source:      source,
@@ -252,11 +275,14 @@ func createCdxVulnerabilityFull(ref, id, description string, cweList []int, comp
 				Method:   "other",
 			},
 		},
-		Affects: &[]cyclonedx.Affects{
-			{
-				Ref:   fmt.Sprintf("pkg:generic/%s", component),
-				Range: &[]cyclonedx.AffectedVersions{},
-			},
-		},
 	}
+	if component == "" {
+		vuln.Affects = nil
+	} else {
+		vuln.Affects = &[]cyclonedx.Affects{{
+			Ref:   fmt.Sprintf("pkg:generic/%s", component),
+			Range: &[]cyclonedx.AffectedVersions{},
+		}}
+	}
+	return vuln
 }
