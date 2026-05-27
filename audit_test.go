@@ -113,7 +113,7 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 	}
 	if len(params.OnlyScan) > 0 {
 		args = append(args, subScansToFlags(params.OnlyScan)...)
-	}	
+	}
 	if params.WithSbom {
 		args = append(args, "--sbom")
 	}
@@ -781,7 +781,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
-		OnlyScan: []utils.SubScanType{utils.SecretsScan},
+		OnlyScan:        []utils.SubScanType{utils.SecretsScan},
 		ValidateSecrets: true,
 		Format:          format.SimpleJson,
 	})

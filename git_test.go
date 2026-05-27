@@ -296,14 +296,14 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{
-				Format: format.SimpleJson,
-				Watches: []string{watchName},
+				Format:                       format.SimpleJson,
+				Watches:                      []string{watchName},
 				DisableFailOnFailedBuildFlag: true,
-				OnlyScan: []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
-				ValidateSecrets: true,
+				OnlyScan:                     []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+				ValidateSecrets:              true,
 			},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
@@ -331,14 +331,14 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
 			auditCommandTestParams: auditCommandTestParams{
-				Format: format.SimpleJson,
-				Watches: []string{skipWatchName},
+				Format:                       format.SimpleJson,
+				Watches:                      []string{skipWatchName},
 				DisableFailOnFailedBuildFlag: true,
-				ValidateSecrets: true,
-				OnlyScan: []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+				ValidateSecrets:              true,
+				OnlyScan:                     []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
 			},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
