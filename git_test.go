@@ -16,6 +16,7 @@ import (
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
@@ -294,7 +295,13 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
+			auditCommandTestParams: auditCommandTestParams{
+				Format: format.SimpleJson,
+				Watches: []string{watchName},
+				DisableFailOnFailedBuildFlag: true,
+				OnlyScan: []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+				ValidateSecrets: true,
+			},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
 			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
 		},
@@ -323,7 +330,13 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
+			auditCommandTestParams: auditCommandTestParams{
+				Format: format.SimpleJson,
+				Watches: []string{skipWatchName},
+				DisableFailOnFailedBuildFlag: true,
+				ValidateSecrets: true,
+				OnlyScan: []utils.SubScanType{utils.SecretsScan, utils.ScaScan, utils.SastScan, utils.IacScan},
+			},
 			OverrideRepoCloneUrl:   dummyCloneUrl,
 			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
 		},

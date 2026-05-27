@@ -64,6 +64,8 @@ type auditCommandTestParams struct {
 	WithSbom bool
 	// adds "--secrets", "--validate-secrets" flags if true
 	ValidateSecrets bool
+	// adds "--sca", "--secrets", "--iac", "--sast" flags if provided
+	OnlyScan []utils.SubScanType
 	// adds "--sca" and "--without-contextual-analysis" flags if true
 	OnlyScaScan bool
 	// adds "--static-sca" flag value if provided
@@ -107,8 +109,11 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 		args = append(args, "--vuln")
 	}
 	if params.ValidateSecrets {
-		args = append(args, "--secrets", "--validate-secrets")
+		args = append(args, "--validate-secrets")
 	}
+	if len(params.OnlyScan) > 0 {
+		args = append(args, subScansToFlags(params.OnlyScan)...)
+	}	
 	if params.WithSbom {
 		args = append(args, "--sbom")
 	}
@@ -776,6 +781,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	securityIntegrationTestUtils.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
+		OnlyScan: []utils.SubScanType{utils.SecretsScan},
 		ValidateSecrets: true,
 		Format:          format.SimpleJson,
 	})
