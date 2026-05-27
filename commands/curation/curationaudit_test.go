@@ -1838,6 +1838,135 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
+// =============================================================================
+// Tests for Poetry support added to curationaudit.go.
+// Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the
+// supportedTech registration.
+// =============================================================================
+
+func Test_getPythonNameVersion(t *testing.T) {
+	const exampleUrl = "http://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
+
+	tests := []struct {
+		name             string
+		id               string
+		downloadUrlsMap  map[string]string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "pip id with matching download url",
+			id:               "pypi://flask:2.0.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask:2.0.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "flask",
+			wantVersion:      "2.0.0",
+		},
+		{
+			name:             "poetry id with matching download url (same pypi:// prefix)",
+			id:               "pypi://click:8.0.1",
+			downloadUrlsMap:  map[string]string{"pypi://click:8.0.1": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "click",
+			wantVersion:      "8.0.1",
+		},
+		{
+			name:             "id present in map but no entry returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  map[string]string{"pypi://other:1.0.0": exampleUrl},
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "nil downloadUrlsMap returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "malformed id (no version separator) returns empty",
+			id:               "pypi://malformed",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getPythonNameVersion(tt.id, tt.downloadUrlsMap)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+// TestGetBlockedPackageDetails_403FallbackEmitsRow drives getBlockedPackageDetails
+// down the two unparseable-body branches and asserts a blocked-policy row is still
+// emitted instead of the package being silently dropped from the audit table.
+//
+// Covers the realistic Artifactory shapes for a malicious-policy block reaching the
+// audit phase: (1) the 403 response is HTML / not valid JSON; (2) the 403 response
+// is JSON but the Errors array is empty.
+func TestGetBlockedPackageDetails_403FallbackEmitsRow(t *testing.T) {
+	tests := []struct {
+		name     string
+		respBody string
+	}{
+		{
+			name:     "non-JSON body (HTML error page)",
+			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
+		},
+		{
+			name:     "JSON body with empty errors list",
+			respBody: `{"errors":[]}`,
+		},
+	}
+
+	const (
+		pkgName    = "telnyx"
+		pkgVersion = "4.87.1"
+	)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.respBody))
+			})
+			defer serverMock.Close()
+
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			httpClientDetails := rtAuth.CreateHttpClientDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				rtAuth:               rtAuth,
+				httpClientDetails:    httpClientDetails,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				url:                  rtAuth.GetUrl(),
+				repo:                 "pypi-remote",
+				tech:                 techutils.Poetry,
+			}
+			packageUrl := fmt.Sprintf("%sapi/pypi/pypi-remote/packages/%s-%s.tar.gz", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+			require.NoError(t, err, "fallback must not surface as an error — the row carries the failure signal instead")
+			require.NotNil(t, got, "fallback must emit a PackageStatus row so the package appears in the audit table")
+			assert.Equal(t, pkgName, got.PackageName)
+			assert.Equal(t, pkgVersion, got.PackageVersion)
+			assert.Equal(t, packageUrl, got.BlockedPackageUrl)
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, BlockingReasonPolicy, got.BlockingReason)
+			assert.Equal(t, string(techutils.Poetry), got.PkgType)
+		})
+	}
+}
 
 // TestFetchCvsBlockedStatusTransitive verifies the CVS fallback for a transitive range blocker:
 // the range is resolved to the newest satisfying version and the policy is recovered from the 403 probe.

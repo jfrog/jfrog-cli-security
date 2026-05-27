@@ -5,35 +5,71 @@ import (
 	"errors"
 	"fmt"
 
+	"net/http"
+	"net/url"
+
 	"github.com/jfrog/gofrog/version"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
 	artifactoryutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/python"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 const (
 	PythonPackageTypeIdentifier = "pypi://"
 	pythonReportFile            = "report.json"
+	poetryLockFile              = "poetry.lock"
 
-	CurationPipMinimumVersion = "23.0.0"
+	CurationPipMinimumVersion    = "23.0.0"
+	PoetryNoInteractionFlag      = "--no-interaction"
+	pyprojectToml                = "pyproject.toml"
+	CurationPoetryMinimumVersion = "1.2.0"
 )
+
+var (
+	poetryLockFileEntry  = regexp.MustCompile(`\{[^}]*\bfile\s*=\s*"([^"]+)"`)
+	simpleIndexHrefEntry = regexp.MustCompile(`<a\s+[^>]*href\s*=\s*"([^"]+)"`)
+	// poetryVersionRegex matches the canonical "Poetry (version X.Y.Z)" line
+	// emitted by `poetry --version`. Older Poetry releases (e.g. 1.2.x on macOS
+	// with a legacy ~/Library/Application Support/pypoetry config dir) prepend
+	// deprecation notices on stdout before this line, so we scan the full
+	// output rather than assuming a single-line response.
+	poetryVersionRegex = regexp.MustCompile(`Poetry \(version ([^)]+)\)`)
+)
+
+// parsePoetryVersion extracts the semantic version (e.g. "1.2.2") from the
+// raw stdout of `poetry --version`. Returns "" if no version line is found.
+func parsePoetryVersion(out string) string {
+	m := poetryVersionRegex.FindStringSubmatch(out)
+	if len(m) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
+}
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
 	rootDetected, dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
@@ -85,7 +121,7 @@ func getRootNodes(directDependencies []*clientutils.GraphNode, rootDetected bool
 	return
 }
 
-func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (rootDetected bool, dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (rootDetected bool, dependenciesGraph map[string][]string, directDependencies []string, downloadUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -96,6 +132,7 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 	if err != nil {
 		return
 	}
+	log.Debug(fmt.Sprintf("Python (%s): created temp working dir at %s", technology, tempDirPath))
 
 	err = os.Chdir(tempDirPath)
 	if errorutils.CheckError(err) != nil {
@@ -140,13 +177,30 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 		technologies.LogExecutableVersion("python")
 		technologies.LogExecutableVersion(string(pythonTool))
 	}
+	if technology == techutils.Poetry {
+		log.Debug(fmt.Sprintf("Poetry: dependency tree built — %d nodes in graph, %d direct dependencies", len(dependenciesGraph), len(directDependencies)))
+		graphKeyByCanonicalName := make(map[string]string, len(dependenciesGraph))
+		for k := range dependenciesGraph {
+			if name, _, ok := strings.Cut(k, ":"); ok {
+				graphKeyByCanonicalName[NormalizePypiName(name)] = k
+			}
+		}
+		for i, d := range directDependencies {
+			name, _, _ := strings.Cut(d, ":")
+			if key, ok := graphKeyByCanonicalName[NormalizePypiName(name)]; ok {
+				directDependencies[i] = key
+			}
+		}
+	}
 	if !params.IsCurationCmd {
 		return
 	}
-	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
-	if errProcessed != nil {
-		err = errProcessed
-
+	switch technology {
+	case techutils.Pip:
+		downloadUrls, err = processPipDownloadsUrlsFromReportFile()
+	case techutils.Poetry:
+		downloadUrls, err = buildPoetryDownloadUrlsMap(params.ServerDetails, params.DependenciesRepository)
+		log.Debug(fmt.Sprintf("Poetry: curation download-URL map built — %d packages resolved", len(downloadUrls)))
 	}
 	return
 }
@@ -204,6 +258,235 @@ type pypiMetaData struct {
 	Version string `json:"version"`
 }
 
+type poetryLockPackage struct {
+	Name    string
+	Version string
+	Files   []string
+}
+
+func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository string) (map[string]string, error) {
+	if serverDetails == nil || serverDetails.GetArtifactoryUrl() == "" {
+		return nil, errorutils.CheckErrorf("server details with Artifactory URL are required for poetry curation")
+	}
+	if repository == "" {
+		return nil, errorutils.CheckErrorf("a poetry repository must be configured (run 'jf poetry-config') for poetry curation")
+	}
+	packages, err := readPoetryLockIfExists()
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("Poetry: parsed %d package entries from poetry.lock", len(packages)))
+	rtAuth, err := serverDetails.CreateArtAuthConfig()
+	if err != nil {
+		return nil, err
+	}
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+	artiUrl := strings.TrimSuffix(serverDetails.GetArtifactoryUrl(), "/")
+	urls := map[string]string{}
+	skipped := 0
+	for _, pkg := range packages {
+		if pkg.Name == "" || pkg.Version == "" || len(pkg.Files) == 0 {
+			skipped++
+			continue
+		}
+		downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, &httpClientDetails, artiUrl, repository, pkg)
+		if lookupErr != nil {
+			log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
+			continue
+		}
+		compId := PythonPackageTypeIdentifier + pkg.Name + ":" + pkg.Version
+		urls[compId] = downloadUrl
+	}
+	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", len(urls), skipped))
+	return urls, nil
+}
+
+// buildPoetryDownloadUrl is the Poetry equivalent of npm's buildNpmDownloadUrl: given a
+// package, it returns the absolute Artifactory download URL that curation will HEAD against.
+// It does so by fetching the package's simple-index HTML and matching one of the filenames
+// recorded in poetry.lock against the listed <a href>s.
+func buildPoetryDownloadUrl(rtManager artifactory.ArtifactoryServicesManager, clientDetails *httputils.HttpClientDetails, artiUrl, repository string, pkg poetryLockPackage) (string, error) {
+	normalized := NormalizePypiName(pkg.Name)
+	simpleIndexUrl := fmt.Sprintf("%s/api/pypi/%s/simple/%s/", artiUrl, repository, normalized)
+	log.Debug(fmt.Sprintf("Poetry: GET simple-index %s (matching against %d filenames)", simpleIndexUrl, len(pkg.Files)))
+	resp, body, _, err := rtManager.Client().SendGet(simpleIndexUrl, true, clientDetails)
+	if err != nil {
+		return "", err
+	}
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		return "", fmt.Errorf("simple-index GET returned status %d for %s", status, simpleIndexUrl)
+	}
+
+	href := pickPoetryHrefByFilename(body, pkg.Files)
+	if href == "" {
+		return "", fmt.Errorf("no matching href found in simple index for any of %v", pkg.Files)
+	}
+	base, err := url.Parse(simpleIndexUrl)
+	if err != nil {
+		return "", err
+	}
+	target, err := url.Parse(href)
+	if err != nil {
+		return "", err
+	}
+	absolute := base.ResolveReference(target).String()
+	log.Debug(fmt.Sprintf("Poetry: resolved %s:%s -> %s", pkg.Name, pkg.Version, absolute))
+	return absolute, nil
+}
+
+// pickPoetryHrefByFilename scans the simple-index body for an <a href> whose filename
+// (after stripping the optional "#sha256=..." fragment) matches one of the wanted filenames.
+// Returns "" when no href matches. Mirrors the focused-helper style of npm's appendUniqueChild.
+func pickPoetryHrefByFilename(body []byte, wantedFiles []string) string {
+	wanted := make(map[string]struct{}, len(wantedFiles))
+	for _, f := range wantedFiles {
+		wanted[f] = struct{}{}
+	}
+	hrefMatches := simpleIndexHrefEntry.FindAllStringSubmatch(string(body), -1)
+	for _, m := range hrefMatches {
+		candidate, _, _ := strings.Cut(m[1], "#")
+		if _, ok := wanted[path.Base(candidate)]; ok {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func NormalizePypiName(name string) string {
+	name = strings.ToLower(name)
+	var b strings.Builder
+	prevSep := false
+	for _, r := range name {
+		if r == '-' || r == '_' || r == '.' {
+			if !prevSep {
+				b.WriteByte('-')
+				prevSep = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		prevSep = false
+	}
+	return b.String()
+}
+
+func readPoetryLockIfExists() ([]poetryLockPackage, error) {
+	exists, err := fileutils.IsFileExists(poetryLockFile, false)
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	if !exists {
+		return nil, errorutils.CheckErrorf("process failed, %s wasn't found, can't process poetry curation command", poetryLockFile)
+	}
+	content, err := os.ReadFile(poetryLockFile)
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	log.Debug(fmt.Sprintf("Poetry: reading %s (%d bytes)", poetryLockFile, len(content)))
+	return parsePoetryLockPackages(content), nil
+}
+
+func parsePoetryLockPackages(content []byte) []poetryLockPackage {
+	var packages []poetryLockPackage
+	var current *poetryLockPackage
+	nameToIdx := map[string]int{}
+	inMetadataFiles := false
+	currentMetaPkg := ""
+	lockVersion := ""
+
+	flush := func() {
+		if current != nil {
+			nameToIdx[strings.ToLower(current.Name)] = len(packages)
+			packages = append(packages, *current)
+			current = nil
+		}
+	}
+
+	for _, raw := range strings.Split(string(content), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if line == "[[package]]" {
+			flush()
+			inMetadataFiles = false
+			current = &poetryLockPackage{}
+			continue
+		}
+		if lockVersion == "" && strings.HasPrefix(line, "lock-version") {
+			if v, ok := parsePoetryScalar(line, "lock-version"); ok {
+				lockVersion = v
+			}
+		}
+		if strings.HasPrefix(line, "[") {
+			flush()
+			inMetadataFiles = line == "[metadata.files]"
+			currentMetaPkg = ""
+			continue
+		}
+		// lock v1.x: files live in [metadata.files] as  pkgname = [{file = "..."},]
+		if inMetadataFiles {
+			if strings.Contains(line, "= [") {
+				currentMetaPkg = strings.ToLower(strings.TrimSpace(strings.SplitN(line, "=", 2)[0]))
+			} else if currentMetaPkg != "" {
+				for _, m := range poetryLockFileEntry.FindAllStringSubmatch(line, -1) {
+					if idx, ok := nameToIdx[currentMetaPkg]; ok {
+						packages[idx].Files = append(packages[idx].Files, m[1])
+					}
+				}
+			}
+			continue
+		}
+		if current == nil {
+			continue
+		}
+		if current.Name == "" && strings.HasPrefix(line, "name") {
+			if v, ok := parsePoetryScalar(line, "name"); ok {
+				current.Name = v
+				continue
+			}
+		}
+		if current.Version == "" && strings.HasPrefix(line, "version") {
+			if v, ok := parsePoetryScalar(line, "version"); ok {
+				current.Version = v
+				continue
+			}
+		}
+		for _, m := range poetryLockFileEntry.FindAllStringSubmatch(line, -1) {
+			current.Files = append(current.Files, m[1])
+		}
+	}
+	flush()
+	log.Debug(fmt.Sprintf("Poetry lock: done — %d packages parsed, lock version: %s", len(packages), lockVersion))
+	return packages
+}
+
+func parsePoetryScalar(line, key string) (string, bool) {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, key))
+	if !strings.HasPrefix(rest, "=") {
+		return "", false
+	}
+	rest = strings.TrimSpace(strings.TrimPrefix(rest, "="))
+	if !strings.HasPrefix(rest, `"`) {
+		return "", false
+	}
+	rest = rest[1:]
+	end := strings.IndexByte(rest, '"')
+	if end < 0 {
+		return "", false
+	}
+	return rest[:end], true
+}
+
 func runPythonInstall(params technologies.BuildInfoBomGeneratorParams, tool pythonutils.PythonTool) (rootDetected bool, restoreEnv func() error, err error) {
 	switch tool {
 	case pythonutils.Pip:
@@ -220,21 +503,227 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 	restoreEnv = func() error {
 		return nil
 	}
+	technologies.LogExecutableVersion("poetry")
+
+	if params.IsCurationCmd {
+		if err = validateMinimumPoetryVersion(CurationPoetryMinimumVersion); err != nil {
+			return false, restoreEnv, err
+		}
+	}
+	// jf ca: check lock staleness BEFORE changing the source URL.
+	// Poetry 1.x stores the source URL in poetry.lock — swapping the URL first causes a
+	// false stale result even when no dependencies changed.
+	//   lockNeedsGenerate = true  → no lock file, generate fresh
+	//   lockIsStale       = true  → lock exists but is out of sync with pyproject.toml
+	lockNeedsGenerate, lockIsStale := false, false
+	if params.IsCurationCmd {
+		lockExists, existErr := fileutils.IsFileExists(poetryLockFile, false)
+		if existErr != nil {
+			return false, restoreEnv, existErr
+		}
+		log.Debug(fmt.Sprintf("Poetry: poetry.lock exists in temp dir: %v", lockExists))
+		if !lockExists {
+			lockNeedsGenerate = true
+		} else {
+			// `poetry check --lock` exits 0 when lock matches pyproject.toml (Poetry 1.8+/2.x).
+			// Older versions expose the same check via `poetry lock --check`.
+			_, checkErr := executeCommand("poetry", "check", "--lock")
+			if checkErr != nil && strings.Contains(checkErr.Error(), "does not exist") {
+				log.Debug("Poetry: 'poetry check --lock' not supported, falling back to 'poetry lock --check'")
+				_, checkErr = executeCommand("poetry", "lock", "--check")
+			}
+			lockIsStale = checkErr != nil
+			log.Debug(fmt.Sprintf("Poetry: stale check result: stale=%v", lockIsStale))
+		}
+	}
+
 	if params.DependenciesRepository != "" {
-		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(params.ServerDetails, params.DependenciesRepository, false)
+		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(params.ServerDetails, params.DependenciesRepository, params.IsCurationCmd)
 		if err != nil {
 			return false, restoreEnv, err
 		}
 		if password != "" {
-			err = artifactoryutils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DependenciesRepository)
-			if err != nil {
-				return false, restoreEnv, err
+			baseUrl := rtUrl.Scheme + "://" + rtUrl.Host + rtUrl.Path
+			if params.IsCurationCmd {
+				// Set credentials in Poetry's global config (used by Poetry 2.x).
+				if err = artifactoryutils.RunPoetryConfig(baseUrl, username, password, params.DependenciesRepository); err != nil {
+					return false, restoreEnv, err
+				}
+				// Overwrite [[tool.poetry.source]] in the temp pyproject.toml with the curation
+				// pass-through URL. Required for Poetry 1.x which ignores the global config URL.
+				if err = setCurationSourceInPyproject(params.DependenciesRepository, baseUrl); err != nil {
+					return false, restoreEnv, err
+				}
+			} else {
+				if err = artifactoryutils.ConfigPoetryRepo(baseUrl, username, password, params.DependenciesRepository); err != nil {
+					return false, restoreEnv, err
+				}
 			}
 		}
 	}
-	// Run 'poetry install'
-	_, err = executeCommand("poetry", "install")
-	return false, restoreEnv, err
+
+	if params.IsCurationCmd {
+		switch {
+		case lockNeedsGenerate:
+			// No lock file — generate fresh.
+			if _, lockErr := executeCommand("poetry", "lock", PoetryNoInteractionFlag); lockErr != nil {
+				return false, restoreEnv, wrapPoetryCurationErr(params.IsCurationCmd, lockErr)
+			}
+			log.Debug("Poetry: lock generated")
+		case lockIsStale:
+			// Lock exists but is out of sync — add new/changed deps without bumping locked versions.
+			// `--no-update` is Poetry 1.x; Poetry 2.x removed the flag (its default is no-update).
+			_, lockErr := executeCommand("poetry", "lock", "--no-update", PoetryNoInteractionFlag)
+			if lockErr != nil && strings.Contains(lockErr.Error(), "does not exist") {
+				log.Debug("Poetry: '--no-update' not supported (Poetry 2.x), running 'poetry lock --no-interaction'")
+				_, lockErr = executeCommand("poetry", "lock", PoetryNoInteractionFlag)
+			}
+			if lockErr != nil {
+				return false, restoreEnv, wrapPoetryCurationErr(params.IsCurationCmd, lockErr)
+			}
+			log.Debug("Poetry: lock updated")
+		default:
+			log.Debug("Poetry: poetry.lock is up to date — skipping lock")
+		}
+	} else {
+		_, err = executeCommand("poetry", "install")
+	}
+	return false, restoreEnv, nil
+}
+
+func wrapPoetryCurationErr(isCurationCmd bool, lockErr error) error {
+	if lockErr == nil {
+		return nil
+	}
+	if isCurationCmd && isCvsVersionFilteredOutput(lockErr.Error()) {
+		pins := parseCvsFailedPackages(lockErr.Error())
+		lockErr = errors.Join(lockErr, errors.New(formatCvsBlockedRequirementsMessage(pins)))
+	}
+	if msgToUser := technologies.GetMsgToUserForCurationBlock(isCurationCmd, techutils.Poetry, lockErr.Error()); msgToUser != "" {
+		return errors.Join(lockErr, errors.New(msgToUser))
+	}
+	return lockErr
+}
+
+// setCurationSourceInPyproject rewrites [[tool.poetry.source]] in the temp
+// pyproject.toml so that every dependency resolves through the curation
+// pass-through endpoint. The source NAME(s) from the user's original
+// pyproject.toml are preserved; only the URL is overwritten.
+//
+// Why preserve the name: poetry.lock records every package against its
+// source NAME (not URL). If we renamed the source here, an existing lock
+// would suddenly reference a source that no longer exists, Poetry would
+// abort the relock with "Repository '<old-name>' does not exist".
+// Preserving the name keeps the lock valid and lets the normal post-lock
+// pipeline (with HEAD probes against the wheel URLs) run as designed.
+//
+// If pyproject.toml has no [[tool.poetry.source]] at all, we fall back to
+// adding a single entry named after the Artifactory repository so Poetry
+// has somewhere to resolve from.
+func setCurationSourceInPyproject(repoName, repoUrl string) error {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	absPath := filepath.Join(currentDir, pyprojectToml)
+	v := viper.New()
+	v.SetConfigType("toml")
+	v.SetConfigFile(absPath)
+	if err = v.ReadInConfig(); err != nil {
+		return errorutils.CheckErrorf("failed to read %s: %s", pyprojectToml, err)
+	}
+
+	names := extractPoetrySourceNames(v.Get("tool.poetry.source"))
+	if len(names) == 0 {
+		names = []string{repoName}
+	}
+	setDefault := poetryMajorVersion() < 2
+	sources := make([]map[string]interface{}, 0, len(names))
+	for i, n := range names {
+		s := map[string]interface{}{"name": n, "url": repoUrl}
+		if setDefault && i == 0 {
+			s["default"] = true
+		}
+		sources = append(sources, s)
+	}
+	v.Set("tool.poetry.source", sources)
+	if err = v.WriteConfig(); err != nil {
+		return errorutils.CheckErrorf("failed to write %s: %s", pyprojectToml, err)
+	}
+	for _, s := range sources {
+		log.Info(fmt.Sprintf("Configured tool.poetry.source name:%q url:%q for curation", s["name"], s["url"]))
+	}
+	return nil
+}
+
+// extractPoetrySourceNames returns the canonical list of source names from
+// viper's view of `[[tool.poetry.source]]`. Entries without a name, or with
+// duplicate names, are skipped. Returns nil when the key is missing or has
+// an unexpected shape so callers can fall back to a default.
+func extractPoetrySourceNames(v interface{}) []string {
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(arr))
+	seen := map[string]struct{}{}
+	for _, e := range arr {
+		m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		n, _ := m["name"].(string)
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if _, dup := seen[n]; dup {
+			continue
+		}
+		seen[n] = struct{}{}
+		names = append(names, n)
+	}
+	return names
+}
+
+func validateMinimumPoetryVersion(minVersion string) error {
+	out, err := executeCommand("poetry", "--version")
+	if err != nil {
+		log.Debug(fmt.Sprintf("Could not determine Poetry version: %s", err.Error()))
+		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher.", minVersion)
+	}
+	v := parsePoetryVersion(out)
+	if v == "" {
+		log.Debug(fmt.Sprintf("Could not parse Poetry version from output: %q", out))
+		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher.", minVersion)
+	}
+	log.Debug(fmt.Sprintf("Poetry version: %s", v))
+	if version.NewVersion(v).Compare(minVersion) > 0 {
+		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher. The Current version is: %s", minVersion, v)
+	}
+	return nil
+}
+
+// poetryMajorVersion returns the major version number of the installed Poetry executable.
+// Returns 0 on any parse failure (safe fallback — caller uses < 2 check, so 0 adds default=true).
+func poetryMajorVersion() int {
+	out, err := executeCommand("poetry", "--version")
+	if err != nil {
+		return 0
+	}
+	v := parsePoetryVersion(out)
+	if v == "" {
+		return 0
+	}
+	dot := strings.IndexByte(v, '.')
+	if dot < 0 {
+		dot = len(v)
+	}
+	major, parseErr := strconv.Atoi(v[:dot])
+	if parseErr != nil {
+		return 0
+	}
+	return major
 }
 
 func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDetected bool, restoreEnv func() error, err error) {
