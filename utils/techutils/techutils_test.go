@@ -59,6 +59,35 @@ func TestMapFilesToRelevantWorkingDirectories(t *testing.T) {
 			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
 		},
 		{
+			name:                 "pnpmWorkspaceTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			name:                 "pnpmfileTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			// pnpm-workspace.yaml + pnpm-lock.yaml both present: only pnpm should be detected,
+			// npm and yarn excluded.
+			name: "pnpmWorkspaceAndLockfileTest",
+			paths: []string{
+				filepath.Join("dir", "package.json"),
+				filepath.Join("dir", "pnpm-workspace.yaml"),
+				filepath.Join("dir", "pnpm-lock.yaml"),
+			},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir: map[string][]string{
+				"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml"), filepath.Join("dir", "pnpm-lock.yaml")},
+			},
+			expectedExcluded: map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
 			name:                 "yarnTest",
 			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", ".yarn")},
 			requestedDescriptors: noRequest,

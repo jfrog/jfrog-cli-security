@@ -1,12 +1,14 @@
 package pnpm
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -19,9 +21,10 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
 
-	biutils "github.com/jfrog/build-info-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
+
+const lockfileOnlyFlag = "--lockfile-only"
 
 type pnpmLsDependency struct {
 	From         string                      `json:"from"`
@@ -37,7 +40,6 @@ type pnpmLsProject struct {
 }
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	// Prepare
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return
@@ -46,22 +48,89 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	// Build
-	var dirForDependenciesCalculation string
-	if dirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
+
+	if err = ensureLockfile(pnpmExecPath, currentDir); err != nil {
 		return
 	}
 
-	if dirForDependenciesCalculation == "" {
-		// If we didn't execute 'install' dirForDependenciesCalculation contains an empty value and the dependencies calculation should be performed on the original cloned dir
-		dirForDependenciesCalculation = currentDir
-	} else {
-		// If tempDirForDependenciesCalculation contains a non-empty value, it means we created a temporary directory during the execution of 'install' command, and it needs to removed at the end
-		defer func() {
-			err = errors.Join(err, biutils.RemoveTempDir(dirForDependenciesCalculation))
-		}()
+	projects, err := parsePnpmLockFile(currentDir)
+	if err != nil {
+		return
 	}
-	return calculateDependencies(pnpmExecPath, dirForDependenciesCalculation, params)
+	// Apply scope filter (dev-only / prod-only) to the raw project list if requested.
+	if len(params.Args) > 0 {
+		projects = filterProjectsByScope(projects, params.Args)
+	}
+	dependencyTrees, uniqueDeps = parsePnpmLSContent(projects)
+	return
+}
+
+// filterProjectsByScope removes dev or prod dependencies from each project
+// based on the --dev or --prod flags passed via params.Args (set by SetNpmScope).
+func filterProjectsByScope(projects []pnpmLsProject, args []string) []pnpmLsProject {
+	devOnly, prodOnly := false, false
+	for _, arg := range args {
+		switch arg {
+		case "--dev":
+			devOnly = true
+		case "--prod":
+			prodOnly = true
+		}
+	}
+	if !devOnly && !prodOnly {
+		return projects
+	}
+	for i := range projects {
+		if devOnly {
+			projects[i].Dependencies = nil
+		}
+		if prodOnly {
+			projects[i].DevDependencies = nil
+		}
+	}
+	return projects
+}
+
+// GetNativePnpmRegistryConfig reads the Artifactory registry URL and auth token
+// from the project's .npmrc via the pnpm CLI. pnpm reads .npmrc with the same
+// hierarchy and semantics as npm, so this mirrors GetNativeNpmRegistryConfig
+// without requiring an npm binary on pnpm-only machines.
+func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
+	pnpmExecPath, err := getPnpmExecPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to locate pnpm executable: %w", err)
+	}
+
+	registryData, err := getPnpmCmd(pnpmExecPath, "", "config", "get", "registry").RunWithOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read registry from pnpm config: %w", err)
+	}
+	registryUrl := strings.TrimSpace(string(registryData))
+
+	rtBaseUrl, repoName, err := npm.ParseArtifactoryNpmRegistryUrl(registryUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	authKey, err := npm.BuildNpmAuthTokenKey(registryUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenData, tokenErr := getPnpmCmd(pnpmExecPath, "", "config", "get", authKey).RunWithOutput()
+	authToken := ""
+	if tokenErr == nil {
+		authToken = strings.TrimSpace(string(tokenData))
+		if authToken == "undefined" || authToken == "null" {
+			authToken = ""
+		}
+	}
+
+	return &npm.NpmrcRegistryConfig{
+		ArtifactoryUrl: rtBaseUrl,
+		RepoName:       repoName,
+		AuthToken:      authToken,
+	}, nil
 }
 
 func getPnpmExecPath() (pnpmExecPath string, err error) {
@@ -73,7 +142,6 @@ func getPnpmExecPath() (pnpmExecPath string, err error) {
 		return
 	}
 	log.Debug("Using Pnpm executable:", pnpmExecPath)
-	// Validate pnpm version command
 	version, err := getPnpmCmd(pnpmExecPath, "", "--version").RunWithOutput()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -88,68 +156,59 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 	return command
 }
 
-// Installation is necessary when either the "pnpm-lock.yaml" lock file or the "node_modules/.pnpm" directory does not exist.
-// If install is needed, we duplicate the project to a temporary directory and conduct the 'install' operation on the duplicate, to ensure that the original clone does not retain the node_modules directory if it didn't exist previously.
-// Upon 'install' the path to the duplicate directory will be returned.
-func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependenciesCalculation string, err error) {
-	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
+// ensureLockfile guarantees that pnpm-lock.yaml exists in workingDir.
+// If it is already present, nothing is done — the existing lockfile is used as-is.
+// If it is absent, `pnpm install --lockfile-only --ignore-scripts` is run in a
+// temporary copy of workingDir so the original directory is not mutated.
+//
+// This mirrors the npm path (--package-lock-only) and yarn V3 path (--mode=update-lockfile):
+// no tarballs are downloaded, only resolution metadata is written.
+func ensureLockfile(pnpmExecPath, workingDir string) error {
+	lockExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
-		return
+		return err
 	}
-	pnpmDirExists, err := fileutils.IsDirExists(filepath.Join(workingDir, "node_modules", ".pnpm"), false)
-	if err != nil || (lockFileExists && pnpmDirExists) {
-		return
+	if lockExists {
+		return nil
 	}
-	// Install is needed and will be performed on a copy of the cloned dir
-	log.Debug("Installing Pnpm project:", workingDir)
-	dirForDependenciesCalculation, err = fileutils.CreateTempDir()
+
+	log.Debug("pnpm-lock.yaml not found — running 'pnpm install --lockfile-only' in a temporary directory")
+	tmpDir, err := fileutils.CreateTempDir()
 	if err != nil {
-		err = fmt.Errorf("failed to create a temporary dir: %w", err)
-		return
+		return fmt.Errorf("failed to create a temporary dir: %w", err)
 	}
 	defer func() {
-		// If an error occurs for any reason, we proceed to delete the temporary directory.
-		if err != nil {
-			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
-		}
+		err = errors.Join(err, fileutils.RemoveTempDir(tmpDir))
 	}()
 
-	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{technologies.DotVsRepoSuffix})
-	if err != nil {
-		err = fmt.Errorf("failed copying project to temp dir: %w", err)
-		return
+	if copyErr := copyProjectToDir(workingDir, tmpDir); copyErr != nil {
+		return copyErr
 	}
-	output, err := getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
-	if err != nil {
-		err = fmt.Errorf("failed to install project: %w\n%s", err, string(output))
+
+	out, runErr := getPnpmCmd(pnpmExecPath, tmpDir, "install", lockfileOnlyFlag, npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
+	if runErr != nil {
+		return fmt.Errorf("'pnpm install --lockfile-only' failed: %w\n%s", runErr, string(out))
 	}
-	return
+
+	// Copy the generated lockfile back so parsePnpmLockFile can read it from workingDir.
+	generatedLock, readErr := fileutils.ReadFile(filepath.Join(tmpDir, "pnpm-lock.yaml"))
+	if readErr != nil {
+		return fmt.Errorf("lockfile not produced after 'pnpm install --lockfile-only': %w", readErr)
+	}
+	return os.WriteFile(filepath.Join(workingDir, "pnpm-lock.yaml"), generatedLock, 0644)
 }
 
-// Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
-func calculateDependencies(executablePath, workingDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	lsArgs := append([]string{"--depth", params.MaxTreeDepth, "--json", "--long"}, params.Args...)
-	log.Debug("Running Pnpm ls command with args:", lsArgs)
-	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()
-	if err != nil {
-		return
+func copyProjectToDir(src, dst string) error {
+	if err := biutils.CopyDir(src, dst, true, []string{technologies.DotVsRepoSuffix}); err != nil {
+		return fmt.Errorf("failed copying project to temp dir: %w", err)
 	}
-	log.Verbose("Pnpm ls command output:\n", string(npmLsCmdContent))
-	output := &[]pnpmLsProject{}
-	if err = json.Unmarshal(npmLsCmdContent, output); err != nil {
-		return
-	}
-	dependencyTrees, uniqueDeps = parsePnpmLSContent(*output)
-	return
+	return nil
 }
 
 func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string) {
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, project := range projectInfo {
-		// Parse the dependencies into Xray dependency tree format
 		dependencyTree, uniqueProjectDeps := xray.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
-		// Add results
 		dependencyTrees = append(dependencyTrees, dependencyTree)
 		uniqueDepsSet.AddElements(maps.Keys(uniqueProjectDeps)...)
 	}
@@ -159,14 +218,12 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 
 func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTreeNode {
 	treeMap := make(map[string]xray.DepTreeNode)
-	directDependencies := []string{}
-	// Handle production-dependencies
+	var directDependencies []string
 	for depName, dependency := range project.Dependencies {
 		directDependency := getDependencyId(depName, dependency.Version)
 		directDependencies = append(directDependencies, directDependency)
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, &treeMap)
 	}
-	// Handle dev-dependencies
 	for depName, dependency := range project.DevDependencies {
 		directDependency := getDependencyId(depName, dependency.Version)
 		directDependencies = append(directDependencies, directDependency)
@@ -178,7 +235,6 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 	return treeMap
 }
 
-// Return npm://<name>:<version> of a dependency
 func getDependencyId(depName, version string) string {
 	return techutils.Npm.GetXrayPackageTypeId() + depName + ":" + version
 }

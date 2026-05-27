@@ -238,7 +238,7 @@ func TestBuildNpmAuthTokenKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			authKey, err := buildNpmAuthTokenKey(tc.registryUrl)
+			authKey, err := BuildNpmAuthTokenKey(tc.registryUrl)
 			if tc.expectErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.errContains)
@@ -332,7 +332,7 @@ func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rtUrl, repo, err := parseArtifactoryNpmRegistryUrl(tc.registryUrl)
+			rtUrl, repo, err := ParseArtifactoryNpmRegistryUrl(tc.registryUrl)
 			if tc.expectErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.errContains)

@@ -174,7 +174,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
-		exclude:                    []string{"pnpm-lock.yaml", ".yarnrc.yml", "yarn.lock", ".yarn"},
+		exclude:                    []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
@@ -185,7 +185,7 @@ var technologiesData = map[Technology]TechData{
 	Pnpm: {
 		packageType:                "npm",
 		xrayPackageType:            "npm",
-		indicators:                 []string{"pnpm-lock.yaml"},
+		indicators:                 []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
@@ -195,7 +195,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
-		exclude:                []string{"pnpm-lock.yaml"},
+		exclude:                []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
 		projectType:            project.Yarn,
