@@ -253,14 +253,16 @@ type ScanTarget struct {
 }
 
 func (st ScanTarget) DetectedTechnologies() []techutils.Technology {
-	technologies := datastructures.MakeSet[techutils.Technology]()
+	seen := datastructures.MakeSet[techutils.Technology]()
+	technologies := make([]techutils.Technology, 0, len(st.Technologies))
 	for _, tech := range st.Technologies {
-		if tech == techutils.NoTech {
+		if tech == techutils.NoTech || seen.Exists(tech) {
 			continue
 		}
-		technologies.Add(tech)
+		seen.Add(tech)
+		technologies = append(technologies, tech)
 	}
-	return technologies.ToSlice()
+	return technologies
 }
 
 func (st ScanTarget) HasTechnology(tech techutils.Technology) bool {
@@ -286,17 +288,23 @@ func (st ScanTarget) String() (str string) {
 		// If project name is provided, use it instead of the target path
 		str = st.Name
 	}
-	targetTechnologies := datastructures.MakeSet[string]()
+	seenTechnologies := datastructures.MakeSet[string]()
+	formalTechnologies := make([]string, 0, len(st.Technologies))
 	for _, tech := range st.Technologies {
 		if tech == techutils.NoTech {
 			continue
 		}
-		targetTechnologies.Add(tech.ToFormal())
+		formal := tech.ToFormal()
+		if seenTechnologies.Exists(formal) {
+			continue
+		}
+		seenTechnologies.Add(formal)
+		formalTechnologies = append(formalTechnologies, formal)
 	}
-	if targetTechnologies.Size() == 0 {
+	if len(formalTechnologies) == 0 {
 		str += " [unknown]"
 	} else {
-		str += fmt.Sprintf(" [%s]", strings.Join(targetTechnologies.ToSlice(), ", "))
+		str += fmt.Sprintf(" [%s]", strings.Join(formalTechnologies, ", "))
 	}
 	return
 }
