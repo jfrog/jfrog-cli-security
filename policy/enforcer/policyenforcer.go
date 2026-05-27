@@ -248,6 +248,9 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 	return
 }
 
+// locateBomVulnerabilityInfo finds a CycloneDX vulnerability in scan results by issue/CVE id.
+// When impactedComponent is nil, only vulnerabilities with empty Affects are matched.
+// If the BOM lists Affects but Xray omits InfectedComponentIds, conversion still fails (returns nil).
 func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issueId string, impactedComponent *cyclonedx.Component) (relevantVulnerability *cyclonedx.Vulnerability, contextualAnalysis *formats.Applicability) {
 	for _, target := range cmdResults.Targets {
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Vulnerabilities == nil {
