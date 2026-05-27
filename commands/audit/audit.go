@@ -990,10 +990,14 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}
+		rtResultRepository := params.rtResultRepository
+		if params.resultsContext.ProjectKey != "" {
+			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
+		}
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
 		}
-		uploadPath, err = uploadCdxResults(params, cmdResults)
+		uploadPath, err = uploadCdxResults(params, cmdResults, rtResultRepository)
 		if err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
 		}
@@ -1003,26 +1007,30 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
-		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
+		rtResultRepository := params.rtResultRepository
+		if rtResultRepository != "" && params.resultsContext.ProjectKey != "" {
+			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
+		}
+		if err = fetchViolations(uploadPath, cmdResults, params, rtResultRepository); err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
 	}
 	return cmdResults
 }
 
-func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults, rtResultRepository string) (uploadPath string, err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
-	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
+	if uploadPath, err = output.UploadCommandResults(serverDetails, rtResultRepository, cmdResults); err != nil {
 		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
 	}
 	return
 }
 
-func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams) (err error) {
+func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams, rtResultRepository string) (err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return fmt.Errorf("failed to get server details: %s", err.Error())
@@ -1031,7 +1039,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		local.WithAllowedLicenses(auditParams.allowedLicenses),
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
-		enforcer.WithArtifactParams(auditParams.rtResultRepository, uploadPath),
+		enforcer.WithArtifactParams(rtResultRepository, uploadPath),
 		enforcer.WithWatches(auditParams.resultsContext.Watches),
 		enforcer.WithResultsOutputDir(auditParams.scanResultsOutputDir),
 	)
