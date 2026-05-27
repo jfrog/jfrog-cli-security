@@ -164,8 +164,11 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 		}
 		// Get the related components for the vulnerability
 		for _, affectedComponent := range *vulnerability.Affects {
-			// Pass the vulnerability to the handler with its related information
-			if e := handler(vulnerability, cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref), GetFixedVersions(affectedComponent), applicability, severity); e != nil {
+			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
+			if relatedComponent == nil {
+				log.Warn(fmt.Sprintf("Vulnerability %s references component BOMRef %s that was not found in the BOM; reporting without impacted component", vulnerability.BOMRef, affectedComponent.Ref))
+			}
+			if e := handler(vulnerability, relatedComponent, GetFixedVersions(affectedComponent), applicability, severity); e != nil {
 				err = errors.Join(err, e)
 				continue
 			}
