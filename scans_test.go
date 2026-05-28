@@ -176,7 +176,6 @@ func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 }
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
-	securityTestUtils.SkipTestIfDurationNotPassed(t, "24-05-2026", 7, "Scanner stopped detecting secrets, waiting for XRAY-142987")
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJASArtifact(t, "student-services-security-0.0.1.jar", false, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
