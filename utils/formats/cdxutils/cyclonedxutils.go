@@ -459,12 +459,21 @@ func GetTrimmedPurlByRef(dep string, components *[]cyclonedx.Component) string {
 	return techutils.PurlToXrayComponentId(component.PackageURL)
 }
 
+// ScanLicenseToCycloneDx maps an Xray license key/name to a CycloneDX license.
+// CycloneDX allows only one of ID or Name, not both.
+func ScanLicenseToCycloneDx(key, name string) *cyclonedx.License {
+	if key != "" {
+		return &cyclonedx.License{ID: key}
+	}
+	return &cyclonedx.License{Name: name}
+}
+
 func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {
 	if component.Licenses == nil {
 		component.Licenses = &cyclonedx.Licenses{}
 	}
 	// Check if the license already exists in the component
-	if hasLicense(*component, license.License.ID) {
+	if hasLicense(*component, licenseIdentifier(license.License)) {
 		// The license already exists, no need to add it again
 		return
 	}
@@ -472,12 +481,22 @@ func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.
 	*component.Licenses = append(*component.Licenses, license)
 }
 
-func hasLicense(component cyclonedx.Component, licenseName string) bool {
-	if component.Licenses == nil || len(*component.Licenses) == 0 {
+func licenseIdentifier(license *cyclonedx.License) string {
+	if license == nil {
+		return ""
+	}
+	if license.ID != "" {
+		return license.ID
+	}
+	return license.Name
+}
+
+func hasLicense(component cyclonedx.Component, licenseId string) bool {
+	if licenseId == "" || component.Licenses == nil || len(*component.Licenses) == 0 {
 		return false
 	}
 	for _, license := range *component.Licenses {
-		if license.License != nil && license.License.ID == licenseName {
+		if license.License != nil && licenseIdentifier(license.License) == licenseId {
 			return true
 		}
 	}

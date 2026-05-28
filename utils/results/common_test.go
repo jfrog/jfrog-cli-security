@@ -1,7 +1,6 @@
 package results
 
 import (
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -2702,8 +2701,7 @@ func TestScanResponseToSbom(t *testing.T) {
 						Licenses: &cyclonedx.Licenses{
 							{
 								License: &cyclonedx.License{
-									ID:   "Apache-2.0-Key",
-									Name: "Apache-2.0",
+									ID: "Apache-2.0-Key",
 								},
 							},
 						},
@@ -2869,7 +2867,6 @@ func TestScanResponseToSbom(t *testing.T) {
 				}
 			}
 			// Validate
-			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
 			if expected.Components == nil {
 				assert.Nil(t, destination.Components)
 			} else {

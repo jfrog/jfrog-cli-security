@@ -1281,10 +1281,7 @@ func ParseScanGraphLicenseToSbom(destination *cyclonedx.BOM) ParseLicenseFunc {
 		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
 		// Attach the license to the component
 		cdxutils.AttachLicenseToComponent(affectedComponent, cyclonedx.LicenseChoice{
-			License: &cyclonedx.License{
-				ID:   license.Key,
-				Name: license.Name,
-			},
+			License: cdxutils.ScanLicenseToCycloneDx(license.Key, license.Name),
 		})
 		return nil
 	}
