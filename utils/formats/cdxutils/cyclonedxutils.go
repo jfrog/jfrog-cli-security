@@ -304,12 +304,13 @@ func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) 
 	return
 }
 
-func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
+func CreateFileOrDirComponent(filePathOrUri string, relatedProperties ...cyclonedx.Property) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
 		BOMRef: GetFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
 		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
+	component.Properties = AppendProperties(component.Properties, relatedProperties...)
 	return
 }
 
