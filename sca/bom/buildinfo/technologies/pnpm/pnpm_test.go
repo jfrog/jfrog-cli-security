@@ -155,3 +155,27 @@ func TestEnsureLockfileExisting(t *testing.T) {
 	err = ensureLockfile(pnpmExecPath, ".")
 	assert.NoError(t, err)
 }
+
+func TestValidatePnpmMinVersion(t *testing.T) {
+	testCases := []struct {
+		name        string
+		version     string
+		expectError bool
+	}{
+		{name: "v10 accepted", version: "10.0.0", expectError: false},
+		{name: "v10 minor accepted", version: "10.27.0", expectError: false},
+		{name: "v9 rejected", version: "9.15.0", expectError: true},
+		{name: "v8 rejected", version: "8.15.9", expectError: true},
+		{name: "v11 accepted", version: "11.0.0", expectError: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validatePnpmMinVersion(tc.version)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

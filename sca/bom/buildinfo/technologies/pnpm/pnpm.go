@@ -133,6 +133,8 @@ func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
 	}, nil
 }
 
+const minPnpmMajorVersion = 10
+
 func getPnpmExecPath() (pnpmExecPath string, err error) {
 	if pnpmExecPath, err = exec.LookPath("pnpm"); errorutils.CheckError(err) != nil {
 		return
@@ -142,12 +144,32 @@ func getPnpmExecPath() (pnpmExecPath string, err error) {
 		return
 	}
 	log.Debug("Using Pnpm executable:", pnpmExecPath)
-	version, err := getPnpmCmd(pnpmExecPath, "", "--version").RunWithOutput()
-	if errorutils.CheckError(err) != nil {
+	versionOut, versionErr := getPnpmCmd(pnpmExecPath, "", "--version").RunWithOutput()
+	if errorutils.CheckError(versionErr) != nil {
+		err = versionErr
 		return
 	}
-	log.Debug("Pnpm version:", string(version))
+	versionStr := strings.TrimSpace(string(versionOut))
+	log.Debug("Pnpm version:", versionStr)
+	if err = validatePnpmMinVersion(versionStr); err != nil {
+		return
+	}
 	return
+}
+
+// validatePnpmMinVersion returns an error if the installed pnpm major version is below minPnpmMajorVersion.
+func validatePnpmMinVersion(versionStr string) error {
+	// Version string may include extra lines (warnings on incompatible Node); take first token.
+	firstLine := strings.SplitN(versionStr, "\n", 2)[0]
+	parts := strings.SplitN(strings.TrimSpace(firstLine), ".", 2)
+	var major int
+	if _, scanErr := fmt.Sscanf(parts[0], "%d", &major); scanErr != nil {
+		return fmt.Errorf("could not parse pnpm version %q: %w", versionStr, scanErr)
+	}
+	if major < minPnpmMajorVersion {
+		return fmt.Errorf("pnpm version %s is not supported. Minimum required version is %d.x", versionStr, minPnpmMajorVersion)
+	}
+	return nil
 }
 
 func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
@@ -164,15 +186,23 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 // This mirrors the npm path (--package-lock-only) and yarn V3 path (--mode=update-lockfile):
 // no tarballs are downloaded, only resolution metadata is written.
 func ensureLockfile(pnpmExecPath, workingDir string) error {
-	lockExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
+	lockPath := filepath.Join(workingDir, "pnpm-lock.yaml")
+	lockExists, err := fileutils.IsFileExists(lockPath, false)
 	if err != nil {
 		return err
 	}
 	if lockExists {
-		return nil
+		// Re-run install if package.json is newer than pnpm-lock.yaml (stale lockfile).
+		pkgStat, pkgErr := os.Stat(filepath.Join(workingDir, "package.json"))
+		lockStat, lockErr := os.Stat(lockPath)
+		if pkgErr == nil && lockErr == nil && pkgStat.ModTime().After(lockStat.ModTime()) {
+			log.Debug(fmt.Sprintf("package.json is newer than pnpm-lock.yaml — running '%s install %s %s' to refresh it", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
+		} else {
+			return nil
+		}
+	} else {
+		log.Debug(fmt.Sprintf("pnpm-lock.yaml not found — running '%s install %s %s' in a temporary directory", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
 	}
-
-	log.Debug("pnpm-lock.yaml not found — running 'pnpm install --lockfile-only' in a temporary directory")
 	tmpDir, err := fileutils.CreateTempDir()
 	if err != nil {
 		return fmt.Errorf("failed to create a temporary dir: %w", err)
