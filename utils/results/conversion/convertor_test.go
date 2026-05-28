@@ -162,7 +162,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.SourceCode)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technology: techutils.Npm}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
+	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technologies: []techutils.Technology{techutils.Npm}}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
 	// SCA scan results
 	npmTargetResults.ScaScanResults(0, services.ScanResponse{
 		ScanId: "711851ce-68c4-4dfd-7afb-c29737ebcb96",
@@ -606,7 +606,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.DockerImage)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technology: techutils.Oci})
+	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technologies: []techutils.Technology{techutils.Oci}})
 	// SCA scan results
 	dockerImageTarget.ScaScanResults(0, services.ScanResponse{
 		ScanId: "27da9106-88ea-416b-799b-bc7d15783473",
