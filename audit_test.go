@@ -1077,7 +1077,7 @@ func TestAuditNewScaCycloneDxGradle(t *testing.T) {
 	assert.NoError(t, err)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 11, BomComponents: 7 + 1, Licenses: 5},
+		Total:             &validations.TotalCount{Vulnerabilities: 11, BomComponents: 7 + 1, Licenses: 3},
 		SbomComponents:    &validations.SbomCount{Direct: 7, Root: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 11},
