@@ -106,6 +106,7 @@ func parseDepTreeFiles(jsonFilePaths string) ([]*moduleDepTree, error) {
 }
 
 func parseDepTreeFile(path string) (results *moduleDepTree, err error) {
+	// jfrog-ignore: The file is a JSON file that contains the dependency tree of a module in a Gradle/Maven project.
 	depTreeJson, err := os.ReadFile(strings.TrimSpace(path))
 	if errorutils.CheckError(err) != nil {
 		return
