@@ -1,6 +1,7 @@
 package simplejsonparser
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
@@ -62,6 +64,10 @@ func (sjc *CmdResultsSimpleJsonConverter) Reset(metadata results.ResultsMetaData
 	sjc.multipleRoots = multipleTargets
 	if scanErrors := metadata.GetAllErrors(); len(scanErrors) > 0 {
 		for _, scanError := range scanErrors {
+			if scanError.Skip {
+				log.Debug(fmt.Sprintf("Skipping adding error %s because it is skipped", scanError.ActualError.Error()))
+				continue
+			}
 			sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{ErrorMessage: scanError.ActualError.Error()})
 		}
 	}

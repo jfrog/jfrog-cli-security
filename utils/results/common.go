@@ -901,6 +901,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
 		if len(technologies) > 0 && !utils.ElementsEqual(potential.Technologies, technologies) {
 			// If the technology is not the same, skip the comparison
+			// When project evolves and new technologies are added, not supporting the new technology on the first change.
 			continue
 		}
 		if relativeTarget == potential.Target {

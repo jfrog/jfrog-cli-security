@@ -100,7 +100,20 @@ func (auditCmd *AuditCommand) SetIncludeLicenses(include bool) *AuditCommand {
 	auditCmd.IncludeLicenses = include
 	return auditCmd
 }
-
+func logScanPaths(workingDirs []string, isRecursiveScan bool) {
+	switch {
+	case len(workingDirs) > 1:
+		log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
+	case isRecursiveScan && len(workingDirs) == 0:
+		log.Info("Detecting recursively targets for scan in current directory")
+	case isRecursiveScan:
+		log.Info("Detecting recursively targets for scan in path:", workingDirs[0])
+	case len(workingDirs) == 0:
+		log.Debug("Scanning current directory...")
+	default:
+		log.Info("Scanning path:", workingDirs[0])
+	}
+}
 func (auditCmd *AuditCommand) SetIncludeSnippetDetection(include bool) *AuditCommand {
 	auditCmd.IncludeSnippetDetection = include
 	return auditCmd
@@ -180,27 +193,6 @@ func shouldIncludeSnippetDetection(params *AuditParams) bool {
 		return true
 	}
 	return strings.ToLower(os.Getenv(plugin.SnippetDetectionEnvVariable)) == "true"
-}
-
-func logScanPaths(workingDirs []string, isRecursiveScan bool) {
-	if len(workingDirs) <= 1 {
-		switch isRecursiveScan {
-		case true:
-			if len(workingDirs) == 0 {
-				log.Info("Detecting recursively targets for scan in current directory")
-			} else {
-				log.Info("Detecting recursively targets for scan in path:", workingDirs[0])
-			}
-		case false:
-			if len(workingDirs) == 0 {
-				log.Debug("Scanning current directory...")
-			} else {
-				log.Info("Scanning path:", workingDirs[0])
-			}
-		}
-		return
-	}
-	log.Info("Scanning paths:", strings.Join(workingDirs, ", "))
 }
 
 func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansToPerform []utils.SubScanType, includeSbom bool, rootDir string) (projectPath string, includeDirs []string, isRecursiveScan bool, err error) {
