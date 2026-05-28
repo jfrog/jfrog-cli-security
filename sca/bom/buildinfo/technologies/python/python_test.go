@@ -551,7 +551,7 @@ description = "fixture"
 		require.NoError(t, os.WriteFile(pyprojectPath, initial, 0600))
 		t.Chdir(dir)
 
-		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL))
+		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL, 0))
 
 		written, err := os.ReadFile(pyprojectPath)
 		require.NoError(t, err)
@@ -576,7 +576,7 @@ url = "https://example.com/artifactory/api/pypi/my-curation-repo/simple"
 		require.NoError(t, os.WriteFile(pyprojectPath, initial, 0600))
 		t.Chdir(dir)
 
-		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL))
+		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL, 0))
 
 		written, err := os.ReadFile(pyprojectPath)
 		require.NoError(t, err)
@@ -611,7 +611,7 @@ url = "https://example.com/artifactory/api/pypi/other-repo/simple"
 		require.NoError(t, os.WriteFile(pyprojectPath, initial, 0600))
 		t.Chdir(dir)
 
-		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL))
+		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL, 0))
 
 		written, err := os.ReadFile(pyprojectPath)
 		require.NoError(t, err)
@@ -744,3 +744,23 @@ func TestBuildPoetryDownloadUrl_HTTP(t *testing.T) {
 		assert.Contains(t, seenPath, "/simple/flask-babel/", "must use PEP 503 normalized name in the simple-index URL, got %q", seenPath)
 	})
 }
+
+func TestParsePoetryVersion(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"Poetry (version 1.8.3)", "1.8.3"},
+		{"Poetry version 1.5.0", "1.5.0"},
+		{"Poetry (version 2.0.0)", "2.0.0"},
+		{"Poetry version 1.2.0", "1.2.0"},
+		{"", ""},
+		{"some unrelated output", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, parsePoetryVersion(tt.in))
+		})
+	}
+}
+

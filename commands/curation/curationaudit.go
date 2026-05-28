@@ -1647,7 +1647,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	if dl, ok := downloadUrlsMap[normalizedId]; ok {
 		downloadUrls = []string{dl}
 	} else {
-		log.Warn(fmt.Sprintf("couldn't find download url for node id %s", id))
+		log.Warn(fmt.Sprintf("Couldn't find download URL for node ID %s", id))
 	}
 	return
 }

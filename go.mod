@@ -13,11 +13,11 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260526201157-3dd942bd9e1f
+	github.com/jfrog/build-info-go v1.13.1-0.20260528065004-80409c046540
 	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260501071051-3c8035fc662b
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260528073225-e2d59f90c8c6
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260522091649-43f236276873
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20260508101905-a17af78a38d7
 	github.com/magiconair/properties v1.8.10
@@ -156,10 +156,6 @@ require (
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go master
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
-
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/Phavya-jfrog/jfrog-cli-artifactory v0.0.0-20260527055932-07a682546e54
-
-replace github.com/jfrog/build-info-go => github.com/Phavya-jfrog/build-info-go v1.13.1-0.20260527083816-99f98732e17d
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/gauriy-tech/jfrog-cli-core/v2 v2.0.0-20260526032107-e8995d698251
 

@@ -58,7 +58,7 @@ var (
 	// with a legacy ~/Library/Application Support/pypoetry config dir) prepend
 	// deprecation notices on stdout before this line, so we scan the full
 	// output rather than assuming a single-line response.
-	poetryVersionRegex = regexp.MustCompile(`Poetry \(version ([^)]+)\)`)
+	poetryVersionRegex = regexp.MustCompile(`Poetry \(?version\s+([^)\s]+)\)?`)
 )
 
 // parsePoetryVersion extracts the semantic version (e.g. "1.2.2") from the
@@ -298,7 +298,8 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 			log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
 			continue
 		}
-		compId := PythonPackageTypeIdentifier + pkg.Name + ":" + pkg.Version
+		normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
+		compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
 		urls[compId] = downloadUrl
 	}
 	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", len(urls), skipped))
@@ -404,7 +405,12 @@ func parsePoetryLockPackages(content []byte) []poetryLockPackage {
 
 	flush := func() {
 		if current != nil {
-			nameToIdx[strings.ToLower(current.Name)] = len(packages)
+			key := strings.ToLower(current.Name)
+			if _, dup := nameToIdx[key]; dup {
+				log.Warn(fmt.Sprintf("Poetry lock: duplicate package name %q — keeping first entry, skipping index update", current.Name))
+			} else {
+				nameToIdx[key] = len(packages)
+			}
 			packages = append(packages, *current)
 			current = nil
 		}
@@ -505,8 +511,9 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 	}
 	technologies.LogExecutableVersion("poetry")
 
+	var poetryMajor int
 	if params.IsCurationCmd {
-		if err = validateMinimumPoetryVersion(CurationPoetryMinimumVersion); err != nil {
+		if poetryMajor, err = validateMinimumPoetryVersion(CurationPoetryMinimumVersion); err != nil {
 			return false, restoreEnv, err
 		}
 	}
@@ -542,17 +549,24 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 		if err != nil {
 			return false, restoreEnv, err
 		}
+		baseUrl := rtUrl.Scheme + "://" + rtUrl.Host + rtUrl.Path
+		if params.IsCurationCmd {
+			// Overwrite [[tool.poetry.source]] in the temp pyproject.toml with the curation
+			// pass-through URL.
+			if err = setCurationSourceInPyproject(params.DependenciesRepository, baseUrl, poetryMajor); err != nil {
+				return false, restoreEnv, err
+			}
+		}
 		if password != "" {
-			baseUrl := rtUrl.Scheme + "://" + rtUrl.Host + rtUrl.Path
 			if params.IsCurationCmd {
 				// Set credentials in Poetry's global config (used by Poetry 2.x).
 				if err = artifactoryutils.RunPoetryConfig(baseUrl, username, password, params.DependenciesRepository); err != nil {
 					return false, restoreEnv, err
 				}
-				// Overwrite [[tool.poetry.source]] in the temp pyproject.toml with the curation
-				// pass-through URL. Required for Poetry 1.x which ignores the global config URL.
-				if err = setCurationSourceInPyproject(params.DependenciesRepository, baseUrl); err != nil {
-					return false, restoreEnv, err
+				restoreEnv = func() error {
+					_, e1 := executeCommand("poetry", "config", "--unset", "http-basic."+params.DependenciesRepository)
+					_, e2 := executeCommand("poetry", "config", "--unset", "repositories."+params.DependenciesRepository)
+					return errors.Join(e1, e2)
 				}
 			} else {
 				if err = artifactoryutils.ConfigPoetryRepo(baseUrl, username, password, params.DependenciesRepository); err != nil {
@@ -620,7 +634,7 @@ func wrapPoetryCurationErr(isCurationCmd bool, lockErr error) error {
 // If pyproject.toml has no [[tool.poetry.source]] at all, we fall back to
 // adding a single entry named after the Artifactory repository so Poetry
 // has somewhere to resolve from.
-func setCurationSourceInPyproject(repoName, repoUrl string) error {
+func setCurationSourceInPyproject(repoName, repoUrl string, majorVersion int) error {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -637,7 +651,7 @@ func setCurationSourceInPyproject(repoName, repoUrl string) error {
 	if len(names) == 0 {
 		names = []string{repoName}
 	}
-	setDefault := poetryMajorVersion() < 2
+	setDefault := majorVersion < 2
 	sources := make([]map[string]interface{}, 0, len(names))
 	for i, n := range names {
 		s := map[string]interface{}{"name": n, "url": repoUrl}
@@ -686,34 +700,20 @@ func extractPoetrySourceNames(v interface{}) []string {
 	return names
 }
 
-func validateMinimumPoetryVersion(minVersion string) error {
+func validateMinimumPoetryVersion(minVersion string) (int, error) {
 	out, err := executeCommand("poetry", "--version")
 	if err != nil {
-		log.Debug(fmt.Sprintf("Could not determine Poetry version: %s", err.Error()))
-		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher.", minVersion)
+		log.Debug(fmt.Sprintf("Poetry is not installed or not on PATH: %s", err.Error()))
+		return 0, errorutils.CheckErrorf("JFrog CLI poetry curation requires Poetry to be installed (version %s or higher).", minVersion)
 	}
 	v := parsePoetryVersion(out)
 	if v == "" {
 		log.Debug(fmt.Sprintf("Could not parse Poetry version from output: %q", out))
-		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher.", minVersion)
+		return 0, errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher.", minVersion)
 	}
 	log.Debug(fmt.Sprintf("Poetry version: %s", v))
 	if version.NewVersion(v).Compare(minVersion) > 0 {
-		return errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher. The Current version is: %s", minVersion, v)
-	}
-	return nil
-}
-
-// poetryMajorVersion returns the major version number of the installed Poetry executable.
-// Returns 0 on any parse failure (safe fallback — caller uses < 2 check, so 0 adds default=true).
-func poetryMajorVersion() int {
-	out, err := executeCommand("poetry", "--version")
-	if err != nil {
-		return 0
-	}
-	v := parsePoetryVersion(out)
-	if v == "" {
-		return 0
+		return 0, errorutils.CheckErrorf("JFrog CLI poetry curation requires poetry version %s or higher. The Current version is: %s", minVersion, v)
 	}
 	dot := strings.IndexByte(v, '.')
 	if dot < 0 {
@@ -721,9 +721,9 @@ func poetryMajorVersion() int {
 	}
 	major, parseErr := strconv.Atoi(v[:dot])
 	if parseErr != nil {
-		return 0
+		return 0, nil
 	}
-	return major
+	return major, nil
 }
 
 func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDetected bool, restoreEnv func() error, err error) {

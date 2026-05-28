@@ -1906,25 +1906,26 @@ func Test_getPythonNameVersion(t *testing.T) {
 	}
 }
 
-// TestGetBlockedPackageDetails_403FallbackEmitsRow drives getBlockedPackageDetails
-// down the two unparseable-body branches and asserts a blocked-policy row is still
-// emitted instead of the package being silently dropped from the audit table.
-//
-// Covers the realistic Artifactory shapes for a malicious-policy block reaching the
-// audit phase: (1) the 403 response is HTML / not valid JSON; (2) the 403 response
-// is JSON but the Errors array is empty.
-func TestGetBlockedPackageDetails_403FallbackEmitsRow(t *testing.T) {
+// TestGetBlockedPackageDetails_403UnparsableBodyReturnsError verifies that
+// getBlockedPackageDetails returns an error (and no PackageStatus) when a 403
+// response body cannot be resolved to a known curation block reason:
+// (1) the body is not valid JSON (e.g. an HTML error page), or
+// (2) the body is valid JSON but the Errors array is empty.
+func TestGetBlockedPackageDetails_403UnparsableBodyReturnsError(t *testing.T) {
 	tests := []struct {
-		name     string
-		respBody string
+		name           string
+		respBody       string
+		expectedErrMsg string
 	}{
 		{
-			name:     "non-JSON body (HTML error page)",
-			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
+			name:           "non-JSON body (HTML error page)",
+			respBody:       "<html><body><h1>403 Forbidden</h1></body></html>",
+			expectedErrMsg: "invalid character",
 		},
 		{
-			name:     "JSON body with empty errors list",
-			respBody: `{"errors":[]}`,
+			name:           "JSON body with empty errors list",
+			respBody:       `{"errors":[]}`,
+			expectedErrMsg: "received 403 for unknown reason",
 		},
 	}
 
@@ -1956,14 +1957,9 @@ func TestGetBlockedPackageDetails_403FallbackEmitsRow(t *testing.T) {
 
 			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
 
-			require.NoError(t, err, "fallback must not surface as an error — the row carries the failure signal instead")
-			require.NotNil(t, got, "fallback must emit a PackageStatus row so the package appears in the audit table")
-			assert.Equal(t, pkgName, got.PackageName)
-			assert.Equal(t, pkgVersion, got.PackageVersion)
-			assert.Equal(t, packageUrl, got.BlockedPackageUrl)
-			assert.Equal(t, blocked, got.Action)
-			assert.Equal(t, BlockingReasonPolicy, got.BlockingReason)
-			assert.Equal(t, string(techutils.Poetry), got.PkgType)
+			require.Error(t, err, "unparseable 403 body must surface as an error")
+			assert.Nil(t, got, "no PackageStatus should be returned when the block reason cannot be determined")
+			assert.Contains(t, err.Error(), tt.expectedErrMsg)
 		})
 	}
 }
