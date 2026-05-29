@@ -1,23 +1,27 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const (
-	JfrogCurationDirName = "curation"
+	JfrogCurationDirName     = "curation"
+	JfrogContributorsDirName = "contributors-cache"
 
 	CurationsDir = "JFROG_CLI_CURATION_DIR"
 
@@ -37,6 +41,14 @@ func getJfrogCurationFolder() (string, error) {
 	return filepath.Join(jfrogHome, JfrogCurationDirName), nil
 }
 
+func GetContributorsCacheDir() (string, error) {
+	jfrogHome, err := coreutils.GetJfrogHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(jfrogHome, JfrogContributorsDirName), nil
+}
+
 func GetCurationCacheFolder() (string, error) {
 	curationFolder, err := getJfrogCurationFolder()
 	if err != nil {
@@ -45,7 +57,7 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string, err error) {
+func GetCurationCacheFolderByTech(tech string) (projectDir string, err error) {
 	pathHash, errFromHash := getProjectPathHash()
 	if errFromHash != nil {
 		err = errFromHash
@@ -55,7 +67,7 @@ func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string,
 	if err != nil {
 		return "", err
 	}
-	projectDir = filepath.Join(curationFolder, tech.String(), pathHash)
+	projectDir = filepath.Join(curationFolder, tech, pathHash)
 	return
 }
 
@@ -81,6 +93,97 @@ func GetCurationNugetCacheFolder() (string, error) {
 		return "", err
 	}
 	return filepath.Join(curationFolder, "nuget"), nil
+}
+
+func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
+	var fullPathsWorkingDirs []string
+	for _, wd := range workingDirs {
+		fullPathWd, err := filepath.Abs(wd)
+		if err != nil {
+			return nil, err
+		}
+		fullPathsWorkingDirs = append(fullPathsWorkingDirs, fullPathWd)
+	}
+	return fullPathsWorkingDirs, nil
+}
+
+func IsPathExcluded(path string, exclusions []string) bool {
+	if len(exclusions) == 0 {
+		return false
+	}
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, true), path)
+	if err != nil {
+		log.Warn("Failed to check if path is excluded:", err.Error())
+		return false
+	}
+	return match
+}
+
+func GetExcludePattern(excludePatterns []string, defaultExcludePatterns []string, isRecursive bool) string {
+	exclusions := excludePatterns
+	if len(exclusions) == 0 {
+		exclusions = defaultExcludePatterns
+	}
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, isRecursive)
+}
+
+func IsPathMatchesPatterns(rootPath, path string, isRecursive, fromRelativePath bool, patterns ...string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	if fromRelativePath {
+		relativePath, err := filepath.Rel(rootPath, path)
+		if err != nil {
+			log.Warn("Failed to get relative path:", err.Error())
+			return false
+		}
+		path = relativePath
+	}
+	match, err := regexp.MatchString(fspatterns.PrepareExcludePathPattern(patterns, clientUtils.WildCardPattern, isRecursive), path)
+	if err != nil {
+		log.Warn("Failed to check if path matches pattern:", err.Error())
+		return false
+	}
+	return match
+}
+
+func ListFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			dirs = append(dirs, path)
+		} else {
+			files = append(files, path)
+		}
+	}
+	return
+}
+
+func ListDirs(rootPath string, isRecursive, patternsFromRelativePath, preserveSymlink bool, excludePattern string, includePatterns ...string) (dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, patternsFromRelativePath, preserveSymlink, excludePattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			// Validate if the directory matches any of the include patterns
+			if len(includePatterns) > 0 && !IsPathMatchesPatterns(rootPath, path, isRecursive, patternsFromRelativePath, includePatterns...) {
+				log.Verbose(fmt.Sprintf("Skipping directory %s as it does not match any of the include patterns: %s", path, strings.Join(includePatterns, ", ")))
+				continue
+			}
+			dirs = append(dirs, path)
+		}
+	}
+	return
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {
@@ -163,8 +266,14 @@ func ToURI(path string) string {
 	return u.String()
 }
 
-func GetReleasesRemoteDetails(artifact, downloadPath string) (server *config.ServerDetails, fullRemotePath string, err error) {
-	var remoteRepo string
+func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, fullRemotePath string, err error) {
+	if remoteServerDetails != nil && remoteRepo != "" {
+		// Config profile server and repo details are provided
+		server = remoteServerDetails
+		fullRemotePath = path.Join(remoteRepo, downloadPath)
+		return
+	}
+	// Try to get releases remote details from environment variable
 	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
 	if err != nil {
 		return
@@ -173,7 +282,7 @@ func GetReleasesRemoteDetails(artifact, downloadPath string) (server *config.Ser
 		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
 		return
 	}
-	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The %s will be downloaded directly from releases.jfrog.io if needed.", artifact))
+	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
 	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
 	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
 }

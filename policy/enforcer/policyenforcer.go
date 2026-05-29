@@ -264,7 +264,7 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 				if affected.Ref == impactedComponent.BOMRef {
 					// Found the relevant component in a vulnerability
 					relevantVulnerability = &vulnerability
-					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, target.JasResults.ApplicabilityScanResults)
+					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, target.JasResults.GetApplicabilityScanResults())
 					break
 				}
 			}

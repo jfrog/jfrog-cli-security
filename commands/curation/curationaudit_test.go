@@ -221,11 +221,11 @@ func TestIsYarnBerryWorkspaceMember(t *testing.T) {
 	}{
 		{"workspace member — typical", "admin-ui-428bae", "0.0.0", true},
 		{"workspace member — root style", "root-workspace-0b6124", "0.0.0", true},
-		{"real package version 0.0.0", "my-pkg", "0.0.0", false},     // no hex suffix
+		{"real package version 0.0.0", "my-pkg", "0.0.0", false},           // no hex suffix
 		{"real package with hex-looking name", "a-1b2c3d", "1.2.3", false}, // wrong version
-		{"Yarn V1 use.local", "my-pkg", "0.0.0-use.local", false},     // caught by earlier check
-		{"suffix too short", "pkg-4abc", "0.0.0", false},              // 4 chars, not 6
-		{"suffix uppercase", "pkg-4ABC12", "0.0.0", false},            // uppercase hex not matched
+		{"Yarn V1 use.local", "my-pkg", "0.0.0-use.local", false},          // caught by earlier check
+		{"suffix too short", "pkg-4abc", "0.0.0", false},                   // 4 chars, not 6
+		{"suffix uppercase", "pkg-4ABC12", "0.0.0", false},                 // uppercase hex not matched
 		{"suffix has non-hex", "pkg-4xyzab", "0.0.0", false},
 	}
 	for _, tt := range tests {
@@ -705,7 +705,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
 				defer restoreWD()
 
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle.String())
 				require.NoError(t, err)
 
 				return []string{
@@ -888,7 +888,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				// The cache directory is determined by the project directory, so we need to "simulate" the cache directory when running the pretest build.
 				// During the test, the blocked package will be resolved from the same cache directory that was populated in the pretest build.
 				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
 				return []string{"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
@@ -1956,4 +1956,3 @@ func changeDirForTest(t *testing.T, dir string) func() {
 		require.NoError(t, os.Chdir(origCwd))
 	}
 }
-

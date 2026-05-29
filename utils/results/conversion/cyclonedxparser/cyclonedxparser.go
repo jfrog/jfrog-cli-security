@@ -3,6 +3,7 @@ package cyclonedxparser
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -30,6 +31,8 @@ const (
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
 	// Git context property
 	gitContextProperty = "jfrog:git:context"
+	// Include directories property
+	includeDirectoriesProperty = "jfrog:include:directories"
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -92,7 +95,14 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 		return results.ErrResetConvertor
 	}
 	cdc.currentTarget = target
-	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target))
+	properties := []cyclonedx.Property{}
+	if len(target.Include) > 0 {
+		properties = append(properties, cyclonedx.Property{
+			Name:  includeDirectoriesProperty,
+			Value: strings.Join(target.Include, ","),
+		})
+	}
+	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target, properties...))
 	return
 }
 

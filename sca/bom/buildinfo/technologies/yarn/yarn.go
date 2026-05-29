@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -292,25 +292,38 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, cu
 	if params.OutputFormat == outFormat.Json {
 		outputRef = "JSON output"
 	}
+	tableRendered := false
 	tableNote := ""
 	if len(probed) > 0 {
 		if tableErr := printBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat); tableErr != nil {
 			log.Debug(fmt.Sprintf("yarn curation probe: failed to render blocked deps table: %s", tableErr.Error()))
 		} else {
+			tableRendered = true
 			tableNote = fmt.Sprintf(" The %d direct dependencies that the curation repo rejected with HTTP 403 are listed in the %s above.", len(probed), outputRef)
 			tableNote += " Without a 'yarn.lock' the audit cannot enumerate transitives; only direct blockers are listed. Once enough directs pass curation that Yarn writes a lockfile, transitive blockers are audited automatically."
 		}
+	}
+	// buildSuffix assembles the note + recommendation appended after the
+	// "...lockfile was written." sentence. It begins with a leading space.
+	// When the probe surfaced blocked directs (table rendered) we point the user
+	// at them; otherwise the blocker is a transitive we can't enumerate without a
+	// lockfile, so referencing a (non-existent) table would be misleading.
+	buildSuffix := func(completionVerb string) string {
+		if tableRendered {
+			return tableNote + fmt.Sprintf(" Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, %s completes and the audit enumerates the full graph.", outputRef, completionVerb)
+		}
+		return " Probing the declared direct dependencies did not surface the blocked package, so it is likely a transitive dependency that cannot be enumerated without a 'yarn.lock'. Identify the blocked package from the 'yarn install' output above (or pre-generate 'yarn.lock' against a non-curation registry), then remove/replace it or request a waiver and re-run 'jf ca'."
 	}
 	yarnVersionStr, versionErr := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if versionErr == nil {
 		yarnVersion := version.NewVersion(yarnVersionStr)
 		isV2 := yarnVersion.Compare(yarnV2Version) <= 0 && yarnVersion.Compare(yarnV3Version) > 0
 		if isV2 {
-			return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — V2 has no lockfile-only install mode, so any blocked package aborts the install before the lockfile is written.%s Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, install completes and the audit enumerates the full graph. Secondary option: upgrade the project to Yarn V3 ('yarn set version 3.6.4'). V3's '--mode=update-lockfile' writes the lockfile during resolve, so 'jf ca' can audit even while curation blocks tarballs. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, tableNote, outputRef, installErr.Error())
+			return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — V2 has no lockfile-only install mode, so any blocked package aborts the install before the lockfile is written.%s Secondary option: upgrade the project to Yarn V3 ('yarn set version 3.6.4'). V3's '--mode=update-lockfile' writes the lockfile during resolve, so 'jf ca' can audit even while curation blocks tarballs. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("install"), installErr.Error())
 		}
-		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — 'yarn install --mode=update-lockfile' aborted before the lockfile was written (curation is blocking manifests, not just tarballs).%s Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, resolve completes and the audit enumerates the full graph. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, tableNote, outputRef, installErr.Error())
+		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — 'yarn install --mode=update-lockfile' aborted before the lockfile was written (curation is blocking manifests, not just tarballs).%s Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("resolve"), installErr.Error())
 	}
-	return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' — 'yarn install' failed before the lockfile was written (curation is likely blocking manifests, not just tarballs).%s Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, install completes and the audit enumerates the full graph. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, tableNote, outputRef, installErr.Error())
+	return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' — 'yarn install' failed before the lockfile was written (curation is likely blocking manifests, not just tarballs).%s Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, buildSuffix("install"), installErr.Error())
 }
 
 // enumerateAfterCurationInstallError handles the workspace-specific case where
@@ -325,8 +338,8 @@ func enumerateAfterCurationInstallError(params technologies.BuildInfoBomGenerato
 		if tableErr := printBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat); tableErr != nil {
 			log.Debug(fmt.Sprintf("yarn curation probe: failed to render blocked deps table: %s", tableErr.Error()))
 		} else {
-		if params.OutputFormat == outFormat.Json {
-			tablePointer = " (listed in the JSON output above)"
+			if params.OutputFormat == outFormat.Json {
+				tablePointer = " (listed in the JSON output above)"
 			} else {
 				tablePointer = " (listed in the table above)"
 			}
@@ -564,6 +577,14 @@ func expandYarnWorkspaceDirs(curWd string) []string {
 	if len(patterns) == 0 {
 		return nil
 	}
+	// The "workspaces" patterns come from package.json (untrusted, stored input),
+	// so a crafted manifest could use '../' segments to escape the project. Resolve
+	// the root once and reject any match that lands outside it before touching the
+	// filesystem, preventing stored path traversal.
+	rootAbs, rootErr := filepath.Abs(curWd)
+	if rootErr != nil {
+		return nil
+	}
 	seen := map[string]struct{}{}
 	var dirs []string
 	for _, pattern := range patterns {
@@ -573,15 +594,24 @@ func expandYarnWorkspaceDirs(curWd string) []string {
 			continue
 		}
 		for _, m := range matches {
-			info, statErr := os.Stat(m)
+			absMatch, absErr := filepath.Abs(m)
+			if absErr != nil {
+				continue
+			}
+			rel, relErr := filepath.Rel(rootAbs, absMatch)
+			if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+				log.Debug(fmt.Sprintf("yarn curation probe: ignoring workspace match outside project root: %s", m))
+				continue
+			}
+			info, statErr := os.Stat(absMatch)
 			if statErr != nil || !info.IsDir() {
 				continue
 			}
-			if _, dup := seen[m]; dup {
+			if _, dup := seen[absMatch]; dup {
 				continue
 			}
-			seen[m] = struct{}{}
-			dirs = append(dirs, m)
+			seen[absMatch] = struct{}{}
+			dirs = append(dirs, absMatch)
 		}
 	}
 	return dirs
@@ -992,9 +1022,13 @@ func printBlockedDirectDepsTable(blocked []blockedDirectDep, totalProbed int, fo
 func runYarnCommandQuiet(executablePath, srcPath string, args ...string) error {
 	command := exec.Command(executablePath, args...)
 	command.Dir = srcPath
+	var stderr bytes.Buffer
 	command.Stdout = io.Discard
-	command.Stderr = io.Discard
+	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
 		return err
 	}
 	return nil

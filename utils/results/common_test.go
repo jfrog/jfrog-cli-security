@@ -1,7 +1,6 @@
 package results
 
 import (
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -1027,7 +1026,7 @@ func TestSearchTargetResultsByRelativePath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			foundTarget := SearchTargetResultsByRelativePath(tc.target, techutils.NoTech, tc.cmdResults)
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}
@@ -1037,33 +1036,58 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 	sharedDir := filepath.Join("root", "app")
 	cmdResults := NewCommandResults(utils.SourceCode)
 	// Order intentionally Poetry before Npm (simulates nondeterministic map iteration).
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
 
 	// Same absolute path for every target ⇒ common parent equals that path ⇒ relative key is "" (see utils.GetRelativePath).
 	relativeKey := utils.GetRelativePath(sharedDir, cmdResults.GetCommonParentPath())
 	require.Equal(t, "", relativeKey)
 
 	t.Run("picks npm when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Npm, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 		assert.Equal(t, sharedDir, found.Target)
 	})
 	t.Run("picks poetry when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Poetry, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Poetry)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Poetry, found.Technology)
+		assert.Equal(t, techutils.Poetry, found.Technologies[0])
 	})
 	t.Run("reversed slice order still picks npm", func(t *testing.T) {
 		reversed := NewCommandResults(utils.SourceCode)
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
 		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
-		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, reversed)
+		found := SearchTargetResultsByRelativePath(rel, reversed, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 	})
+}
+
+func TestFormalTechOrCdxCompType_MultiTech(t *testing.T) {
+	assert.Equal(t, "Poetry", FormalTechOrCdxCompType("pypi", true, techutils.Poetry))
+	assert.Equal(t, "Yarn", FormalTechOrCdxCompType("npm", true, techutils.Yarn))
+	assert.Equal(t, "pypi", FormalTechOrCdxCompType("pypi", false, techutils.Poetry))
+}
+
+func TestGetIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []techutils.Technology
+		expected techutils.Technology
+	}{
+		{"empty response npm target", "", "npm", []techutils.Technology{techutils.Npm}, techutils.Npm},
+		{"pip response poetry target", "pip", "pypi", []techutils.Technology{techutils.Poetry}, techutils.Poetry},
+		{"npm response disambiguate", "npm", "npm", []techutils.Technology{techutils.Maven, techutils.Npm}, techutils.Npm},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, GetIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
 }
 
 func TestDepTreeToSbom(t *testing.T) {
@@ -2677,8 +2701,7 @@ func TestScanResponseToSbom(t *testing.T) {
 						Licenses: &cyclonedx.Licenses{
 							{
 								License: &cyclonedx.License{
-									ID:   "Apache-2.0-Key",
-									Name: "Apache-2.0",
+									ID: "Apache-2.0-Key",
 								},
 							},
 						},
@@ -2844,7 +2867,6 @@ func TestScanResponseToSbom(t *testing.T) {
 				}
 			}
 			// Validate
-			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
 			if expected.Components == nil {
 				assert.Nil(t, destination.Components)
 			} else {

@@ -1157,6 +1157,23 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 	}
 }
 
+func TestScanLicenseToCycloneDx(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		license  string
+		expected cyclonedx.License
+	}{
+		{name: "prefer key as id", key: "Apache-2.0-Key", license: "Apache-2.0", expected: cyclonedx.License{ID: "Apache-2.0-Key"}},
+		{name: "fallback to name", key: "", license: "Apache-2.0", expected: cyclonedx.License{Name: "Apache-2.0"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, *ScanLicenseToCycloneDx(tt.key, tt.license))
+		})
+	}
+}
+
 func TestAttachLicenseToComponent(t *testing.T) {
 	tests := []struct {
 		name     string

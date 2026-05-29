@@ -63,6 +63,10 @@ func subScansToFlags(subScans []utils.SubScanType) (flags []string) {
 			flags = append(flags, "--sca")
 		case utils.SecretsScan:
 			flags = append(flags, "--secrets")
+		case utils.IacScan:
+			flags = append(flags, "--iac")
+		case utils.SastScan:
+			flags = append(flags, "--sast")
 		}
 	}
 	return flags
@@ -175,10 +179,10 @@ func TestXrayBinaryScanJsonJar(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJASArtifact(t, "student-services-security-0.0.1.jar", false, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 41},
+		Total: &validations.TotalCount{Vulnerabilities: 101},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 40, Secrets: 1},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 17, NotCovered: 3, NotApplicable: 20},
+			ValidateScan:                &validations.ScanCount{Sca: 100, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 6, NotCovered: 34, NotApplicable: 60},
 		},
 	})
 }

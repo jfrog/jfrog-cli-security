@@ -1,6 +1,7 @@
 package yarn
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,12 +14,14 @@ import (
 	"github.com/jfrog/build-info-go/build"
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseYarnDependenciesMap(t *testing.T) {
@@ -911,6 +914,77 @@ func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
 // fails at runtime if findClaimingYarnWorkspaceRoot accidentally side-
 // effects the rest of the audit. The helper itself is tested below; this
 // test asserts the call-site gate is in place.
+// TestRootResolutionAppliesToAuditAndScan pins two contracts:
+//
+//  1. findYarnWorkspaceRoot is NOT gated behind IsCurationCmd in BuildDependencyTree —
+//     it improves root identification for every caller (jf audit, jf scan, jf ca).
+//
+//  2. For Yarn V2+ projects the @workspace:. label is authoritative and takes
+//     precedence over build-info-go's name-based heuristic. This matters for nameless
+//     projects (no "name" in package.json) where the heuristic can fail.
+func TestRootResolutionAppliesToAuditAndScan(t *testing.T) {
+	t.Run("source contract: findYarnWorkspaceRoot is not gated on IsCurationCmd", func(t *testing.T) {
+		src, err := os.ReadFile("yarn.go")
+		require.NoError(t, err)
+		txt := string(src)
+		overrideIdx := strings.Index(txt, "if workspaceRoot := findYarnWorkspaceRoot(")
+		require.NotEqual(t, -1, overrideIdx,
+			"findYarnWorkspaceRoot override must be present in BuildDependencyTree")
+		// Look at the 200 characters immediately before the call site.
+		// If IsCurationCmd appears there, the override is gated — which would
+		// mean it no longer applies to jf audit/scan and this test should fail.
+		windowStart := overrideIdx - 200
+		if windowStart < 0 {
+			windowStart = 0
+		}
+		context := txt[windowStart:overrideIdx]
+		assert.NotContains(t, context, "IsCurationCmd",
+			"findYarnWorkspaceRoot must not be gated on IsCurationCmd — "+
+				"root resolution applies to jf audit/scan as well as jf ca")
+	})
+
+	t.Run("Yarn V2 named project: @workspace:. root is found", func(t *testing.T) {
+		// Simulates what bibuildutils.GetYarnDependencies returns for a named
+		// Yarn V2+ project. findYarnWorkspaceRoot should return the workspace root
+		// so BuildDependencyTree sets root = workspaceRoot, identical to what
+		// build-info-go's heuristic would select.
+		deps := map[string]*bibuildutils.YarnDependency{
+			"my-app@workspace:.": {Value: "my-app@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0"}},
+			"lodash@npm:4.17.23": {Value: "lodash@npm:4.17.23", Details: bibuildutils.YarnDepDetails{Version: "4.17.23"}},
+		}
+		root := findYarnWorkspaceRoot(deps)
+		require.NotNil(t, root, "named Yarn V2 project must have a @workspace:. root")
+		assert.Equal(t, "my-app@workspace:.", root.Value)
+	})
+
+	t.Run("Yarn V2 nameless project: @workspace:. root is found via hash-prefixed key", func(t *testing.T) {
+		// When package.json has no "name" field, Yarn V2+ generates an
+		// auto-derived key like "root-workspace-<hash>@workspace:.".
+		// build-info-go's heuristic relies on the name field and may return nil;
+		// findYarnWorkspaceRoot finds the root via the suffix alone, preventing
+		// a nil-deref in BuildDependencyTree (the root == nil guard).
+		deps := map[string]*bibuildutils.YarnDependency{
+			"root-workspace-0b6124@workspace:.": {Value: "root-workspace-0b6124@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "0.0.0"}},
+			"express@npm:5.2.1":                 {Value: "express@npm:5.2.1", Details: bibuildutils.YarnDepDetails{Version: "5.2.1"}},
+		}
+		root := findYarnWorkspaceRoot(deps)
+		require.NotNil(t, root, "nameless Yarn V2 project must still find root via @workspace:. suffix")
+		assert.Equal(t, "root-workspace-0b6124@workspace:.", root.Value)
+	})
+
+	t.Run("Yarn V1 project: findYarnWorkspaceRoot returns nil, falls back to build-info-go heuristic", func(t *testing.T) {
+		// Yarn V1 dep maps use plain package names as keys without @workspace:
+		// locators. findYarnWorkspaceRoot must return nil so BuildDependencyTree
+		// keeps whatever root build-info-go already identified.
+		deps := map[string]*bibuildutils.YarnDependency{
+			"lodash": {Value: "lodash", Details: bibuildutils.YarnDepDetails{Version: "4.17.23"}},
+			"react":  {Value: "react", Details: bibuildutils.YarnDepDetails{Version: "18.0.0"}},
+		}
+		assert.Nil(t, findYarnWorkspaceRoot(deps),
+			"Yarn V1 dep map must not produce a workspace root — build-info-go heuristic takes over")
+	})
+}
+
 func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 	// Synthesise a workspace structure that *would* be claimed by the
 	// walk-up helper, so any future caller that forgets to gate on
@@ -1487,5 +1561,86 @@ func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
 			assert.Equal(t, expected, field.Tag.Get("json"),
 				"blockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
 		}
+	}
+}
+
+func TestProbeBlockedDirectDeps(t *testing.T) {
+	curationBody := `{"errors":[{"status":403,"message":"Package lodash:4.17.21 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove it}."}]}`
+	nonCurationBody := `{"errors":[{"status":403,"message":"403 Forbidden"}]}`
+
+	tests := []struct {
+		name          string
+		handler       func(w http.ResponseWriter, r *http.Request)
+		wantTotal     int
+		wantBlocked   int
+		wantReason    string
+		wantPolicy    string
+		wantCondition string
+	}{
+		{
+			name: "curation 403 — policy extracted",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				if r.Method == http.MethodGet {
+					_, _ = w.Write([]byte(curationBody))
+				}
+			},
+			wantTotal:     1,
+			wantBlocked:   1,
+			wantReason:    "blocked_policy",
+			wantPolicy:    "mal-policy",
+			wantCondition: "Malicious package",
+		},
+		{
+			name: "500 from registry — counted as probed, not blocked",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+			wantTotal:   1, // HEAD returned a response → probed; non-403 → not blocked
+			wantBlocked: 0,
+		},
+		{
+			name: "non-curation 403 — unknown reason, no policies",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				if r.Method == http.MethodGet {
+					_, _ = w.Write([]byte(nonCurationBody))
+				}
+			},
+			wantTotal:   1,
+			wantBlocked: 1,
+			wantReason:  "unknown_403",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, tt.handler)
+			defer mockServer.Close()
+
+			curWd := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"),
+				[]byte(`{"name":"root","dependencies":{"lodash":"4.17.21"}}`), 0o644))
+
+			params := technologies.BuildInfoBomGeneratorParams{
+				ServerDetails:          serverDetails,
+				DependenciesRepository: "tst-yarn-repo",
+				ParallelRequests:       1,
+			}
+
+			blocked, totalProbed := probeBlockedDirectDeps(params, curWd, "")
+
+			assert.Equal(t, tt.wantTotal, totalProbed)
+			assert.Len(t, blocked, tt.wantBlocked)
+			if tt.wantBlocked > 0 {
+				assert.Equal(t, "lodash", blocked[0].name)
+				assert.Equal(t, "4.17.21", blocked[0].probedVersion)
+				assert.Equal(t, tt.wantReason, blocked[0].reason)
+				if tt.wantPolicy != "" && assert.Len(t, blocked[0].policies, 1) {
+					assert.Equal(t, tt.wantPolicy, blocked[0].policies[0].policy)
+					assert.Equal(t, tt.wantCondition, blocked[0].policies[0].condition)
+				}
+			}
+		})
 	}
 }

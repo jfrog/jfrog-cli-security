@@ -862,6 +862,32 @@ func TestSplitPackageURL(t *testing.T) {
 	}
 }
 
+func TestResolveIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []Technology
+		expected Technology
+	}{
+		{"empty response npm target", "", "npm", []Technology{Npm}, Npm},
+		{"pip response poetry target", "pip", "pypi", []Technology{Poetry}, Poetry},
+		{"pypi response poetry target", "pypi", "pypi", []Technology{Poetry}, Poetry},
+		{"gav response gradle target", "gav", "gav", []Technology{Gradle}, Gradle},
+		{"npm response disambiguate", "npm", "npm", []Technology{Maven, Npm}, Npm},
+		{"maven response disambiguate", "maven", "maven", []Technology{Maven, Npm}, Maven},
+		{"generic uses target", "generic", "maven", []Technology{Maven}, Maven},
+		{"yarn npm type", "yarn", "npm", []Technology{Yarn}, Yarn},
+		{"single target fallback", "", "go", []Technology{Go}, Go},
+		{"no match", "", "pypi", []Technology{Maven, Npm}, NoTech},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ResolveIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
+}
+
 func TestCdxPackageTypeToTechnology(t *testing.T) {
 	tests := []struct {
 		name     string

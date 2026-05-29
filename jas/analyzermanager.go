@@ -25,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.31.1"
+	defaultAnalyzerManagerVersion             = "1.34.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -213,7 +213,7 @@ func GetAnalyzerManagerExitCode(err error) int {
 
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
-func DownloadAnalyzerManagerIfNeeded(threadId int) error {
+func DownloadAnalyzerManagerIfNeeded(remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 	if err != nil {
 		return err
 	}
-	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, threadId)
+	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, remoteRepo, remoteServerDetails, threadId)
 }
 
 func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
@@ -331,7 +331,7 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 
 // RunAnalyzerManagerWithPipesAndDownload downloads the analyzer manager if needed and runs the command with pipes.
 func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
-	if err := DownloadAnalyzerManagerIfNeeded(0); err != nil {
+	if err := DownloadAnalyzerManagerIfNeeded("", nil, 0); err != nil {
 		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
 	}
 	return RunAnalyzerManagerWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)

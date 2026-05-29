@@ -772,14 +772,10 @@ func CollectRuns(runs ...[]*sarif.Run) []*sarif.Run {
 	return flat
 }
 
-// Resolve the actual technology from multiple sources:
-func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
-	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
-		// technology returned in the vulnerability/violation obj is the most specific technology
-		return techutils.ToTechnology(responseTechnology)
-	}
-	// if no technology is provided, use the target technology
-	return targetTech
+// GetIssueTechnology resolves the most specific technology for an issue from the scan response,
+// detected target technologies, and the impacted component package type.
+func GetIssueTechnology(responseTechnology string, targetTechnologies []techutils.Technology, componentPackageType string) techutils.Technology {
+	return techutils.ResolveIssueTechnology(responseTechnology, targetTechnologies, componentPackageType)
 }
 
 // This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
@@ -884,7 +880,7 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-func SearchTargetResultsByRelativePath(relativeTarget string, technology techutils.Technology, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults, technologies ...techutils.Technology) (targetResults *TargetResults) {
 	if resultsToCompare == nil || len(resultsToCompare.Targets) == 0 {
 		log.Debug(fmt.Sprintf("No targets to compare in results for target '%s'", relativeTarget))
 		return
@@ -892,7 +888,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, technology techuti
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
-	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, technology.String(), sourceBasePath))
+	log.Debug(fmt.Sprintf("Searching for target '%s' with technology '%s' in results with base path '%s'", relativeTarget, techutils.ToFormalString(technologies), sourceBasePath))
 	defer func() {
 		if best == nil {
 			log.Debug("No target found")
@@ -903,8 +899,9 @@ func SearchTargetResultsByRelativePath(relativeTarget string, technology techuti
 	for _, potential := range resultsToCompare.Targets {
 		relative := utils.GetRelativePath(potential.Target, sourceBasePath)
 		log.Debug(fmt.Sprintf("Comparing target %s, relative: '%s'", potential.String(), relative))
-		if technology != techutils.NoTech && potential.Technology != technology {
+		if len(technologies) > 0 && !utils.ElementsEqual(potential.Technologies, technologies) {
 			// If the technology is not the same, skip the comparison
+			// When project evolves and new technologies are added, not supporting the new technology on the first change.
 			continue
 		}
 		if relativeTarget == potential.Target {
@@ -993,14 +990,18 @@ func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties .
 	return
 }
 
-// If pretty is true, return the formal technology name, otherwise return the cdx component type
-func FormalTechOrCdxCompType(cdxCompType string, pretty bool) string {
+// If pretty is true, return the formal technology name, otherwise return the cdx component type.
+// targetTechnologies is used to disambiguate broad types (pypi, gav, npm) when pretty is true.
+func FormalTechOrCdxCompType(cdxCompType string, pretty bool, targetTechnologies ...techutils.Technology) string {
 	if !pretty {
 		return cdxCompType
 	}
 	tech := techutils.CdxPackageTypeToTechnology(cdxCompType)
 	if tech != techutils.NoTech {
 		return tech.ToFormal()
+	}
+	if resolved := GetIssueTechnology("", targetTechnologies, cdxCompType); resolved != techutils.NoTech {
+		return resolved.ToFormal()
 	}
 	return cdxCompType
 }
@@ -1281,10 +1282,7 @@ func ParseScanGraphLicenseToSbom(destination *cyclonedx.BOM) ParseLicenseFunc {
 		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
 		// Attach the license to the component
 		cdxutils.AttachLicenseToComponent(affectedComponent, cyclonedx.LicenseChoice{
-			License: &cyclonedx.License{
-				ID:   license.Key,
-				Name: license.Name,
-			},
+			License: cdxutils.ScanLicenseToCycloneDx(license.Key, license.Name),
 		})
 		return nil
 	}

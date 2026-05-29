@@ -69,7 +69,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 			mockServer, serverDetails, _ := validations.XrayServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl)
+			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl, "")
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)
@@ -87,7 +87,6 @@ func getComparisonConfigProfile() *services.ConfigProfile {
 		ProfileName: "default-profile",
 		GeneralConfig: services.GeneralConfig{
 			ScannersDownloadPath:    "https://repo.example.com/releases",
-			GeneralExcludePatterns:  []string{"*.log*", "*.tmp*"},
 			FailUponAnyScannerError: true,
 		},
 		FrogbotConfig: services.FrogbotConfig{

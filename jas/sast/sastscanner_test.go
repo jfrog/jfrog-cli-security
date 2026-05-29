@@ -71,7 +71,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -94,7 +94,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -234,65 +234,58 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 	threeFiles := xscGitInfoWithChanged(t, "modA/a.go", "modA/b.go", "modB/x.go")
 
 	tests := []struct {
-		name             string
-		gitCtx           *xscservices.XscGitInfoContext
-		targetPath       string
-		rootDir          string
-		changedFilesMode bool
+		name       string
+		gitCtx     *xscservices.XscGitInfoContext
+		targetPath string
+		rootDir    string
 		// wantEmpty: expect no file roots (nil or empty slice) when mode is off or there is nothing to return.
 		wantEmpty bool
 		want      []string
 	}{
-		{name: "nil_context", gitCtx: nil, targetPath: base, rootDir: base, changedFilesMode: true, wantEmpty: true},
-		{name: "changed_files_mode_off", gitCtx: threeFiles, targetPath: modA, rootDir: base, changedFilesMode: false, wantEmpty: true},
-		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, rootDir: base, changedFilesMode: true, wantEmpty: true},
-		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", changedFilesMode: true, wantEmpty: true},
-		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, changedFilesMode: true, wantEmpty: true},
+		{name: "nil_context", gitCtx: nil, targetPath: base, rootDir: base, wantEmpty: true},
+		{name: "empty_changed_files", gitCtx: xscGitInfoWithChanged(t), targetPath: modA, rootDir: base, wantEmpty: true},
+		{name: "empty_root_dir", gitCtx: threeFiles, targetPath: modA, rootDir: "", wantEmpty: true},
+		{name: "empty_target_path", gitCtx: threeFiles, targetPath: "", rootDir: base, wantEmpty: true},
 		{
-			name:             "target_is_repo_root_returns_all_as_abs",
-			gitCtx:           threeFiles,
-			targetPath:       base,
-			rootDir:          base,
-			changedFilesMode: true,
-			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
+			name:       "target_is_repo_root_returns_all_as_abs",
+			gitCtx:     threeFiles,
+			targetPath: base,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go"), filepath.Join(base, "modB", "x.go")},
 		},
 		{
-			name:             "filters_to_modA_only",
-			gitCtx:           threeFiles,
-			targetPath:       modA,
-			rootDir:          base,
-			changedFilesMode: true,
-			want:             []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
+			name:       "filters_to_modA_only",
+			gitCtx:     threeFiles,
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go"), filepath.Join(base, "modA", "b.go")},
 		},
 		{
-			name:             "prefix_foo_does_not_match_foobar",
-			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
-			targetPath:       filepath.Join(base, "foo"),
-			rootDir:          base,
-			changedFilesMode: true,
-			want:             []string{filepath.Join(base, "foo", "x.go")},
+			name:       "prefix_foo_does_not_match_foobar",
+			gitCtx:     &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"foo/x.go", "foobar/y.go"}}},
+			targetPath: filepath.Join(base, "foo"),
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "foo", "x.go")},
 		},
 		{
 			// belong-to-target matching uses repo-relative paths (as git reports); resolve to absolute under rootDir afterward.
-			name:             "repo_relative_changed_file_under_target",
-			gitCtx:           xscGitInfoWithChanged(t, "modA/abs.go"),
-			targetPath:       modA,
-			rootDir:          base,
-			changedFilesMode: true,
-			want:             []string{filepath.Join(base, "modA", "abs.go")},
+			name:       "repo_relative_changed_file_under_target",
+			gitCtx:     xscGitInfoWithChanged(t, "modA/abs.go"),
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "abs.go")},
 		},
 		{
-			name:             "deduplicates_same_paths",
-			gitCtx:           &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
-			targetPath:       modA,
-			rootDir:          base,
-			changedFilesMode: true,
-			want:             []string{filepath.Join(base, "modA", "a.go")},
+			name:       "deduplicates_same_paths",
+			gitCtx:     &xscservices.XscGitInfoContext{GitDiffContext: xscservices.GitDiffContext{ChangedFiles: []string{"modA/a.go", "modA/a.go", "./modA/a.go"}}},
+			targetPath: modA,
+			rootDir:    base,
+			want:       []string{filepath.Join(base, "modA", "a.go")},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SastChangedFilesForTarget(tt.changedFilesMode, tt.gitCtx, tt.targetPath, tt.rootDir)
+			got := SastChangedFilesForTarget(tt.gitCtx, tt.targetPath, tt.rootDir)
 			if tt.wantEmpty {
 				assert.Empty(t, got, "SastChangedFilesForTarget should not return any paths in this case")
 			} else {
@@ -343,7 +336,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		changedFilesMode bool
-		// sastForCall is the slice passed to createConfigFile; nil to pass nil.
+		// sastForCall is the slice passed to deprecatedCreateConfigFile; nil to pass nil.
 		sastForCall []string
 		want        []string
 		emptyRoots  bool
@@ -376,7 +369,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ssm.changedFilesMode = tc.changedFilesMode
-			require.NoError(t, ssm.createConfigFile(module, false, tc.sastForCall, nil))
+			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, tc.sastForCall, nil))
 			got := readConfigRoots(t)
 			if tc.emptyRoots {
 				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")

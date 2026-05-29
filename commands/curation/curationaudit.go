@@ -30,7 +30,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	clientio "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
@@ -488,16 +487,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 	serverDetails, err := ca.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.GetXrayVersion(),
-		ExclusionPattern: technologies.GetExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
-		// Suppress the spinner when emitting machine-readable output: the
-		// progress goroutine ticks on stdout with carriage-return sequences
-		// and can overwrite the last line of JSON output (e.g. the closing ']').
-		Progress: func() clientio.ProgressMgr {
-			if ca.OutputFormat() == outFormat.Json {
-				return nil
-			}
-			return ca.Progress()
-		}(),
+		ExclusionPattern: technologies.GetScaExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
+		Progress:         ca.Progress(),
 		// Artifactory Repository params
 		ServerDetails:          serverDetails,
 		DependenciesRepository: ca.DepsRepo(),
@@ -1132,6 +1123,13 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				blockingReason = BlockingReasonOnDemand
 			}
 			policies := nc.extractPoliciesFromMsg(respError)
+			// extractPoliciesFromMsg may return empty when BlockMessageKey is present
+			// but no {policy,...} groups were found in the message.  In that case
+			// keep the 403 signal but be honest: use BlockingReasonUnknown rather
+			// than "Policy violations" with every detail column blank.
+			if blockingReason == BlockingReasonPolicy && len(policies) == 0 {
+				blockingReason = BlockingReasonUnknown
+			}
 			return &PackageStatus{
 				PackageName:       name,
 				PackageVersion:    version,
