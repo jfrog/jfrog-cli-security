@@ -166,7 +166,7 @@ func TestValidatePnpmMinVersion(t *testing.T) {
 		{name: "v10 minor accepted", version: "10.27.0", expectError: false},
 		{name: "v9 rejected", version: "9.15.0", expectError: true},
 		{name: "v8 rejected", version: "8.15.9", expectError: true},
-		{name: "v11 accepted", version: "11.0.0", expectError: false},
+		{name: "v11 rejected", version: "11.0.0", expectError: true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

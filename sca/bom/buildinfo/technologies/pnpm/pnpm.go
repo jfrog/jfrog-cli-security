@@ -133,7 +133,10 @@ func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
 	}, nil
 }
 
-const minPnpmMajorVersion = 10
+const (
+	minPnpmMajorVersion = 10
+	maxPnpmMajorVersion = 10
+)
 
 func getPnpmExecPath() (pnpmExecPath string, err error) {
 	if pnpmExecPath, err = exec.LookPath("pnpm"); errorutils.CheckError(err) != nil {
@@ -157,7 +160,7 @@ func getPnpmExecPath() (pnpmExecPath string, err error) {
 	return
 }
 
-// validatePnpmMinVersion returns an error if the installed pnpm major version is below minPnpmMajorVersion.
+// validatePnpmMinVersion returns an error if the installed pnpm major version is outside the supported range [minPnpmMajorVersion, maxPnpmMajorVersion].
 func validatePnpmMinVersion(versionStr string) error {
 	// Version string may include extra lines (warnings on incompatible Node); take first token.
 	firstLine := strings.SplitN(versionStr, "\n", 2)[0]
@@ -166,8 +169,8 @@ func validatePnpmMinVersion(versionStr string) error {
 	if _, scanErr := fmt.Sscanf(parts[0], "%d", &major); scanErr != nil {
 		return fmt.Errorf("could not parse pnpm version %q: %w", versionStr, scanErr)
 	}
-	if major < minPnpmMajorVersion {
-		return fmt.Errorf("pnpm version %s is not supported. Minimum required version is %d.x", versionStr, minPnpmMajorVersion)
+	if major < minPnpmMajorVersion || major > maxPnpmMajorVersion {
+		return fmt.Errorf("Resolving Pnpm dependencies from Artifactory is currently not supported for Pnpm versions outside the %d.x range. The current Pnpm version is: %s", minPnpmMajorVersion, versionStr)
 	}
 	return nil
 }
