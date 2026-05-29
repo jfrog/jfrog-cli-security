@@ -574,7 +574,7 @@ func getDirChildren(dir string, dirsList []string) (children []string) {
 //     wd/wd2: [tech1]
 func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors map[Technology][]string) (workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, err error) {
 	workingDirectoryToIndicatorsSet := make(map[string]*datastructures.Set[string])
-	excludedTechAtWorkingDir = make(map[string][]Technology)
+	excludedTechAtWorkingDirSet := make(map[string]*datastructures.Set[Technology])
 	for _, path := range files {
 		directory := filepath.Dir(path)
 
@@ -594,13 +594,20 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 			}
 			// Check if the working directory contains a file/directory with a name that ends with an excluded suffix
 			if isExclude(path, techData) {
-				excludedTechAtWorkingDir[directory] = append(excludedTechAtWorkingDir[directory], tech)
+				if _, exist := excludedTechAtWorkingDirSet[directory]; !exist {
+					excludedTechAtWorkingDirSet[directory] = datastructures.MakeSet[Technology]()
+				}
+				excludedTechAtWorkingDirSet[directory].Add(tech)
 			}
 		}
 	}
 	workingDirectoryToIndicators = make(map[string][]string)
 	for wd, indicators := range workingDirectoryToIndicatorsSet {
 		workingDirectoryToIndicators[wd] = indicators.ToSlice()
+	}
+	excludedTechAtWorkingDir = make(map[string][]Technology)
+	for wd, excluded := range excludedTechAtWorkingDirSet {
+		excludedTechAtWorkingDir[wd] = excluded.ToSlice()
 	}
 	return
 }

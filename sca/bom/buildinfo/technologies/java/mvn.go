@@ -97,6 +97,7 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 	// They are downloaded during mvn install but never appear in mvn dependency:tree,
 	// so without this step jf ca would miss curation violations that block the build.
 	// Skip if the tree is empty — no roots to attach to and no point running extra subprocesses.
+	// To move this logic to maven-dep-tree - XRAY-145307
 	if manager.mvnIncludePluginDeps && len(dependencyTree) > 0 {
 		injectPluginDeps(uniqueDeps, dependencyTree, manager.resolvePluginDeps())
 	}

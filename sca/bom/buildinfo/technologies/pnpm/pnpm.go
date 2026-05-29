@@ -1,11 +1,13 @@
 package pnpm
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -24,12 +26,20 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-const lockfileOnlyFlag = "--lockfile-only"
+const (
+	lockfileOnlyFlag = "--lockfile-only"
+	// Suppresses .pnpmfile.cjs hooks during lockfile generation — hooks run arbitrary JS.
+	ignorePnpmfileFlag = "--ignore-pnpmfile"
+)
 
 type pnpmLsDependency struct {
 	From         string                      `json:"from"`
 	Version      string                      `json:"version"`
 	Dependencies map[string]pnpmLsDependency `json:"dependencies,omitempty"`
+	// Local marks a node that is a local workspace member (not a published package).
+	// Such nodes stay in the tree for attribution but are excluded from the curation
+	// HEAD-check, mirroring how the root project node is skipped.
+	Local bool `json:"-"`
 }
 
 type pnpmLsProject struct {
@@ -44,20 +54,40 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	pnpmExecPath, err := getPnpmExecPath()
+	pnpmExecPath, pnpmVersion, err := getPnpmExecPath()
 	if err != nil {
 		return
 	}
+	if params.IsCurationCmd {
+		return buildDependencyTreeFromLockfile(pnpmExecPath, pnpmVersion, currentDir, params)
+	}
+	return buildDependencyTreeFromPnpmLs(pnpmExecPath, currentDir, params)
+}
 
-	if err = ensureLockfile(pnpmExecPath, currentDir); err != nil {
+// buildDependencyTreeFromLockfile is the curation-audit path: parses pnpm-lock.yaml
+// directly without running pnpm ls or downloading tarballs.
+func buildDependencyTreeFromLockfile(pnpmExecPath, pnpmVersion, currentDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	if err = validateSupportedPnpmVersion(pnpmVersion); err != nil {
 		return
 	}
-
-	projects, err := parsePnpmLockFile(currentDir)
+	if params.MaxTreeDepth != "" && params.MaxTreeDepth != "Infinity" {
+		log.Warn("The --max-tree-depth flag is not supported for pnpm curation audit (lockfile-based resolution always produces the full tree). The flag will be ignored.")
+	}
+	// In a workspace, the lockfile lives at the root and records every member under its
+	// own importer. Resolve from the root, then scope to the importer matching currentDir:
+	// "." (the root) audits the whole workspace; a member audits only that member.
+	workspaceRoot, importer := resolveWorkspaceRoot(currentDir)
+	lockfileDir, cleanup, err := resolveLockfileDir(pnpmExecPath, workspaceRoot)
 	if err != nil {
 		return
 	}
-	// Apply scope filter (dev-only / prod-only) to the raw project list if requested.
+	defer func() {
+		err = errors.Join(err, cleanup())
+	}()
+	projects, err := parsePnpmLockFile(lockfileDir, importer)
+	if err != nil {
+		return
+	}
 	if len(params.Args) > 0 {
 		projects = filterProjectsByScope(projects, params.Args)
 	}
@@ -65,8 +95,82 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	return
 }
 
-// filterProjectsByScope removes dev or prod dependencies from each project
-// based on the --dev or --prod flags passed via params.Args (set by SetNpmScope).
+// buildDependencyTreeFromPnpmLs is the audit/scan path: installs into a temp dir
+// if needed, then calls `pnpm ls --json` to obtain the full dependency tree.
+func buildDependencyTreeFromPnpmLs(pnpmExecPath, currentDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	var dirForDependenciesCalculation string
+	if dirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
+		return
+	}
+	if dirForDependenciesCalculation == "" {
+		// Lockfile and node_modules already present — run ls in the original dir.
+		dirForDependenciesCalculation = currentDir
+	} else {
+		defer func() {
+			err = errors.Join(err, biutils.RemoveTempDir(dirForDependenciesCalculation))
+		}()
+	}
+	return calculateDependencies(pnpmExecPath, dirForDependenciesCalculation, params)
+}
+
+// installProjectIfNeeded runs `pnpm install --ignore-scripts` in a temp copy of the
+// project when pnpm-lock.yaml or node_modules/.pnpm is missing.
+// Returns the temp dir path, or "" if no install was needed.
+func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependenciesCalculation string, err error) {
+	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
+	if err != nil {
+		return
+	}
+	pnpmDirExists, err := fileutils.IsDirExists(filepath.Join(workingDir, "node_modules", ".pnpm"), false)
+	if err != nil || (lockFileExists && pnpmDirExists) {
+		return
+	}
+	log.Debug("Installing Pnpm project:", workingDir)
+	dirForDependenciesCalculation, err = fileutils.CreateTempDir()
+	if err != nil {
+		err = fmt.Errorf("failed to create a temporary dir: %w", err)
+		return
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
+		}
+	}()
+	// Exclude Visual Studio inner directory — not needed for scanning and may cause race conditions.
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{technologies.DotVsRepoSuffix})
+	if err != nil {
+		err = fmt.Errorf("failed copying project to temp dir: %w", err)
+		return
+	}
+	output, err := getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("failed to install project: %w\n%s", err, string(output))
+	}
+	return
+}
+
+// calculateDependencies runs `pnpm ls --json` in workingDir (which must already be
+// installed) and converts the output into an Xray dependency tree.
+func calculateDependencies(executablePath, workingDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	lsArgs := append([]string{"--depth", params.MaxTreeDepth, "--json", "--long"}, params.Args...)
+	log.Debug("Running Pnpm ls command with args:", lsArgs)
+	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()
+	if err != nil {
+		return
+	}
+	log.Verbose("Pnpm ls command output:\n", string(npmLsCmdContent))
+	output := &[]pnpmLsProject{}
+	if err = json.Unmarshal(npmLsCmdContent, output); err != nil {
+		return
+	}
+	dependencyTrees, uniqueDeps = parsePnpmLSContent(*output)
+	return
+}
+
+// filterProjectsByScope returns a shallow copy of projects with dev or prod
+// dependencies cleared based on the --dev or --prod flags passed via params.Args
+// (set by SetNpmScope). It does not mutate the caller's slice, so the original
+// pre-filter state stays intact.
 func filterProjectsByScope(projects []pnpmLsProject, args []string) []pnpmLsProject {
 	devOnly, prodOnly := false, false
 	for _, arg := range args {
@@ -80,15 +184,17 @@ func filterProjectsByScope(projects []pnpmLsProject, args []string) []pnpmLsProj
 	if !devOnly && !prodOnly {
 		return projects
 	}
-	for i := range projects {
+	result := make([]pnpmLsProject, len(projects))
+	copy(result, projects)
+	for i := range result {
 		if devOnly {
-			projects[i].Dependencies = nil
+			result[i].Dependencies = nil
 		}
 		if prodOnly {
-			projects[i].DevDependencies = nil
+			result[i].DevDependencies = nil
 		}
 	}
-	return projects
+	return result
 }
 
 // GetNativePnpmRegistryConfig reads the Artifactory registry URL and auth token
@@ -96,7 +202,7 @@ func filterProjectsByScope(projects []pnpmLsProject, args []string) []pnpmLsProj
 // hierarchy and semantics as npm, so this mirrors GetNativeNpmRegistryConfig
 // without requiring an npm binary on pnpm-only machines.
 func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
-	pnpmExecPath, err := getPnpmExecPath()
+	pnpmExecPath, _, err := getPnpmExecPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to locate pnpm executable: %w", err)
 	}
@@ -133,12 +239,11 @@ func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
 	}, nil
 }
 
-const (
-	minPnpmMajorVersion = 10
-	maxPnpmMajorVersion = 10
-)
+const supportedPnpmMajorVersion = 10
 
-func getPnpmExecPath() (pnpmExecPath string, err error) {
+// getPnpmExecPath locates the pnpm executable and returns it together with its version,
+// so callers needing the version (e.g. the curation version check) need not re-spawn it.
+func getPnpmExecPath() (pnpmExecPath, pnpmVersion string, err error) {
 	if pnpmExecPath, err = exec.LookPath("pnpm"); errorutils.CheckError(err) != nil {
 		return
 	}
@@ -152,27 +257,89 @@ func getPnpmExecPath() (pnpmExecPath string, err error) {
 		err = versionErr
 		return
 	}
-	versionStr := strings.TrimSpace(string(versionOut))
-	log.Debug("Pnpm version:", versionStr)
-	if err = validatePnpmMinVersion(versionStr); err != nil {
-		return
-	}
+	pnpmVersion = strings.TrimSpace(string(versionOut))
+	log.Debug("Pnpm version:", pnpmVersion)
 	return
 }
 
-// validatePnpmMinVersion returns an error if the installed pnpm major version is outside the supported range [minPnpmMajorVersion, maxPnpmMajorVersion].
-func validatePnpmMinVersion(versionStr string) error {
+// validateSupportedPnpmVersion returns an error unless the installed pnpm major
+// version is exactly supportedPnpmMajorVersion. Curation supports only that major,
+// so both older and newer majors are rejected.
+func validateSupportedPnpmVersion(versionStr string) error {
 	// Version string may include extra lines (warnings on incompatible Node); take first token.
 	firstLine := strings.SplitN(versionStr, "\n", 2)[0]
 	parts := strings.SplitN(strings.TrimSpace(firstLine), ".", 2)
-	var major int
-	if _, scanErr := fmt.Sscanf(parts[0], "%d", &major); scanErr != nil {
-		return fmt.Errorf("could not parse pnpm version %q: %w", versionStr, scanErr)
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return fmt.Errorf("could not parse pnpm version %q: %w", versionStr, err)
 	}
-	if major < minPnpmMajorVersion || major > maxPnpmMajorVersion {
-		return fmt.Errorf("Resolving Pnpm dependencies from Artifactory is currently not supported for Pnpm versions outside the %d.x range. The current Pnpm version is: %s", minPnpmMajorVersion, versionStr)
+	if major != supportedPnpmMajorVersion {
+		return fmt.Errorf("resolving pnpm dependencies from Artifactory is currently not supported for pnpm versions other than %d.x. The current pnpm version is: %s", supportedPnpmMajorVersion, versionStr)
 	}
 	return nil
+}
+
+// wrapLockfileRegenError checks the pnpm output for ERR_PNPM_NO_MATCHING_VERSION
+// (raised when CVS removes a blocked version from the packument) and returns a
+// curation-flavoured message. Any other failure is returned with the raw output.
+func wrapLockfileRegenError(out []byte, runErr error) error {
+	output := string(out)
+	if !strings.Contains(output, "ERR_PNPM_NO_MATCHING_VERSION") {
+		return fmt.Errorf("'pnpm install --lockfile-only' failed: %w\n%s", runErr, output)
+	}
+	pkgs := parsePnpmCvsFailedPackages(output)
+	return errors.New(formatPnpmCvsBlockedMessage(pkgs))
+}
+
+// pnpmNoMatchPrefix is the literal that precedes the failed "<name>@<version>"
+// reference in pnpm's ERR_PNPM_NO_MATCHING_VERSION output line, e.g.
+// "No matching version found for @scope/pkg@^1.0.0 while fetching it from ...".
+const pnpmNoMatchPrefix = "No matching version found for "
+
+// parsePnpmCvsFailedPackages extracts every name@version pair that pnpm
+// reported as unresolvable so only the actual blockers are listed.
+// It uses splitPnpmRef (last-'@' split) so scoped names like "@scope/pkg@1.0.0"
+// are parsed correctly — a leading '@' would defeat a naive name regex.
+func parsePnpmCvsFailedPackages(output string) []string {
+	seen := map[string]bool{}
+	var pkgs []string
+	for _, line := range strings.Split(output, "\n") {
+		idx := strings.Index(line, pnpmNoMatchPrefix)
+		if idx < 0 {
+			continue
+		}
+		// The package reference is the first whitespace-delimited token after the
+		// prefix; pnpm appends trailing text such as "while fetching it from ...".
+		fields := strings.Fields(line[idx+len(pnpmNoMatchPrefix):])
+		if len(fields) == 0 {
+			continue
+		}
+		name, version := splitPnpmRef(fields[0])
+		if version == "" {
+			continue
+		}
+		key := version
+		if name != "" {
+			key = name + "@" + version
+		}
+		if !seen[key] {
+			seen[key] = true
+			pkgs = append(pkgs, key)
+		}
+	}
+	return pkgs
+}
+
+func formatPnpmCvsBlockedMessage(pkgs []string) string {
+	var b strings.Builder
+	b.WriteString("Curation audit failed: one or more pinned package versions were unavailable during dependency resolution, so the corresponding curation policy violations could not be evaluated.")
+	if len(pkgs) > 0 {
+		b.WriteString("\n\nAffected package(s):\n")
+		for _, p := range pkgs {
+			fmt.Fprintf(&b, " - %s\n", p)
+		}
+	}
+	return b.String()
 }
 
 func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
@@ -181,54 +348,101 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 	return command
 }
 
-// ensureLockfile guarantees that pnpm-lock.yaml exists in workingDir.
-// If it is already present, nothing is done — the existing lockfile is used as-is.
-// If it is absent, `pnpm install --lockfile-only --ignore-scripts` is run in a
-// temporary copy of workingDir so the original directory is not mutated.
-//
-// This mirrors the npm path (--package-lock-only) and yarn V3 path (--mode=update-lockfile):
-// no tarballs are downloaded, only resolution metadata is written.
-func ensureLockfile(pnpmExecPath, workingDir string) error {
+// resolveLockfileDir returns the directory whose pnpm-lock.yaml should be parsed, plus a
+// cleanup the caller must always invoke. An up-to-date lockfile returns workingDir and a
+// no-op; a missing/stale one is regenerated in a temp copy (returned for cleanup) so the
+// user's project is never modified and read-only checkouts still work.
+// resolveWorkspaceRoot walks up from workingDir to find the pnpm workspace root — the
+// nearest ancestor (workingDir included) containing pnpm-lock.yaml or pnpm-workspace.yaml.
+// It returns that root and the importer path of workingDir relative to it ("." when
+// workingDir is the root). When no marker is found, workingDir is treated as a standalone
+// project (root=workingDir, importer="."). This mirrors promotePnpmWorkspaceMember so
+// detection and lockfile resolution agree on what the workspace root is.
+func resolveWorkspaceRoot(workingDir string) (rootDir, importer string) {
+	dir := workingDir
+	for {
+		for _, marker := range []string{"pnpm-lock.yaml", "pnpm-workspace.yaml"} {
+			if exists, _ := fileutils.IsFileExists(filepath.Join(dir, marker), false); exists {
+				rel, err := filepath.Rel(dir, workingDir)
+				if err != nil {
+					rel = "."
+				}
+				return dir, filepath.ToSlash(rel)
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return workingDir, "."
+		}
+		dir = parent
+	}
+}
+
+func resolveLockfileDir(pnpmExecPath, workingDir string) (lockfileDir string, cleanup func() error, err error) {
+	noop := func() error { return nil }
 	lockPath := filepath.Join(workingDir, "pnpm-lock.yaml")
 	lockExists, err := fileutils.IsFileExists(lockPath, false)
 	if err != nil {
-		return err
+		return "", noop, err
 	}
-	if lockExists {
-		// Re-run install if package.json is newer than pnpm-lock.yaml (stale lockfile).
-		pkgStat, pkgErr := os.Stat(filepath.Join(workingDir, "package.json"))
-		lockStat, lockErr := os.Stat(lockPath)
-		if pkgErr == nil && lockErr == nil && pkgStat.ModTime().After(lockStat.ModTime()) {
-			log.Debug(fmt.Sprintf("package.json is newer than pnpm-lock.yaml — running '%s install %s %s' to refresh it", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
-		} else {
-			return nil
-		}
-	} else {
-		log.Debug(fmt.Sprintf("pnpm-lock.yaml not found — running '%s install %s %s' in a temporary directory", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
+	if lockExists && !lockfileNeedsRefresh(pnpmExecPath, workingDir, lockPath) {
+		return workingDir, noop, nil
 	}
+	if !lockExists {
+		log.Debug(fmt.Sprintf("pnpm-lock.yaml not found — generating it in a temporary directory via '%s install %s %s'", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
+	}
+
 	tmpDir, err := fileutils.CreateTempDir()
 	if err != nil {
-		return fmt.Errorf("failed to create a temporary dir: %w", err)
+		return "", noop, fmt.Errorf("failed to create a temporary dir: %w", err)
 	}
+	cleanup = func() error { return fileutils.RemoveTempDir(tmpDir) }
+	// On failure, remove the temp dir now and downgrade cleanup so the caller won't re-remove.
 	defer func() {
-		err = errors.Join(err, fileutils.RemoveTempDir(tmpDir))
+		if err != nil {
+			err = errors.Join(err, cleanup())
+			cleanup = noop
+		}
 	}()
 
-	if copyErr := copyProjectToDir(workingDir, tmpDir); copyErr != nil {
-		return copyErr
+	if err = copyProjectToDir(workingDir, tmpDir); err != nil {
+		return "", cleanup, err
 	}
 
-	out, runErr := getPnpmCmd(pnpmExecPath, tmpDir, "install", lockfileOnlyFlag, npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
+	out, runErr := getPnpmCmd(pnpmExecPath, tmpDir, "install", lockfileOnlyFlag, npm.IgnoreScriptsFlag, ignorePnpmfileFlag).GetCmd().CombinedOutput()
 	if runErr != nil {
-		return fmt.Errorf("'pnpm install --lockfile-only' failed: %w\n%s", runErr, string(out))
+		log.Debug("pnpm install --lockfile-only failed:\n" + string(out))
+		err = wrapLockfileRegenError(out, runErr)
+		return "", cleanup, err
 	}
 
-	// Copy the generated lockfile back so parsePnpmLockFile can read it from workingDir.
-	generatedLock, readErr := fileutils.ReadFile(filepath.Join(tmpDir, "pnpm-lock.yaml"))
-	if readErr != nil {
-		return fmt.Errorf("lockfile not produced after 'pnpm install --lockfile-only': %w", readErr)
+	lockProduced, err := fileutils.IsFileExists(filepath.Join(tmpDir, "pnpm-lock.yaml"), false)
+	if err != nil {
+		return "", cleanup, err
 	}
-	return os.WriteFile(filepath.Join(workingDir, "pnpm-lock.yaml"), generatedLock, 0644)
+	if !lockProduced {
+		err = errors.New("lockfile not produced after 'pnpm install --lockfile-only'")
+		return "", cleanup, err
+	}
+	return tmpDir, cleanup, nil
+}
+
+// lockfileNeedsRefresh reports whether pnpm-lock.yaml is stale versus package.json,
+// by mtime or by drift in the recorded dependency specifiers.
+func lockfileNeedsRefresh(pnpmExecPath, workingDir, lockPath string) bool {
+	pkgStat, pkgErr := os.Stat(filepath.Join(workingDir, "package.json"))
+	lockStat, lockErr := os.Stat(lockPath)
+	mtimeStale := pkgErr == nil && lockErr == nil && pkgStat.ModTime().After(lockStat.ModTime())
+	switch {
+	case mtimeStale:
+		log.Debug(fmt.Sprintf("package.json is newer than pnpm-lock.yaml — regenerating the lockfile in a temporary directory via '%s install %s %s'", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
+		return true
+	case lockfileSpecifiersDrift(workingDir, lockPath):
+		log.Debug(fmt.Sprintf("pnpm-lock.yaml specifiers do not match package.json — regenerating the lockfile in a temporary directory via '%s install %s %s'", pnpmExecPath, lockfileOnlyFlag, npm.IgnoreScriptsFlag))
+		return true
+	default:
+		return false
+	}
 }
 
 func copyProjectToDir(src, dst string) error {
@@ -244,6 +458,14 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 		dependencyTree, uniqueProjectDeps := xray.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
 		dependencyTrees = append(dependencyTrees, dependencyTree)
 		uniqueDepsSet.AddElements(maps.Keys(uniqueProjectDeps)...)
+		// Local workspace members are project roots, not published packages: keep them
+		// in the tree for attribution but drop them from the HEAD-check set so we don't
+		// query Artifactory for a package that doesn't exist (404).
+		for name, dependency := range project.Dependencies {
+			if dependency.Local {
+				_ = uniqueDepsSet.Remove(getDependencyId(name, dependency.Version))
+			}
+		}
 	}
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return

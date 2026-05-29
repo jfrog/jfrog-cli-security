@@ -1,33 +1,34 @@
 package pnpm
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Minimum supported pnpm lockfile version. Versions below this use a different
-// format (flat packages map with no snapshots block) that we do not support.
-const minSupportedLockfileVersion = "6.0"
-
 // pnpmLockFile is the top-level structure of pnpm-lock.yaml.
 type pnpmLockFile struct {
-	LockfileVersion string                         `yaml:"lockfileVersion"`
-	Importers       map[string]pnpmLockImporter    `yaml:"importers"`
-	Snapshots       map[string]pnpmLockSnapshot    `yaml:"snapshots"`
+	LockfileVersion string                      `yaml:"lockfileVersion"`
+	Importers       map[string]pnpmLockImporter `yaml:"importers"`
+	Snapshots       map[string]pnpmLockSnapshot `yaml:"snapshots"`
 }
 
 // pnpmLockImporter represents a workspace member (or the root project at ".").
 type pnpmLockImporter struct {
-	Dependencies    map[string]pnpmLockDep `yaml:"dependencies"`
-	DevDependencies map[string]pnpmLockDep `yaml:"devDependencies"`
+	Dependencies         map[string]pnpmLockDep `yaml:"dependencies"`
+	DevDependencies      map[string]pnpmLockDep `yaml:"devDependencies"`
+	OptionalDependencies map[string]pnpmLockDep `yaml:"optionalDependencies"`
 }
 
-// pnpmLockDep holds the resolved version for a direct dependency.
+// pnpmLockDep holds the resolved version and original specifier for a direct dependency.
 type pnpmLockDep struct {
-	Version string `yaml:"version"`
+	Specifier string `yaml:"specifier"`
+	Version   string `yaml:"version"`
 }
 
 // pnpmLockSnapshot is one entry in the snapshots block.
@@ -39,13 +40,17 @@ type pnpmLockSnapshot struct {
 	Dependencies map[string]string `yaml:"dependencies"`
 }
 
-// parsePnpmLockFile reads workingDir/pnpm-lock.yaml and converts it into the
-// same []pnpmLsProject shape that the old `pnpm ls --json` path produced.
-// The name and version for each importer entry are taken from
-// workingDir/<importerPath>/package.json when available; importer paths other
-// than "." are treated as workspace members.
-func parsePnpmLockFile(workingDir string) ([]pnpmLsProject, error) {
-	lockPath := workingDir + "/pnpm-lock.yaml"
+// parsePnpmLockFile reads workingDir/pnpm-lock.yaml and converts it into []pnpmLsProject,
+// scoped by importer:
+//   - importer "." (or "") collapses the whole workspace into a single project rooted at
+//     the "." importer, with each member attached as a direct dependency — mirroring how
+//     npm records root→workspace edges, so a root-level `jf ca` audits the whole workspace.
+//   - a member importer (e.g. "packages/app") returns only that member as its own project,
+//     used when `jf ca --working-dirs=<member>` targets a single workspace package.
+//
+// Names/versions come from each importer's package.json when available.
+func parsePnpmLockFile(workingDir, importer string) ([]pnpmLsProject, error) {
+	lockPath := filepath.Join(workingDir, "pnpm-lock.yaml")
 	data, err := os.ReadFile(lockPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading pnpm-lock.yaml: %w", err)
@@ -60,25 +65,79 @@ func parsePnpmLockFile(workingDir string) ([]pnpmLsProject, error) {
 		return nil, err
 	}
 
-	// Root-only project (no importers block) — treat the whole file as a single importer.
 	if len(lf.Importers) == 0 {
 		return nil, fmt.Errorf("pnpm-lock.yaml has no importers block; run 'pnpm install --lockfile-only' first")
 	}
 
-	var projects []pnpmLsProject
-	for importerPath, importer := range lf.Importers {
-		name, version := readPackageNameVersion(workingDir, importerPath)
-		project := pnpmLsProject{
-			Name:    name,
-			Version: version,
-		}
-
-		visited := map[string]bool{}
-		project.Dependencies = buildDepsMap(importer.Dependencies, lf.Snapshots, visited)
-		project.DevDependencies = buildDepsMap(importer.DevDependencies, lf.Snapshots, visited)
-		projects = append(projects, project)
+	if importer != "" && importer != "." {
+		return parseSingleImporter(workingDir, importer, lf)
 	}
-	return projects, nil
+
+	rootName, rootVersion := readPackageNameVersion(workingDir, ".")
+	root := pnpmLsProject{Name: rootName, Version: rootVersion}
+	if rootImporter, ok := lf.Importers["."]; ok {
+		visited := map[string]bool{}
+		root.Dependencies = buildProdDepsMap(rootImporter, lf.Snapshots, visited)
+		root.DevDependencies = buildDepsMap(rootImporter.DevDependencies, lf.Snapshots, visited)
+	}
+
+	// Nest every workspace member (any importer other than ".") as a direct dependency
+	// of the root so the whole workspace is audited under a single npm-like tree.
+	for importerPath, importer := range lf.Importers {
+		if importerPath == "." {
+			continue
+		}
+		memberName, memberVersion := readPackageNameVersion(workingDir, importerPath)
+		visited := map[string]bool{}
+		memberDeps := buildProdDepsMap(importer, lf.Snapshots, visited)
+		for depName, dep := range buildDepsMap(importer.DevDependencies, lf.Snapshots, visited) {
+			if memberDeps == nil {
+				memberDeps = map[string]pnpmLsDependency{}
+			}
+			memberDeps[depName] = dep
+		}
+		if root.Dependencies == nil {
+			root.Dependencies = map[string]pnpmLsDependency{}
+		}
+		root.Dependencies[memberName] = pnpmLsDependency{
+			From:         memberName,
+			Version:      memberVersion,
+			Dependencies: memberDeps,
+			Local:        true,
+		}
+	}
+	return []pnpmLsProject{root}, nil
+}
+
+// buildProdDepsMap merges an importer's regular and optional dependencies into one
+// production dependency map. pnpm installs optionalDependencies by default (when the
+// platform matches), so curation must evaluate them alongside regular dependencies.
+func buildProdDepsMap(imp pnpmLockImporter, snapshots map[string]pnpmLockSnapshot, visited map[string]bool) map[string]pnpmLsDependency {
+	prod := buildDepsMap(imp.Dependencies, snapshots, visited)
+	for name, dep := range buildDepsMap(imp.OptionalDependencies, snapshots, visited) {
+		if prod == nil {
+			prod = map[string]pnpmLsDependency{}
+		}
+		prod[name] = dep
+	}
+	return prod
+}
+
+// parseSingleImporter returns only the given workspace member as its own project (its
+// own deps and devDeps, with transitives), used when a run is scoped to one member via
+// --working-dirs. The member is the tree root here, so it is skipped from the curation
+// HEAD-check the same way any project root is.
+func parseSingleImporter(workingDir, importerPath string, lf pnpmLockFile) ([]pnpmLsProject, error) {
+	imp, ok := lf.Importers[importerPath]
+	if !ok {
+		return nil, fmt.Errorf("pnpm workspace member %q is not recorded in pnpm-lock.yaml; run 'pnpm install --lockfile-only' to refresh it", importerPath)
+	}
+	name, version := readPackageNameVersion(workingDir, importerPath)
+	project := pnpmLsProject{Name: name, Version: version}
+	visited := map[string]bool{}
+	project.Dependencies = buildProdDepsMap(imp, lf.Snapshots, visited)
+	project.DevDependencies = buildDepsMap(imp.DevDependencies, lf.Snapshots, visited)
+	return []pnpmLsProject{project}, nil
 }
 
 // buildDepsMap converts a direct-dependency map from the importers block into
@@ -133,38 +192,29 @@ func walkSnapshot(snapshotKey string, snapshots map[string]pnpmLockSnapshot, vis
 	return result
 }
 
-// splitPnpmRef splits a pnpm lockfile reference into (name, version).
-// The reference may be either a snapshot key like "@scope/pkg@2.0.0(@peer@1.0)"
-// or a plain version string like "2.0.0(@peer@1.0)".
-// In both cases the peer-dep suffix (everything from the first '(' onward) is stripped.
-// The split is always on the LAST '@' so scoped names like "@scope/pkg" are handled correctly.
+// splitPnpmRef splits a pnpm ref into (name, version), stripping any peer-dep suffix.
+// Splits on the last '@' so scoped names like "@scope/pkg" are handled correctly.
 func splitPnpmRef(ref string) (name, version string) {
-	// Strip peer-dep suffix.
 	if i := strings.IndexByte(ref, '('); i >= 0 {
 		ref = ref[:i]
 	}
 	i := strings.LastIndexByte(ref, '@')
 	if i <= 0 {
-		// No '@' or starts with '@' but has no version — treat the whole thing as a version.
 		return "", ref
 	}
 	return ref[:i], ref[i+1:]
 }
 
-// buildSnapshotKey constructs the key used to look up an entry in the snapshots map.
-// pnpm stores snapshots under the full "<name>@<version>(<peers>)" key, so we need
-// to combine the package name with its raw (possibly peer-suffixed) version ref.
-// For plain version strings (no name in the ref) the name is prepended.
+// buildSnapshotKey returns the snapshots-map key for a dependency. rawRef is usually a
+// bare version, giving "<name>@<rawRef>". For an aliased dep ("npm:<target>@<range>"),
+// rawRef is the target ref (e.g. "@babel/code-frame@7.29.7") which is itself the key, so
+// it is returned as-is — detected by '@' in the version part (ignoring the peer suffix).
 func buildSnapshotKey(name, rawRef string) string {
-	// If rawRef already contains an '@' after the first character (i.e. it's a full
-	// "<name>@<version>..." key rather than a bare version), use it as-is.
-	if strings.Count(rawRef, "@") >= 1 && !strings.HasPrefix(rawRef, "@") {
-		return name + "@" + rawRef
+	base := rawRef
+	if i := strings.IndexByte(base, '('); i >= 0 {
+		base = base[:i]
 	}
-	// Scoped packages (@scope/pkg) always start with '@'; their version refs look like
-	// "2.0.0" or "2.0.0(@peer@1.0)" — never "<name>@<version>".
-	if strings.HasPrefix(rawRef, "@") {
-		// rawRef is itself a full scoped key e.g. "@scope/pkg@2.0.0(@peer@1.0)"
+	if strings.Contains(base, "@") {
 		return rawRef
 	}
 	return name + "@" + rawRef
@@ -176,19 +226,17 @@ func buildSnapshotKey(name, rawRef string) string {
 func readPackageNameVersion(workingDir, importerPath string) (name, version string) {
 	dir := workingDir
 	if importerPath != "." {
-		dir = workingDir + "/" + importerPath
+		dir = filepath.Join(workingDir, importerPath)
 	}
-	data, err := os.ReadFile(dir + "/package.json")
+	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {
 		return importerPath, "0.0.0"
 	}
-	// Minimal JSON extraction — avoid a full unmarshal dependency just for two fields.
 	var pkg struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	}
-	// Use yaml decoder as a light JSON superset parser (json is valid yaml).
-	if err = yaml.Unmarshal(data, &pkg); err != nil || pkg.Name == "" {
+	if err = json.Unmarshal(data, &pkg); err != nil || pkg.Name == "" {
 		return importerPath, "0.0.0"
 	}
 	if pkg.Version == "" {
@@ -197,17 +245,76 @@ func readPackageNameVersion(workingDir, importerPath string) (name, version stri
 	return pkg.Name, pkg.Version
 }
 
-// validateLockfileVersion rejects lockfile versions older than minSupportedLockfileVersion.
-// pnpm v5 used "5.x" and had a different flat format; v6+ uses the current structure.
+// lockfileSpecifiersDrift reports whether workingDir's package.json declares a
+// different set of direct-dependency specifiers than its pnpm-lock.yaml records —
+// covering added, removed, and changed specifiers. jf ca operates on the given
+// directory, whose lockfile records that project under the "." importer, so the
+// comparison is against "." only. Returns false on any read/parse error so the
+// caller falls back to mtime-only.
+func lockfileSpecifiersDrift(workingDir, lockPath string) bool {
+	pkgData, err := os.ReadFile(filepath.Join(workingDir, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Dependencies         map[string]string `json:"dependencies"`
+		DevDependencies      map[string]string `json:"devDependencies"`
+		OptionalDependencies map[string]string `json:"optionalDependencies"`
+	}
+	if err = json.Unmarshal(pkgData, &pkg); err != nil {
+		return false
+	}
+
+	lockData, err := os.ReadFile(lockPath)
+	if err != nil {
+		return false
+	}
+	var lf pnpmLockFile
+	if err = yaml.Unmarshal(lockData, &lf); err != nil {
+		return false
+	}
+
+	rootImporter, ok := lf.Importers["."]
+	if !ok {
+		return false
+	}
+	return specifiersDiffer(pkg.Dependencies, rootImporter.Dependencies) ||
+		specifiersDiffer(pkg.DevDependencies, rootImporter.DevDependencies) ||
+		specifiersDiffer(pkg.OptionalDependencies, rootImporter.OptionalDependencies)
+}
+
+// specifiersDiffer reports whether the package.json dependency specifiers differ
+// from the lockfile importer entry in EITHER direction — a differing count catches
+// added or removed deps, and the per-name check catches changed or missing specifiers.
+func specifiersDiffer(pkgDeps map[string]string, lockDeps map[string]pnpmLockDep) bool {
+	if len(pkgDeps) != len(lockDeps) {
+		return true
+	}
+	for name, specifier := range pkgDeps {
+		lockDep, ok := lockDeps[name]
+		if !ok || lockDep.Specifier != specifier {
+			return true
+		}
+	}
+	return false
+}
+
+// validateLockfileVersion accepts only lockfileVersion 9.0+, which introduced the
+// 'snapshots' block this parser reads. Older formats (5.x–8.x) use a differently-shaped
+// 'packages' block and would yield an empty snapshots map, silently dropping transitives.
 func validateLockfileVersion(v string) error {
 	// Strip surrounding quotes if present (pnpm 9 writes lockfileVersion: '9.0').
 	v = strings.Trim(v, "'\"")
 	if v == "" {
 		return fmt.Errorf("pnpm-lock.yaml is missing lockfileVersion; run 'pnpm install --lockfile-only' to regenerate")
 	}
-	// Only reject clearly old formats (5.x). Anything >= 6.0 shares the same structure.
-	if strings.HasPrefix(v, "5.") {
-		return fmt.Errorf("pnpm-lock.yaml lockfileVersion %q requires pnpm v6 or later to parse; please upgrade pnpm and re-run 'pnpm install --lockfile-only'", v)
+	major, _, _ := strings.Cut(v, ".")
+	majorNum, err := strconv.Atoi(major)
+	if err != nil {
+		return fmt.Errorf("pnpm-lock.yaml has an unrecognized lockfileVersion %q; run 'pnpm install --lockfile-only' to regenerate", v)
+	}
+	if majorNum < 9 {
+		return fmt.Errorf("pnpm-lock.yaml lockfileVersion %q is not supported (only 9.0 and later, written by pnpm 9/10, are parseable); run 'pnpm install --lockfile-only' with pnpm %d to regenerate", v, supportedPnpmMajorVersion)
 	}
 	return nil
 }

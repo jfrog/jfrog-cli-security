@@ -394,13 +394,13 @@ func getPolicyAndConditionId(policy, condition string) string {
 	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
-// promotePnpmWorkspaceMember replaces "npm" with "pnpm" in the detected
-// technologies list when the current directory is a pnpm workspace member
-// (i.e., it has no pnpm indicators itself but an ancestor directory contains
-// pnpm-workspace.yaml or pnpm-lock.yaml).
+// promotePnpmWorkspaceMember replaces "npm" with "pnpm" in the detected technologies
+// list when the current directory is a pnpm workspace member — it has no pnpm marker
+// itself, but an ancestor directory contains pnpm-workspace.yaml or pnpm-lock.yaml.
+// This lets `jf ca --working-dirs=<member>` audit the member as part of its pnpm
+// workspace, consistently with the lockfile resolution which also walks up to the root.
 func promotePnpmWorkspaceMember(techs []string) []string {
-	hasPnpm := false
-	hasNpm := false
+	hasPnpm, hasNpm := false, false
 	for _, t := range techs {
 		switch t {
 		case techutils.Pnpm.String():
@@ -412,7 +412,6 @@ func promotePnpmWorkspaceMember(techs []string) []string {
 	if hasPnpm || !hasNpm {
 		return techs
 	}
-	// Walk up to find a pnpm workspace root.
 	dir, err := os.Getwd()
 	if err != nil {
 		return techs
@@ -420,25 +419,23 @@ func promotePnpmWorkspaceMember(techs []string) []string {
 	for {
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			break
+			return techs
 		}
 		dir = parent
 		for _, indicator := range []string{"pnpm-workspace.yaml", "pnpm-lock.yaml"} {
 			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
 				log.Debug(fmt.Sprintf("Detected pnpm workspace root at %s via %s; promoting current directory from npm to pnpm.", dir, indicator))
-				result := make([]string, 0, len(techs))
+				promoted := make([]string, 0, len(techs))
 				for _, t := range techs {
 					if t == techutils.Npm.String() {
-						result = append(result, techutils.Pnpm.String())
-					} else {
-						result = append(result, t)
+						t = techutils.Pnpm.String()
 					}
+					promoted = append(promoted, t)
 				}
-				return result
+				return promoted
 			}
 		}
 	}
-	return techs
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
@@ -1003,12 +1000,14 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 	registryConfig, err := pnpmtech.GetNativePnpmRegistryConfig()
 	if err != nil {
-		return fmt.Errorf("pnpm: failed to read Artifactory details from .npmrc: %w\nEnsure the registry is configured in .npmrc (e.g. registry=https://<host>/artifactory/api/npm/<repo>/)", err)
+		log.Warn("Ensure the pnpm registry is configured in .npmrc (e.g. registry=https://<host>/artifactory/api/npm/<repo>/)")
+		return fmt.Errorf("pnpm: failed to read Artifactory details from .npmrc: %w", err)
 	}
 
 	var serverDetails *config.ServerDetails
 	if registryConfig.AuthToken != "" {
 		// .npmrc has an auth token that matches the registry — use it directly.
+		log.Debug("pnpm: using auth token from .npmrc")
 		serverDetails = &config.ServerDetails{
 			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 			AccessToken:    registryConfig.AuthToken,
@@ -1016,6 +1015,7 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 	} else {
 		// No token in .npmrc — fall back to whatever 'jf c' has stored, overriding
 		// only the Artifactory URL so requests go to the correct registry.
+		log.Debug("pnpm: no token in .npmrc — using 'jf c' server credentials")
 		serverDetails, err = ca.ServerDetails()
 		if err != nil || serverDetails == nil {
 			return fmt.Errorf("pnpm: no auth token found in .npmrc and no 'jf c' server configured: %w", err)
