@@ -1323,7 +1323,7 @@ func TestGetOrCreateScaIssue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bom := cyclonedx.NewBOM()
+			bom := NewBOM(cyclonedx.SpecVersion1_6)
 			vuln := GetOrCreateScaIssue(bom, tt.params)
 			assert.NotNil(t, vuln)
 			assert.Equal(t, tt.id, vuln.ID)
@@ -1361,7 +1361,7 @@ func TestSearchVulnerabilityByRef(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bom := cyclonedx.NewBOM()
+			bom := NewBOM(cyclonedx.SpecVersion1_6)
 			for _, p := range tt.params {
 				GetOrCreateScaIssue(bom, p)
 			}
@@ -1473,7 +1473,7 @@ func TestUpdateOrAppendVulnerabilitiesRatingsAndSearchRating(t *testing.T) {
 }
 
 func TestExclude(t *testing.T) {
-	bom := cyclonedx.NewBOM()
+	bom := NewBOM(cyclonedx.SpecVersion1_6)
 	bom.Components = &[]cyclonedx.Component{
 		{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
 		{BOMRef: "comp1", PackageURL: "pkg:comp1", Type: cyclonedx.ComponentTypeLibrary},

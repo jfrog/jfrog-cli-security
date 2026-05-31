@@ -1,7 +1,9 @@
 package cdxutils
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -49,6 +52,39 @@ const (
 )
 
 type ComponentRelation string
+
+func NewBOM(specVersion cyclonedx.SpecVersion) *cyclonedx.BOM {
+	if specVersion < cyclonedx.SpecVersion1_6 {
+		log.Error("Unsupported spec version: ", specVersion)
+		return nil
+	}
+	if specVersion == cyclonedx.SpecVersion1_7 {
+		// Default spec version is 1.7
+		return cyclonedx.NewBOM()
+	}
+	return &cyclonedx.BOM{
+		JSONSchema:  "http://cyclonedx.org/schema/bom-1.6.schema.json",
+		XMLNS:       "http://cyclonedx.org/schema/bom/1.6",
+		BOMFormat:   cyclonedx.BOMFormat,
+		SpecVersion: cyclonedx.SpecVersion1_6,
+		Version:     1,
+	}
+}
+
+func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
+	bom = cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	return bom, nil
+}
 
 func GetProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
 	if properties == nil || len(*properties) == 0 || name == "" {

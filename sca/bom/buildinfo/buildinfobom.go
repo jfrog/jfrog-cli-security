@@ -89,7 +89,7 @@ func (b *BuildInfoBomGenerator) CleanUp() error {
 
 func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
-	sbom = cyclonedx.NewBOM()
+	sbom = cdxutils.NewBOM(cyclonedx.SpecVersion1_6)
 	wdComponent := cdxutils.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &wdComponent}
 
