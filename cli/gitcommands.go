@@ -55,6 +55,8 @@ func GitAuditCmd(c *components.Context) error {
 		return err
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
+	// Set config profile params
+	gitAuditCmd.SetUseConfigProfile(c.GetBoolFlagValue(flags.UseConfigProfile))
 	// Set violations params
 	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {

@@ -9,14 +9,13 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -342,6 +341,14 @@ func (tech Technology) ToFormal() string {
 	return technologiesData[tech].formal
 }
 
+func ToFormalString(technologies []Technology) string {
+	formals := make([]string, len(technologies))
+	for i, tech := range technologies {
+		formals[i] = tech.ToFormal()
+	}
+	return strings.Join(formals, ", ")
+}
+
 func (tech Technology) String() string {
 	return string(tech)
 }
@@ -440,7 +447,7 @@ func detectedTechnologiesListInPath(path string, recursive bool) (technologies [
 // If requestedTechs is empty, all technologies will be checked.
 // If excludePathPattern is not empty, files/directories that match the wildcard pattern will be excluded from the search.
 func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs []string, requestedDescriptors map[Technology][]string, excludePathPattern string) (technologiesDetected map[Technology]map[string][]string, err error) {
-	filesList, dirsList, err := listFilesAndDirs(path, recursive, true, true, excludePathPattern)
+	filesList, dirsList, err := utils.ListFilesAndDirs(path, recursive, true, true, excludePathPattern)
 	if err != nil {
 		return
 	}
@@ -463,29 +470,18 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
 	}
 	techCount := len(technologiesDetected)
+	detectedTechs := datastructures.MakeSet[Technology]()
+	for tech := range technologiesDetected {
+		if tech == NoTech {
+			continue
+		}
+		detectedTechs.Add(tech)
+	}
 	if _, exist := technologiesDetected[NoTech]; exist {
 		techCount--
 	}
 	if techCount > 0 {
-		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
-	}
-	return
-}
-
-func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
-	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
-	if err != nil {
-		return
-	}
-	for _, path := range filesOrDirsInPath {
-		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
-			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
-			continue
-		} else if isDir {
-			dirs = append(dirs, path)
-		} else {
-			files = append(files, path)
-		}
+		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, detectedTechs.ToSlice()))
 	}
 	return
 }
@@ -886,6 +882,94 @@ func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
 		}
 	}
 	return cdxPackageType
+}
+
+// IsAmbiguousTechnologyString returns true for Xray/CDX types that map to multiple package managers (pypi, gav, npm, etc.).
+func IsAmbiguousTechnologyString(technology string) bool {
+	switch strings.ToLower(technology) {
+	case "", "generic", Pypi, Gav, string(Npm):
+		return true
+	default:
+		return false
+	}
+}
+
+// technologySharesXrayEcosystem reports whether tech belongs to the same Xray ecosystem as xrayType.
+func technologySharesXrayEcosystem(tech Technology, xrayType string) bool {
+	if tech.GetXrayPackageType() == xrayType {
+		return true
+	}
+	switch xrayType {
+	case Pypi:
+		return tech == Pip || tech == Pipenv || tech == Poetry
+	case Gav:
+		return tech == Maven || tech == Gradle
+	case string(Npm):
+		return tech == Npm || tech == Pnpm || tech == Yarn
+	default:
+		return false
+	}
+}
+
+// ComponentPackageTypeToXrayType normalizes a CDX PURL type or Xray component-id type to an Xray package type.
+func ComponentPackageTypeToXrayType(packageType string) string {
+	if packageType == "" {
+		return ""
+	}
+	switch strings.ToLower(packageType) {
+	case Pypi, Gav:
+		return strings.ToLower(packageType)
+	default:
+		return CdxPackageTypeToXrayPackageType(packageType)
+	}
+}
+
+// TechnologiesInTargetsWithXrayType returns target technologies that share the given Xray package type ecosystem.
+func TechnologiesInTargetsWithXrayType(targets []Technology, xrayType string) []Technology {
+	if xrayType == "" {
+		return nil
+	}
+	var matches []Technology
+	for _, tech := range targets {
+		if tech == NoTech {
+			continue
+		}
+		if technologySharesXrayEcosystem(tech, xrayType) {
+			matches = append(matches, tech)
+		}
+	}
+	return matches
+}
+
+func containsTechnology(targets []Technology, tech Technology) bool {
+	for _, t := range targets {
+		if t == tech {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveIssueTechnology picks the most specific technology for an SCA issue using the Xray response, detected target
+// technologies, and the impacted component package type.
+func ResolveIssueTechnology(responseTechnology string, targetTechnologies []Technology, componentPackageType string) Technology {
+	responseTech := ToTechnology(responseTechnology)
+	xrayType := ComponentPackageTypeToXrayType(componentPackageType)
+	candidates := TechnologiesInTargetsWithXrayType(targetTechnologies, xrayType)
+
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) && containsTechnology(candidates, responseTech) {
+		return responseTech
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) {
+		return responseTech
+	}
+	if len(targetTechnologies) == 1 && targetTechnologies[0] != NoTech {
+		return targetTechnologies[0]
+	}
+	return NoTech
 }
 
 // https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
