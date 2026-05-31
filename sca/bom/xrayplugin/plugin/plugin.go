@@ -189,7 +189,7 @@ func (p *Plugin) Client(broker *goplugin.MuxBroker, client *rpc.Client) (any, er
 	return &ScannerRPCClient{client: client}, nil
 }
 
-func DownloadXrayLibPluginIfNeeded() error {
+func DownloadXrayLibPluginIfNeeded(remoteRepo string, remoteServerDetails *config.ServerDetails) error {
 	downloadPath, err := GetXrayLibPluginDownloadPath()
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func DownloadXrayLibPluginIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, path.Base(downloadPath), true, 0)
+	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, path.Base(downloadPath), true, remoteRepo, remoteServerDetails, 0)
 }
 
 func getXrayLibPluginFullName() (string, error) {

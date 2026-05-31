@@ -682,7 +682,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
 				defer restoreWD()
 
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle.String())
 				require.NoError(t, err)
 
 				return []string{
@@ -865,7 +865,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				// The cache directory is determined by the project directory, so we need to "simulate" the cache directory when running the pretest build.
 				// During the test, the blocked package will be resolved from the same cache directory that was populated in the pretest build.
 				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
 				return []string{"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}

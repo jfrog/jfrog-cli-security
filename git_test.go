@@ -58,13 +58,16 @@ func TestCountContributorsFlags(t *testing.T) {
 
 type gitAuditCommandTestParams struct {
 	auditCommandTestParams
+	UseConfigProfile bool
 	// Override the test project repo clone url
 	OverrideRepoCloneUrl string
 	OverrideCommitMsg    string
 }
 
-func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
+func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string, error) {
+	args := append([]string{"git"}, getAuditCmdArgs(params.auditCommandTestParams)...)
+	args = append(args, fmt.Sprintf("--use-config-profile=%t", params.UseConfigProfile))
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
 }
 
 func getDummyGitRepoUrl() string {
@@ -104,7 +107,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		amendHeadCommitForTest(t, gitAuditParams.OverrideCommitMsg)
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
+	output, err := testGitAuditCommand(t, gitAuditParams)
 	if expectError != "" {
 		assert.ErrorContains(t, err, expectError)
 	} else {
@@ -291,9 +294,15 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
+			auditCommandTestParams: auditCommandTestParams{
+				Format:                       format.SimpleJson,
+				Watches:                      []string{watchName},
+				DisableFailOnFailedBuildFlag: true,
+				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
+				ValidateSecrets:              true,
+			},
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
@@ -320,9 +329,15 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
+			auditCommandTestParams: auditCommandTestParams{
+				Format:                       format.SimpleJson,
+				Watches:                      []string{skipWatchName},
+				DisableFailOnFailedBuildFlag: true,
+				ValidateSecrets:              true,
+				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
+			},
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
