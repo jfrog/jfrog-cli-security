@@ -150,7 +150,7 @@ func validateInputFile(cdxFilePath string) (err error) {
 		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
-	bom, err := cdxutils.ReadSbomFromFile(cdxFilePath)
+	bom, err := utils.ReadSbomFromFile(cdxFilePath)
 	if err != nil || bom == nil {
 		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
