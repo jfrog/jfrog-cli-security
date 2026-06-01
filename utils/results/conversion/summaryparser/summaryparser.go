@@ -5,6 +5,9 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -12,8 +15,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 type CmdResultsSummaryConverter struct {
@@ -222,25 +223,66 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.
 	}
 	return errors.Join(err,
 		sc.parseScaViolations(violations),
-		sc.parseSecretsViolations(violations.Secrets),
+		sc.parseExposuresViolations(violations.Secrets, sc.ensureViolationsSecretsResults),
+		sc.parseExposuresViolations(violations.Services, sc.ensureViolationsServicesResults),
 		sc.parseIacViolations(violations.Iac),
 		sc.parseSastViolations(violations.Sast),
 	)
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseExposuresScans(secrets, services []*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
-		// JAS results are only supported as vulnerabilities for now
 		return
 	}
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
+	if err = sc.parseExposuresVulnerabilities(secrets, sc.ensureVulnerabilitiesSecretsResults); err != nil {
+		return
+	}
+	return sc.parseExposuresVulnerabilities(services, sc.ensureVulnerabilitiesServicesResults)
+}
 
+func (sc *CmdResultsSummaryConverter) ensureVulnerabilitiesSecretsResults() *formats.ResultSummary {
 	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
+	return sc.currentScan.Vulnerabilities.SecretsResults
+}
+
+func (sc *CmdResultsSummaryConverter) ensureVulnerabilitiesServicesResults() *formats.ResultSummary {
+	if sc.currentScan.Vulnerabilities.ServicesResults == nil {
+		sc.currentScan.Vulnerabilities.ServicesResults = &formats.ResultSummary{}
+	}
+	return sc.currentScan.Vulnerabilities.ServicesResults
+}
+
+func (sc *CmdResultsSummaryConverter) ensureViolationsSecretsResults() *formats.ResultSummary {
+	if sc.currentScan.Violations.SecretsResults == nil {
+		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
+	}
+	return sc.currentScan.Violations.SecretsResults
+}
+
+func (sc *CmdResultsSummaryConverter) ensureViolationsServicesResults() *formats.ResultSummary {
+	if sc.currentScan.Violations.ServicesResults == nil {
+		sc.currentScan.Violations.ServicesResults = &formats.ResultSummary{}
+	}
+	return sc.currentScan.Violations.ServicesResults
+}
+
+func (sc *CmdResultsSummaryConverter) parseExposuresVulnerabilities(runs []*sarif.Run, getSummary func() *formats.ResultSummary) (err error) {
+	if len(runs) == 0 {
+		return
+	}
+	return results.ForEachJasIssue(runs, sc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
+		resultStatus := formats.NoStatus
+		if tokenStatus := sarifutils.GetResultPropertyTokenValidation(result); tokenStatus != "" {
+			resultStatus = tokenStatus
+		}
+		countJasIssues(getSummary(), location, severity, resultStatus)
+		return nil
+	})
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
@@ -321,20 +363,17 @@ func countJasIssues(count *formats.ResultSummary, location *sarif.Location, seve
 	(*count)[severity.String()][resultStatus] += 1
 }
 
-func (sc *CmdResultsSummaryConverter) parseSecretsViolations(secretsViolations []violationutils.JasViolation) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
+func (sc *CmdResultsSummaryConverter) parseExposuresViolations(violations []violationutils.JasViolation, getSummary func() *formats.ResultSummary) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil || len(violations) == 0 {
 		return
 	}
-	if sc.currentScan.Violations.SecretsResults == nil {
-		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
-	}
-	for _, secretViolation := range secretsViolations {
+	for _, violation := range violations {
 		status := formats.NoStatus
-		if tokenStatus := sarifutils.GetResultPropertyTokenValidation(secretViolation.Result); tokenStatus != "" {
+		if tokenStatus := sarifutils.GetResultPropertyTokenValidation(violation.Result); tokenStatus != "" {
 			status = tokenStatus
 		}
-		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, secretViolation.Watch)
-		countJasIssues(sc.currentScan.Violations.SecretsResults, secretViolation.Location, secretViolation.Severity, status)
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, violation.Watch)
+		countJasIssues(getSummary(), violation.Location, violation.Severity, status)
 	}
 	return
 }

@@ -14,12 +14,13 @@ import (
 )
 
 const (
-	LicenseViolationType ViolationIssueType = "license"
-	OperationalRiskType  ViolationIssueType = "operational_risk"
-	CveViolationType     ViolationIssueType = "cve"
-	SecretsViolationType ViolationIssueType = "secrets"
-	IacViolationType     ViolationIssueType = "iac"
-	SastViolationType    ViolationIssueType = "sast"
+	LicenseViolationType  ViolationIssueType = "license"
+	OperationalRiskType   ViolationIssueType = "operational_risk"
+	CveViolationType      ViolationIssueType = "cve"
+	SecretsViolationType  ViolationIssueType = "secrets"
+	ServicesViolationType ViolationIssueType = "services"
+	IacViolationType      ViolationIssueType = "iac"
+	SastViolationType     ViolationIssueType = "sast"
 )
 
 type ViolationIssueType string
@@ -43,20 +44,21 @@ func (v ScaViolationIssueType) String() string {
 }
 
 type Violations struct {
-	Sca     []CveViolation             `json:"sca,omitempty"`
-	License []LicenseViolation         `json:"license,omitempty"`
-	OpRisk  []OperationalRiskViolation `json:"operational_risk,omitempty"`
-	Secrets []JasViolation             `json:"secrets,omitempty"`
-	Iac     []JasViolation             `json:"iac,omitempty"`
-	Sast    []JasViolation             `json:"sast,omitempty"`
+	Sca      []CveViolation             `json:"sca,omitempty"`
+	License  []LicenseViolation         `json:"license,omitempty"`
+	OpRisk   []OperationalRiskViolation `json:"operational_risk,omitempty"`
+	Secrets  []JasViolation             `json:"secrets,omitempty"`
+	Services []JasViolation             `json:"services,omitempty"`
+	Iac      []JasViolation             `json:"iac,omitempty"`
+	Sast     []JasViolation             `json:"sast,omitempty"`
 }
 
 func (vs *Violations) HasViolations() bool {
-	return len(vs.Sca) > 0 || len(vs.License) > 0 || len(vs.OpRisk) > 0 || len(vs.Secrets) > 0 || len(vs.Iac) > 0 || len(vs.Sast) > 0
+	return len(vs.Sca) > 0 || len(vs.License) > 0 || len(vs.OpRisk) > 0 || len(vs.Secrets) > 0 || len(vs.Services) > 0 || len(vs.Iac) > 0 || len(vs.Sast) > 0
 }
 
 func (vs *Violations) Count() int {
-	return len(vs.Sca) + len(vs.License) + len(vs.OpRisk) + len(vs.Secrets) + len(vs.Iac) + len(vs.Sast)
+	return len(vs.Sca) + len(vs.License) + len(vs.OpRisk) + len(vs.Secrets) + len(vs.Services) + len(vs.Iac) + len(vs.Sast)
 }
 
 func (vs *Violations) String() string {
@@ -75,6 +77,9 @@ func (vs *Violations) String() string {
 	}
 	if len(vs.Secrets) > 0 {
 		out = append(out, fmt.Sprintf("%d Secrets", len(vs.Secrets)))
+	}
+	if len(vs.Services) > 0 {
+		out = append(out, fmt.Sprintf("%d Services", len(vs.Services)))
 	}
 	if len(vs.Iac) > 0 {
 		out = append(out, fmt.Sprintf("%d IaC", len(vs.Iac)))
@@ -102,6 +107,11 @@ func (vs *Violations) ShouldFailBuild() bool {
 		}
 	}
 	for _, v := range vs.Secrets {
+		if v.ShouldFailBuild() {
+			return true
+		}
+	}
+	for _, v := range vs.Services {
 		if v.ShouldFailBuild() {
 			return true
 		}
@@ -136,6 +146,11 @@ func (vs *Violations) ShouldFailPR() bool {
 		}
 	}
 	for _, v := range vs.Secrets {
+		if v.ShouldFailPR() {
+			return true
+		}
+	}
+	for _, v := range vs.Services {
 		if v.ShouldFailPR() {
 			return true
 		}

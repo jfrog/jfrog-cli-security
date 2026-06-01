@@ -148,7 +148,8 @@ func dumpViolationsResponseToFileIfNeeded(generatedViolations *services.Violatio
 func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {
 	convertedViolations = violationutils.Violations{}
 	for _, violation := range generatedViolations {
-		switch getViolationType(violation) {
+		violationScanType := getViolationType(violation)
+		switch violationScanType {
 		case utils.ScaScan:
 			switch violation.Type {
 			case xrayUtils.SecurityViolation:
@@ -164,9 +165,13 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 			if sastViolation := convertToJasViolation(cmdResults, jasutils.Sast, violation); sastViolation != nil {
 				convertedViolations.Sast = append(convertedViolations.Sast, *sastViolation)
 			}
-		case utils.SecretsScan:
-			if secretsViolation := convertToJasViolation(cmdResults, jasutils.Secrets, violation); secretsViolation != nil {
-				convertedViolations.Secrets = append(convertedViolations.Secrets, *secretsViolation)
+		case utils.SecretsScan, utils.ServicesScan:
+			if exposuresViolation := convertToExposuresViolation(cmdResults, violationScanType, violation); exposuresViolation != nil {
+				if violationScanType == utils.SecretsScan {
+					convertedViolations.Secrets = append(convertedViolations.Secrets, *exposuresViolation)
+				} else {
+					convertedViolations.Services = append(convertedViolations.Services, *exposuresViolation)
+				}
 			}
 		default:
 			log.Warn(fmt.Sprintf("Skipping violation with unknown scan type for violation ID %s", violation.Id))
@@ -207,6 +212,8 @@ func getJasViolationType(jasType jasutils.JasScanType) violationutils.ViolationI
 		return violationutils.SastViolationType
 	case jasutils.Secrets:
 		return violationutils.SecretsViolationType
+	case jasutils.Services:
+		return violationutils.ServicesViolationType
 	case jasutils.IaC:
 		return violationutils.IacViolationType
 	default:
@@ -278,6 +285,10 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 		log.Warn(fmt.Sprintf("Could not locate vulnerability with ID %s in the scan results", issueId))
 	}
 	return
+}
+
+func convertToExposuresViolation(cmdResults *results.SecurityCommandResults, scanType utils.SubScanType, violation services.XrayViolation) *violationutils.JasViolation {
+	return convertToJasViolation(cmdResults, jasutils.SubScanTypeToJasScanType(scanType), violation)
 }
 
 func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations *violationutils.JasViolation) {

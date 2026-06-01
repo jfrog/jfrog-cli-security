@@ -54,6 +54,7 @@ func (sjc *CmdResultsSimpleJsonConverter) Reset(metadata results.ResultsMetaData
 			ScaStatusCode:           statusCodes.ScaScanStatusCode,
 			ApplicabilityStatusCode: statusCodes.ContextualAnalysisStatusCode,
 			SecretsStatusCode:       statusCodes.SecretsScanStatusCode,
+			ServicesStatusCode:      statusCodes.ServicesScanStatusCode,
 			IacStatusCode:           statusCodes.IacScanStatusCode,
 			SastStatusCode:          statusCodes.SastScanStatusCode,
 		},
@@ -202,12 +203,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violationsScanResults 
 	for _, opRiskViolation := range violationsScanResults.OpRisk {
 		sjc.current.OperationalRiskViolations = append(sjc.current.OperationalRiskViolations, sjc.createOpRiskViolationRow(opRiskViolation))
 	}
-	// Secrets Violations
-	for _, jasViolation := range violationsScanResults.Secrets {
-		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
-		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
-		sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, violation)
-	}
+	// Exposures scan violations (secrets + services share the same row shape)
+	sjc.appendExposuresViolations(violationsScanResults.Secrets, &sjc.current.SecretsViolations)
+	sjc.appendExposuresViolations(violationsScanResults.Services, &sjc.current.ServicesViolations)
 	// IaC Violations
 	for _, jasViolation := range violationsScanResults.Iac {
 		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
@@ -333,19 +331,41 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(_ *cyclonedx.BOM) (err error
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseExposuresScans(secrets, services []*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	secretsSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.CollectRuns(secrets...)...)
-	if err != nil || len(secretsSimpleJson) == 0 {
+	if err = sjc.appendExposuresVulnerabilities(secrets, func(rows []formats.SourceCodeRow) {
+		sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, rows...)
+	}); err != nil {
 		return
 	}
-	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
+	return sjc.appendExposuresVulnerabilities(services, func(rows []formats.SourceCodeRow) {
+		sjc.current.ServicesVulnerabilities = append(sjc.current.ServicesVulnerabilities, rows...)
+	})
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) appendExposuresVulnerabilities(runs []*sarif.Run, appendRows func([]formats.SourceCodeRow)) (err error) {
+	if len(runs) == 0 {
+		return
+	}
+	rows, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, runs...)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	appendRows(rows)
 	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) appendExposuresViolations(violations []violationutils.JasViolation, destination *[]formats.SourceCodeRow) {
+	for _, jasViolation := range violations {
+		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
+		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
+		*destination = append(*destination, violation)
+	}
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
@@ -673,6 +693,9 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	if len(simpleJsonResults.SecretsVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.SecretsVulnerabilities)
 	}
+	if len(simpleJsonResults.ServicesVulnerabilities) > 0 {
+		sortSourceCodeRow(simpleJsonResults.ServicesVulnerabilities)
+	}
 	if len(simpleJsonResults.IacsVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.IacsVulnerabilities)
 	}
@@ -682,6 +705,9 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	// Jas Violations
 	if len(simpleJsonResults.SecretsViolations) > 0 {
 		sortSourceCodeRow(simpleJsonResults.SecretsViolations)
+	}
+	if len(simpleJsonResults.ServicesViolations) > 0 {
+		sortSourceCodeRow(simpleJsonResults.ServicesViolations)
 	}
 	if len(simpleJsonResults.IacsViolations) > 0 {
 		sortSourceCodeRow(simpleJsonResults.IacsViolations)

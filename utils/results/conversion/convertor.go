@@ -68,8 +68,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseSbom(sbom *cyclonedx.BOM) error
 	ParseSbomLicenses(sbom *cyclonedx.BOM) error
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
-	// Parse JAS content to the current scan target
-	ParseSecrets(secrets ...[]*sarif.Run) error
+	// Parse JAS exposures scans that share the secrets-like output shape (secrets + services).
+	ParseExposuresScans(secrets, services []*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
 	ParseMalicious(malicious ...[]*sarif.Run) error
@@ -206,8 +206,10 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if targetResults.JasResults == nil || !params.IncludeVulnerabilities {
 		return
 	}
-	// Parsing JAS Secrets results
-	if err = parser.ParseSecrets(targetResults.JasResults.JasVulnerabilities.SecretsScanResults); err != nil {
+	if err = parser.ParseExposuresScans(
+		targetResults.JasResults.JasVulnerabilities.SecretsScanResults,
+		targetResults.JasResults.JasVulnerabilities.ServicesScanResults,
+	); err != nil {
 		return
 	}
 	// Parsing JAS IAC results

@@ -44,6 +44,8 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
 		SecretsVulnerabilitiesTable:    formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsVulnerabilities),
 		SecretsViolationsTable:         formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsViolations),
+		ServicesVulnerabilitiesTable:   formats.ConvertToSecretsTableRow(simpleJsonFormat.ServicesVulnerabilities),
+		ServicesViolationsTable:        formats.ConvertToSecretsTableRow(simpleJsonFormat.ServicesViolations),
 		IacVulnerabilitiesTable:        formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsVulnerabilities),
 		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
 		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
@@ -80,8 +82,8 @@ func (tc *CmdResultsTableConverter) ParseViolations(violations violationutils.Vi
 	return tc.simpleJsonConvertor.ParseViolations(violations)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSecrets(secrets...)
+func (tc *CmdResultsTableConverter) ParseExposuresScans(secrets, services []*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseExposuresScans(secrets, services)
 }
 
 func (tc *CmdResultsTableConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {

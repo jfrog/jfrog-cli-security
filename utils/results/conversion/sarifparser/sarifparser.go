@@ -77,6 +77,7 @@ type currentTargetRuns struct {
 	// Current run cache information
 	scaCurrentRun       *sarif.Run
 	secretsCurrentRun   *sarif.Run
+	servicesCurrentRun  *sarif.Run
 	iacCurrentRun       *sarif.Run
 	sastCurrentRun      *sarif.Run
 	maliciousCurrentRun *sarif.Run
@@ -155,6 +156,9 @@ func (sc *CmdResultsSarifConverter) flush() {
 	// Flush secrets if needed
 	if sc.currentTargetConvertedRuns.secretsCurrentRun != nil {
 		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.secretsCurrentRun)
+	}
+	if sc.currentTargetConvertedRuns.servicesCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.servicesCurrentRun)
 	}
 	// Flush iac if needed
 	if sc.currentTargetConvertedRuns.iacCurrentRun != nil {
@@ -282,10 +286,10 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 	if len(scaRules) > 0 && len(scaSarifResults) > 0 {
 		sc.addResultsToCurrentRun(ViolationsRun, maps.Values(scaRules), scaSarifResults...)
 	}
-	// Secrets violations
-	for _, secretViolation := range violationsScanResults.Secrets {
-		secretResult, secretRule := createJasViolation(secretViolation)
-		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{secretRule}, secretResult)
+	// Exposures scan violations (secrets + services)
+	for _, violation := range append(violationsScanResults.Secrets, violationsScanResults.Services...) {
+		jasResult, jasRule := createJasViolation(violation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{jasRule}, jasResult)
 	}
 	// IaC violations
 	for _, iacViolation := range violationsScanResults.Iac {
@@ -418,11 +422,18 @@ func (sc *CmdResultsSarifConverter) getVulnerabilitiesConvertParams(scanType uti
 	return getSarifConvertParams(sc.currentCmdType, scanType, &sc.currentTargetConvertedRuns.currentTarget, false, sc.patchBinaryPaths, sc.baseJfrogUrl)
 }
 
-func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
+func (sc *CmdResultsSarifConverter) ParseExposuresScans(secrets, services []*sarif.Run) (err error) {
+	if err = sc.appendExposuresScan(utils.SecretsScan, secrets, &sc.currentTargetConvertedRuns.secretsCurrentRun); err != nil {
 		return
 	}
-	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.SecretsScan), results.CollectRuns(secrets...)...)...)
+	return sc.appendExposuresScan(utils.ServicesScan, services, &sc.currentTargetConvertedRuns.servicesCurrentRun)
+}
+
+func (sc *CmdResultsSarifConverter) appendExposuresScan(scanType utils.SubScanType, runs []*sarif.Run, destination **sarif.Run) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas || len(runs) == 0 {
+		return
+	}
+	*destination = combineJasRunsToCurrentRun(*destination, patchSarifRuns(sc.getVulnerabilitiesConvertParams(scanType), runs...)...)
 	return
 }
 
@@ -904,6 +915,8 @@ func getResultViolationType(violationType string) utils.SubScanType {
 	switch violationutils.ViolationIssueType(violationType) {
 	case violationutils.SecretsViolationType:
 		return utils.SecretsScan
+	case violationutils.ServicesViolationType:
+		return utils.ServicesScan
 	case violationutils.IacViolationType:
 		return utils.IacScan
 	case violationutils.SastViolationType:

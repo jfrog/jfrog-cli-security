@@ -17,9 +17,11 @@ type SimpleJsonResults struct {
 	Licenses                  []LicenseRow                  `json:"licenses"`
 	OperationalRiskViolations []OperationalRiskViolationRow `json:"operationalRiskViolations"`
 	SecretsVulnerabilities    []SourceCodeRow               `json:"secrets"`
+	ServicesVulnerabilities   []SourceCodeRow               `json:"services"`
 	IacsVulnerabilities       []SourceCodeRow               `json:"iac"`
 	SastVulnerabilities       []SourceCodeRow               `json:"sast"`
 	SecretsViolations         []SourceCodeRow               `json:"secretsViolations"`
+	ServicesViolations        []SourceCodeRow               `json:"servicesViolations"`
 	IacsViolations            []SourceCodeRow               `json:"iacViolations"`
 	SastViolations            []SourceCodeRow               `json:"sastViolations"`
 	MaliciousVulnerabilities  []SourceCodeRow               `json:"maliciousCode"`
@@ -34,6 +36,7 @@ type ScanStatus struct {
 	SastStatusCode          *int `json:"sastScanStatusCode,omitempty"`
 	IacStatusCode           *int `json:"iacScanStatusCode,omitempty"`
 	SecretsStatusCode       *int `json:"secretsScanStatusCode,omitempty"`
+	ServicesStatusCode      *int `json:"servicesScanStatusCode,omitempty"`
 	ApplicabilityStatusCode *int `json:"ContextualAnalysisScanStatusCode,omitempty"`
 	MaliciousStatusCode     *int `json:"MaliciousStatusCode,omitempty"`
 }

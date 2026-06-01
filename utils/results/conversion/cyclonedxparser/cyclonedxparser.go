@@ -154,12 +154,22 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, 
 	)
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseExposuresScans(secrets, services []*sarif.Run) (err error) {
+	if err = cdc.parseExposuresScan("secret", secrets); err != nil {
+		return
+	}
+	return cdc.parseExposuresScan("services", services)
+}
+
+func (cdc *CmdResultsCycloneDxConverter) parseExposuresScan(locationLabel string, runs []*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	source := cdc.addJasService(secrets)
-	return results.ForEachJasIssue(results.CollectRuns(secrets...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+	if len(runs) == 0 {
+		return
+	}
+	source := cdc.addJasService([][]*sarif.Run{runs})
+	return results.ForEachJasIssue(runs, cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		startLine := sarifutils.GetLocationStartLine(location)
 		startColumn := sarifutils.GetLocationStartColumn(location)
 		endLine := sarifutils.GetLocationEndLine(location)
@@ -170,7 +180,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 		properties := []cyclonedx.Property{}
 		applicabilityStatus := jasutils.NotScanned
 		if secretValidation := results.GetJasResultApplicability(result); secretValidation != nil {
-			// Secret validation results exist
+			// Exposure validation results exist
 			applicabilityStatus = jasutils.ConvertToApplicabilityStatus(secretValidation.Status)
 			properties = append(properties, cyclonedx.Property{
 				Name:  fmt.Sprintf(secretValidationPropertyTemplate, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
@@ -187,7 +197,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetSecretScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		properties = append(properties, cyclonedx.Property{
-			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, locationLabel, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
 			Value: sarifutils.GetLocationSnippetText(location),
 		})
 		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)

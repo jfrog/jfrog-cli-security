@@ -56,9 +56,19 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 		}
 		// JAS violations (from JasResults)
 		if target.JasResults != nil {
-			if len(target.JasResults.JasViolations.SecretsScanResults) > 0 {
-				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SecretsScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Secrets)); e != nil {
-					err = errors.Join(err, fmt.Errorf("failed to convert JAS Secret violations for target %s: %w", target.Target, e))
+			for _, exposuresScan := range []struct {
+				runs          []*sarif.Run
+				violationType violationutils.ViolationIssueType
+				label         string
+			}{
+				{target.JasResults.JasViolations.SecretsScanResults, violationutils.SecretsViolationType, "Secret"},
+				{target.JasResults.JasViolations.ServicesScanResults, violationutils.ServicesViolationType, "Services"},
+			} {
+				if len(exposuresScan.runs) == 0 {
+					continue
+				}
+				if e := results.ForEachJasIssue(exposuresScan.runs, cmdResults.Entitlements.Jas, convertExposuresViolationsToPolicyViolations(&convertedViolations, exposuresScan.violationType)); e != nil {
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS %s violations for target %s: %w", exposuresScan.label, target.Target, e))
 				}
 			}
 			if len(target.JasResults.JasViolations.IacScanResults) > 0 {
@@ -155,6 +165,26 @@ func convertToBasicJasViolation(violationType violationutils.ViolationIssueType,
 		})
 	}
 	return violation
+}
+
+func convertExposuresViolationsToPolicyViolations(convertedViolations *violationutils.Violations, violationType violationutils.ViolationIssueType) results.ParseJasIssueFunc {
+	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
+		violation := violationutils.JasViolation{
+			Violation: convertToBasicJasViolation(violationType, result, severity),
+			Rule:      rule,
+			Result:    result,
+			Location:  location,
+		}
+		switch violationType {
+		case violationutils.SecretsViolationType:
+			convertedViolations.Secrets = append(convertedViolations.Secrets, violation)
+		case violationutils.ServicesViolationType:
+			convertedViolations.Services = append(convertedViolations.Services, violation)
+		default:
+			return fmt.Errorf("unsupported exposures violation type: %s", violationType)
+		}
+		return nil
+	}
 }
 
 func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.Violations, jasType jasutils.JasScanType) results.ParseJasIssueFunc {

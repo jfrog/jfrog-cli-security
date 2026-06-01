@@ -255,6 +255,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.SecretsScan, jasutils.Secrets); err != nil {
 		return
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.ServicesScan, jasutils.Services); err != nil {
+		return
+	}
 	if rw.shouldPrintSecretValidationExtraMessage() {
 		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 	}
@@ -393,14 +396,8 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 	// Space before the tables
 	log.Output()
 	switch scanType {
-	case jasutils.Secrets:
-		if violations {
-			return coreutils.PrintTable(tables.SecretsViolationsTable, "Secret Violations",
-				"✨ No violations were found ✨", false)
-		} else {
-			return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secrets Detection",
-				"✨ No secrets were found ✨", false)
-		}
+	case jasutils.Secrets, jasutils.Services:
+		return printExposuresScanTable(tables, scanType, violations)
 	case jasutils.IaC:
 		if violations {
 			return coreutils.PrintTable(tables.IacViolationsTable, "Infrastructure as Code Violations",
@@ -423,6 +420,22 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 				"✨ No Malicious Code vulnerabilities were found ✨", false)
 		}
 
+	}
+	return nil
+}
+
+func printExposuresScanTable(tables formats.ResultsTables, scanType jasutils.JasScanType, violations bool) error {
+	switch scanType {
+	case jasutils.Secrets:
+		if violations {
+			return coreutils.PrintTable(tables.SecretsViolationsTable, "Secret Violations", "✨ No violations were found ✨", false)
+		}
+		return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secrets Detection", "✨ No secrets were found ✨", false)
+	case jasutils.Services:
+		if violations {
+			return coreutils.PrintTable(tables.ServicesViolationsTable, "Services Violations", "✨ No violations were found ✨", false)
+		}
+		return coreutils.PrintTable(tables.ServicesVulnerabilitiesTable, "Services Detection", "✨ No services were found ✨", false)
 	}
 	return nil
 }

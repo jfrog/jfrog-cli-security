@@ -23,6 +23,9 @@ type ResultsTables struct {
 	// Secrets
 	SecretsVulnerabilitiesTable []secretsTableRow
 	SecretsViolationsTable      []secretsTableRow
+	// Services
+	ServicesVulnerabilitiesTable []secretsTableRow
+	ServicesViolationsTable      []secretsTableRow
 	// Malicious Code
 	MaliciousVulnerabilitiesTable []maliciousTableRow
 }
