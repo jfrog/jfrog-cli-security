@@ -46,9 +46,15 @@ const (
 
 	// JFrog specific properties
 	JfrogRelationProperty = "jfrog:dependency:type"
+
+	SpecVersion = cyclonedx.SpecVersion1_7
 )
 
 type ComponentRelation string
+
+func NewBOM() *cyclonedx.BOM {
+	return cyclonedx.NewBOMWithSpecVersion(SpecVersion)
+}
 
 func GetProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
 	if properties == nil || len(*properties) == 0 || name == "" {
