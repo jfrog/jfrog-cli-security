@@ -266,7 +266,7 @@ func TestCreateGithubSnapshotFromSbom(t *testing.T) {
 
 // createTestBOM creates a test BOM with the specified components and dependencies
 func createTestBOM(components []cyclonedx.Component, dependencies []cyclonedx.Dependency) *cdxutils.FullBOM {
-	innerBom := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
+	innerBom := cdxutils.NewBOM()
 	if len(components) > 0 {
 		innerBom.Components = &components
 	}

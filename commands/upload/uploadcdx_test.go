@@ -18,7 +18,7 @@ func TestValidateInputFile(t *testing.T) {
 	// Create a valid CycloneDX file for testing
 	validCdxFilePath := filepath.Join(tempDirPath, "some_results.cdx.json")
 	fileComponent := cdxutils.CreateFileOrDirComponent(filepath.Join("a", "directory", "file.txt"))
-	cdx := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
+	cdx := cdxutils.NewBOM()
 	cdx.Metadata = &cyclonedx.Metadata{
 		Component: &fileComponent,
 	}
@@ -69,7 +69,7 @@ func TestGenerateURLFromPath(t *testing.T) {
 	// Create a valid CycloneDX file for testing
 	validCdxFilePath := filepath.Join(tempDirPath, "valid_cdx.json")
 	fileComponent := cdxutils.CreateFileOrDirComponent(filepath.Join("a", "directory", "file.txt"))
-	cdx := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
+	cdx := cdxutils.NewBOM()
 	cdx.Metadata = &cyclonedx.Metadata{
 		Component: &fileComponent,
 	}

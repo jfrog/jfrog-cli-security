@@ -54,7 +54,7 @@ func NewCmdResultsCycloneDxConverter(parseSast bool) *CmdResultsCycloneDxConvert
 
 func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error) {
 	if cdc.bom == nil {
-		return &cdxutils.FullBOM{BOM: *cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)}, nil
+		return &cdxutils.FullBOM{BOM: *cdxutils.NewBOM()}, nil
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
@@ -80,7 +80,7 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(metadata results.ResultsMetaData,
 	cdc.gitContext = metadata.GitContext
 	cdc.xrayVersion = metadata.XrayVersion
 	// Reset the BOM
-	cdc.bom = &cdxutils.FullBOM{BOM: *cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)}
+	cdc.bom = &cdxutils.FullBOM{BOM: *cdxutils.NewBOM()}
 	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(metadata.MultiScanId)
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),

@@ -922,7 +922,7 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
 	parsed := datastructures.MakeSet[string]()
-	bom := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
+	bom := cdxutils.NewBOM()
 	bom.Components = &[]cyclonedx.Component{}
 	bom.Dependencies = &[]cyclonedx.Dependency{}
 	for _, root := range trees {
@@ -940,7 +940,7 @@ func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Comp
 }
 
 func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string]) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
-	bom := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
+	bom := cdxutils.NewBOM()
 	bom.Components = &[]cyclonedx.Component{}
 	bom.Dependencies = &[]cyclonedx.Dependency{}
 	if parsed.Exists(node.Id) {
