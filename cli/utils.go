@@ -155,6 +155,17 @@ func validateSnippetDetection(c *components.Context) (bool, error) {
 	return true, nil
 }
 
+func isServicesDetectionEnabled(c *components.Context) bool {
+	if !c.IsFlagSet(flags.Services) {
+		return false
+	}
+	return c.GetBoolFlagValue(flags.Services)
+}
+
+func validateServicesDetection(c *components.Context) (bool, error) {
+	return isServicesDetectionEnabled(c), nil
+}
+
 func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, err error) {
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error

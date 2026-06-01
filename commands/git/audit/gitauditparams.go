@@ -89,6 +89,11 @@ func (gap *GitAuditParams) SetIncludeSnippetDetection(includeSnippetDetection bo
 	return gap
 }
 
+func (gap *GitAuditParams) SetIncludeServicesDetection(includeServicesDetection bool) *GitAuditParams {
+	gap.resultsContext.IncludeServicesDetection = includeServicesDetection
+	return gap
+}
+
 func (gap *GitAuditParams) SetScansToPerform(scansToPerform []utils.SubScanType) *GitAuditParams {
 	gap.scansToPerform = scansToPerform
 	return gap

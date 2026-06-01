@@ -61,6 +61,7 @@ type SpecificScannersExcludePatterns struct {
 	SecretsExcludePatterns            []string
 	IacExcludePatterns                []string
 	MaliciousCodeExcludePatterns      []string
+	ServicesExcludePatterns           []string
 }
 
 type JasScannerOption func(f *JasScanner) error
@@ -523,6 +524,7 @@ func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile
 	scanner.ScannersExclusions.SastExcludePatterns = profile.Modules[0].ScanConfig.SastScannerConfig.ExcludePatterns
 	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
 	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
+	scanner.ScannersExclusions.ServicesExcludePatterns = profile.Modules[0].ScanConfig.ServicesScannerConfig.ExcludePatterns
 }
 
 func GetStartJasScanLog(scanType utils.SubScanType, threadId int, module jfrogappsconfig.Module, targetCount int) string {

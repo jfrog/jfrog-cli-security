@@ -20,4 +20,6 @@ type Config struct {
 	IgnorePatterns []string `json:"ignorePatterns,omitempty" yaml:"ignorePatterns,omitempty"`
 	// [Optional] Ecosystems to scan.
 	Ecosystems []techutils.Technology `json:"ecosystems,omitempty" yaml:"ecosystems,omitempty"`
+	// [Optional] Enable services.
+	EnableServicesScan bool `json:"enableServicesScan,omitempty" yaml:"enableServicesScan,omitempty"`
 }

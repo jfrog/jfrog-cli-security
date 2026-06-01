@@ -71,6 +71,7 @@ const (
 	SecretsScan               SubScanType = "secrets"
 	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 	MaliciousCodeScan         SubScanType = "malicious_code"
+	ServicesScan              SubScanType = "services"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -80,6 +81,7 @@ var subScanTypeToText = map[SubScanType]string{
 	SastScan:               "SAST",
 	SecretsScan:            "Secrets",
 	MaliciousCodeScan:      "Malicious Code",
+	ServicesScan:           "Services",
 }
 
 func (subScan SubScanType) ToTextString() string {
@@ -111,7 +113,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan, ServicesScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
@@ -119,8 +121,7 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
-	if subScan == MaliciousCodeScan {
-		// Scan not requested by default, needs to be specified directly to run it
+	if subScan == MaliciousCodeScan || subScan == ServicesScan {
 		return slices.Contains(requestedScans, subScan)
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
@@ -130,7 +131,8 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
 		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
 		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
+		IsScanRequested(cmdType, SastScan, requestedScans...) ||
+		IsScanRequested(cmdType, ServicesScan, requestedScans...)
 }
 
 func getScanFindingName(scanType SubScanType) string {

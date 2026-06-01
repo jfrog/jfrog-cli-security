@@ -3,9 +3,10 @@ package xsc
 import (
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 )
 
 const (
@@ -87,7 +88,6 @@ func getComparisonConfigProfile() *services.ConfigProfile {
 		ProfileName: "default-profile",
 		GeneralConfig: services.GeneralConfig{
 			ScannersDownloadPath:    "https://repo.example.com/releases",
-			GeneralExcludePatterns:  []string{"*.log*", "*.tmp*"},
 			FailUponAnyScannerError: true,
 		},
 		FrogbotConfig: services.FrogbotConfig{
@@ -127,6 +127,9 @@ func getComparisonConfigProfile() *services.ConfigProfile {
 					IacScannerConfig: services.IacScannerConfig{
 						EnableIacScan:   true,
 						ExcludePatterns: []string{"*.tfstate"},
+					},
+					ServicesScannerConfig: services.ServicesScannerConfig{
+						EnableServicesScan: false,
 					},
 				},
 			},

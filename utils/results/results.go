@@ -29,6 +29,7 @@ const (
 	CmdStepSecrets            = "Secret Detection Scan"
 	CmdStepSast               = "Static Application Security Testing (SAST)"
 	CmdStepMaliciousCode      = "Malicious Code"
+	CmdStepServices           = "Services Scan"
 	CmdStepViolations         = "Violations Reporting"
 )
 
@@ -64,8 +65,9 @@ type ResultsMetaData struct {
 }
 
 type Entitlements struct {
-	Jas              bool `json:"jas"`
-	SnippetDetection bool `json:"snippet_detection"`
+	Jas               bool `json:"jas"`
+	SnippetDetection  bool `json:"snippet_detection"`
+	ServicesDetection bool `json:"services_detection"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -91,6 +93,8 @@ type ResultContext struct {
 	IncludeSbom bool `json:"include_sbom,omitempty"`
 	// If requested, the results will include snippet detection
 	IncludeSnippetDetection bool `json:"include_snippet_detection,omitempty"`
+	// If requested, the results will include services detection
+	IncludeServicesDetection bool `json:"include_services_detection,omitempty"`
 	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
@@ -107,6 +111,7 @@ type ResultsStatus struct {
 	IacScanStatusCode            *int `json:"iac,omitempty"`
 	SastScanStatusCode           *int `json:"sast,omitempty"`
 	MaliciousScanStatusCode      *int `json:"malicious_code,omitempty"`
+	ServicesScanStatusCode       *int `json:"services,omitempty"`
 	ViolationsStatusCode         *int `json:"violations,omitempty"`
 }
 
@@ -126,6 +131,8 @@ func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
 		return isScanFailed(status.SastScanStatusCode)
 	case CmdStepMaliciousCode:
 		return isScanFailed(status.MaliciousScanStatusCode)
+	case CmdStepServices:
+		return isScanFailed(status.ServicesScanStatusCode)
 	case CmdStepViolations:
 		return isScanFailed(status.ViolationsStatusCode)
 	}
@@ -165,6 +172,10 @@ func (status *ResultsStatus) UpdateStatus(step SecurityCommandStep, statusCode *
 	case CmdStepMaliciousCode:
 		if shouldUpdateStatus(status.MaliciousScanStatusCode, statusCode) {
 			status.MaliciousScanStatusCode = statusCode
+		}
+	case CmdStepServices:
+		if shouldUpdateStatus(status.ServicesScanStatusCode, statusCode) {
+			status.ServicesScanStatusCode = statusCode
 		}
 	case CmdStepViolations:
 		if shouldUpdateStatus(status.ViolationsStatusCode, statusCode) {
@@ -214,6 +225,7 @@ type JasScanResults struct {
 	IacScanResults       []*sarif.Run `json:"iac,omitempty"`
 	SastScanResults      []*sarif.Run `json:"sast,omitempty"`
 	MaliciousScanResults []*sarif.Run `json:"malicious_code,omitempty"`
+	ServicesScanResults  []*sarif.Run `json:"services,omitempty"`
 }
 
 type ScanTarget struct {
@@ -268,6 +280,11 @@ func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *Securit
 
 func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnippetDetection bool) *SecurityCommandResults {
 	r.Entitlements.SnippetDetection = entitledForSnippetDetection
+	return r
+}
+
+func (r *SecurityCommandResults) SetEntitledForServicesDetection(entitledForServicesDetection bool) *SecurityCommandResults {
+	r.Entitlements.ServicesDetection = entitledForServicesDetection
 	return r
 }
 
@@ -442,6 +459,7 @@ func (r *SecurityCommandResults) GetStatusCodes() ResultsStatus {
 		status.UpdateStatus(CmdStepIaC, targetResults.ResultsStatus.IacScanStatusCode)
 		status.UpdateStatus(CmdStepSast, targetResults.ResultsStatus.SastScanStatusCode)
 		status.UpdateStatus(CmdStepMaliciousCode, targetResults.ResultsStatus.MaliciousScanStatusCode)
+		status.UpdateStatus(CmdStepServices, targetResults.ResultsStatus.ServicesScanStatusCode)
 		status.UpdateStatus(CmdStepViolations, targetResults.ResultsStatus.ViolationsStatusCode)
 	}
 	return status
@@ -608,6 +626,12 @@ func (sr *TargetResults) AddJasScanResults(scanType jasutils.JasScanType, vulner
 		if sr.JasResults != nil {
 			sr.JasResults.JasVulnerabilities.MaliciousScanResults = append(sr.JasResults.JasVulnerabilities.MaliciousScanResults, vulnerabilitiesRuns...)
 		}
+	case jasutils.Services:
+		sr.ResultsStatus.UpdateStatus(CmdStepServices, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.ServicesScanResults = append(sr.JasResults.JasVulnerabilities.ServicesScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.ServicesScanResults = append(sr.JasResults.JasViolations.ServicesScanResults, violationsRuns...)
+		}
 	}
 }
 
@@ -694,6 +718,8 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 		return jsr.JasVulnerabilities.SastScanResults
 	case jasutils.MaliciousCode:
 		return jsr.JasVulnerabilities.MaliciousScanResults
+	case jasutils.Services:
+		return jsr.JasVulnerabilities.ServicesScanResults
 	}
 	return
 }
@@ -706,6 +732,8 @@ func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) 
 		return jsr.JasViolations.IacScanResults
 	case jasutils.Sast:
 		return jsr.JasViolations.SastScanResults
+	case jasutils.Services:
+		return jsr.JasViolations.ServicesScanResults
 	}
 	return
 }

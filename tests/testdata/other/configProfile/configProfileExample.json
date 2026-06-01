@@ -42,6 +42,9 @@
         "iac_scanner_config": {
           "enable_iac_scan": true,
           "exclude_patterns": ["*.tfstate"]
+        },
+        "services_scanner_config": {
+          "enable_services_scan": false
         }
       }
     }

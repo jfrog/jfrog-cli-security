@@ -98,12 +98,17 @@ func GitAuditCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	includeServicesDetection, err := validateServicesDetection(c)
+	if err != nil {
+		return err
+	}
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
 	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	gitAuditCmd.SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	gitAuditCmd.SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	gitAuditCmd.SetIncludeSnippetDetection(includeSnippetDetection)
+	gitAuditCmd.SetIncludeServicesDetection(includeServicesDetection)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	err = reportErrorIfExists(xrayVersion, xscVersion, serverDetails, gitAuditCmd.GetProjectKey(), progressbar.ExecWithProgress(gitAuditCmd))
 	return err

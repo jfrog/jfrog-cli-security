@@ -555,6 +555,10 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+	includeServicesDetection, err := validateServicesDetection(c)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	auditCmd.SetViolationGenerator(violationGenerator)
@@ -565,6 +569,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetIncludeSbom(shouldIncludeSbom(c, format)).
 		SetIncludeSnippetDetection(includeSnippetDetection).
+		SetIncludeServicesDetection(includeServicesDetection).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).

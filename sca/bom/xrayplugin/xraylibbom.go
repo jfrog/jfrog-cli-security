@@ -19,12 +19,16 @@ import (
 // SnippetDetectionFeatureId is "curation" because snippet detection is gated by the curation entitlement on the Xray server.
 const SnippetDetectionFeatureId = "curation"
 
+// ServicesDetectionFeatureId is the Xray entitlement feature id for services detection.
+const ServicesDetectionFeatureId = "services"
+
 type XrayLibBomGenerator struct {
-	binaryPath       string
-	snippetDetection bool
-	ignorePatterns   []string
-	specificTechs    []techutils.Technology
-	totalTargets     int
+	binaryPath        string
+	snippetDetection  bool
+	servicesDetection bool
+	ignorePatterns    []string
+	specificTechs     []techutils.Technology
+	totalTargets      int
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
@@ -70,6 +74,14 @@ func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.snippetDetection = snippetDetection
+		}
+	}
+}
+
+func WithServicesDetection(servicesDetection bool) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.servicesDetection = servicesDetection
 		}
 	}
 }
@@ -142,11 +154,12 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 
 func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	scanConfig := plugin.Config{
-		BomRef:         cdxutils.GetFileRef(target.Target),
-		Type:           string(cyclonedx.ComponentTypeFile),
-		Name:           target.Target,
-		IgnorePatterns: sbg.ignorePatterns,
-		Ecosystems:     sbg.specificTechs,
+		BomRef:             cdxutils.GetFileRef(target.Target),
+		Type:               string(cyclonedx.ComponentTypeFile),
+		Name:               target.Target,
+		IgnorePatterns:     sbg.ignorePatterns,
+		Ecosystems:         sbg.specificTechs,
+		EnableServicesScan: sbg.servicesDetection,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
