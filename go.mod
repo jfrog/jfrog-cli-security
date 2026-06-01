@@ -160,3 +160,6 @@ require (
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+
+// attiasas:new_bom_with_spec
+replace github.com/CycloneDX/cyclonedx-go => github.com/attiasas/cyclonedx-go v0.0.0-20260601062827-6dae744d6259

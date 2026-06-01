@@ -110,7 +110,7 @@ func (ibg *IndexerBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 
 func CreateTargetEmptySbom(target results.ScanTarget) *cyclonedx.BOM {
 	// Create an empty CycloneDX BOM for the target
-	sbom := cdxutils.NewBOM(cyclonedx.SpecVersion1_6)
+	sbom := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
 	binaryFileComponent := cdxutils.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &binaryFileComponent}
 	return sbom

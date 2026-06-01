@@ -1805,7 +1805,7 @@ func TestBomToFlatTree(t *testing.T) {
 	}{
 		{
 			name:     "No components",
-			bom:      cdxutils.NewBOM(cyclonedx.SpecVersion1_6),
+			bom:      cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6),
 			expected: &xrayUtils.GraphNode{Id: "root"},
 		},
 		{
@@ -2839,7 +2839,7 @@ func TestScanResponseToSbom(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Prepare expected
-			expected := cdxutils.NewBOM(cyclonedx.SpecVersion1_6)
+			expected := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
 			expected.Components = test.expected.Components
 			expected.Dependencies = test.expected.Dependencies
 			expected.Vulnerabilities = test.expected.Vulnerabilities
@@ -2854,7 +2854,7 @@ func TestScanResponseToSbom(t *testing.T) {
 				}
 			}
 			// Run test
-			destination := cdxutils.NewBOM(cyclonedx.SpecVersion1_6)
+			destination := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
 			assert.NoError(t, ScanResponseToSbom(destination, test.response))
 			// Sort affects in vulnerabilities for consistent comparison
 			if destination.Vulnerabilities != nil {

@@ -53,24 +53,6 @@ const (
 
 type ComponentRelation string
 
-func NewBOM(specVersion cyclonedx.SpecVersion) *cyclonedx.BOM {
-	if specVersion < cyclonedx.SpecVersion1_6 {
-		log.Error("Unsupported spec version: ", specVersion)
-		return nil
-	}
-	if specVersion == cyclonedx.SpecVersion1_7 {
-		// Default spec version is 1.7
-		return cyclonedx.NewBOM()
-	}
-	return &cyclonedx.BOM{
-		JSONSchema:  "http://cyclonedx.org/schema/bom-1.6.schema.json",
-		XMLNS:       "http://cyclonedx.org/schema/bom/1.6",
-		BOMFormat:   cyclonedx.BOMFormat,
-		SpecVersion: cyclonedx.SpecVersion1_6,
-		Version:     1,
-	}
-}
-
 func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
 	bom = cyclonedx.NewBOM()
 	file, err := os.Open(cdxFilePath)

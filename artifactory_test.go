@@ -309,7 +309,7 @@ func generateTestRepoName() string {
 
 func getTestCdxFile(t *testing.T, tempDir string) string {
 	// Create the cyclonedx BOM
-	bom := cdxutils.NewBOM(cyclonedx.SpecVersion1_6)
+	bom := cyclonedx.NewBOMWithSpecVersion(cyclonedx.SpecVersion1_6)
 	fileComponent := cdxutils.CreateFileOrDirComponent(tempDir)
 	bom.Metadata = &cyclonedx.Metadata{
 		Component: &fileComponent,
