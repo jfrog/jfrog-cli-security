@@ -739,6 +739,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
+	curationAuditCommand.SetMvnIncludePluginDeps(c.GetBoolFlagValue(flags.MvnIncludePluginDeps))
 	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))
 	curationAuditCommand.SetRunNative(c.GetBoolFlagValue(flags.RunNative))
 	return curationAuditCommand, nil

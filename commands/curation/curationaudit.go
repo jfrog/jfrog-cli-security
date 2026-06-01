@@ -233,6 +233,7 @@ type CurationAuditCommand struct {
 	parallelRequests      int
 	dockerImageName       string
 	includeCachedPackages bool
+	mvnIncludePluginDeps  bool
 	audit.AuditParamsInterface
 }
 
@@ -280,6 +281,11 @@ func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *Cura
 
 func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages bool) *CurationAuditCommand {
 	ca.includeCachedPackages = includeCachedPackages
+	return ca
+}
+
+func (ca *CurationAuditCommand) SetMvnIncludePluginDeps(mvnIncludePluginDeps bool) *CurationAuditCommand {
+	ca.mvnIncludePluginDeps = mvnIncludePluginDeps
 	return ca
 }
 
@@ -451,7 +457,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		Args:               ca.Args(),
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
-		IsCurationCmd: true,
+		IsCurationCmd:        true,
+		MvnIncludePluginDeps: ca.mvnIncludePluginDeps,
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.UseWrapper(),

@@ -545,6 +545,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
+	curationCmd.SetMvnIncludePluginDeps(tt.mvnIncludePluginDeps)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -568,6 +569,15 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 	}
 	// the number of packages is not deterministic for gem, as it depends on the version of the package manager.
 	if testCase.tech == techutils.Gem {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
+	// Cases that exercise Maven plugin-dep injection pull in a plugin's full transitive
+	// closure (e.g. maven-jar-plugin -> maven-archiver -> plexus-utils ...), which varies
+	// across plugin/Maven versions. Suppress the count assertion when requested.
+	if testCase.skipPackageCount {
 		for key := range results {
 			result := results[key]
 			result.totalNumberOfPackages = 0
@@ -600,6 +610,13 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
+	// mvnIncludePluginDeps wires the --mvn-include-plugin-deps CLI flag into the curation
+	// audit command so the test exercises Maven build-plugin transitive dep collection.
+	mvnIncludePluginDeps bool
+	// skipPackageCount tells validateCurationResults to ignore totalNumberOfPackages.
+	// Use for cases where the count depends on a Maven plugin's transitive closure
+	// (e.g. maven-jar-plugin) and would otherwise be brittle across Maven/plugin versions.
+	skipPackageCount bool
 }
 
 func (tc testCase) getPathToTests() string {
@@ -852,6 +869,70 @@ func getTestCasesForDoCurationAudit() []testCase {
 				},
 			},
 			allowInsecureTls: true,
+		},
+		{
+			// Regression coverage for --mvn-include-plugin-deps. The customer scenario was a
+			// build that downloaded a curated artifact only via a Maven build-plugin's transitive
+			// closure; `jf ca` would report "0 blocked" because mvn dependency:tree never sees
+			// plugin deps. The test pom pins maven-jar-plugin to 3.4.1, whose fixed transitive
+			// closure includes org.ow2.asm:asm:9.8 (via plexus-archiver:4.9.2). The mock server
+			// blocks that exact jar URL. With the flag on, the curation audit must resolve plugin
+			// deps, inject asm into the tree, and surface it as blocked.
+			name:          "maven tree - one blocked plugin dependency",
+			tech:          techutils.Maven,
+			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation-plugin-deps"),
+			pathToTest:    "test",
+			pathToPreTest: "pretest",
+			preTestExec:   "mvn",
+			funcToGetGoals: func(t *testing.T) []string {
+				// Curation cache is keyed off the project directory — compute it from the
+				// test/ dir (where the real test will run) so pretest writes into the same
+				// folder that the test phase reads. Mirrors the maven-curation case above.
+				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
+				require.NoError(t, err)
+				cleanUpTestDirChange()
+				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
+				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
+				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
+				// re-run during the test phase against the mock server.
+				return []string{
+					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
+					"-DdepsTreeOutputFile=output",
+					"-Dmaven.repo.local=" + curationCache,
+					"dependency:resolve-plugins",
+					"help:effective-pom",
+				}
+			},
+			mvnIncludePluginDeps: true,
+			// The full plugin closure depends on the runner's ambient Maven plugin versions;
+			// only asm:9.8 (pinned via maven-jar-plugin:3.4.1) is deterministic, so we assert
+			// just that blocked package and skip the non-deterministic total count.
+			skipPackageCount: true,
+			requestToFail: map[string]bool{
+				"/maven-remote/org/ow2/asm/asm/9.8/asm-9.8.jar": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"test:plugin-dep-app:1.0.0": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentVersion:     "9.8",
+						ParentName:        "org.ow2.asm:asm",
+						BlockedPackageUrl: "/maven-remote/org/ow2/asm/asm/9.8/asm-9.8.jar",
+						PackageName:       "org.ow2.asm:asm",
+						PackageVersion:    "9.8",
+						BlockingReason:    "Policy violations",
+						PkgType:           "maven",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				}},
+			},
 		},
 		{
 			name:          "maven tree - one blocked package",

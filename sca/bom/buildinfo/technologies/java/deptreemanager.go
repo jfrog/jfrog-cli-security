@@ -30,6 +30,7 @@ type DepTreeParams struct {
 	DepsRepo                string
 	IsMavenDepTreeInstalled bool
 	IsCurationCmd           bool
+	MvnIncludePluginDeps    bool
 	CurationCacheFolder     string
 	UseIncludedBuilds       bool
 }

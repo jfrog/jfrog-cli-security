@@ -48,7 +48,8 @@ type BuildInfoBomGeneratorParams struct {
 	Args               []string
 	InstallCommandArgs []string
 	// Curation params
-	IsCurationCmd bool
+	IsCurationCmd        bool
+	MvnIncludePluginDeps bool
 	// Java params
 	IsMavenDepTreeInstalled bool
 	UseWrapper              bool

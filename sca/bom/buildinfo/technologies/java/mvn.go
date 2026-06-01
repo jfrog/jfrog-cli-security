@@ -3,15 +3,19 @@ package java
 import (
 	"bytes"
 	_ "embed"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
+	"unicode/utf8"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -51,8 +55,10 @@ var mavenDepTreeJar []byte
 type MavenDepTreeManager struct {
 	DepTreeManager
 	isInstalled bool
-	// this flag its curation command, it will set dedicated cache and download url.
+	// isCurationCmd sets a dedicated cache and download URL for curation mode.
 	isCurationCmd bool
+	// mvnIncludePluginDeps enables resolution of Maven build-plugin transitive deps.
+	mvnIncludePluginDeps bool
 	// path to the curation dedicated cache
 	curationCacheFolder string
 	cmdName             MavenDepTreeCmd
@@ -62,11 +68,12 @@ type MavenDepTreeManager struct {
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
 	depTreeManager := NewDepTreeManager(params)
 	return &MavenDepTreeManager{
-		DepTreeManager:      depTreeManager,
-		isInstalled:         params.IsMavenDepTreeInstalled,
-		cmdName:             cmdName,
-		isCurationCmd:       params.IsCurationCmd,
-		curationCacheFolder: params.CurationCacheFolder,
+		DepTreeManager:       depTreeManager,
+		isInstalled:          params.IsMavenDepTreeInstalled,
+		cmdName:              cmdName,
+		isCurationCmd:        params.IsCurationCmd,
+		mvnIncludePluginDeps: params.MvnIncludePluginDeps,
+		curationCacheFolder:  params.CurationCacheFolder,
 	}
 }
 
@@ -83,7 +90,338 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 		err = errors.Join(err, clearMavenDepTreeRun())
 	}()
 	dependencyTree, uniqueDeps, err = getGraphFromDepTree(outputFilePaths)
+	if err != nil {
+		return
+	}
+	// Include Maven build-plugin transitive deps when requested.
+	// They are downloaded during mvn install but never appear in mvn dependency:tree,
+	// so without this step jf ca would miss curation violations that block the build.
+	// Skip if the tree is empty — no roots to attach to and no point running extra subprocesses.
+	if manager.mvnIncludePluginDeps && len(dependencyTree) > 0 {
+		injectPluginDeps(uniqueDeps, dependencyTree, manager.resolvePluginDeps())
+	}
 	return
+}
+
+// injectPluginDeps adds plugin deps to uniqueDeps and fans them out to every module root.
+// Split out so the dedup guard and fan-out are unit-testable without spawning Maven.
+func injectPluginDeps(uniqueDeps map[string]*xray.DepTreeNode, dependencyTree []*xrayUtils.GraphNode, pluginDeps map[string]*xray.DepTreeNode) {
+	for id, node := range pluginDeps {
+		gavID := GavPackageTypeIdentifier + id
+		if _, exists := uniqueDeps[gavID]; exists {
+			continue
+		}
+		uniqueDeps[gavID] = node
+		for _, moduleRoot := range dependencyTree {
+			moduleRoot.Nodes = append(moduleRoot.Nodes, &xrayUtils.GraphNode{Id: gavID, Types: node.Types})
+		}
+	}
+}
+
+// resolvePluginDeps runs "mvn dependency:resolve-plugins" and returns all Maven build-plugin
+// transitive dependencies keyed by "groupId:artifactId:version". Failure is non-fatal.
+//
+// The result is filtered by the install-lifecycle plugin allow-list resolved from the
+// effective POM: only transitive deps of plugins that actually run during `mvn install` are
+// returned. If the effective-pom resolution fails, the allow-list is nil and all plugin deps
+// are returned (current behavior).
+func (mdt *MavenDepTreeManager) resolvePluginDeps() map[string]*xray.DepTreeNode {
+	allowedPlugins := mdt.resolveInstallLifecyclePlugins()
+
+	goals := []string{"dependency:resolve-plugins", "-B"}
+	if mdt.isCurationCmd && mdt.curationCacheFolder != "" {
+		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
+	}
+	output, err := mdt.RunMvnCmd(goals)
+	if err != nil {
+		log.Warn("[mvn-plugin-deps] Failed to resolve Maven plugin dependencies; plugin deps will not be included in curation evaluation:", err.Error())
+		return nil
+	}
+	if allowedPlugins != nil {
+		log.Debug(fmt.Sprintf("[mvn-plugin-deps] effective-pom install-lifecycle allow-list (%d plugins):", len(allowedPlugins)))
+		for coord := range allowedPlugins {
+			log.Debug("[mvn-plugin-deps]   allowed:", coord)
+		}
+	} else {
+		log.Debug("[mvn-plugin-deps] effective-pom allow-list unavailable - reporting every plugin dep without lifecycle filter")
+	}
+	parsed := parseMavenPluginDeps(string(output), allowedPlugins)
+	if allowedPlugins != nil {
+		log.Info(fmt.Sprintf("[mvn-plugin-deps] %d plugin transitive deps included after install-lifecycle filter", len(parsed)))
+	} else {
+		log.Info(fmt.Sprintf("[mvn-plugin-deps] %d plugin transitive deps included (lifecycle filter unavailable — all reported)", len(parsed)))
+	}
+	return parsed
+}
+
+// resolveInstallLifecyclePlugins runs "mvn help:effective-pom" and returns the set of
+// "groupId:artifactId" for plugins bound to phases executed by `mvn install`.
+// Plugins whose only executions target post-install phases (deploy/site/release) are excluded.
+// Returns nil if effective-pom resolution fails — callers must treat nil as "no filter".
+func (mdt *MavenDepTreeManager) resolveInstallLifecyclePlugins() map[string]struct{} {
+	outputFile, err := os.CreateTemp("", "effective-pom-*.xml")
+	if err != nil {
+		log.Warn("[mvn-plugin-deps] Failed to create temp file for effective POM; plugin filter disabled:", err.Error())
+		return nil
+	}
+	outputPath := outputFile.Name()
+	if closeErr := outputFile.Close(); closeErr != nil {
+		// Benign: mvn reopens the path via -Doutput=. Log so the rare failure is greppable.
+		log.Debug("[mvn-plugin-deps] temp file close after CreateTemp failed (benign):", closeErr.Error())
+	}
+	// Preserve the file on parse failure so callers can inspect why no plugins were extracted.
+	preserveFile := false
+	defer func() {
+		if preserveFile {
+			log.Warn("[mvn-plugin-deps] effective POM preserved for inspection at:", outputPath)
+			return
+		}
+		if removeErr := os.Remove(outputPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Debug("[mvn-plugin-deps] failed to remove effective POM temp file:", removeErr.Error())
+		}
+	}()
+
+	goals := []string{"help:effective-pom", "-B", "-Doutput=" + outputPath}
+	if mdt.isCurationCmd && mdt.curationCacheFolder != "" {
+		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
+	}
+	log.Debug("[mvn-plugin-deps] running 'mvn", strings.Join(goals, " "), "' to build the install-lifecycle plugin allow-list")
+	mvnOutput, err := mdt.RunMvnCmd(goals)
+	if err != nil {
+		log.Warn("[mvn-plugin-deps] mvn help:effective-pom failed - plugin filter disabled, all plugin deps will be reported. Reason:", err.Error())
+		if len(mvnOutput) > 0 {
+			log.Debug("[mvn-plugin-deps] mvn output (tail):\n", tailString(string(mvnOutput), 2000))
+		}
+		return nil
+	}
+
+	// #nosec G304 -- outputPath is from os.CreateTemp above, system-generated under $TMPDIR with a random suffix; never user-controlled.
+	data, err := os.ReadFile(outputPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		log.Warn("[mvn-plugin-deps] effective POM output file missing after mvn run - plugin filter disabled. Reason:", err.Error())
+		return nil
+	}
+	if err != nil {
+		log.Warn("[mvn-plugin-deps] failed to read effective POM output - plugin filter disabled. Reason:", err.Error())
+		return nil
+	}
+	if len(data) == 0 {
+		log.Warn("[mvn-plugin-deps] effective POM output file is empty - plugin filter disabled. The maven-help-plugin version may not honor -Doutput=")
+		return nil
+	}
+	allowed := parseEffectivePomPluginCoordinates(string(data))
+	if allowed == nil {
+		log.Warn(fmt.Sprintf("[mvn-plugin-deps] effective POM parsed to empty allow-list (file size %d bytes) - plugin filter disabled", len(data)))
+		preserveFile = true
+	}
+	return allowed
+}
+
+// tailString returns roughly the last n bytes of s, advancing to the next rune
+// boundary so the result is always valid UTF-8 (off by at most 3 bytes vs n).
+func tailString(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	start := len(s) - n
+	for start < len(s) && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	return "..." + s[start:]
+}
+
+// phasesNotRunByInstall is the set of lifecycle phases that `mvn install` never executes.
+// Covers the single Default-lifecycle phase past install (deploy), the entire Site
+// lifecycle, and the entire Clean lifecycle. A plugin whose only executions target
+// these phases is excluded from the allow-list.
+var phasesNotRunByInstall = map[string]struct{}{
+	"pre-site":    {},
+	"site":        {},
+	"post-site":   {},
+	"site-deploy": {},
+	"deploy":      {},
+	"pre-clean":   {},
+	"clean":       {},
+	"post-clean":  {},
+}
+
+// postInstallPluginsByDefault lists plugins whose default goal phase is past `install`,
+// even when the effective POM declares them without explicit <executions>.
+// Such plugins are excluded unless the user explicitly binds them to an install-lifecycle phase.
+var postInstallPluginsByDefault = map[string]struct{}{
+	"org.apache.maven.plugins:maven-deploy-plugin":  {},
+	"org.apache.maven.plugins:maven-site-plugin":    {},
+	"org.apache.maven.plugins:maven-release-plugin": {},
+	"org.apache.maven.plugins:maven-gpg-plugin":     {},
+}
+
+// effectivePomProject mirrors the subset of fields we need from `mvn help:effective-pom`.
+// A multi-module effective POM is wrapped in <projects>; we stream-decode <project> elements
+// regardless of nesting depth so both single and multi-module outputs work.
+type effectivePomProject struct {
+	XMLName xml.Name          `xml:"project"`
+	Build   effectivePomBuild `xml:"build"`
+}
+
+type effectivePomBuild struct {
+	Plugins []effectivePomPlugin `xml:"plugins>plugin"`
+}
+
+type effectivePomPlugin struct {
+	GroupID    string                  `xml:"groupId"`
+	ArtifactID string                  `xml:"artifactId"`
+	Executions []effectivePomExecution `xml:"executions>execution"`
+}
+
+type effectivePomExecution struct {
+	Phase string `xml:"phase"`
+}
+
+// effectivePomXmlnsRe matches xmlns and xmlns:prefix attribute declarations.
+// Maven emits the effective POM with xmlns="http://maven.apache.org/POM/4.0.0";
+// stripping it lets our namespace-agnostic struct tags match the actual elements.
+var effectivePomXmlnsRe = regexp.MustCompile(`\s+xmlns(?::[^=\s]+)?="[^"]*"`)
+
+// mavenCoordRe matches both plugin headers and transitive dep lines in dependency:resolve-plugins output.
+var mavenCoordRe = regexp.MustCompile(`\[INFO\]\s+([\w.\-]+):([\w.\-]+):(jar|war|pom|ear|aar|ejb|bundle|test-jar|maven-plugin):([\w.\-]+)(?::([\w.\-]+))?`)
+
+// defaultPluginGroupID is the implicit groupId for plugins under the official Maven
+// plugin namespace. The effective POM commonly omits <groupId> for these plugins,
+// relying on this default.
+const defaultPluginGroupID = "org.apache.maven.plugins"
+
+// parseEffectivePomPluginCoordinates walks the effective POM XML and returns the
+// allow-list of "groupId:artifactId" for plugins that participate in `mvn install`.
+// Returns nil if the XML cannot be decoded — callers treat nil as "no filter".
+func parseEffectivePomPluginCoordinates(xmlData string) map[string]struct{} {
+	// Strip xmlns declarations so the struct-tag matcher works regardless of the
+	// POM namespace declared by maven-help-plugin (defaults to maven.apache.org/POM/4.0.0).
+	xmlData = effectivePomXmlnsRe.ReplaceAllString(xmlData, "")
+	decoder := xml.NewDecoder(strings.NewReader(xmlData))
+	allowed := map[string]struct{}{}
+	projectsSeen, pluginsSeen, pluginsAllowed := 0, 0, 0
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		start, ok := tok.(xml.StartElement)
+		if !ok || start.Name.Local != "project" {
+			continue
+		}
+		projectsSeen++
+		var project effectivePomProject
+		if err := decoder.DecodeElement(&project, &start); err != nil {
+			// Skip malformed <project> blocks; effective-pom for one module shouldn't fail the rest.
+			log.Debug("[mvn-plugin-deps] skipping malformed <project> block in effective POM:", err.Error())
+			continue
+		}
+		for _, p := range project.Build.Plugins {
+			pluginsSeen++
+			groupID := p.GroupID
+			if groupID == "" {
+				// Maven's effective POM frequently omits <groupId> for org.apache.maven.plugins.
+				groupID = defaultPluginGroupID
+			}
+			if p.ArtifactID == "" {
+				continue
+			}
+			coord := groupID + ":" + p.ArtifactID
+			if !isPluginInInstallLifecycle(coord, p.Executions) {
+				continue
+			}
+			allowed[coord] = struct{}{}
+			pluginsAllowed++
+		}
+	}
+	log.Debug(fmt.Sprintf("[mvn-plugin-deps] effective POM scan: %d <project> blocks, %d <plugin> entries under <build><plugins>, %d allowed", projectsSeen, pluginsSeen, pluginsAllowed))
+	if projectsSeen == 0 {
+		// No <project> parsed — treat as malformed and fall back to "no filter".
+		// An empty (non-nil) map is a valid result when every plugin was filtered out.
+		return nil
+	}
+	return allowed
+}
+
+// isPluginInInstallLifecycle returns true when the plugin's executions (or default phase)
+// fall within phases executed by `mvn install`.
+func isPluginInInstallLifecycle(coord string, executions []effectivePomExecution) bool {
+	// Single pass: keep an include if any explicit phase is in the install lifecycle,
+	// otherwise fall back to the plugin's default phase.
+	hasExplicit := false
+	for _, ex := range executions {
+		if ex.Phase == "" {
+			continue
+		}
+		hasExplicit = true
+		if _, skip := phasesNotRunByInstall[ex.Phase]; !skip {
+			return true
+		}
+	}
+	if !hasExplicit {
+		_, isPostInstall := postInstallPluginsByDefault[coord]
+		return !isPostInstall
+	}
+	return false
+}
+
+// mavenKnownScopes distinguishes a Maven scope from a classifier in a 5-field coordinate
+// (g:a:packaging:field4:field5). If field5 is a known scope, field4 is the version.
+var mavenKnownScopes = map[string]bool{
+	"compile": true, "runtime": true, "test": true, "provided": true, "system": true,
+}
+
+// parseMavenPluginDeps parses "mvn dependency:resolve-plugins" output and returns a map of
+// "groupId:artifactId:version" -> DepTreeNode for every resolved plugin dependency.
+//
+// When allowedPlugins is non-nil, only transitive deps of plugins in the allow-list are
+// returned, filtering out plugins bound to post-install lifecycles (deploy, site, release).
+// When allowedPlugins is nil all plugin deps are returned.
+//
+// Output formats matched:
+//
+//	[INFO]    g:a:maven-plugin:version:scope   (top-level plugin — switches the active filter)
+//	[INFO]       g:a:jar:version               (transitive dep, no classifier)
+//	[INFO]       g:a:jar:classifier:version    (transitive dep with classifier — version is last)
+func parseMavenPluginDeps(output string, allowedPlugins map[string]struct{}) map[string]*xray.DepTreeNode {
+	deps := map[string]*xray.DepTreeNode{}
+	// includeCurrent gates whether transitive deps under the most recently seen top-level
+	// plugin should be collected. nil allow-list means "include all".
+	includeCurrent := allowedPlugins == nil
+	for line := range strings.SplitSeq(output, "\n") {
+		m := mavenCoordRe.FindStringSubmatch(line)
+		if len(m) < 5 {
+			continue
+		}
+		groupID, artifactID, packaging := m[1], m[2], m[3]
+		version := m[4]
+		if m[5] != "" && !mavenKnownScopes[m[5]] {
+			// 5-field: g:a:packaging:classifier:version — m[4] is the classifier
+			version = m[5]
+		}
+		// else: g:a:packaging:version:scope — version is already m[4]
+		if packaging == "maven-plugin" {
+			// Top-level plugin line — update the active filter for the indented transitive deps below.
+			coord := groupID + ":" + artifactID
+			if allowedPlugins == nil {
+				includeCurrent = true
+				log.Debug("[mvn-plugin-deps] top-level plugin (no filter active):", coord)
+			} else if _, ok := allowedPlugins[coord]; ok {
+				includeCurrent = true
+				log.Debug("[mvn-plugin-deps] top-level plugin kept:", coord)
+			} else {
+				includeCurrent = false
+				log.Debug("[mvn-plugin-deps] top-level plugin filtered out:", coord)
+			}
+			continue
+		}
+		if !includeCurrent {
+			continue
+		}
+		nodeID := groupID + ":" + artifactID + ":" + version
+		deps[nodeID] = &xray.DepTreeNode{Types: &[]string{packaging}}
+	}
+	return deps
 }
 
 // Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
