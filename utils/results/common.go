@@ -668,6 +668,9 @@ func GetDependencyId(depName, version string) string {
 	return fmt.Sprintf("%s:%s", depName, version)
 }
 
+// GetScaIssueId builds a stable identifier for SCA issues in output formats.
+// When depName and depVersion are empty (component-less issues), both are normalized to "unknown"
+// so SARIF rule IDs remain deterministic.
 func GetScaIssueId(depName, version, issueId string) string {
 	if depName == "" && version == "" {
 		depName = "unknown"
