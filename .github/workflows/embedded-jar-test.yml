@@ -13,7 +13,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      GOPROXY: direct
+      GOPROXY: https://proxy.golang.org,direct
     steps:
       - uses: actions/checkout@v5
 
