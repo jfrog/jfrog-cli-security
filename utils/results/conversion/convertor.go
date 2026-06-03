@@ -162,6 +162,8 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		// If no enriched SBOM was provided, we can't parse new flow
 		return
 	}
+	// ScaResults.Sbom is the canonical enriched BOM. Format parsers must treat it as read-only;
+	// export-only mutations belong on parser-owned output (e.g. cyclonedxparser.cdc.bom).
 	// Parse the SCA results from the enriched SBOM
 	if params.IncludeVulnerabilities && targetScansResults.ScaResults.Sbom.Vulnerabilities != nil {
 		var applicableRuns []*sarif.Run
