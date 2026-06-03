@@ -456,6 +456,30 @@ click = [
 		assert.ElementsMatch(t, []string{"click-8.0.1-py3-none-any.whl"}, got[1].Files)
 	})
 
+	t.Run("v1 quoted dotted key in metadata.files", func(t *testing.T) {
+		fixture := []byte(`[[package]]
+name = "zope.interface"
+version = "5.0.0"
+
+[metadata]
+lock-version = "1.1"
+
+[metadata.files]
+"zope.interface" = [
+    {file = "zope.interface-5.0.0.tar.gz", hash = "sha256:aaa"},
+    {file = "zope.interface-5.0.0-cp39-cp39-linux_x86_64.whl", hash = "sha256:bbb"},
+]
+`)
+		got := parsePoetryLockPackages(fixture)
+		require.Len(t, got, 1)
+		assert.Equal(t, "zope.interface", got[0].Name)
+		assert.ElementsMatch(t, []string{
+			"zope.interface-5.0.0.tar.gz",
+			"zope.interface-5.0.0-cp39-cp39-linux_x86_64.whl",
+		}, got[0].Files,
+			"files for a dotted package with a quoted key in [metadata.files] must be collected")
+	})
+
 	t.Run("empty content returns empty slice", func(t *testing.T) {
 		got := parsePoetryLockPackages(nil)
 		assert.Empty(t, got)
@@ -582,14 +606,10 @@ url = "https://example.com/artifactory/api/pypi/my-curation-repo/simple"
 		require.NoError(t, err)
 		out := string(written)
 
-		// Quote-agnostic check: viper's TOML writer may emit either
-		// single or double quotes around string values depending on
-		// content. The names are what we care about, not the quoting.
-		assert.True(t, strings.Contains(out, `"poetry-test"`) || strings.Contains(out, `'poetry-test'`),
+		assert.Contains(t, out, `name = "poetry-test"`,
 			"user's source name must be preserved so poetry.lock stays in sync; got:\n%s", out)
 		assert.Contains(t, out, repoURL, "URL must be rewritten to the curation pass-through")
-		assert.False(t,
-			strings.Contains(out, `name = "`+repoName+`"`) || strings.Contains(out, `name = '`+repoName+`'`),
+		assert.NotContains(t, out, `name = "`+repoName+`"`,
 			"the Artifactory repo name must NOT replace the user's source name when one already exists; got:\n%s", out)
 	})
 
@@ -617,20 +637,38 @@ url = "https://example.com/artifactory/api/pypi/other-repo/simple"
 		require.NoError(t, err)
 		out := string(written)
 
-		// Quote-agnostic checks — see note in the single-source subtest.
-		assert.True(t,
-			strings.Contains(out, `"primary-mirror"`) || strings.Contains(out, `'primary-mirror'`),
-			"first source name must be preserved; got:\n%s", out)
-		assert.True(t,
-			strings.Contains(out, `"secondary-mirror"`) || strings.Contains(out, `'secondary-mirror'`),
-			"second source name must be preserved; got:\n%s", out)
+		assert.Contains(t, out, `name = "primary-mirror"`, "first source name must be preserved; got:\n%s", out)
+		assert.Contains(t, out, `name = "secondary-mirror"`, "second source name must be preserved; got:\n%s", out)
 		assert.Contains(t, out, repoURL, "URLs must be rewritten to the curation pass-through")
-		// The two original URLs must be gone — every source now points at
-		// the curation pass-through.
 		assert.NotContains(t, out, "/api/pypi/my-curation-repo/simple",
 			"original non-curation URL on first source must be replaced")
 		assert.NotContains(t, out, "/api/pypi/other-repo/simple",
 			"original non-curation URL on second source must be replaced")
+	})
+
+	t.Run("dotted dependency name is not corrupted", func(t *testing.T) {
+		dir := t.TempDir()
+		initial := []byte(`[tool.poetry]
+name = "test-project"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+"zope.interface" = "5.0.0"
+`)
+		pyprojectPath := filepath.Join(dir, pyprojectToml)
+		require.NoError(t, os.WriteFile(pyprojectPath, initial, 0600))
+		t.Chdir(dir)
+
+		require.NoError(t, setCurationSourceInPyproject(repoName, repoURL, 1))
+
+		written, err := os.ReadFile(pyprojectPath)
+		require.NoError(t, err)
+		out := string(written)
+
+		assert.Contains(t, out, `"zope.interface" = "5.0.0"`,
+			"quoted dotted dependency key must survive the pyproject.toml rewrite; got:\n%s", out)
+		assert.Contains(t, out, repoURL)
 	})
 }
 
@@ -762,5 +800,48 @@ func TestParsePoetryVersion(t *testing.T) {
 			assert.Equal(t, tt.want, parsePoetryVersion(tt.in))
 		})
 	}
+}
+
+func TestInstallPoetryDepsLockCheckErrorSurfacedOnRelockFailure(t *testing.T) {
+	fakeDir := t.TempDir()
+	fakePoetry := filepath.Join(fakeDir, "poetry")
+	script := `#!/bin/sh
+case "$*" in
+  *"--version"*) echo "Poetry (version 1.8.0)"; exit 0 ;;
+  *"check"*"--lock"*) echo "Error: SyntaxError in pyproject.toml at line 12" >&2; exit 1 ;;
+  *"lock"*) echo "Error: cannot resolve dependencies" >&2; exit 1 ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`
+	require.NoError(t, os.WriteFile(fakePoetry, []byte(script), 0755))
+	require.NoError(t, os.Chmod(fakePoetry, 0755))
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, poetryLockFile), []byte("# lock\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, pyprojectToml), []byte("[tool.poetry]\nname=\"x\"\n"), 0600))
+	t.Chdir(dir)
+
+	_, _, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SyntaxError",
+		"original check error must appear in the returned error chain")
+}
+
+func TestInstallPoetryDepsNonCurationErrorPropagated(t *testing.T) {
+	fakeDir := t.TempDir()
+	fakePoetry := filepath.Join(fakeDir, "poetry")
+	require.NoError(t, os.WriteFile(fakePoetry,
+		[]byte("#!/bin/sh\necho 'install failed' >&2\nexit 1\n"), 0755))
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, _, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          false,
+		DependenciesRepository: "",
+	})
+
+	require.Error(t, err, "non-curation poetry install failure must propagate to the caller")
 }
 
