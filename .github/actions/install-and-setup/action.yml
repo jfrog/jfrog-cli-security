@@ -6,6 +6,10 @@ inputs:
     description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
     required: false
     default: 'false'
+  go-version-file:
+    description: "Path to the Go version file."
+    required: true
+    default: 'go.mod'
 
 runs:
   using: "composite"
