@@ -542,6 +542,34 @@ func HasImpactedAffects(vulnerability cyclonedx.Vulnerability, affectedComponent
 	return false
 }
 
+// CloneVulnerability returns a copy of v with slice fields deep-copied so mutations (e.g. appending affects) do not alias the source.
+func CloneVulnerability(v cyclonedx.Vulnerability) cyclonedx.Vulnerability {
+	out := v
+	if v.Affects != nil {
+		affects := make([]cyclonedx.Affects, len(*v.Affects))
+		for i, a := range *v.Affects {
+			affects[i] = a
+			if a.Range != nil {
+				rng := make([]cyclonedx.AffectedVersions, len(*a.Range))
+				copy(rng, *a.Range)
+				affects[i].Range = &rng
+			}
+		}
+		out.Affects = &affects
+	}
+	if v.Properties != nil {
+		props := make([]cyclonedx.Property, len(*v.Properties))
+		copy(props, *v.Properties)
+		out.Properties = &props
+	}
+	if v.Ratings != nil {
+		ratings := make([]cyclonedx.VulnerabilityRating, len(*v.Ratings))
+		copy(ratings, *v.Ratings)
+		out.Ratings = &ratings
+	}
+	return out
+}
+
 func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
 	_, impactedPackageVersion, _ := techutils.SplitPackageURL(impactedPackageComponent.PackageURL)
 	affect = cyclonedx.Affects{

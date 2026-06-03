@@ -809,6 +809,10 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 		if auditParams.BomGenerator() != nil {
 			cmdResults.AddGeneralError(auditParams.BomGenerator().CleanUp(), false)
 		}
+		// Merge contextual-analysis evidence into the canonical enriched SBOM.
+		if e := cmdResults.FinalizeEnrichedSbomsWithApplicability(); e != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to finalize enriched SBOMs with applicability: %s", e.Error()), false)
+		}
 	}).Start()
 }
 
