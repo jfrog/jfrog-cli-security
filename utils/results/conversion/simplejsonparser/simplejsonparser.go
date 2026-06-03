@@ -205,7 +205,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violationsScanResults 
 	}
 	// Exposures scan violations (secrets + services share the same row shape)
 	sjc.appendExposuresViolations(violationsScanResults.Secrets, &sjc.current.SecretsViolations)
-	sjc.appendExposuresViolations(violationsScanResults.Services, &sjc.current.ServicesViolations)
+	sjc.appendServicesExposuresViolations(violationsScanResults.Services, &sjc.current.ServicesViolations)
 	// IaC Violations
 	for _, jasViolation := range violationsScanResults.Iac {
 		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
@@ -343,7 +343,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseExposuresScans(secrets, services 
 	}); err != nil {
 		return
 	}
-	return sjc.appendExposuresVulnerabilities(services, func(rows []formats.SourceCodeRow) {
+	return sjc.appendServicesExposuresVulnerabilities(services, func(rows []formats.SourceCodeRow) {
 		sjc.current.ServicesVulnerabilities = append(sjc.current.ServicesVulnerabilities, rows...)
 	})
 }
@@ -363,6 +363,14 @@ func (sjc *CmdResultsSimpleJsonConverter) appendExposuresVulnerabilities(runs []
 func (sjc *CmdResultsSimpleJsonConverter) appendExposuresViolations(violations []violationutils.JasViolation, destination *[]formats.SourceCodeRow) {
 	for _, jasViolation := range violations {
 		violation := createSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
+		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
+		*destination = append(*destination, violation)
+	}
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) appendServicesExposuresViolations(violations []violationutils.JasViolation, destination *[]formats.SourceCodeRow) {
+	for _, jasViolation := range violations {
+		violation := createServicesSourceCodeRow(jasViolation.Rule, jasViolation.Severity, jasViolation.Result, jasViolation.Location, []*sarif.Invocation{}, sjc.pretty)
 		violation.ViolationContext = convertToViolationContext(jasViolation.Violation)
 		*destination = append(*destination, violation)
 	}
@@ -485,6 +493,34 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 		return nil
 	})
 	return rows, err
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) appendServicesExposuresVulnerabilities(runs []*sarif.Run, appendRows func([]formats.SourceCodeRow)) (err error) {
+	if len(runs) == 0 {
+		return
+	}
+	rows, err := PrepareSimpleJsonServicesIssues(sjc.entitledForJas, sjc.pretty, runs...)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	appendRows(rows)
+	return
+}
+
+func PrepareSimpleJsonServicesIssues(entitledForJas, pretty bool, jasIssues ...*sarif.Run) ([]formats.SourceCodeRow, error) {
+	var rows []formats.SourceCodeRow
+	err := results.ForEachJasIssue(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
+		rows = append(rows, createServicesSourceCodeRow(rule, severity, result, location, run.Invocations, pretty))
+		return nil
+	})
+	return rows, err
+}
+
+func createServicesSourceCodeRow(rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location, invocations []*sarif.Invocation, pretty bool) formats.SourceCodeRow {
+	row := createSourceCodeRow(rule, severity, result, location, invocations, pretty)
+	row.Cwe = sarifutils.GetServicesCWE(rule, result)
+	row.Outcomes = sarifutils.GetResultOutcomes(result)
+	return row
 }
 
 func createSourceCodeRow(rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location, invocations []*sarif.Invocation, pretty bool) formats.SourceCodeRow {

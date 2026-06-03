@@ -620,3 +620,28 @@ func TestGetResultFingerprint(t *testing.T) {
 		assert.Equal(t, test.expectedOutput, GetResultFingerprint(test.result))
 	}
 }
+
+func createRuleWithCWE(ruleId, cwe string) *sarif.ReportingDescriptor {
+	return sarif.NewRule(ruleId).WithDefaultConfiguration(
+		sarif.NewReportingConfiguration().WithParameters(
+			sarif.NewPropertyBag().Add(CWEPropertyKey, cwe),
+		),
+	)
+}
+
+func TestGetServicesCWEAndOutcomes(t *testing.T) {
+	rule := createRuleWithCWE("service-rule", "CWE-200")
+	result := CreateResultWithProperties("msg", "service-rule", "warning", map[string]string{
+		CWEPropertyKey:      "CWE-918",
+		OutcomesPropertyKey: "exposed-endpoint",
+	}, CreateLocation("config.yml", 1, 1, 1, 10, ""))
+
+	assert.Equal(t, []string{"CWE-918"}, GetServicesCWE(rule, result))
+	assert.Equal(t, "exposed-endpoint", GetResultOutcomes(result))
+
+	resultWithoutCWE := CreateResultWithProperties("msg", "service-rule", "warning", map[string]string{
+		OutcomesPropertyKey: "misconfigured-port",
+	}, CreateLocation("config.yml", 2, 1, 2, 10, ""))
+	assert.Equal(t, []string{"CWE-200"}, GetServicesCWE(rule, resultWithoutCWE))
+	assert.Equal(t, "misconfigured-port", GetResultOutcomes(resultWithoutCWE))
+}

@@ -24,8 +24,8 @@ type ResultsTables struct {
 	SecretsVulnerabilitiesTable []secretsTableRow
 	SecretsViolationsTable      []secretsTableRow
 	// Services
-	ServicesVulnerabilitiesTable []secretsTableRow
-	ServicesViolationsTable      []secretsTableRow
+	ServicesVulnerabilitiesTable []servicesTableRow
+	ServicesViolationsTable      []servicesTableRow
 	// Malicious Code
 	MaliciousVulnerabilitiesTable []maliciousTableRow
 }
@@ -170,6 +170,16 @@ type secretsTableRow struct {
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
 	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
 	watch           string `col-name:"Watch Name" omitempty:"true"`
+}
+
+type servicesTableRow struct {
+	severity   string `col-name:"Severity"`
+	file       string `col-name:"File"`
+	lineColumn string `col-name:"Line:Column"`
+	finding    string `col-name:"Finding"`
+	cwe        string `col-name:"CWE" omitempty:"true"`
+	outcomes   string `col-name:"Outcomes" omitempty:"true"`
+	watch      string `col-name:"Watch Name" omitempty:"true"`
 }
 
 type iacOrSastTableRow struct {

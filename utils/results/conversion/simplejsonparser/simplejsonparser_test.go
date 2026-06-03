@@ -6,6 +6,7 @@ import (
 
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -486,4 +487,21 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})
 	}
+}
+
+func TestPrepareSimpleJsonServicesIssues(t *testing.T) {
+	rule := sarif.NewRule("service-rule")
+	result := sarifutils.CreateResultWithProperties("service finding", "service-rule", "warning", map[string]string{
+		sarifutils.CWEPropertyKey:      "CWE-918",
+		sarifutils.OutcomesPropertyKey: "publicly-exposed",
+	}, sarifutils.CreateLocation("service.yaml", 3, 4, 5, 6, "snippet"))
+	run := sarifutils.CreateRunWithDummyResults(result)
+	run.Tool.Driver.Rules = []*sarif.ReportingDescriptor{rule}
+
+	out, err := PrepareSimpleJsonServicesIssues(true, false, run)
+	assert.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, []string{"CWE-918"}, out[0].Cwe)
+	assert.Equal(t, "publicly-exposed", out[0].Outcomes)
+	assert.Equal(t, "service finding", out[0].Finding)
 }

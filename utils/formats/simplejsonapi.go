@@ -114,6 +114,7 @@ type SourceCodeRow struct {
 	Location
 	Finding       string         `json:"finding,omitempty"`
 	Fingerprint   string         `json:"fingerprint,omitempty"`
+	Outcomes      string         `json:"outcomes,omitempty"`
 	Applicability *Applicability `json:"applicability,omitempty"`
 	CodeFlow      [][]Location   `json:"codeFlow,omitempty"`
 }

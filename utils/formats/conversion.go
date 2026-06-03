@@ -157,6 +157,21 @@ func ConvertToOperationalRiskViolationTableRow(rows []OperationalRiskViolationRo
 	return
 }
 
+func ConvertToServicesTableRow(rows []SourceCodeRow) (tableRows []servicesTableRow) {
+	for i := range rows {
+		tableRows = append(tableRows, servicesTableRow{
+			severity:   rows[i].Severity,
+			file:       rows[i].File,
+			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			finding:    rows[i].Finding,
+			cwe:        strings.Join(rows[i].Cwe, ", "),
+			outcomes:   rows[i].Outcomes,
+			watch:      rows[i].Watch,
+		})
+	}
+	return
+}
+
 func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow) {
 	for i := range rows {
 		var status string

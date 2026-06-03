@@ -21,6 +21,7 @@ const (
 	JasScannerIdSarifPropertyKey            = "scanner_id"
 	FailPrSarifPropertyKey                  = "failPullRequest"
 	CWEPropertyKey                          = "CWE"
+	OutcomesPropertyKey                     = "Outcomes"
 	SarifImpactPathsRulePropertyKey         = "impactPaths"
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
 	TokenValidationMetadataSarifPropertyKey = "metadata"
@@ -132,16 +133,38 @@ func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
 
 func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
 	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
-		// No CWE property
 		return
 	}
 	if cweProperty, ok := rule.DefaultConfiguration.Parameters.Properties[CWEPropertyKey]; ok {
 		if cweValue, ok := cweProperty.(string); ok {
-			split := strings.Split(cweValue, ",")
-			for _, policy := range split {
-				cwe = append(cwe, strings.TrimSpace(policy))
-			}
-			return
+			return ParseCWEValue(cweValue)
+		}
+	}
+	return
+}
+
+func GetResultCWE(result *sarif.Result) []string {
+	return ParseCWEValue(GetResultProperty(CWEPropertyKey, result))
+}
+
+func GetResultOutcomes(result *sarif.Result) string {
+	return GetResultProperty(OutcomesPropertyKey, result)
+}
+
+func GetServicesCWE(rule *sarif.ReportingDescriptor, result *sarif.Result) []string {
+	if cwe := GetResultCWE(result); len(cwe) > 0 {
+		return cwe
+	}
+	return GetRuleCWE(rule)
+}
+
+func ParseCWEValue(cweValue string) (cwe []string) {
+	if cweValue == "" {
+		return
+	}
+	for _, part := range strings.Split(cweValue, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			cwe = append(cwe, trimmed)
 		}
 	}
 	return

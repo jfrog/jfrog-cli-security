@@ -28,6 +28,7 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
+	servicesOutcomesPropertyTemplate         = "jfrog:services:outcomes:" + results.LocationIdTemplate
 	// Git context property
 	gitContextProperty = "jfrog:git:context"
 )
@@ -158,7 +159,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseExposuresScans(secrets, services [
 	if err = cdc.parseExposuresScan("secret", secrets); err != nil {
 		return
 	}
-	return cdc.parseExposuresScan("services", services)
+	return cdc.parseServicesScan(services)
 }
 
 func (cdc *CmdResultsCycloneDxConverter) parseExposuresScan(locationLabel string, runs []*sarif.Run) (err error) {
@@ -200,6 +201,45 @@ func (cdc *CmdResultsCycloneDxConverter) parseExposuresScan(locationLabel string
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, locationLabel, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
 			Value: sarifutils.GetLocationSnippetText(location),
 		})
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)
+		return
+	})
+}
+
+func (cdc *CmdResultsCycloneDxConverter) parseServicesScan(runs []*sarif.Run) (err error) {
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if len(runs) == 0 {
+		return
+	}
+	source := cdc.addJasService([][]*sarif.Run{runs})
+	return results.ForEachJasIssue(runs, cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+		startLine := sarifutils.GetLocationStartLine(location)
+		startColumn := sarifutils.GetLocationStartColumn(location)
+		endLine := sarifutils.GetLocationEndLine(location)
+		endColumn := sarifutils.GetLocationEndColumn(location)
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, cdc.currentTarget))
+		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
+		jasIssue := cdc.getOrCreateJasIssue(
+			sarifutils.GetResultRuleId(result),
+			sarifutils.GetRuleScannerId(rule),
+			sarifutils.GetResultMsgText(result),
+			sarifutils.GetRuleShortDescriptionText(rule),
+			source,
+			sarifutils.GetServicesCWE(rule, result),
+			ratings,
+		)
+		properties := []cyclonedx.Property{{
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "services", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+			Value: sarifutils.GetLocationSnippetText(location),
+		}}
+		if outcomes := sarifutils.GetResultOutcomes(result); outcomes != "" {
+			properties = append(properties, cyclonedx.Property{
+				Name:  fmt.Sprintf(servicesOutcomesPropertyTemplate, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+				Value: outcomes,
+			})
+		}
 		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)
 		return
 	})
