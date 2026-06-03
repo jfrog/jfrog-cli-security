@@ -1364,6 +1364,24 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 	}
 }
 
+// EnrichSbomWithApplicability merges contextual-analysis evidence into the canonical enriched SBOM.
+func EnrichSbomWithApplicability(bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run) error {
+	if bom == nil || !entitledForJas || len(applicabilityRuns) == 0 {
+		return nil
+	}
+	return ForEachScaBomVulnerability(ScanTarget{}, bom, true, applicabilityRuns,
+		func(vulnerability cyclonedx.Vulnerability, _ *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, _ severityutils.Severity) error {
+			if applicability == nil {
+				return nil
+			}
+			if v := cdxutils.SearchVulnerabilityByRef(bom, vulnerability.BOMRef); v != nil {
+				AttachApplicabilityToVulnerability(bom, v, applicability)
+			}
+			return nil
+		},
+	)
+}
+
 func AttachApplicabilityToVulnerability(destination *cyclonedx.BOM, vulnerability *cyclonedx.Vulnerability, applicability *formats.Applicability) {
 	if applicability == nil || applicability.Status == jasutils.NotScanned.String() || vulnerability == nil {
 		// No applicability to attach

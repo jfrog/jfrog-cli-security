@@ -3245,6 +3245,30 @@ func TestSplitComponents(t *testing.T) {
 	}
 }
 
+func TestEnrichSbomWithApplicability_AddsFileComponentAndAffect(t *testing.T) {
+	libRef := "pkg:maven/com.example/lib@1.0"
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{{
+			BOMRef: libRef, Type: cyclonedx.ComponentTypeLibrary, Name: "lib", Version: "1.0",
+		}},
+		Vulnerabilities: &[]cyclonedx.Vulnerability{{
+			BOMRef: "CVE-2024-29371", ID: "CVE-2024-29371",
+			Affects: &[]cyclonedx.Affects{{Ref: libRef}},
+		}},
+	}
+	applicRun := sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithLocations(
+			"applic_CVE-2024-29371", "applic_CVE-2024-29371", "note",
+			sarifutils.CreateLocation("src/Foo.java", 1, 0, 2, 0, "snippet"),
+		),
+	)
+	require.NoError(t, EnrichSbomWithApplicability(bom, true, []*sarif.Run{applicRun}))
+	fileRef := cdxutils.GetFileRef("src/Foo.java")
+	assert.NotNil(t, cdxutils.SearchComponentByRef(bom.Components, fileRef))
+	vuln := &(*bom.Vulnerabilities)[0]
+	assert.True(t, cdxutils.HasImpactedAffects(*vuln, cyclonedx.Component{BOMRef: fileRef}))
+}
+
 func TestForEachScaBomVulnerability(t *testing.T) {
 	validComponent := cyclonedx.Component{
 		BOMRef:     "pkg:golang/example@1.0.0",
@@ -3296,7 +3320,7 @@ func TestForEachScaBomVulnerability(t *testing.T) {
 		assert.Equal(t, 1, callCount)
 	})
 
-	t.Run("unresolved affect ref still invokes handler with nil component", func(t *testing.T) {
+	t.Run("unresolved affect ref is skipped", func(t *testing.T) {
 		bom := &cyclonedx.BOM{
 			Components: &bomComponents,
 			Vulnerabilities: &[]cyclonedx.Vulnerability{{
@@ -3308,24 +3332,19 @@ func TestForEachScaBomVulnerability(t *testing.T) {
 				},
 			}},
 		}
-		var nilComponentCalls int
-		var resolvedCalls int
+		var callCount int
 		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
 			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
-				if comp == nil {
-					nilComponentCalls++
-				} else {
-					resolvedCalls++
-					assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
-				}
+				callCount++
+				require.NotNil(t, comp)
+				assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
 				return nil
 			})
 		require.NoError(t, err)
-		assert.Equal(t, 1, nilComponentCalls)
-		assert.Equal(t, 1, resolvedCalls)
+		assert.Equal(t, 1, callCount)
 	})
 
-	t.Run("only unresolved affects invokes handler per affect with nil component", func(t *testing.T) {
+	t.Run("only unresolved affects does not invoke handler", func(t *testing.T) {
 		bom := &cyclonedx.BOM{
 			Components: &bomComponents,
 			Vulnerabilities: &[]cyclonedx.Vulnerability{{
@@ -3341,11 +3360,10 @@ func TestForEachScaBomVulnerability(t *testing.T) {
 		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
 			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
 				callCount++
-				assert.Nil(t, comp)
 				return nil
 			})
 		require.NoError(t, err)
-		assert.Equal(t, 2, callCount)
+		assert.Equal(t, 0, callCount)
 	})
 }
 

@@ -405,7 +405,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclone
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnToParse)
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdxutils.CloneVulnerability(vulnToParse))
 	vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 	// Ensure the source is set for the vulnerability
 	if vulnerability.Source == nil {
