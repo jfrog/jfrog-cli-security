@@ -166,7 +166,12 @@ func ForEachScaBomVulnerability(_ ScanTarget, bom *cyclonedx.BOM, entitledForJas
 		for _, affectedComponent := range *vulnerability.Affects {
 			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
 			if relatedComponent == nil {
-				log.Warn(fmt.Sprintf("Vulnerability %s references component BOMRef %s that was not found in the BOM; reporting without impacted component", vulnerability.BOMRef, affectedComponent.Ref))
+				log.Warn(fmt.Sprintf("Vulnerability %s references component BOMRef %s that was not found in the BOM; Skipping", vulnerability.BOMRef, affectedComponent.Ref))
+				continue
+			}
+			if relatedComponent.Type != cyclonedx.ComponentTypeLibrary {
+				log.Verbose(fmt.Sprintf("Vulnerability %s references component BOMRef %s that is not a library component (evidence); Skipping", vulnerability.BOMRef, affectedComponent.Ref))
+				continue
 			}
 			if e := handler(vulnerability, relatedComponent, GetFixedVersions(affectedComponent), applicability, severity); e != nil {
 				err = errors.Join(err, e)
