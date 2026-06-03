@@ -12,8 +12,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GOPROXY: direct
     steps:
       - uses: actions/checkout@v5
 

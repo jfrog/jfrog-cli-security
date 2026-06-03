@@ -572,14 +572,12 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		return "", "", nil, nil, err
 	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
-	auditCmd.SetScaScanStrategy(scaScanStrategy)
-	auditCmd.SetViolationGenerator(violationGenerator)
+	auditCmd.SetScaScanStrategy(scaScanStrategy).SetViolationGenerator(violationGenerator).SetIncludeSbom(shouldIncludeSbom(c, format))
 	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(shouldIncludeSbom(c, format)).
 		SetIncludeSnippetDetection(includeSnippetDetection).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
