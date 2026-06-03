@@ -3244,3 +3244,170 @@ func TestSplitComponents(t *testing.T) {
 		})
 	}
 }
+
+func TestEnrichSbomWithApplicability_AddsFileComponentAndAffect(t *testing.T) {
+	libRef := "pkg:maven/com.example/lib@1.0"
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{{
+			BOMRef: libRef, Type: cyclonedx.ComponentTypeLibrary, Name: "lib", Version: "1.0",
+		}},
+		Vulnerabilities: &[]cyclonedx.Vulnerability{{
+			BOMRef: "CVE-2024-29371", ID: "CVE-2024-29371",
+			Affects: &[]cyclonedx.Affects{{Ref: libRef}},
+		}},
+	}
+	applicRun := sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithLocations(
+			"applic_CVE-2024-29371", "applic_CVE-2024-29371", "note",
+			sarifutils.CreateLocation("src/Foo.java", 1, 0, 2, 0, "snippet"),
+		),
+	)
+	require.NoError(t, EnrichSbomWithApplicability(bom, true, []*sarif.Run{applicRun}))
+	fileRef := cdxutils.GetFileRef("src/Foo.java")
+	assert.NotNil(t, cdxutils.SearchComponentByRef(bom.Components, fileRef))
+	vuln := &(*bom.Vulnerabilities)[0]
+	assert.True(t, cdxutils.HasImpactedAffects(*vuln, cyclonedx.Component{BOMRef: fileRef}))
+}
+
+func TestForEachScaBomVulnerability(t *testing.T) {
+	validComponent := cyclonedx.Component{
+		BOMRef:     "pkg:golang/example@1.0.0",
+		PackageURL: "pkg:golang/example@1.0.0",
+		Type:       cyclonedx.ComponentTypeLibrary,
+		Name:       "example",
+		Version:    "1.0.0",
+	}
+	bomComponents := []cyclonedx.Component{validComponent}
+
+	t.Run("no affects invokes handler once with nil component", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components:      &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{ID: "CVE-2024-0001", BOMRef: "vuln-no-affects"}},
+		}
+		var callCount int
+		var lastComp *cyclonedx.Component
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				lastComp = comp
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+		assert.Nil(t, lastComp)
+	})
+
+	t.Run("resolved affect invokes handler once with component", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0002",
+				BOMRef: "vuln-with-affect",
+				Affects: &[]cyclonedx.Affects{{
+					Ref: validComponent.BOMRef,
+				}},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				require.NotNil(t, comp)
+				assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("unresolved affect ref is skipped", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0003",
+				BOMRef: "vuln-mixed-affects",
+				Affects: &[]cyclonedx.Affects{
+					{Ref: "pkg:golang/missing@9.9.9"},
+					{Ref: validComponent.BOMRef},
+				},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				require.NotNil(t, comp)
+				assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("only unresolved affects does not invoke handler", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0004",
+				BOMRef: "vuln-broken-affects",
+				Affects: &[]cyclonedx.Affects{
+					{Ref: "pkg:golang/missing-a@1.0.0"},
+					{Ref: "pkg:golang/missing-b@2.0.0"},
+				},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 0, callCount)
+	})
+}
+
+func TestForEachScanGraphVulnerability_emptyImpactedPackages(t *testing.T) {
+	vuln := services.Vulnerability{
+		IssueId:    "XRAY-empty-comp",
+		Severity:   "High",
+		Cves:       []services.Cve{{Id: "CVE-2024-empty"}},
+		Components: map[string]services.Component{},
+	}
+	var calls int
+	var lastPkgId string
+	err := ForEachScanGraphVulnerability(
+		ScanTarget{Target: "."},
+		[]string{},
+		[]services.Vulnerability{vuln},
+		false,
+		nil,
+		func(_ services.Vulnerability, _ []formats.CveRow, _ jasutils.ApplicabilityStatus, _ severityutils.Severity, impactedPackagesId string, _ []string, _ []formats.ComponentRow, _ [][]formats.ComponentRow) error {
+			calls++
+			lastPkgId = impactedPackagesId
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls)
+	assert.Empty(t, lastPkgId)
+}
+
+func TestForEachLicense_emptyImpactedPackages(t *testing.T) {
+	license := services.License{
+		Key:        "GPL-3.0",
+		Components: map[string]services.Component{},
+	}
+	var calls int
+	err := ForEachLicense(
+		ScanTarget{Target: "."},
+		[]services.License{license},
+		func(_ services.License, impactedPackagesId string, _ []formats.ComponentRow, _ [][]formats.ComponentRow) error {
+			calls++
+			assert.Empty(t, impactedPackagesId)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls)
+}

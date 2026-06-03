@@ -424,6 +424,19 @@ func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *Securit
 	return r
 }
 
+// FinalizeEnrichedSbomsWithApplicability merges JAS contextual-analysis data into each target's canonical enriched SBOM.
+func (r *SecurityCommandResults) FinalizeEnrichedSbomsWithApplicability() (err error) {
+	for _, target := range r.Targets {
+		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.JasResults == nil {
+			continue
+		}
+		if e := EnrichSbomWithApplicability(target.ScaResults.Sbom, r.Entitlements.Jas, target.JasResults.ApplicabilityScanResults); e != nil {
+			err = errors.Join(err, e)
+		}
+	}
+	return
+}
+
 func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnippetDetection bool) *SecurityCommandResults {
 	r.Entitlements.SnippetDetection = entitledForSnippetDetection
 	return r
