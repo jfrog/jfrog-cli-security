@@ -422,7 +422,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "XRAY-609848",
 						Severity:      severityutils.Unknown,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/async@3.2.4",
 						PackageURL: "pkg:npm/async@3.2.4",
 					},
@@ -462,7 +462,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "98yhnmju7654rfvbnj",
 						Severity:      severityutils.Medium,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
@@ -503,7 +503,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "12ee2e134edqwe234",
 						Severity:      severityutils.High,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
@@ -751,7 +751,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ViolationId:   "XRAY-632747",
 						Severity:      severityutils.Unknown,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 						PackageURL: "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 					},
