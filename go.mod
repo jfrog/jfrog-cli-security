@@ -23,7 +23,6 @@ require (
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
-	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.17
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
@@ -122,6 +121,7 @@ require (
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
+	github.com/spf13/viper v1.21.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
@@ -157,6 +157,6 @@ require (
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
-// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/gauriy-tech/jfrog-cli-core/v2 v2.0.0-20260526032107-e8995d698251
+//replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
-// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
