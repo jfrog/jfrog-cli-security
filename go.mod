@@ -2,10 +2,7 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.26.3
 
-replace (
-	github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.10.0
-	github.com/go-git/go-git/v5 => github.com/go-git/go-git/v5 v5.19.0
-)
+replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.10.0
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
