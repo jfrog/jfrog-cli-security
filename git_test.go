@@ -271,8 +271,8 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
-
-	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// TODO: investigate why "issues" npm project causes flaky tests
+	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues-mvn")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
 	dummyCloneUrl := getDummyGitRepoUrl()
 
@@ -307,8 +307,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 19, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 15, NotCovered: 4, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 67, Sast: 5, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 63, NotCovered: 3, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},
@@ -342,8 +342,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 4, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 4, Sast: 5, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},
