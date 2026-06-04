@@ -27,6 +27,8 @@ env:
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
   JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
+  # Repository variable ENABLE_FASTCI_BOOST (default: true). Set to 'false' to skip jfrog/boost@v0.
+  ENABLE_FASTCI_BOOST: ${{ vars.ENABLE_FASTCI_BOOST != 'false' }}
 
 jobs:
   Pretest:
@@ -45,6 +47,7 @@ jobs:
           labels: "safe to test"
           
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -73,6 +76,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -124,6 +128,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -153,6 +158,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -179,6 +185,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -204,6 +211,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -230,6 +238,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -257,6 +266,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -284,6 +294,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -311,6 +322,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Start FastCI Optimization
+        if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
