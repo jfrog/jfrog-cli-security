@@ -22,6 +22,7 @@ concurrency:
 
 # Environment variables shared across all jobs.
 env:
+  GOPROXY: https://proxy.golang.org,direct
   GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 40m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
@@ -29,7 +30,7 @@ env:
   JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
   # Repository variable ENABLE_FASTCI_BOOST (default: true). Set to 'false' to skip jfrog/boost@v0.
   ENABLE_FASTCI_BOOST: ${{ vars.ENABLE_FASTCI_BOOST != 'false' }}
-
+  
 jobs:
   Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
