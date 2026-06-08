@@ -185,10 +185,6 @@ func extractPodsSection(filePath string) (string, error) {
 }
 
 func GetDependenciesData(currentDir string) (string, error) {
-	_, err := os.Stat(filepath.Join(currentDir, lockFileName))
-	if err != nil {
-		return "", err
-	}
 	result, err := extractPodsSection(filepath.Join(currentDir, lockFileName))
 	if err != nil {
 		return "", err
@@ -204,23 +200,22 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, podExecPath, err := getPodVersionAndExecPath()
-	if err != nil {
-		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
-		return
-	}
 	// Check if lock file exists, if not run 'pod install'
 	lockFilePath := filepath.Join(currentDir, lockFileName)
-	if _, err := os.Stat(lockFilePath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(lockFilePath); os.IsNotExist(statErr) {
 		if params.SkipAutoInstall {
 			return nil, nil, &biutils.ErrProjectNotInstalled{UninstalledDir: currentDir}
+		}
+		_, podExecPath, err := getPodVersionAndExecPath()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		}
 		log.Debug("Running 'pod install' command to install dependencies...")
 		if _, err = runPodCmd(podExecPath, currentDir, []string{"install"}); err != nil {
 			return nil, nil, fmt.Errorf("failed to run 'pod install': %w", err)
 		}
-	} else if err != nil {
-		return nil, nil, fmt.Errorf("failed to check if lock file exists: %w", err)
+	} else if statErr != nil {
+		return nil, nil, fmt.Errorf("failed to check if lock file exists: %w", statErr)
 	}
 	// Calculate pod dependencies
 	data, err := GetDependenciesData(currentDir)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -17,6 +18,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestBuildDependencyTreeSkipAutoInstallNoLockFile(t *testing.T) {
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods", "cocoapods-no-lock-file"))
+	defer cleanUp()
+
+	params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
+	dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+	assert.Nil(t, dependencyTrees)
+	assert.Nil(t, uniqueDeps)
+	assert.Error(t, err)
+	assert.IsType(t, &biutils.ErrProjectNotInstalled{}, err)
+}
 
 func TestBuildCocoapodsDependencyList(t *testing.T) {
 	// Create and change directory to test workspace

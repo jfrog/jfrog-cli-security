@@ -588,6 +588,9 @@ func TestXrayAuditCocoapodsNoLockFile(t *testing.T) {
 	if coreutils.IsWindows() {
 		t.Skip("Skipping: CocoaPods auto-install (pod install) requires macOS/Linux with Xcode.")
 	}
+	if _, err := exec.LookPath("pod"); err != nil {
+		t.Skip("Skipping: pod executable not found in PATH.")
+	}
 	output := testXrayAuditCocoapods(t, format.SimpleJson, "cocoapods-no-lock-file")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
