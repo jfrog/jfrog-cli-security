@@ -480,6 +480,33 @@ lock-version = "1.1"
 			"files for a dotted package with a quoted key in [metadata.files] must be collected")
 	})
 
+	t.Run("v1 file value containing '= [' is not mistaken for a package key", func(t *testing.T) {
+		// A file entry whose name contains "= [" appears mid-array, before the
+		// real wheel. A bare strings.Contains(line, "= [") guard would treat it as
+		// a new package key, reset currentMetaPkg, and silently drop flask's files.
+		fixture := []byte(`[[package]]
+name = "flask"
+version = "2.0.0"
+
+[metadata]
+lock-version = "1.1"
+
+[metadata.files]
+flask = [
+    {file = "weird = [name].whl", hash = "sha256:abc"},
+    {file = "Flask-2.0.0.tar.gz", hash = "sha256:def"},
+]
+`)
+		got := parsePoetryLockPackages(fixture)
+		require.Len(t, got, 1)
+		assert.Equal(t, "flask", got[0].Name)
+		assert.ElementsMatch(t, []string{
+			"weird = [name].whl",
+			"Flask-2.0.0.tar.gz",
+		}, got[0].Files,
+			"files must stay attributed to flask, not to a spurious metadata key")
+	})
+
 	t.Run("empty content returns empty slice", func(t *testing.T) {
 		got := parsePoetryLockPackages(nil)
 		assert.Empty(t, got)
@@ -698,6 +725,43 @@ func TestExtractPoetrySourceNames(t *testing.T) {
 	})
 }
 
+func TestStripPoetrySourceBlocks(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{
+			name: "no source blocks — content unchanged",
+			in:   "[tool.poetry]\nname = \"x\"\n",
+			want: "[tool.poetry]\nname = \"x\"\n",
+		},
+		{
+			name: "single source block stripped, following section kept",
+			in:   "[tool.poetry]\nname = \"x\"\n[[tool.poetry.source]]\nname = \"pypi\"\nurl = \"https://pypi.org\"\n[tool.poetry.dependencies]\npython = \"^3.9\"\n",
+			want: "[tool.poetry]\nname = \"x\"\n[tool.poetry.dependencies]\npython = \"^3.9\"\n",
+		},
+		{
+			name: "two consecutive source blocks stripped without consuming next section",
+			in:   "[tool.poetry]\nname = \"x\"\n[[tool.poetry.source]]\nname = \"a\"\nurl = \"https://a\"\n[[tool.poetry.source]]\nname = \"b\"\nurl = \"https://b\"\n[tool.poetry.dependencies]\npython = \"^3.9\"\n",
+			want: "[tool.poetry]\nname = \"x\"\n[tool.poetry.dependencies]\npython = \"^3.9\"\n",
+		},
+		{
+			// The source block extends to EOF, so the trailing empty line
+			// produced by the final newline is consumed along with it.
+			name: "source block at EOF",
+			in:   "[tool.poetry]\nname = \"x\"\n[[tool.poetry.source]]\nname = \"pypi\"\n",
+			want: "[tool.poetry]\nname = \"x\"",
+		},
+		{
+			name: "indented source header is still stripped",
+			in:   "[tool.poetry]\n  [[tool.poetry.source]]\n  name = \"pypi\"\n[tool.poetry.dependencies]\n",
+			want: "[tool.poetry]\n[tool.poetry.dependencies]\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, stripPoetrySourceBlocks(tc.in))
+		})
+	}
+}
+
 // TestBuildPoetryDownloadUrl_HTTP exercises the simple-index lookup that
 // resolves a poetry.lock package to an absolute Artifactory download URL.
 // The function:
@@ -814,7 +878,6 @@ case "$*" in
 esac
 `
 	require.NoError(t, os.WriteFile(fakePoetry, []byte(script), 0755))
-	require.NoError(t, os.Chmod(fakePoetry, 0755))
 	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	dir := t.TempDir()

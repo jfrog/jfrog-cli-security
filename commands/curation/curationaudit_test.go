@@ -1895,6 +1895,14 @@ func Test_getPythonNameVersion(t *testing.T) {
 			wantName:         "",
 			wantVersion:      "",
 		},
+		{
+			name:             "hyphenated name resolved via normalization fallback",
+			id:               "pypi://Flask-Babel:1.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask_babel:1.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "Flask-Babel",
+			wantVersion:      "1.0",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

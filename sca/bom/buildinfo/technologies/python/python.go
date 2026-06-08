@@ -35,8 +35,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -48,6 +50,8 @@ const (
 	PoetryNoInteractionFlag      = "--no-interaction"
 	pyprojectToml                = "pyproject.toml"
 	CurationPoetryMinimumVersion = "1.2.0"
+
+	poetryDownloadUrlWorkers = 8
 )
 
 var (
@@ -288,20 +292,32 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 	artiUrl := strings.TrimSuffix(serverDetails.GetArtifactoryUrl(), "/")
 	urls := map[string]string{}
 	skipped := 0
+	var mu sync.Mutex
+
+	g := new(errgroup.Group)
+	g.SetLimit(poetryDownloadUrlWorkers)
 	for _, pkg := range packages {
+		pkg := pkg
 		if pkg.Name == "" || pkg.Version == "" || len(pkg.Files) == 0 {
 			skipped++
 			continue
 		}
-		downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, &httpClientDetails, artiUrl, repository, pkg)
-		if lookupErr != nil {
-			log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
-			continue
-		}
-		normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
-		compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
-		urls[compId] = downloadUrl
+		g.Go(func() error {
+			downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, &httpClientDetails, artiUrl, repository, pkg)
+			if lookupErr != nil {
+				log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
+				return nil
+			}
+			normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
+			compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
+			mu.Lock()
+			urls[compId] = downloadUrl
+			mu.Unlock()
+			return nil
+		})
 	}
+	_ = g.Wait()
+
 	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", len(urls), skipped))
 	return urls, nil
 }
@@ -441,9 +457,8 @@ func parsePoetryLockPackages(content []byte) []poetryLockPackage {
 		}
 		// lock v1.x: files live in [metadata.files] as  pkgname = [{file = "..."},]
 		if inMetadataFiles {
-			if strings.Contains(line, "= [") {
-				raw := strings.TrimSpace(strings.SplitN(line, "=", 2)[0])
-				currentMetaPkg = strings.ToLower(strings.Trim(raw, `"`))
+			if key, value, ok := strings.Cut(line, "="); ok && strings.HasPrefix(strings.TrimSpace(value), "[") {
+				currentMetaPkg = strings.ToLower(strings.Trim(strings.TrimSpace(key), `"`))
 			} else if currentMetaPkg != "" {
 				for _, m := range poetryLockFileEntry.FindAllStringSubmatch(line, -1) {
 					if idx, ok := nameToIdx[currentMetaPkg]; ok {
@@ -581,7 +596,7 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 		case lockNeedsGenerate:
 			// No lock file — generate fresh.
 			if _, lockErr := executeCommand("poetry", "lock", PoetryNoInteractionFlag); lockErr != nil {
-				return false, restoreEnv, wrapPoetryCurationErr(params.IsCurationCmd, lockErr)
+				return false, restoreEnv, wrapPoetryCurationErr(lockErr)
 			}
 			log.Debug("Poetry: lock generated")
 		case lockIsStale:
@@ -593,7 +608,7 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 				_, lockErr = executeCommand("poetry", "lock", PoetryNoInteractionFlag)
 			}
 			if lockErr != nil {
-				return false, restoreEnv, wrapPoetryCurationErr(params.IsCurationCmd, errors.Join(lockCheckErr, lockErr))
+				return false, restoreEnv, wrapPoetryCurationErr(errors.Join(lockCheckErr, lockErr))
 			}
 			log.Debug("Poetry: lock updated")
 		default:
@@ -605,15 +620,15 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 	return false, restoreEnv, err
 }
 
-func wrapPoetryCurationErr(isCurationCmd bool, lockErr error) error {
+func wrapPoetryCurationErr(lockErr error) error {
 	if lockErr == nil {
 		return nil
 	}
-	if isCurationCmd && isCvsVersionFilteredOutput(lockErr.Error()) {
+	if isCvsVersionFilteredOutput(lockErr.Error()) {
 		pins := parseCvsFailedPackages(lockErr.Error())
 		lockErr = errors.Join(lockErr, errors.New(formatCvsBlockedRequirementsMessage(pins)))
 	}
-	if msgToUser := technologies.GetMsgToUserForCurationBlock(isCurationCmd, techutils.Poetry, lockErr.Error()); msgToUser != "" {
+	if msgToUser := technologies.GetMsgToUserForCurationBlock(true, techutils.Poetry, lockErr.Error()); msgToUser != "" {
 		return errors.Join(lockErr, errors.New(msgToUser))
 	}
 	return lockErr
@@ -732,7 +747,7 @@ func validateMinimumPoetryVersion(minVersion string) (int, error) {
 	v := parsePoetryVersion(out)
 	if v == "" {
 		log.Debug(fmt.Sprintf("Could not parse Poetry version from output: %q", out))
-		return 0, errorutils.CheckErrorf("JFrog CLI poetry curation requires Poetry %s or higher to be installed.", minVersion)
+		return 0, errorutils.CheckErrorf("Could not parse Poetry version from output %q — ensure Poetry %s or higher is installed correctly", out, minVersion)
 	}
 	log.Debug(fmt.Sprintf("Poetry version: %s", v))
 	if !version.NewVersion(v).AtLeast(minVersion) {
