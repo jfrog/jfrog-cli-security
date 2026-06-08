@@ -274,10 +274,13 @@ func TestNpmConfigGetRegistryFromWorkspacePackage(t *testing.T) {
 	registryData, _, err := bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry", true), &biutils.NullLog{})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, strings.TrimSpace(string(registryData)))
-	// This should fail because we are in a workspace package and workspaces are disabled
-	_, _, err = bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, []string{"config", "get", "registry"}, &biutils.NullLog{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ENOWORKSPACES")
+	// npm 9+ rejects `npm config get` inside workspace packages unless workspaces are disabled.
+	// npm 7-8 only emit a warning and still succeed (CI uses Node 16 / npm 8).
+	if npmVersion.AtLeast("9.0.0") {
+		_, _, err = bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry", false), &biutils.NullLog{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "does not support workspaces")
+	}
 }
 
 func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
