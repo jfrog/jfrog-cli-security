@@ -271,7 +271,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
-	// TODO: investigate why "issues" npm project causes flaky tests
+	// TODO: investigate why "issues" npm project causes flaky tests XRAY-145258
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues-mvn")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
 	dummyCloneUrl := getDummyGitRepoUrl()
