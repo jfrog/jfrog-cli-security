@@ -6,18 +6,20 @@ inputs:
     description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
     required: false
     default: 'false'
+  go-version-file:
+    description: "Path to the Go version file."
+    required: true
+    default: 'go.mod'
 
 runs:
   using: "composite"
   steps:
-    # Install dependencies
-    - name: Setup Go
-      uses: actions/setup-go@v5
+  
+    - name: Setup Go with cache
+      uses: jfrog/.github/actions/install-go-with-cache@main
       with:
-        go-version: 1.26
-    # - name: Setup Go with cache
-    #   uses: jfrog/.github/actions/install-go-with-cache@main
-
+        go-version-file: ${{ inputs.go-version-file }}
+        
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
