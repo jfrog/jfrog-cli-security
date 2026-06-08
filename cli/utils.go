@@ -149,7 +149,7 @@ func validateSnippetDetection(c *components.Context) (bool, error) {
 		return false, err
 	}
 	// Make sure SCA is requested or SBOM is requested
-	if !utils.IsScanRequested(utils.SourceCode, utils.ScaScan, subScans...) && !c.GetBoolFlagValue(flags.Sbom) {
+	if !utils.IsScanRequested(utils.SourceCode, utils.ScaScan, nil, subScans...) && !c.GetBoolFlagValue(flags.Sbom) {
 		return false, errorutils.CheckErrorf("Snippet detection is only supported when SCA is requested or SBOM is requested")
 	}
 	return true, nil

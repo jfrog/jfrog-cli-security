@@ -189,7 +189,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 		},
 		{
 			name:         "Scan failed no findings.",
-			auditResults: &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{MultiScanId: "msi", StartTime: time}, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
+			auditResults: &results.SecurityCommandResults{ResultsMetaData: results.ResultsMetaData{MultiScanId: "msi", StartTime: time}, Targets: []*results.TargetResults{{TargetErrors: []results.SkippableError{{ActualError: errors.New("an error"), Skip: false}}}}},
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
 			},
@@ -238,7 +238,7 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 	}
 
 	if withErr {
-		scanResults.Errors = []error{errors.New("an error")}
+		scanResults.TargetErrors = []results.SkippableError{{ActualError: errors.New("an error"), Skip: false}}
 	}
 
 	if withResultContext {

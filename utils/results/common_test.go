@@ -1,7 +1,6 @@
 package results
 
 import (
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -1027,7 +1026,7 @@ func TestSearchTargetResultsByRelativePath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			foundTarget := SearchTargetResultsByRelativePath(tc.target, techutils.NoTech, tc.cmdResults)
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}
@@ -1037,33 +1036,58 @@ func TestSearchTargetResultsByRelativePathTechnologyDisambiguatesSameDirectory(t
 	sharedDir := filepath.Join("root", "app")
 	cmdResults := NewCommandResults(utils.SourceCode)
 	// Order intentionally Poetry before Npm (simulates nondeterministic map iteration).
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
-	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
+	cmdResults.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
 
 	// Same absolute path for every target ⇒ common parent equals that path ⇒ relative key is "" (see utils.GetRelativePath).
 	relativeKey := utils.GetRelativePath(sharedDir, cmdResults.GetCommonParentPath())
 	require.Equal(t, "", relativeKey)
 
 	t.Run("picks npm when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Npm, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 		assert.Equal(t, sharedDir, found.Target)
 	})
 	t.Run("picks poetry when requested", func(t *testing.T) {
-		found := SearchTargetResultsByRelativePath(relativeKey, techutils.Poetry, cmdResults)
+		found := SearchTargetResultsByRelativePath(relativeKey, cmdResults, techutils.Poetry)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Poetry, found.Technology)
+		assert.Equal(t, techutils.Poetry, found.Technologies[0])
 	})
 	t.Run("reversed slice order still picks npm", func(t *testing.T) {
 		reversed := NewCommandResults(utils.SourceCode)
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Npm})
-		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technology: techutils.Poetry})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Npm}})
+		reversed.NewScanResults(ScanTarget{Target: sharedDir, Technologies: []techutils.Technology{techutils.Poetry}})
 		rel := utils.GetRelativePath(sharedDir, reversed.GetCommonParentPath())
-		found := SearchTargetResultsByRelativePath(rel, techutils.Npm, reversed)
+		found := SearchTargetResultsByRelativePath(rel, reversed, techutils.Npm)
 		require.NotNil(t, found)
-		assert.Equal(t, techutils.Npm, found.Technology)
+		assert.Equal(t, techutils.Npm, found.Technologies[0])
 	})
+}
+
+func TestFormalTechOrCdxCompType_MultiTech(t *testing.T) {
+	assert.Equal(t, "Poetry", FormalTechOrCdxCompType("pypi", true, techutils.Poetry))
+	assert.Equal(t, "Yarn", FormalTechOrCdxCompType("npm", true, techutils.Yarn))
+	assert.Equal(t, "pypi", FormalTechOrCdxCompType("pypi", false, techutils.Poetry))
+}
+
+func TestGetIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []techutils.Technology
+		expected techutils.Technology
+	}{
+		{"empty response npm target", "", "npm", []techutils.Technology{techutils.Npm}, techutils.Npm},
+		{"pip response poetry target", "pip", "pypi", []techutils.Technology{techutils.Poetry}, techutils.Poetry},
+		{"npm response disambiguate", "npm", "npm", []techutils.Technology{techutils.Maven, techutils.Npm}, techutils.Npm},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, GetIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
 }
 
 func TestDepTreeToSbom(t *testing.T) {
@@ -2677,8 +2701,7 @@ func TestScanResponseToSbom(t *testing.T) {
 						Licenses: &cyclonedx.Licenses{
 							{
 								License: &cyclonedx.License{
-									ID:   "Apache-2.0-Key",
-									Name: "Apache-2.0",
+									ID: "Apache-2.0-Key",
 								},
 							},
 						},
@@ -2844,7 +2867,6 @@ func TestScanResponseToSbom(t *testing.T) {
 				}
 			}
 			// Validate
-			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
 			if expected.Components == nil {
 				assert.Nil(t, destination.Components)
 			} else {
@@ -3221,4 +3243,171 @@ func TestSplitComponents(t *testing.T) {
 			assert.ElementsMatch(t, tt.wantImpactPaths, impPaths, "impact paths")
 		})
 	}
+}
+
+func TestEnrichSbomWithApplicability_AddsFileComponentAndAffect(t *testing.T) {
+	libRef := "pkg:maven/com.example/lib@1.0"
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{{
+			BOMRef: libRef, Type: cyclonedx.ComponentTypeLibrary, Name: "lib", Version: "1.0",
+		}},
+		Vulnerabilities: &[]cyclonedx.Vulnerability{{
+			BOMRef: "CVE-2024-29371", ID: "CVE-2024-29371",
+			Affects: &[]cyclonedx.Affects{{Ref: libRef}},
+		}},
+	}
+	applicRun := sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithLocations(
+			"applic_CVE-2024-29371", "applic_CVE-2024-29371", "note",
+			sarifutils.CreateLocation("src/Foo.java", 1, 0, 2, 0, "snippet"),
+		),
+	)
+	require.NoError(t, EnrichSbomWithApplicability(bom, true, []*sarif.Run{applicRun}))
+	fileRef := cdxutils.GetFileRef("src/Foo.java")
+	assert.NotNil(t, cdxutils.SearchComponentByRef(bom.Components, fileRef))
+	vuln := &(*bom.Vulnerabilities)[0]
+	assert.True(t, cdxutils.HasImpactedAffects(*vuln, cyclonedx.Component{BOMRef: fileRef}))
+}
+
+func TestForEachScaBomVulnerability(t *testing.T) {
+	validComponent := cyclonedx.Component{
+		BOMRef:     "pkg:golang/example@1.0.0",
+		PackageURL: "pkg:golang/example@1.0.0",
+		Type:       cyclonedx.ComponentTypeLibrary,
+		Name:       "example",
+		Version:    "1.0.0",
+	}
+	bomComponents := []cyclonedx.Component{validComponent}
+
+	t.Run("no affects invokes handler once with nil component", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components:      &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{ID: "CVE-2024-0001", BOMRef: "vuln-no-affects"}},
+		}
+		var callCount int
+		var lastComp *cyclonedx.Component
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				lastComp = comp
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+		assert.Nil(t, lastComp)
+	})
+
+	t.Run("resolved affect invokes handler once with component", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0002",
+				BOMRef: "vuln-with-affect",
+				Affects: &[]cyclonedx.Affects{{
+					Ref: validComponent.BOMRef,
+				}},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				require.NotNil(t, comp)
+				assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("unresolved affect ref is skipped", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0003",
+				BOMRef: "vuln-mixed-affects",
+				Affects: &[]cyclonedx.Affects{
+					{Ref: "pkg:golang/missing@9.9.9"},
+					{Ref: validComponent.BOMRef},
+				},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				require.NotNil(t, comp)
+				assert.Equal(t, validComponent.BOMRef, comp.BOMRef)
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("only unresolved affects does not invoke handler", func(t *testing.T) {
+		bom := &cyclonedx.BOM{
+			Components: &bomComponents,
+			Vulnerabilities: &[]cyclonedx.Vulnerability{{
+				ID:     "CVE-2024-0004",
+				BOMRef: "vuln-broken-affects",
+				Affects: &[]cyclonedx.Affects{
+					{Ref: "pkg:golang/missing-a@1.0.0"},
+					{Ref: "pkg:golang/missing-b@2.0.0"},
+				},
+			}},
+		}
+		var callCount int
+		err := ForEachScaBomVulnerability(ScanTarget{}, bom, false, nil,
+			func(_ cyclonedx.Vulnerability, comp *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, _ *formats.Applicability, _ severityutils.Severity) error {
+				callCount++
+				return nil
+			})
+		require.NoError(t, err)
+		assert.Equal(t, 0, callCount)
+	})
+}
+
+func TestForEachScanGraphVulnerability_emptyImpactedPackages(t *testing.T) {
+	vuln := services.Vulnerability{
+		IssueId:    "XRAY-empty-comp",
+		Severity:   "High",
+		Cves:       []services.Cve{{Id: "CVE-2024-empty"}},
+		Components: map[string]services.Component{},
+	}
+	var calls int
+	var lastPkgId string
+	err := ForEachScanGraphVulnerability(
+		ScanTarget{Target: "."},
+		[]string{},
+		[]services.Vulnerability{vuln},
+		false,
+		nil,
+		func(_ services.Vulnerability, _ []formats.CveRow, _ jasutils.ApplicabilityStatus, _ severityutils.Severity, impactedPackagesId string, _ []string, _ []formats.ComponentRow, _ [][]formats.ComponentRow) error {
+			calls++
+			lastPkgId = impactedPackagesId
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls)
+	assert.Empty(t, lastPkgId)
+}
+
+func TestForEachLicense_emptyImpactedPackages(t *testing.T) {
+	license := services.License{
+		Key:        "GPL-3.0",
+		Components: map[string]services.Component{},
+	}
+	var calls int
+	err := ForEachLicense(
+		ScanTarget{Target: "."},
+		[]services.License{license},
+		func(_ services.License, impactedPackagesId string, _ []formats.ComponentRow, _ [][]formats.ComponentRow) error {
+			calls++
+			assert.Empty(t, impactedPackagesId)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls)
 }

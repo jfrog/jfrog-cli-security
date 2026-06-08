@@ -17,7 +17,9 @@ type GitAuditParams struct {
 	// Git Params
 	gitContext services.XscGitInfoContext
 	// Connection params
-	serverDetails *config.ServerDetails
+	serverDetails    *config.ServerDetails
+	useConfigProfile bool
+	configProfile    *services.ConfigProfile
 	// Violations params
 	resultsContext results.ResultContext
 	failBuild      bool
@@ -25,6 +27,7 @@ type GitAuditParams struct {
 	scansToPerform []utils.SubScanType
 	includeSbom    bool
 	threads        int
+	workingDirs    []string
 	exclusions     []string
 	// Output params
 	outputFormat  format.OutputFormat
@@ -134,6 +137,11 @@ func (gap *GitAuditParams) SetExclusions(exclusions []string) *GitAuditParams {
 	return gap
 }
 
+func (gap *GitAuditParams) SetWorkingDirs(workingDirs []string) *GitAuditParams {
+	gap.workingDirs = workingDirs
+	return gap
+}
+
 func (gap *GitAuditParams) SetSbomGenerator(generator bom.SbomGenerator) *GitAuditParams {
 	gap.bomGenerator = generator
 	return gap
@@ -197,4 +205,30 @@ func (gap *GitAuditParams) SetCustomBomGenBinaryPath(customBomGenBinaryPath stri
 
 func (gap *GitAuditParams) CustomBomGenBinaryPath() string {
 	return gap.customBomGenBinaryPath
+}
+
+func (gap *GitAuditParams) SetUseConfigProfile(useConfigProfile bool) *GitAuditParams {
+	gap.useConfigProfile = useConfigProfile
+	return gap
+}
+
+func (gap *GitAuditParams) UseConfigProfile() bool {
+	return gap.useConfigProfile
+}
+
+func (gap *GitAuditParams) SetConfigProfile(configProfile *services.ConfigProfile) *GitAuditParams {
+	gap.configProfile = configProfile
+	return gap
+}
+
+func (gap *GitAuditParams) ConfigProfile() *services.ConfigProfile {
+	return gap.configProfile
+}
+
+func (gap *GitAuditParams) SetGitContext(gitContext *services.XscGitInfoContext) *GitAuditParams {
+	if gitContext == nil {
+		return gap
+	}
+	gap.gitContext = *gitContext
+	return gap
 }

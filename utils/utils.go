@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -115,7 +116,10 @@ func GetAllSupportedScans() []SubScanType {
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
-func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
+func IsScanRequested(cmdType CommandType, subScan SubScanType, centralConfigRequestedParam *bool, requestedScans ...SubScanType) bool {
+	if centralConfigRequestedParam != nil {
+		return *centralConfigRequestedParam
+	}
 	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
@@ -124,13 +128,6 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return slices.Contains(requestedScans, subScan)
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
-}
-
-func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
-	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
-		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
-		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
 func getScanFindingName(scanType SubScanType) string {
@@ -390,9 +387,9 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }
 
-func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
 	// Get JPD / Releases remote details to download the resource from.
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return err
 	}
@@ -491,4 +488,21 @@ func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
 			return 0, err
 		}
 	}
+}
+
+func ElementsEqual[T comparable](slice1 []T, slice2 []T) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	freq := make(map[T]int, len(slice1))
+	for _, v := range slice1 {
+		freq[v]++
+	}
+	for _, v := range slice2 {
+		freq[v]--
+		if freq[v] < 0 {
+			return false
+		}
+	}
+	return true
 }
