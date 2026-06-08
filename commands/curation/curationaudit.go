@@ -56,6 +56,7 @@ const (
 	BlockingReasonPolicy   = "Policy violations"
 	BlockingReasonNotFound = "Package pending update"
 	BlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
+	BlockingReasonUnknown  = "Blocked by curation (response could not be parsed)"
 
 	directRelation   = "direct"
 	indirectRelation = "indirect"
@@ -88,7 +89,8 @@ const (
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
-	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Yarn: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
@@ -298,6 +300,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		ca.workingDirs = append(ca.workingDirs, rootDir)
 	}
 	results := map[string]*CurationReport{}
+	var scanErr error
 	for _, workDir := range ca.workingDirs {
 		var absWd string
 		absWd, err = filepath.Abs(workDir)
@@ -312,11 +315,16 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		}
 		// If error returned, continue to print results(if any), and return error at the end.
 		if e := ca.doCurateAudit(results); e != nil {
+			scanErr = errors.Join(scanErr, e)
 			err = errors.Join(err, e)
 		}
 	}
 	if ca.Progress() != nil {
 		err = errors.Join(err, ca.Progress().Quit())
+	}
+	// Print after the spinner has stopped so the message appears on the terminal.
+	if scanErr != nil {
+		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete: " + scanErr.Error())
 	}
 
 	for projectPath, packagesStatus := range results {
@@ -379,10 +387,15 @@ func getPolicyAndConditionId(policy, condition string) string {
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
-	techs := techutils.DetectedTechnologiesList()
+	techs := techutils.DetectedTechnologiesListForCurationAudit()
 	if ca.DockerImageName() != "" {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
+	}
+	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
+	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
+	for i, tech := range techs {
+		techs[i] = resolveNpmYarnTech(tech)
 	}
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
@@ -408,6 +421,41 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 
 	}
 	return nil
+}
+
+// resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml —
+// the developer ran 'jf yarn-config' but the file-system detector fell back to npm.
+func resolveNpmYarnTech(tech string) string {
+	if techutils.Technology(tech) != techutils.Npm {
+		return tech
+	}
+	_, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType())
+	if npmConfigExists {
+		return tech
+	}
+	_, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType())
+	if yarnConfigExists {
+		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
+		return techutils.Yarn.String()
+	}
+	return tech
+}
+
+// resolveResolverTechForCuration returns the tech whose *.yaml config drives
+// SetResolutionRepoInParamsIfExists. For yarn with no yarn.yaml, falls back to
+// npm.yaml — npm and yarn share the same Artifactory npm API.
+func resolveResolverTechForCuration(tech techutils.Technology) techutils.Technology {
+	if tech != techutils.Yarn {
+		return tech
+	}
+	if _, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType()); yarnConfigExists {
+		return tech
+	}
+	if _, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType()); !npmConfigExists {
+		return tech
+	}
+	log.Info("No yarn.yaml found; using npm.yaml for resolver configuration (npm and yarn share the same Artifactory npm API).")
+	return techutils.Npm
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
@@ -451,7 +499,9 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		Args:               ca.Args(),
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
-		IsCurationCmd: true,
+		IsCurationCmd:    true,
+		ParallelRequests: ca.parallelRequests,
+		OutputFormat:     ca.OutputFormat(),
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.UseWrapper(),
@@ -460,6 +510,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmOverwritePackageLock: true,
 		NpmRunNative:            ca.RunNative(),
 		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
+		// Yarn: always refresh yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
+		YarnOverwriteYarnLock: true,
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
@@ -470,6 +522,10 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
+	// --run-native is only supported for npm today; reject it early for all other techs.
+	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
+		return err
+	}
 	params, err := ca.getBuildInfoParamsByTech()
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
@@ -479,7 +535,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Npm {
 		params.IgnoreConfigFile = true
 	}
-	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
+	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
+	resolverTech := resolveResolverTechForCuration(tech)
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, resolverTech)
 	if err != nil {
 		return err
 	}
@@ -543,9 +601,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	// Fetch status for each node from a flatten graph which, has no duplicate nodes.
 	packagesStatusMap := sync.Map{}
-	// if error returned we still want to produce a report, so we don't fail the next step
 	err = analyzer.fetchNodesStatus(depTreeResult.FlatTree, &packagesStatusMap, rootNodes)
-	// Auth errors are unrecoverable — skip building a misleading partial report.
+	// Auth errors are unrecoverable — abort before building a misleading partial report.
 	if analyzer.cancelled.Load() {
 		return err
 	}
@@ -784,10 +841,49 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
-		return err
+		// npm and yarn share the same Artifactory npm API for curation, so their
+		// repository configs are interchangeable. Fall back to the sibling tech's
+		// config when the primary one is missing (e.g. the project was configured
+		// with 'jf yarn-config' but is detected as npm because yarn.lock is absent).
+		primaryErr := err
+		switch tech {
+		case techutils.Npm:
+			resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType())
+		case techutils.Yarn:
+			resolverParams, err = ca.getRepoParams(techutils.Npm.GetProjectType())
+		}
+		if err != nil {
+			// Return the primary tech's error so the user sees the correct command.
+			// Yarn's CLI config command is 'jf yarn-config', not 'jf yarn c'.
+			if tech == techutils.Yarn {
+				return errorutils.CheckErrorf("no config file was found! Before running jf ca on a yarn project for the first time, the project should be configured using the 'jf yarn-config' command")
+			}
+			return primaryErr
+		}
 	}
 	ca.setPackageManagerConfig(resolverParams)
 	return nil
+}
+
+// validateRunNativeForTech rejects --run-native for techs that don't implement
+// native-config semantics. Only npm is supported today; extend the allow-list
+// below when a new tech adds the matching native-config flow.
+func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
+	if !runNative {
+		return nil
+	}
+	// Extend this set when a new tech grows native-config semantics on
+	// both 'jf <tech>' and 'jf ca'.
+	supported := map[techutils.Technology]struct{}{
+		techutils.Npm: {},
+	}
+	if _, ok := supported[tech]; ok {
+		return nil
+	}
+	return errorutils.CheckErrorf(
+		"--run-native is not supported for '%s' projects. "+
+			"Run 'jf ca' without --run-native; configure the resolution repository using 'jf %s-config'.",
+		tech.String(), tech.String())
 }
 
 // setRepoFromNpmrc builds PackageManagerConfig by reading the npm registry URL from the
@@ -994,11 +1090,29 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	if getResp.StatusCode == http.StatusForbidden {
 		respError := &ErrorsResp{}
 		if err := json.Unmarshal(respBody, respError); err != nil {
-			return nil, errorutils.CheckError(err)
+			// Body is not valid JSON (e.g. Artifactory returned an HTML error page).
+			// The 403 itself is authoritative — record the package as blocked with
+			// unknown policy rather than dropping it from results.
+			log.Debug(fmt.Sprintf("curation: could not parse 403 body for %s@%s as JSON (%s) — recording as blocked with unknown policy", name, version, err.Error()))
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			}, nil
 		}
 		if len(respError.Errors) == 0 {
-			return nil, errorutils.CheckErrorf("received 403 for unknown reason, no curation status will be presented for this package. "+
-				"package name: %s, version: %s, download url: %s ", name, version, packageUrl)
+			log.Debug(fmt.Sprintf("curation: received 403 with empty error list for %s@%s — recording as blocked with unknown policy", name, version))
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			}, nil
 		}
 		// if the error message contains the curation string key, then we can be sure it got blocked by Curation service.
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {
@@ -1009,6 +1123,13 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				blockingReason = BlockingReasonOnDemand
 			}
 			policies := nc.extractPoliciesFromMsg(respError)
+			// extractPoliciesFromMsg may return empty when BlockMessageKey is present
+			// but no {policy,...} groups were found in the message.  In that case
+			// keep the 403 signal but be honest: use BlockingReasonUnknown rather
+			// than "Policy violations" with every detail column blank.
+			if blockingReason == BlockingReasonPolicy && len(policies) == 0 {
+				blockingReason = BlockingReasonUnknown
+			}
 			return &PackageStatus{
 				PackageName:       name,
 				PackageVersion:    version,
@@ -1066,7 +1187,8 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 
 func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
-	case techutils.Npm:
+	case techutils.Npm, techutils.Yarn:
+		// Yarn packages use npm:// node IDs and the same Artifactory npm API endpoint.
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
 	case techutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
@@ -1251,6 +1373,12 @@ func getNpmNameScopeAndVersion(id, artiUrl, repo, tech string) (downloadUrl []st
 	if len(nameVersion) > 1 {
 		version = nameVersion[1]
 	}
+	// Skip local workspace members — they have no remote artifact.
+	// Yarn V1: version ends in "-use.local". Yarn V2+: name ends with a
+	// 6-char hex hash and version is "0.0.0" (e.g. "admin-ui-428bae:0.0.0").
+	if strings.HasSuffix(version, "-use.local") || isYarnBerryWorkspaceMember(name, version) {
+		return nil, name, "", version
+	}
 	scopeSplit := strings.Split(name, "/")
 	if len(scopeSplit) > 1 {
 		scope = scopeSplit[0]
@@ -1267,6 +1395,28 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
+}
+
+// isYarnBerryWorkspaceMember reports whether a graph node is a Yarn V2/V3
+// workspace member. Yarn Berry appends a 6-char lowercase hex hash to the
+// package name (e.g. "admin-ui-428bae") and sets their version to "0.0.0".
+func isYarnBerryWorkspaceMember(name, version string) bool {
+	if version != "0.0.0" {
+		return false
+	}
+	if len(name) < 8 {
+		return false
+	}
+	suffix := name[len(name)-7:]
+	if suffix[0] != '-' {
+		return false
+	}
+	for _, c := range suffix[1:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
