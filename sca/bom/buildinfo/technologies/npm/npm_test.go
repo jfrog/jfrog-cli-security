@@ -270,10 +270,14 @@ func TestNpmConfigGetRegistryFromWorkspacePackage(t *testing.T) {
 	assert.NoError(t, os.MkdirAll(workspaceDir, 0o755))
 	assert.NoError(t, os.WriteFile(filepath.Join(rootDir, "package.json"), []byte(`{"private":true,"workspaces":["containers/backend"]}`), 0o644))
 	assert.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name":"backend","version":"1.0.0"}`), 0o644))
-
+	// This should work because we are in a workspace package and workspaces are disabled
 	registryData, _, err := bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, npmConfigGetArgs("registry", true), &biutils.NullLog{})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, strings.TrimSpace(string(registryData)))
+	// This should fail because we are in a workspace package and workspaces are disabled
+	_, _, err = bibuildutils.RunNpmCmd(npmExecPath, workspaceDir, []string{"config", "get", "registry"}, &biutils.NullLog{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ENOWORKSPACES")
 }
 
 func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
