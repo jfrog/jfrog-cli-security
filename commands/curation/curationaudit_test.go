@@ -1845,7 +1845,7 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 // =============================================================================
 
 func Test_getPythonNameVersion(t *testing.T) {
-	const exampleUrl = "http://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
+	const exampleUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
 
 	tests := []struct {
 		name             string

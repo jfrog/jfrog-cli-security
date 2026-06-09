@@ -182,7 +182,6 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 		technologies.LogExecutableVersion(string(pythonTool))
 	}
 	if technology == techutils.Poetry {
-		log.Debug(fmt.Sprintf("Poetry: dependency tree built — %d nodes in graph, %d direct dependencies", len(dependenciesGraph), len(directDependencies)))
 		graphKeyByCanonicalName := make(map[string]string, len(dependenciesGraph))
 		for k := range dependenciesGraph {
 			if name, _, ok := strings.Cut(k, ":"); ok {
@@ -767,7 +766,7 @@ func validateMinimumPoetryVersion(minVersion string) (int, error) {
 	}
 	major, parseErr := strconv.Atoi(v[:dot])
 	if parseErr != nil {
-		return 0, nil
+		return 0, errorutils.CheckErrorf("could not parse Poetry version from %q: %s", v, parseErr.Error())
 	}
 	return major, nil
 }
