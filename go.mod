@@ -2,6 +2,8 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.26.3
 
+replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.10.0
+
 require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
 	github.com/beevik/etree v1.6.0
@@ -15,9 +17,9 @@ require (
 	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260528073225-e2d59f90c8c6
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260528061115-b41c87af0194
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260528115006-6ca9682a3255
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260603105750-3886c0f01286
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260601130310-8d52a530da18
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260603130552-af1dd449b994
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -152,8 +154,6 @@ require (
 )
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go master
-
-replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v0.10.0
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
