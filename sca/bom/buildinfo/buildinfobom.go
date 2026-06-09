@@ -263,6 +263,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled,
 			UseWrapper:              params.UseWrapper,
 			IsCurationCmd:           params.IsCurationCmd,
+			MvnIncludePluginDeps:    params.MvnIncludePluginDeps,
 			CurationCacheFolder:     curationCacheFolder,
 			UseIncludedBuilds:       params.UseIncludedBuilds,
 		}, tech)
