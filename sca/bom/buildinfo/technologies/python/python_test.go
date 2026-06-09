@@ -705,21 +705,21 @@ func TestExtractPoetrySourceNames(t *testing.T) {
 	})
 	t.Run("wrong type returns nil", func(t *testing.T) {
 		assert.Nil(t, extractPoetrySourceNames("not-an-array"))
-		assert.Nil(t, extractPoetrySourceNames(map[string]interface{}{"name": "x"}))
+		assert.Nil(t, extractPoetrySourceNames(map[string]any{"name": "x"}))
 	})
 	t.Run("entries without name are skipped", func(t *testing.T) {
-		got := extractPoetrySourceNames([]interface{}{
-			map[string]interface{}{"url": "https://x"},
-			map[string]interface{}{"name": "named", "url": "https://y"},
-			map[string]interface{}{"name": "   ", "url": "https://z"},
+		got := extractPoetrySourceNames([]any{
+			map[string]any{"url": "https://x"},
+			map[string]any{"name": "named", "url": "https://y"},
+			map[string]any{"name": "   ", "url": "https://z"},
 		})
 		assert.Equal(t, []string{"named"}, got)
 	})
 	t.Run("duplicate names are deduped, order preserved", func(t *testing.T) {
-		got := extractPoetrySourceNames([]interface{}{
-			map[string]interface{}{"name": "a", "url": "https://1"},
-			map[string]interface{}{"name": "b", "url": "https://2"},
-			map[string]interface{}{"name": "a", "url": "https://3"},
+		got := extractPoetrySourceNames([]any{
+			map[string]any{"name": "a", "url": "https://1"},
+			map[string]any{"name": "b", "url": "https://2"},
+			map[string]any{"name": "a", "url": "https://3"},
 		})
 		assert.Equal(t, []string{"a", "b"}, got)
 	})
