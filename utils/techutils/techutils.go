@@ -174,7 +174,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
-		exclude:                    []string{"pnpm-lock.yaml", ".yarnrc.yml", "yarn.lock", ".yarn"},
+		exclude:                    []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
@@ -185,7 +185,7 @@ var technologiesData = map[Technology]TechData{
 	Pnpm: {
 		packageType:                "npm",
 		xrayPackageType:            "npm",
-		indicators:                 []string{"pnpm-lock.yaml"},
+		indicators:                 []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
@@ -195,7 +195,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
-		exclude:                []string{"pnpm-lock.yaml"},
+		exclude:                []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
 		projectType:            project.Yarn,
@@ -574,7 +574,7 @@ func getDirChildren(dir string, dirsList []string) (children []string) {
 //     wd/wd2: [tech1]
 func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors map[Technology][]string) (workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, err error) {
 	workingDirectoryToIndicatorsSet := make(map[string]*datastructures.Set[string])
-	excludedTechAtWorkingDir = make(map[string][]Technology)
+	excludedTechAtWorkingDirSet := make(map[string]*datastructures.Set[Technology])
 	for _, path := range files {
 		directory := filepath.Dir(path)
 
@@ -594,13 +594,20 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 			}
 			// Check if the working directory contains a file/directory with a name that ends with an excluded suffix
 			if isExclude(path, techData) {
-				excludedTechAtWorkingDir[directory] = append(excludedTechAtWorkingDir[directory], tech)
+				if _, exist := excludedTechAtWorkingDirSet[directory]; !exist {
+					excludedTechAtWorkingDirSet[directory] = datastructures.MakeSet[Technology]()
+				}
+				excludedTechAtWorkingDirSet[directory].Add(tech)
 			}
 		}
 	}
 	workingDirectoryToIndicators = make(map[string][]string)
 	for wd, indicators := range workingDirectoryToIndicatorsSet {
 		workingDirectoryToIndicators[wd] = indicators.ToSlice()
+	}
+	excludedTechAtWorkingDir = make(map[string][]Technology)
+	for wd, excluded := range excludedTechAtWorkingDirSet {
+		excludedTechAtWorkingDir[wd] = excluded.ToSlice()
 	}
 	return
 }

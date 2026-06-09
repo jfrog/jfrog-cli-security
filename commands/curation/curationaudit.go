@@ -39,7 +39,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
-	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	npmtech  "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -91,6 +92,7 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Yarn: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Pnpm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
@@ -392,8 +394,52 @@ func getPolicyAndConditionId(policy, condition string) string {
 	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
+// promotePnpmWorkspaceMember replaces "npm" with "pnpm" in the detected technologies
+// list when the current directory is a pnpm workspace member — it has no pnpm marker
+// itself, but an ancestor directory contains pnpm-workspace.yaml or pnpm-lock.yaml.
+// This lets `jf ca --working-dirs=<member>` audit the member as part of its pnpm
+// workspace, consistently with the lockfile resolution which also walks up to the root.
+func promotePnpmWorkspaceMember(techs []string) []string {
+	hasPnpm, hasNpm := false, false
+	for _, t := range techs {
+		switch t {
+		case techutils.Pnpm.String():
+			hasPnpm = true
+		case techutils.Npm.String():
+			hasNpm = true
+		}
+	}
+	if hasPnpm || !hasNpm {
+		return techs
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return techs
+	}
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return techs
+		}
+		dir = parent
+		for _, indicator := range []string{"pnpm-workspace.yaml", "pnpm-lock.yaml"} {
+			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
+				log.Debug(fmt.Sprintf("Detected pnpm workspace root at %s via %s; promoting current directory from npm to pnpm.", dir, indicator))
+				promoted := make([]string, 0, len(techs))
+				for _, t := range techs {
+					if t == techutils.Npm.String() {
+						t = techutils.Pnpm.String()
+					}
+					promoted = append(promoted, t)
+				}
+				return promoted
+			}
+		}
+	}
+}
+
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
-	techs := techutils.DetectedTechnologiesListForCurationAudit()
+	techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 	if ca.DockerImageName() != "" {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
@@ -519,6 +565,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
 		// Yarn: always refresh yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 		YarnOverwriteYarnLock: true,
+		// Pnpm params
+		MaxTreeDepth: ca.MaxTreeDepth(),
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
@@ -529,7 +577,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	// --run-native is only supported for npm today; reject it early for all other techs.
+	// --run-native is only meaningful for npm/pnpm (.npmrc-based); reject it early for other techs.
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
 	}
@@ -537,10 +585,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
-	// When --run-native is set for npm, the Artifactory details are already populated from .npmrc.
-	// Skip the npm.yaml config file lookup to avoid requiring 'jf npm-config'.
-	if ca.RunNative() && tech == techutils.Npm {
+	// When --run-native is set for npm, or for pnpm (always .npmrc-based), the Artifactory
+	// details are already populated from .npmrc. Skip the yaml config file lookup.
+	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
 		params.IgnoreConfigFile = true
+	}
+	// Pnpm always resolves natively from .npmrc — --run-native is redundant and has no effect.
+	if ca.RunNative() && tech == techutils.Pnpm {
+		log.Warn("--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -846,6 +898,12 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrc()
 	}
 
+	// Pnpm always reads from .npmrc — there is no 'jf pnpm-config' command.
+	// pnpm shares the npm registry protocol, so the same .npmrc key/URL format applies.
+	if tech == techutils.Pnpm {
+		return ca.setRepoFromNpmrcForPnpm()
+	}
+
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
 		// npm and yarn share the same Artifactory npm API for curation, so their
@@ -873,8 +931,9 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 }
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
-// native-config semantics. Only npm is supported today; extend the allow-list
-// below when a new tech adds the matching native-config flow.
+// native-config semantics. npm uses it to read Artifactory details from .npmrc;
+// pnpm accepts it as a no-op (it always resolves from .npmrc). Extend the
+// allow-list below when a new tech adds the matching native-config flow.
 func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	if !runNative {
 		return nil
@@ -883,6 +942,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	// both 'jf <tech>' and 'jf ca'.
 	supported := map[techutils.Technology]struct{}{
 		techutils.Npm: {},
+		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
+		// rather than an error (a warning is emitted in auditTree).
+		techutils.Pnpm: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
@@ -924,6 +986,48 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromNpmrcForPnpm reads Artifactory connection details from the project's .npmrc
+// via the pnpm CLI. pnpm uses the same .npmrc format and registry protocol as npm, so the
+// URL parsing logic is identical. This is always called for pnpm — there is no 'jf pnpm-config'.
+//
+// Auth priority:
+//  1. Token from .npmrc — preferred, because it is scoped to the exact registry URL.
+//  2. Token from 'jf c' server config — used as fallback when .npmrc carries no token
+//     (e.g. user relies on a jf-managed credential store).
+func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
+	registryConfig, err := pnpmtech.GetNativePnpmRegistryConfig()
+	if err != nil {
+		log.Warn("Ensure the pnpm registry is configured in .npmrc (e.g. registry=https://<host>/artifactory/api/npm/<repo>/)")
+		return fmt.Errorf("pnpm: failed to read Artifactory details from .npmrc: %w", err)
+	}
+
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
+		// .npmrc has an auth token that matches the registry — use it directly.
+		log.Debug("pnpm: using auth token from .npmrc")
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			AccessToken:    registryConfig.AuthToken,
+		}
+	} else {
+		// No token in .npmrc — fall back to whatever 'jf c' has stored, overriding
+		// only the Artifactory URL so requests go to the correct registry.
+		log.Debug("pnpm: no token in .npmrc — using 'jf c' server credentials")
+		serverDetails, err = ca.ServerDetails()
+		if err != nil || serverDetails == nil {
+			return fmt.Errorf("pnpm: no auth token found in .npmrc and no 'jf c' server configured: %w", err)
+		}
+		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	log.Info(fmt.Sprintf("pnpm: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
@@ -1194,8 +1298,8 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 
 func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
-	case techutils.Npm, techutils.Yarn:
-		// Yarn packages use npm:// node IDs and the same Artifactory npm API endpoint.
+	case techutils.Npm, techutils.Yarn, techutils.Pnpm:
+		// Yarn and pnpm both use npm:// node IDs and the same Artifactory /api/npm/ endpoint as npm.
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
 	case techutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
