@@ -539,48 +539,6 @@ func TestBuildPoetryDownloadUrlsMapInputValidation(t *testing.T) {
 	})
 }
 
-// TestBuildPoetryDownloadUrlsMapIntegration is the end-to-end curation test for
-// Poetry against an actual fixture project
-func TestBuildPoetryDownloadUrlsMapIntegration(t *testing.T) {
-	const repo = "pypi-curation"
-	// Chdir into a copy of the committed fixture project; buildPoetryDownloadUrlsMap
-	// reads poetry.lock from the working directory.
-	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "poetry", "poetry-curation-project"))
-	defer cleanUp()
-
-	server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/simple/urllib3/"):
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<html><body>
-<a href="../../packages/aa/bb/urllib3-1.26.20-py2.py3-none-any.whl#sha256=0ed14c">urllib3-1.26.20-py2.py3-none-any.whl</a>
-<a href="../../packages/aa/bb/urllib3-1.26.20.tar.gz#sha256=40c2dc">urllib3-1.26.20.tar.gz</a>
-</body></html>`))
-		case strings.HasSuffix(r.URL.Path, "/simple/six/"):
-			// Simulate a curation block at the simple-index level.
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-	defer server.Close()
-
-	urls, err := buildPoetryDownloadUrlsMap(serverDetails, repo)
-	require.NoError(t, err)
-
-	// urllib3 resolves to one of its locked files, as an absolute URL on the mock server.
-	urllib3URL, ok := urls[PythonPackageTypeIdentifier+"urllib3:1.26.20"]
-	require.True(t, ok, "urllib3 should resolve a download URL")
-	assert.True(t, strings.HasPrefix(urllib3URL, server.URL), "resolved URL must be absolute against the mock server, got %q", urllib3URL)
-	assert.Contains(t, urllib3URL, "/packages/aa/bb/urllib3-1.26.20", "resolved URL must point at the matched locked file")
-	assert.NotContains(t, urllib3URL, "#", "fragment must be stripped from the resolved URL")
-
-	// six was blocked (403): it must be absent from the map (not HEAD-checked),
-	// and its absence must not fail the whole resolution.
-	_, ok = urls[PythonPackageTypeIdentifier+"six:1.17.0"]
-	assert.False(t, ok, "curation-blocked package (403) must not appear in the resolved map")
-}
-
 func TestReadPoetryLockIfExists(t *testing.T) {
 	t.Run("returns error when poetry.lock is missing", func(t *testing.T) {
 		t.Chdir(t.TempDir())
