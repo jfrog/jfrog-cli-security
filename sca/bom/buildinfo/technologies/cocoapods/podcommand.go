@@ -22,15 +22,23 @@ type PodCommand struct {
 	executablePath   string
 }
 
-func getPodVersionAndExecPath() (*version.Version, string, error) {
+func getPodExecPath() (string, error) {
 	podExecPath, err := exec.LookPath("pod")
 	if err != nil {
-		return nil, "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
+		return "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
+	}
+	return podExecPath, nil
+}
+
+func getPodVersionAndExecPath() (*version.Version, string, error) {
+	podExecPath, err := getPodExecPath()
+	if err != nil {
+		return nil, "", err
 	}
 	log.Debug("Using pod executable:", podExecPath)
 	versionData, err := runPodCmd(podExecPath, "", []string{"--version"})
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("failed to get pod version: %w", err)
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), podExecPath, nil
 }
