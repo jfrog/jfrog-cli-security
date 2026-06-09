@@ -297,13 +297,13 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 	g := new(errgroup.Group)
 	g.SetLimit(poetryDownloadUrlWorkers)
 	for _, pkg := range packages {
-		pkg := pkg
 		if pkg.Name == "" || pkg.Version == "" || len(pkg.Files) == 0 {
 			skipped++
 			continue
 		}
 		g.Go(func() error {
-			downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, &httpClientDetails, artiUrl, repository, pkg)
+			localDetails := httpClientDetails.Clone()
+			downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, localDetails, artiUrl, repository, pkg)
 			if lookupErr != nil {
 				log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
 				return nil
@@ -318,7 +318,15 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 	}
 	_ = g.Wait()
 
-	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", len(urls), skipped))
+	expected := len(packages) - skipped
+	resolved := len(urls)
+	if resolved < expected {
+		log.Warn(fmt.Sprintf(
+			"Poetry: resolved download URLs for %d/%d packages — %d package(s) will not be HEAD-checked by curation. "+
+				"Re-run with JFROG_CLI_LOG_LEVEL=DEBUG to see per-package resolution errors.",
+			resolved, expected, expected-resolved))
+	}
+	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", resolved, skipped))
 	return urls, nil
 }
 
@@ -401,7 +409,7 @@ func readPoetryLockIfExists() ([]poetryLockPackage, error) {
 		return nil, errorutils.CheckError(err)
 	}
 	if !exists {
-		return nil, errorutils.CheckErrorf("process failed, %s wasn't found, can't process poetry curation command", poetryLockFile)
+		return nil, errorutils.CheckErrorf("%s not found — run 'poetry lock' to generate it before running 'jf ca'", poetryLockFile)
 	}
 	content, err := os.ReadFile(poetryLockFile)
 	if err != nil {
@@ -712,15 +720,15 @@ func stripPoetrySourceBlocks(content string) string {
 // viper's view of `[[tool.poetry.source]]`. Entries without a name, or with
 // duplicate names, are skipped. Returns nil when the key is missing or has
 // an unexpected shape so callers can fall back to a default.
-func extractPoetrySourceNames(v interface{}) []string {
-	arr, ok := v.([]interface{})
+func extractPoetrySourceNames(v any) []string {
+	arr, ok := v.([]any)
 	if !ok {
 		return nil
 	}
 	names := make([]string, 0, len(arr))
 	seen := map[string]struct{}{}
 	for _, e := range arr {
-		m, ok := e.(map[string]interface{})
+		m, ok := e.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -741,7 +749,7 @@ func extractPoetrySourceNames(v interface{}) []string {
 func validateMinimumPoetryVersion(minVersion string) (int, error) {
 	out, err := executeCommand("poetry", "--version")
 	if err != nil {
-		log.Debug(fmt.Sprintf("Poetry is not installed or not on PATH: %s", err.Error()))
+		log.Debug(fmt.Sprintf("Poetry is not installed or not on PATH: %v", err))
 		return 0, errorutils.CheckErrorf("JFrog CLI poetry curation requires Poetry %s or higher to be installed.", minVersion)
 	}
 	v := parsePoetryVersion(out)
