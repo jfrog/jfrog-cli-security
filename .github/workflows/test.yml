@@ -58,16 +58,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Download Go modules
-        run: go mod download
-        env:
-          GOPROXY: https://proxy.golang.org,direct
-
       - name: Run Go vet
         run: go vet -v ./...
-        env:
-          GOPROXY: https://proxy.golang.org,direct
-
   Unit_Tests:
     name: "[${{ matrix.os }}] Unit Tests"
     needs: Pretest
@@ -96,8 +88,6 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
   Audit_Command_Integration_Tests:
@@ -150,8 +140,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
 
   Artifactory_Integration_Tests:
@@ -180,8 +168,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
     
   Xray_Commands_Integration_Tests:
@@ -208,8 +194,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray --ci.runId=${{ runner.os }}-sec-test
 
   Xsc_Integration_Tests:
@@ -236,8 +220,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --ci.runId=${{ runner.os }}-sec-test
   
   Binary_Scan_Command_Integration_Tests:
@@ -266,8 +248,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --ci.runId=${{ runner.os }}-sec-test
 
   Docker_Scan_Commands_Integration_Tests:
@@ -296,8 +276,6 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
 
   Other_Commands_Integration_Tests:
@@ -326,9 +304,7 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
 
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
@@ -356,6 +332,4 @@ jobs:
 
       # Test
       - name: Run tests
-        env:
-          GOPROXY: https://proxy.golang.org,direct
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
