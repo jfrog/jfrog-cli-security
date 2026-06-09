@@ -104,12 +104,12 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 	}
 	registryUrl := strings.TrimSpace(string(registryData))
 
-	rtBaseUrl, repoName, err := parseArtifactoryNpmRegistryUrl(registryUrl)
+	rtBaseUrl, repoName, err := ParseArtifactoryNpmRegistryUrl(registryUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	authKey, err := buildNpmAuthTokenKey(registryUrl)
+	authKey, err := BuildNpmAuthTokenKey(registryUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func npmConfigGetArgs(key string, disableWorkspaces bool) []string {
 	return args
 }
 
-// buildNpmAuthTokenKey returns the npm config key used to look up the auth token for a
+// BuildNpmAuthTokenKey returns the npm config key used to look up the auth token for a
 // given registry URL — the registry URL with its scheme stripped and ":_authToken" appended,
 // e.g. https://myrt.jfrog.io/artifactory/api/npm/my-repo/ → //myrt.jfrog.io/artifactory/api/npm/my-repo/:_authToken
 //
@@ -143,7 +143,8 @@ func npmConfigGetArgs(key string, disableWorkspaces bool) []string {
 // the "://" separator, so callers see an actionable message instead of a runtime panic.
 // The original URL is preserved verbatim (including any trailing slash) so the lookup
 // matches exactly what npm stored in .npmrc.
-func buildNpmAuthTokenKey(registryUrl string) (string, error) {
+// Exported so that other package-manager clients (e.g. pnpm) can reuse the same logic.
+func BuildNpmAuthTokenKey(registryUrl string) (string, error) {
 	_, schemeRelative, ok := strings.Cut(registryUrl, "://")
 	if !ok {
 		return "", fmt.Errorf("npm registry %q is malformed: expected a scheme-prefixed URL (e.g. https://...)", registryUrl)
@@ -154,12 +155,14 @@ func buildNpmAuthTokenKey(registryUrl string) (string, error) {
 	return "//" + schemeRelative + npmAuthTokenSuffix, nil
 }
 
-// parseArtifactoryNpmRegistryUrl extracts the Artifactory base URL and repository name from
+// ParseArtifactoryNpmRegistryUrl extracts the Artifactory base URL and repository name from
 // a registry URL containing "/api/npm/<repo>/".
 // Supports both standard URLs (https://<host>/artifactory/api/npm/<repo>/) and
 // reverse-proxy URLs where the "/artifactory" context root is stripped
 // (e.g. https://npm.company.com/api/npm/<repo>/).
-func parseArtifactoryNpmRegistryUrl(registryUrl string) (rtBaseUrl, repoName string, err error) {
+// Exported so that other package-manager clients (e.g. pnpm) can reuse the same
+// Artifactory URL parsing without duplicating logic.
+func ParseArtifactoryNpmRegistryUrl(registryUrl string) (rtBaseUrl, repoName string, err error) {
 	apiNpmIdx := strings.Index(registryUrl, artifactoryApiNpmPath)
 	if apiNpmIdx == -1 {
 		return "", "", fmt.Errorf("npm registry %q does not appear to be an Artifactory npm registry (expected %q in URL)", registryUrl, artifactoryApiNpmPath)

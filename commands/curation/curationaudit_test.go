@@ -1802,11 +1802,14 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 }
 
 // TestValidateRunNativeForTech checks that --run-native is accepted for npm and
-// rejected for all other techs with an error that names the offending tech.
+// pnpm (both .npmrc-based) and rejected for all other techs with an error that
+// names the offending tech.
 func TestValidateRunNativeForTech(t *testing.T) {
-	// Sanity: npm is the currently allow-listed tech. Both flag states pass.
+	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, false))
+	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, true))
+	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, false))
 
 	// The failing-test scenario from the bug report: yarn + --run-native
 	// must exit non-zero with a yarn-named error that points the user at
@@ -1838,7 +1841,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		techutils.Nuget,
 		techutils.Dotnet,
 		techutils.Conan,
-		techutils.Pnpm,
 		techutils.Cocoapods,
 		techutils.Swift,
 		techutils.Docker,
@@ -2035,5 +2037,98 @@ func changeDirForTest(t *testing.T, dir string) func() {
 		// Restore CWD even if the test fails partway, so the next
 		// subtest's GetProjectConfFilePath walk starts from a known dir.
 		require.NoError(t, os.Chdir(origCwd))
+	}
+}
+
+func TestPromotePnpmWorkspaceMember(t *testing.T) {
+	npm := "npm"
+	pnpm := "pnpm"
+	other := "maven"
+
+	tests := []struct {
+		name             string
+		techs            []string
+		ancestorFile     string // file to create in the ancestor dir ("" = none)
+		expectedHasPnpm  bool
+		expectedHasNpm   bool
+		expectNpmRemoved bool // npm was present in input and should be replaced by pnpm
+	}{
+		{
+			// pnpm already present: function returns early, npm is NOT replaced.
+			name:            "already has pnpm — no change",
+			techs:           []string{pnpm, npm},
+			expectedHasPnpm: true,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "no npm — no change",
+			techs:           []string{other},
+			expectedHasPnpm: false,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, no ancestor indicator — no promotion",
+			techs:           []string{npm},
+			ancestorFile:    "",
+			expectedHasPnpm: false,
+			expectedHasNpm:  true,
+		},
+		{
+			name:             "npm only, ancestor has pnpm-workspace.yaml — promote",
+			techs:            []string{npm},
+			ancestorFile:     "pnpm-workspace.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+		{
+			name:             "npm only, ancestor has pnpm-lock.yaml — promote",
+			techs:            []string{npm},
+			ancestorFile:     "pnpm-lock.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+		{
+			name:             "npm + other, ancestor has pnpm-workspace.yaml — npm promoted, other kept",
+			techs:            []string{npm, other},
+			ancestorFile:     "pnpm-workspace.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build a two-level temp dir: root/sub — we run from sub so the walk finds root.
+			root := t.TempDir()
+			sub := filepath.Join(root, "sub")
+			require.NoError(t, os.MkdirAll(sub, 0o755))
+
+			if tc.ancestorFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, tc.ancestorFile), []byte{}, 0o644))
+			}
+
+			t.Chdir(sub)
+
+			result := promotePnpmWorkspaceMember(tc.techs)
+
+			hasPnpm, hasNpm := false, false
+			for _, tech := range result {
+				switch tech {
+				case pnpm:
+					hasPnpm = true
+				case npm:
+					hasNpm = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasPnpm, hasPnpm, "pnpm presence mismatch")
+			assert.Equal(t, tc.expectedHasNpm, hasNpm, "npm presence mismatch")
+			if tc.expectNpmRemoved {
+				assert.False(t, hasNpm, "npm should have been replaced by pnpm")
+				assert.True(t, hasPnpm, "pnpm should be present after promotion")
+			}
+		})
 	}
 }
