@@ -49,8 +49,9 @@ type BuildInfoBomGeneratorParams struct {
 	Args               []string
 	InstallCommandArgs []string
 	// Curation params
-	IsCurationCmd    bool
-	ParallelRequests int
+	IsCurationCmd        bool
+	MvnIncludePluginDeps bool
+	ParallelRequests     int
 	// OutputFormat is the --format flag value forwarded from the curation command.
 	// The zero value is treated as outFormat.Table by all renderers.
 	// Set by curation commands only; generic audit/scan commands leave this unset.
