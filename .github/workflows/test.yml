@@ -30,7 +30,6 @@ env:
   JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
   # Repository variable ENABLE_FASTCI_BOOST (default: true). Set to 'false' to skip jfrog/boost@v0.
   ENABLE_FASTCI_BOOST: ${{ vars.ENABLE_FASTCI_BOOST != 'false' }}
-
 jobs:
   Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
@@ -60,6 +59,7 @@ jobs:
 
       - name: Run Go vet
         run: go vet -v ./...
+
   Unit_Tests:
     name: "[${{ matrix.os }}] Unit Tests"
     needs: Pretest
@@ -305,7 +305,6 @@ jobs:
       # Test
       - name: Run tests
         run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
-
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
     needs: Pretest
