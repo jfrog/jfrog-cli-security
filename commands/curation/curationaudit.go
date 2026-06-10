@@ -572,7 +572,6 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		IgnoreConfigFile:       ca.IgnoreConfigFile(),
 		InsecureTls:            ca.InsecureTls(),
 		// Install params
-		SkipAutoInstall:    ca.SkipAutoInstall(),
 		InstallCommandName: ca.InstallCommandName(),
 		Args:               ca.Args(),
 		InstallCommandArgs: ca.InstallCommandArgs(),

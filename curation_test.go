@@ -136,8 +136,6 @@ func TestDockerCurationAudit(t *testing.T) {
 
 func TestPoetryCurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
-	
-	t.Setenv("JFROG_CLI_CURATION", "true")
 	const repo = "pypi-curation"
 	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-curation-project"))
 	defer cleanUp()
@@ -145,24 +143,19 @@ func TestPoetryCurationAudit(t *testing.T) {
 	blockedURL := "/api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl"
 	expectedRequest := map[string]bool{blockedURL: false}
 	requestToFail := map[string]bool{blockedURL: false}
-	serverMock, config := poetryCurationServer(t, repo, expectedRequest, requestToFail)
+	serverMock, config := curationServer(t, expectedRequest, requestToFail, map[string]string{
+		"urllib3": `<a href="../../packages/aa/urllib3-1.26.20-py2.py3-none-any.whl">urllib3-1.26.20-py2.py3-none-any.whl</a>`,
+	})
 	defer serverMock.Close()
 
-	cleanUpJfrogHome, err := coreTests.SetJfrogHome()
-	assert.NoError(t, err)
-	defer cleanUpJfrogHome()
+	cleanUpHome := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUpHome()
 
 	config.User = "admin"
 	config.Password = "password"
 	config.ServerId = "test"
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
-
-	// Create the poetry resolver config (.jfrog/projects/poetry.yaml).
-	assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, project.Poetry,
-		commonCommands.WithResolverServerId(config.ServerId),
-		commonCommands.WithResolverRepo(repo),
-	))
 
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
@@ -172,7 +165,7 @@ func TestPoetryCurationAudit(t *testing.T) {
 	var got []curation.PackageStatus
 	bracketIndex := strings.Index(output, "[")
 	require.Less(t, 0, bracketIndex, "Unexpected Curation output with missing '['")
-	err = json.Unmarshal([]byte(output[bracketIndex:]), &got)
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &got)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResp, got)
 	for k, v := range expectedRequest {
@@ -200,11 +193,11 @@ func getPoetryCurationExpectedResponse(config *config.ServerDetails, repo string
 	}
 }
 
-func poetryCurationServer(t *testing.T, repo string, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, simpleIndex ...map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
-	
-	simpleIndex := map[string]string{
-		"urllib3": `<a href="../../packages/aa/urllib3-1.26.20-py2.py3-none-any.whl">urllib3-1.26.20-py2.py3-none-any.whl</a>`,
+	var index map[string]string
+	if len(simpleIndex) > 0 {
+		index = simpleIndex[0]
 	}
 	serverMock, config, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -220,50 +213,22 @@ func poetryCurationServer(t *testing.T, repo string, expectedRequest map[string]
 		}
 		if r.Method == http.MethodGet {
 			if r.RequestURI == "/api/system/version" {
-				_, err := w.Write([]byte(`{"version": "7.0.0"}`))
+				_, err := w.Write([]byte(`{"version": "7.82.0"}`))
 				require.NoError(t, err)
 				return
 			}
-			for name, href := range simpleIndex {
+			if r.RequestURI == "/api/v1/system/version" {
+				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+				require.NoError(t, err)
+				return
+			}
+			for name, href := range index {
 				if strings.HasSuffix(r.URL.Path, "/simple/"+name+"/") {
 					_, err := w.Write([]byte("<html><body>" + href + "</body></html>"))
 					require.NoError(t, err)
 					return
 				}
 			}
-			if _, exist := requestToFail[r.RequestURI]; exist {
-				w.WriteHeader(http.StatusForbidden)
-				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
-					"\"message\": \"Package download was blocked by JFrog Packages " +
-					"Curation service due to the following policies violated {pol1, cond1, explanation, recommendation}, {pol2, cond2, explanation2, recommendation2}\"\n        }\n    ]\n}"))
-				require.NoError(t, err)
-			}
-		}
-	})
-	return serverMock, config
-}
-
-func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
-	mapLockReadWrite := sync.Mutex{}
-	serverMock, config, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead {
-			mapLockReadWrite.Lock()
-			if _, exist := expectedRequest[r.RequestURI]; exist {
-				expectedRequest[r.RequestURI] = true
-			}
-			mapLockReadWrite.Unlock()
-			if _, exist := requestToFail[r.RequestURI]; exist {
-				w.WriteHeader(http.StatusForbidden)
-			}
-		}
-		if r.Method == http.MethodGet {
-			if r.RequestURI == "/api/system/version" {
-				_, err := w.Write([]byte(`{"version": "7.0.0"}`))
-				require.NoError(t, err)
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
