@@ -682,8 +682,8 @@ func setCurationSourceInPyproject(repoName, repoUrl string, majorVersion int) er
 	setDefault := majorVersion < 2
 	for i, n := range names {
 		buf.WriteString("\n\n[[tool.poetry.source]]\n")
-		buf.WriteString(fmt.Sprintf("name = %q\n", n))
-		buf.WriteString(fmt.Sprintf("url = %q\n", repoUrl))
+		fmt.Fprintf(&buf, "name = %q\n", n)
+		fmt.Fprintf(&buf, "url = %q\n", repoUrl)
 		if setDefault && i == 0 {
 			buf.WriteString("default = true\n")
 		}

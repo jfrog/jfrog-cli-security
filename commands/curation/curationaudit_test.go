@@ -1914,26 +1914,25 @@ func Test_getPythonNameVersion(t *testing.T) {
 	}
 }
 
-// TestGetBlockedPackageDetails_403UnparsableBodyReturnsError verifies that
-// getBlockedPackageDetails returns an error (and no PackageStatus) when a 403
+// TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked verifies that
+// getBlockedPackageDetails returns a blocked PackageStatus (no error) when a 403
 // response body cannot be resolved to a known curation block reason:
 // (1) the body is not valid JSON (e.g. an HTML error page), or
 // (2) the body is valid JSON but the Errors array is empty.
-func TestGetBlockedPackageDetails_403UnparsableBodyReturnsError(t *testing.T) {
+// In both cases the 403 itself is treated as authoritative — the package is
+// recorded as blocked with an unknown policy rather than being dropped silently.
+func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) {
 	tests := []struct {
-		name           string
-		respBody       string
-		expectedErrMsg string
+		name     string
+		respBody string
 	}{
 		{
-			name:           "non-JSON body (HTML error page)",
-			respBody:       "<html><body><h1>403 Forbidden</h1></body></html>",
-			expectedErrMsg: "invalid character",
+			name:     "non-JSON body (HTML error page)",
+			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
 		},
 		{
-			name:           "JSON body with empty errors list",
-			respBody:       `{"errors":[]}`,
-			expectedErrMsg: "received 403 for unknown reason",
+			name:     "JSON body with empty errors list",
+			respBody: `{"errors":[]}`,
 		},
 	}
 
@@ -1965,9 +1964,12 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsError(t *testing.T) {
 
 			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
 
-			require.Error(t, err, "unparseable 403 body must surface as an error")
-			assert.Nil(t, got, "no PackageStatus should be returned when the block reason cannot be determined")
-			assert.Contains(t, err.Error(), tt.expectedErrMsg)
+			require.NoError(t, err, "unparseable 403 body should not surface as an error")
+			require.NotNil(t, got, "a blocked PackageStatus must be returned when the 403 block reason is unknown")
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)
+			assert.Equal(t, pkgName, got.PackageName)
+			assert.Equal(t, pkgVersion, got.PackageVersion)
 		})
 	}
 }
