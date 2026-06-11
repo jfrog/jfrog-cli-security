@@ -1964,7 +1964,7 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) 
 
 			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
 
-			require.NoError(t, err, "unparseable 403 body should not surface as an error")
+			require.NoError(t, err, "unparsable 403 body should not surface as an error")
 			require.NotNil(t, got, "a blocked PackageStatus must be returned when the 403 block reason is unknown")
 			assert.Equal(t, blocked, got.Action)
 			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)

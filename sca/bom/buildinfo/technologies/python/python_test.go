@@ -866,7 +866,7 @@ func TestParsePoetryVersion(t *testing.T) {
 	}
 }
 
-func TestValidateMinimumPoetryVersionUnparseableMajorErrors(t *testing.T) {
+func TestValidateMinimumPoetryVersionUnparsableMajorErrors(t *testing.T) {
 	fakeDir := t.TempDir()
 	fakePoetry := filepath.Join(fakeDir, "poetry")
 	require.NoError(t, os.WriteFile(fakePoetry,
@@ -874,7 +874,7 @@ func TestValidateMinimumPoetryVersionUnparseableMajorErrors(t *testing.T) {
 	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	major, err := validateMinimumPoetryVersion(CurationPoetryMinimumVersion)
-	require.Error(t, err, "unparseable major version must return an error, not (0, nil)")
+	require.Error(t, err, "unparsable major version must return an error, not (0, nil)")
 	assert.Equal(t, 0, major)
 }
 
