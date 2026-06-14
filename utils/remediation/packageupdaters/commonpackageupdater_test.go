@@ -970,11 +970,12 @@ func copyDir(src, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(dstPath, info.Mode())
 		}
+		//#nosec G122 -- test helper; path comes from filepath.WalkDir over a known test directory.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dstPath, data, info.Mode())
+		return os.WriteFile(dstPath, data, info.Mode()) //#nosec G703 -- test helper writing to a known temp directory.
 	})
 }
 
