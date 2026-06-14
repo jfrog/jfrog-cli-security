@@ -109,29 +109,29 @@ func (gpu *GoPackageUpdater) buildGoCommandEnv() []string {
 	return append(os.Environ(), goFlagModEditEnv, goWorkOffEnv)
 }
 
-func (gpu *GoPackageUpdater) BackupModuleFiles(GoModPath string) (*GoModuleBackup, error) {
+func (gpu *GoPackageUpdater) BackupModuleFiles(goModPath string) (*GoModuleBackup, error) {
 	//#nosec G304 -- go.mod path from scan workflow.
-	GoModContent, err := os.ReadFile(GoModPath)
+	goModContent, err := os.ReadFile(goModPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read '%s': %w", GoModPath, err)
+		return nil, fmt.Errorf("failed to read '%s': %w", goModPath, err)
 	}
 
-	descriptorDir := filepath.Dir(GoModPath)
-	GoSumPath := filepath.Join(descriptorDir, GoSumFileName)
+	descriptorDir := filepath.Dir(goModPath)
+	goSumPath := filepath.Join(descriptorDir, GoSumFileName)
 	//#nosec G304 -- go.sum adjacent to go.mod from same scan workflow.
-	GoSumContent, err := os.ReadFile(GoSumPath)
+	goSumContent, err := os.ReadFile(goSumPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read '%s': %w", GoSumPath, err)
+		return nil, fmt.Errorf("failed to read '%s': %w", goSumPath, err)
 	}
 
 	backup := &GoModuleBackup{
-		GoModPath:    GoModPath,
-		GoModContent: make([]byte, len(GoModContent)),
-		GoSumPath:    GoSumPath,
-		GoSumContent: make([]byte, len(GoSumContent)),
+		GoModPath:    goModPath,
+		GoModContent: make([]byte, len(goModContent)),
+		GoSumPath:    goSumPath,
+		GoSumContent: make([]byte, len(goSumContent)),
 	}
-	copy(backup.GoModContent, GoModContent)
-	copy(backup.GoSumContent, GoSumContent)
+	copy(backup.GoModContent, goModContent)
+	copy(backup.GoSumContent, goSumContent)
 
 	return backup, nil
 }
