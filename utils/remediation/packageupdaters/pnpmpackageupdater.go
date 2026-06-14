@@ -20,14 +20,10 @@ const (
 	PnpmFrozenLockfileEnv    = "PNPM_FROZEN_LOCKFILE"
 )
 
-// PnpmLockfileInstallEnvOverrides returns environment variable overrides for pnpm install
-// when refreshing pnpm-lock.yaml after editing package.json.
-func PnpmLockfileInstallEnvOverrides() map[string]string {
-	return map[string]string{
-		PnpmFrozenLockfileEnv: "false",
-		configLevelEnv:        "error",
-		ciEnv:                 "true",
-	}
+var PnpmLockfileInstallEnvOverrides = map[string]string{
+	PnpmFrozenLockfileEnv: "false",
+	ConfigLevelEnv:        "error",
+	CiEnv:                 "true",
 }
 
 func PnpmFilterCoordinateStyleDescriptorPaths(paths []string) []string {
@@ -59,7 +55,7 @@ func (pnpm *PnpmPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 }
 
 func (pnpm *PnpmPackageUpdater) updateDirectDependency(fixDetails *FixDetails) error {
-	descriptorPaths := pnpm.CollectVulnerabilityDescriptorPaths(fixDetails, []string{nodePackageJSONFileName}, []string{nodeModulesDirName})
+	descriptorPaths := pnpm.CollectVulnerabilityDescriptorPaths(fixDetails, []string{NodePackageJSONFileName}, []string{NodeModulesDirName})
 	descriptorPaths = PnpmFilterCoordinateStyleDescriptorPaths(descriptorPaths)
 	if len(descriptorPaths) == 0 {
 		return fmt.Errorf("no descriptor evidence was found for package %s", fixDetails.ImpactedDependencyName)
@@ -143,7 +139,7 @@ func (pnpm *PnpmPackageUpdater) runPnpmInstallLockOnly() error {
 
 	//#nosec G204 -- False positive - the subprocess only runs after the user's approval
 	cmd := exec.CommandContext(ctx, "pnpm", args...)
-	cmd.Env = EnvWithCorepackIntegrityWorkaround(pnpm.BuildEnvWithOverrides(PnpmLockfileInstallEnvOverrides()))
+	cmd.Env = EnvWithCorepackIntegrityWorkaround(pnpm.BuildEnvWithOverrides(PnpmLockfileInstallEnvOverrides))
 
 	output, err := cmd.CombinedOutput()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {

@@ -57,7 +57,7 @@ func TestPnpmCollectLeavesNpmParityThenPnpmFilterDropsCoordinates(t *testing.T) 
 func TestPnpmLockRegenerationEnv(t *testing.T) {
 	t.Parallel()
 	pnpm := &PnpmPackageUpdater{}
-	env := EnvWithCorepackIntegrityWorkaround(pnpm.BuildEnvWithOverrides(PnpmLockfileInstallEnvOverrides()))
+	env := EnvWithCorepackIntegrityWorkaround(pnpm.BuildEnvWithOverrides(PnpmLockfileInstallEnvOverrides))
 	envMap := make(map[string]string)
 	for _, e := range env {
 		parts := strings.SplitN(e, "=", 2)

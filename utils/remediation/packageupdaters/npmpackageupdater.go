@@ -13,16 +13,11 @@ import (
 )
 
 const (
-	// CiEnv is the environment variable for CI mode.
-	CiEnv = "CI"
-	// ConfigIgnoreScriptsEnv disables npm lifecycle scripts.
+	CiEnv                  = "CI"
 	ConfigIgnoreScriptsEnv = "NPM_CONFIG_IGNORE_SCRIPTS"
-	// ConfigAuditEnv disables npm audit output.
-	ConfigAuditEnv = "NPM_CONFIG_AUDIT"
-	// ConfigFundEnv disables npm fund output.
-	ConfigFundEnv = "NPM_CONFIG_FUND"
-	// ConfigLevelEnv sets the npm log level.
-	ConfigLevelEnv = "NPM_CONFIG_LOGLEVEL"
+	ConfigAuditEnv         = "NPM_CONFIG_AUDIT"
+	ConfigFundEnv          = "NPM_CONFIG_FUND"
+	ConfigLevelEnv         = "NPM_CONFIG_LOGLEVEL"
 
 	npmPackageLockOnlyFlag = "--package-lock-only"
 	npmIgnoreScriptsFlag   = "--ignore-scripts"
@@ -30,16 +25,10 @@ const (
 	npmLegacyPeerDepsFlag  = "--legacy-peer-deps"
 	npmNoFundFlag          = "--no-fund"
 
-	npmLockFileName = "package-lock.json"
-
+	npmLockFileName          = "package-lock.json"
 	npmEreresolveErrorPrefix = "ERESOLVE"
-
-	// Unexported aliases referenced by pnpmpackageupdater.go.
-	ciEnv          = CiEnv
-	configLevelEnv = ConfigLevelEnv
 )
 
-// NpmInstallEnvVars are the environment variable overrides used during npm install.
 var NpmInstallEnvVars = map[string]string{
 	ConfigIgnoreScriptsEnv: "true",
 	ConfigAuditEnv:         "false",
@@ -64,7 +53,7 @@ func (npm *NpmPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 }
 
 func (npm *NpmPackageUpdater) updateDirectDependency(fixDetails *FixDetails) error {
-	descriptorPaths := npm.CollectVulnerabilityDescriptorPaths(fixDetails, []string{nodePackageJSONFileName}, []string{nodeModulesDirName})
+	descriptorPaths := npm.CollectVulnerabilityDescriptorPaths(fixDetails, []string{NodePackageJSONFileName}, []string{NodeModulesDirName})
 	if len(descriptorPaths) == 0 {
 		return fmt.Errorf("no descriptor evidence was found for package %s", fixDetails.ImpactedDependencyName)
 	}
@@ -146,10 +135,7 @@ func (npm *NpmPackageUpdater) regenerateLockFileWithRetry() error {
 			}
 			return nil
 		}
-		log.Debug(fmt.Sprintf("First npm install attempt failed: %s. Retrying...", err.Error()))
-		if err = npm.runNpmInstall(false); err != nil {
-			return fmt.Errorf("npm install failed after retry: %w", err)
-		}
+		return err
 	}
 	return nil
 }

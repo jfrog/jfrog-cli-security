@@ -12,20 +12,16 @@ import (
 )
 
 const (
-	goFlagModEditEnv = "GOFLAGS=-mod=mod"
-	goWorkOffEnv     = "GOWORK=off"
-	// GoModFileName is the Go module descriptor file name.
-	GoModFileName = "go.mod"
-	// GoSumFileName is the Go checksum file name.
-	GoSumFileName = "go.sum"
-	// GoVendorDirName is the Go vendor directory name.
+	goFlagModEditEnv      = "GOFLAGS=-mod=mod"
+	goWorkOffEnv          = "GOWORK=off"
+	GoModFileName         = "go.mod"
+	GoSumFileName         = "go.sum"
 	GoVendorDirName       = "vendor"
 	goTidyContinueOnError = "-e"
 )
 
 type GoPackageUpdater struct{}
 
-// GoModuleBackup holds the original content of go.mod and go.sum for rollback purposes.
 type GoModuleBackup struct {
 	GoModPath    string
 	GoModContent []byte

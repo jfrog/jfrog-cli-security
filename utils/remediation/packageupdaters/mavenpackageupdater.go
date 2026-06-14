@@ -97,8 +97,6 @@ func (m *MavenPackageUpdater) updatePomFile(pomPath, groupId, artifactId, fixedV
 		return fmt.Errorf("failed to parse %s: %w", pomPath, err)
 	}
 
-	// Working buffer for the update chain. Each update returns a new slice (e.g. regexp.ReplaceAll),
-	// so we never mutate the original content. No backup or revert—we only write to the file on success.
 	currentContent := content
 	var updatedAny bool
 

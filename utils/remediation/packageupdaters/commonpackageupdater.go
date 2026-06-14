@@ -22,12 +22,8 @@ import (
 )
 
 const (
-	// NodePackageJSONFileName is the file name of the Node.js package manifest.
-	NodePackageJSONFileName = "package.json"
-	// NodeModulesDirName is the Node.js modules directory name.
+	NodePackageJSONFileName          = "package.json"
 	NodeModulesDirName               = "node_modules"
-	nodePackageJSONFileName          = NodePackageJSONFileName
-	nodeModulesDirName               = NodeModulesDirName
 	nodeDependenciesSection          = "dependencies"
 	nodeDevDependenciesSection       = "devDependencies"
 	nodeOptionalDependenciesSection  = "optionalDependencies"
@@ -42,8 +38,6 @@ var nodePackageManifestSections = []string{
 	nodeOverridesSection,
 }
 
-// SupportedFixTechnologies lists the technologies for which automatic dependency
-// fixing is supported.
 var SupportedFixTechnologies = []techutils.Technology{
 	techutils.Npm,
 	techutils.Maven,
@@ -277,7 +271,7 @@ func GetVulnerabilityLocations(fixDetails *FixDetails, namesFilters []string, ig
 }
 
 // IsFileTrackedByGit returns true if the given file is tracked by the git repository
-// rooted at repoRootDir.
+// rooted at repoRootDir. filePath may be absolute or relative.
 func IsFileTrackedByGit(filePath, repoRootDir string) (bool, error) {
 	repo, err := git.PlainOpen(repoRootDir)
 	if err != nil {
@@ -299,7 +293,12 @@ func IsFileTrackedByGit(filePath, repoRootDir string) (bool, error) {
 		return false, fmt.Errorf("failed to get commit tree: %w", err)
 	}
 
-	_, err = tree.File(filePath)
+	// tree.File expects a slash-separated path relative to the repo root.
+	relPath, err := filepath.Rel(repoRootDir, filePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to make path relative: %w", err)
+	}
+	_, err = tree.File(filepath.ToSlash(relPath))
 	if errors.Is(err, object.ErrFileNotFound) {
 		return false, nil
 	}
