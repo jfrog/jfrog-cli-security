@@ -45,7 +45,7 @@ func (py *PythonPackageUpdater) updateDirectDependency(fixDetails *FixDetails) (
 	case techutils.Pipenv:
 		return py.CommonPackageUpdater.UpdateDependency(fixDetails, fixDetails.Technology.GetPackageInstallationCommand())
 	default:
-		return errors.New("unknown python package manger: " + fixDetails.Technology.GetPackageType())
+		return errors.New("unknown python package manager: " + fixDetails.Technology.GetPackageType())
 	}
 }
 
@@ -72,7 +72,7 @@ func (py *PythonPackageUpdater) handlePip(fixDetails *FixDetails) (err error) {
 	}
 	//#nosec G703 -- False positive - the path is determined by internal file scanning, not user input, and was already validated by the preceding Stat call.
 	if err = os.WriteFile(py.pipRequirementsFile, []byte(fixedFile), 0600); err != nil {
-		err = fmt.Errorf("an error occured while writing the fixed version of %s to the requirements file:\n%s", fixDetails.SuggestedFixedVersion, err.Error())
+		err = fmt.Errorf("an error occurred while writing the fixed version of %s to the requirements file:\n%s", fixDetails.SuggestedFixedVersion, err.Error())
 	}
 	return
 }
