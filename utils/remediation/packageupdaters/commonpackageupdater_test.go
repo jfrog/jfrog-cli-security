@@ -977,3 +977,36 @@ func copyDir(src, dst string) error {
 		return os.WriteFile(dstPath, data, info.Mode())
 	})
 }
+
+// TestGetCompatiblePackageUpdater verifies the factory routes every supported technology
+// to the correct updater type and returns (nil, false) for unsupported ones.
+func TestGetCompatiblePackageUpdater(t *testing.T) {
+	tests := []struct {
+		tech      techutils.Technology
+		supported bool
+		updater   PackageUpdater
+	}{
+		{techutils.Npm, true, &NpmPackageUpdater{}},
+		{techutils.Pnpm, true, &PnpmPackageUpdater{}},
+		{techutils.Maven, true, &MavenPackageUpdater{}},
+		{techutils.Go, true, &GoPackageUpdater{}},
+		{techutils.Pip, true, &PythonPackageUpdater{}},
+		{techutils.Poetry, true, &PythonPackageUpdater{}},
+		{techutils.Pipenv, true, &PythonPackageUpdater{}},
+		{techutils.Yarn, false, nil},
+		{techutils.Gradle, false, nil},
+		{techutils.Nuget, false, nil},
+		{techutils.Conan, false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tech.String(), func(t *testing.T) {
+			updater, supported := GetCompatiblePackageUpdater(&FixDetails{Technology: tt.tech})
+			assert.Equal(t, tt.supported, supported)
+			if tt.supported {
+				assert.IsType(t, tt.updater, updater)
+			} else {
+				assert.Nil(t, updater)
+			}
+		})
+	}
+}

@@ -48,6 +48,8 @@ var SupportedFixTechnologies = []techutils.Technology{
 	techutils.Npm,
 	techutils.Maven,
 	techutils.Pip,
+	techutils.Poetry,
+	techutils.Pipenv,
 	techutils.Go,
 	techutils.Pnpm,
 }
@@ -56,7 +58,7 @@ func GetCompatiblePackageUpdater(fixDetails *FixDetails) (PackageUpdater, bool) 
 	switch fixDetails.Technology {
 	case techutils.Go:
 		return &GoPackageUpdater{}, true
-	case techutils.Pip:
+	case techutils.Pip, techutils.Poetry, techutils.Pipenv:
 		return &PythonPackageUpdater{pipRequirementsFile: defaultRequirementFile}, true
 	case techutils.Npm:
 		return &NpmPackageUpdater{}, true
