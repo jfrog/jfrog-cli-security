@@ -133,6 +133,7 @@ func (cph *CommonPackageUpdater) GetFixedPackageJSONManifest(content []byte, pac
 }
 
 func (cph *CommonPackageUpdater) UpdatePackageJSONDescriptor(descriptorPath, packageName, newVersion string) ([]byte, error) {
+	//#nosec G304 -- descriptorPath comes from descriptor discovery in the scanned repository.
 	descriptorContent, err := os.ReadFile(descriptorPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file '%s': %w", descriptorPath, err)
@@ -146,6 +147,7 @@ func (cph *CommonPackageUpdater) UpdatePackageJSONDescriptor(descriptorPath, pac
 		return nil, fmt.Errorf("failed to update version in descriptor: %w", err)
 	}
 
+	//#nosec G703 G306 -- descriptorPath from scan workflow; 0644 for VCS-tracked sources.
 	if err = os.WriteFile(descriptorPath, updatedContent, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write updated descriptor '%s': %w", descriptorPath, err)
 	}
@@ -192,6 +194,7 @@ func (cph *CommonPackageUpdater) UpdateDependency(fixDetails *FixDetails, instal
 func runPackageMangerCommand(commandName string, techName string, commandArgs []string) error {
 	fullCommand := commandName + " " + strings.Join(commandArgs, " ")
 	log.Debug(fmt.Sprintf("Running '%s'", fullCommand))
+	//#nosec G204 -- commandName is a known package manager binary, not user-controlled input.
 	cmd := exec.Command(commandName, commandArgs...)
 	if commandName == "pnpm" {
 		cmd.Env = EnvWithCorepackIntegrityWorkaround(os.Environ())
