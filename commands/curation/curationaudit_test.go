@@ -918,16 +918,15 @@ func getTestCasesForDoCurationAudit() []testCase {
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
-				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
-				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
-				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
-				// re-run during the test phase against the mock server.
+				// Pre-populate the curation cache with all plugin artifact downloads so that
+				// during the actual test run against the mock server only the blocked artifact
+				// triggers an HTTP request. The -DincludePluginDeps=true flag causes
+				// maven-dep-tree to resolve plugin transitive deps in the same invocation.
 				return []string{
 					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
 					"-DdepsTreeOutputFile=output",
 					"-Dmaven.repo.local=" + curationCache,
-					"dependency:resolve-plugins",
-					"help:effective-pom",
+					"-DincludePluginDeps=true",
 				}
 			},
 			mvnIncludePluginDeps: true,
