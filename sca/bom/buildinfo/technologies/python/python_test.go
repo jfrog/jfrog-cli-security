@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -177,8 +178,10 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "numpy:1.26.4",
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
-	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{}, techutils.Poetry)
+	// Run getModulesDependencyTrees. SkipAutoInstall avoids running `poetry install`
+	// (which would fail on CI if locked packages lack wheels for the current Python version),
+	// relying instead on build-info-go's direct poetry.lock parsing.
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}, techutils.Poetry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -866,12 +869,27 @@ func TestParsePoetryVersion(t *testing.T) {
 	}
 }
 
+// writeFakeExecutable creates a platform-appropriate fake executable named
+// executableName in dir and prepends dir to PATH so the fake shadows any real
+// installation. On Unix it writes a shell script; on Windows a batch script.
+func writeFakeExecutable(t *testing.T, dir, executableName, shContent, batContent string) {
+	t.Helper()
+	name := filepath.Join(dir, executableName)
+	content := shContent
+	if runtime.GOOS == "windows" {
+		name += ".bat"
+		content = batContent
+	}
+	require.NoError(t, os.WriteFile(name, []byte(content), 0755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func TestValidateMinimumPoetryVersionUnparsableMajorErrors(t *testing.T) {
 	fakeDir := t.TempDir()
-	fakePoetry := filepath.Join(fakeDir, "poetry")
-	require.NoError(t, os.WriteFile(fakePoetry,
-		[]byte("#!/bin/sh\necho 'Poetry (version 2x.0.0)'\n"), 0755))
-	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	writeFakeExecutable(t, fakeDir, "poetry",
+		"#!/bin/sh\necho 'Poetry (version 2x.0.0)'\n",
+		"@echo off\necho Poetry (version 2x.0.0)\n",
+	)
 
 	major, err := validateMinimumPoetryVersion(CurationPoetryMinimumVersion)
 	require.Error(t, err, "unparsable major version must return an error, not (0, nil)")
@@ -880,17 +898,34 @@ func TestValidateMinimumPoetryVersionUnparsableMajorErrors(t *testing.T) {
 
 func TestInstallPoetryDepsLockCheckErrorSurfacedOnRelockFailure(t *testing.T) {
 	fakeDir := t.TempDir()
-	fakePoetry := filepath.Join(fakeDir, "poetry")
-	script := `#!/bin/sh
+	writeFakeExecutable(t, fakeDir, "poetry",
+		`#!/bin/sh
 case "$*" in
   *"--version"*) echo "Poetry (version 1.8.0)"; exit 0 ;;
   *"check"*"--lock"*) echo "Error: SyntaxError in pyproject.toml at line 12" >&2; exit 1 ;;
   *"lock"*) echo "Error: cannot resolve dependencies" >&2; exit 1 ;;
   *) echo "unexpected call: $*" >&2; exit 2 ;;
 esac
-`
-	require.NoError(t, os.WriteFile(fakePoetry, []byte(script), 0755))
-	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+`,
+		// Dispatches on %1 (the first argument) to avoid echo %* | findstr, which
+		// breaks if any argument contains a cmd.exe metacharacter (|, >, &, <).
+		`@echo off
+if "%1"=="--version" goto :ver
+if "%1"=="check" goto :chk
+if "%1"=="lock" goto :lck
+echo unexpected call: %* 1>&2
+exit /b 2
+:ver
+echo Poetry (version 1.8.0)
+exit /b 0
+:chk
+echo Error: SyntaxError in pyproject.toml at line 12 1>&2
+exit /b 1
+:lck
+echo Error: cannot resolve dependencies 1>&2
+exit /b 1
+`,
+	)
 
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, poetryLockFile), []byte("# lock\n"), 0600))
@@ -907,10 +942,10 @@ esac
 
 func TestInstallPoetryDepsNonCurationErrorPropagated(t *testing.T) {
 	fakeDir := t.TempDir()
-	fakePoetry := filepath.Join(fakeDir, "poetry")
-	require.NoError(t, os.WriteFile(fakePoetry,
-		[]byte("#!/bin/sh\necho 'install failed' >&2\nexit 1\n"), 0755))
-	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	writeFakeExecutable(t, fakeDir, "poetry",
+		"#!/bin/sh\necho 'install failed' >&2\nexit 1\n",
+		"@echo off\necho install failed 1>&2\nexit /b 1\n",
+	)
 
 	_, _, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
 		IsCurationCmd:          false,
