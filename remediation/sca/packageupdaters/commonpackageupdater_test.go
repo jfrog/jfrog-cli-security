@@ -224,7 +224,7 @@ func getTestDataDir(t *testing.T, directDependency bool) string {
 	} else {
 		projectDir = "indirect-projects"
 	}
-	testdataDir, err := filepath.Abs(filepath.Join("..", "testdata", projectDir))
+	testdataDir, err := filepath.Abs(filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", projectDir))
 	assert.NoError(t, err)
 	return testdataDir
 }
@@ -326,7 +326,7 @@ func TestGetAllDescriptorFilesFullPaths(t *testing.T) {
 		{
 			testProjectRepo:        "maven",
 			suffixesToSearch:       []string{"pom.xml"},
-			expectedResultSuffixes: []string{"pom.xml"},
+			expectedResultSuffixes: []string{"pom.xml", filepath.Join("multi1", "pom.xml")},
 		},
 	}
 
@@ -336,7 +336,7 @@ func TestGetAllDescriptorFilesFullPaths(t *testing.T) {
 	for _, testcase := range testcases {
 		tmpDir, err := os.MkdirTemp("", "")
 		assert.NoError(t, err)
-		assert.NoError(t, copyDir(filepath.Join("..", "testdata", "projects", testcase.testProjectRepo), tmpDir))
+		assert.NoError(t, copyDir(filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "projects", testcase.testProjectRepo), tmpDir))
 		assert.NoError(t, os.Chdir(tmpDir))
 
 		finalDirPath, err := os.Getwd()

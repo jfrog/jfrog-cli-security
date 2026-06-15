@@ -14,7 +14,7 @@ import (
 )
 
 func TestMavenUpdateDependency(t *testing.T) {
-	testProjectPath := filepath.Join("..", "testdata", "packageupdaters")
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
 
@@ -146,7 +146,7 @@ func TestMavenUpdateDependency(t *testing.T) {
 }
 
 func TestMavenUpdateDependencyErrors(t *testing.T) {
-	testProjectPath := filepath.Join("..", "testdata", "packageupdaters")
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
 
