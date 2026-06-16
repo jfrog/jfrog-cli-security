@@ -230,6 +230,9 @@ func TestVersionMatchesConstraintCompatibleRelease(t *testing.T) {
 		{"1.4.9", "~=1.4.2", true},
 		{"1.5.0", "~=1.4.2", false},
 		{"1.4.1", "~=1.4.2", false},
+		// unrecognized operator should not match
+		{"1.0.0", "1.0.0", false},
+		{"1.0.0", "===1.0.0", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.v+"_"+tc.constraint, func(t *testing.T) {

@@ -251,5 +251,5 @@ func versionMatchesConstraint(ver *version.Version, constraint string) bool {
 			return !ver.AtLeast(upper)
 		}
 	}
-	return true
+	return false
 }
