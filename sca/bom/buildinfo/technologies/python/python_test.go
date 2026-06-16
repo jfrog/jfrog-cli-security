@@ -230,10 +230,13 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			rootDetected:                     false,
 		},
 		{
-			name:                             "poetry: project installed before dep tree construction| install forbidden",
-			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
+			// Poetry's BuildDependencyTree reads poetry.lock directly, so a pre-existing
+			// lock file is the equivalent of "already installed" without requiring `poetry
+			// install` (which would need network access to resolve/download packages).
+			name:                             "poetry: lock file pre-exists | install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry-preinstalled"),
 			technology:                       techutils.Poetry,
-			installBeforeFetchingInitialDeps: true,
+			installBeforeFetchingInitialDeps: false,
 			rootDetected:                     false,
 		},
 	}
@@ -283,6 +286,12 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 				dependenciesBeforeBuildDepTree = maps.Keys(dependenciesGraphBeforeBuildDepTree)
 			case techutils.Poetry:
 				if len(dependenciesGraphBeforeBuildDepTree) != 0 {
+					// getPoetryDependencies only adds a package as a graph key when it has
+					// at least one dependency; the root package (the project itself) is
+					// always added.  For a simple single-dependency project (packaging, no
+					// transitives) the graph has exactly one key, so maps.Keys(...)[0] is
+					// deterministic and its VALUE is the list of direct dependencies – the
+					// same set BuildDependencyTree traverses into uniqueDeps.
 					mapKey := maps.Keys(dependenciesGraphBeforeBuildDepTree)[0]
 					dependenciesBeforeBuildDepTree = dependenciesGraphBeforeBuildDepTree[mapKey]
 				}
