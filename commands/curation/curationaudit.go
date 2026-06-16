@@ -1220,11 +1220,11 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, tech techutils.Technology, results map[string]*CurationReport) error {
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return fmt.Errorf("CVS fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
+		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
-		return fmt.Errorf("CVS fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
+		return fmt.Errorf("curation-blocked resolution fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
 	}
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -1355,7 +1355,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 			// Use the unfiltered all-versions metadata API to find the newest match.
 			allVersions, err := nc.lookupPypiAllVersions(pin.Name)
 			if err != nil {
-				log.Debug(fmt.Sprintf("CVS fallback: all-versions lookup failed for %s%s: %v",
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: all-versions lookup failed for %s%s: %v",
 					pin.Name, pin.VersionRange, err))
 				continue
 			}
@@ -1366,11 +1366,11 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 				resolvedVersion = python.ResolveVersionRange(">=0", allVersions)
 			}
 			if resolvedVersion == "" {
-				log.Debug(fmt.Sprintf("CVS fallback: no version found for %s%s",
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: no version found for %s%s",
 					pin.Name, pin.VersionRange))
 				continue
 			}
-			log.Debug(fmt.Sprintf("CVS fallback: resolved %s%s → %s",
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: resolved %s%s → %s",
 				pin.Name, pin.VersionRange, resolvedVersion))
 		}
 
@@ -1382,7 +1382,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 			// so skip it: with no recoverable blockers the command falls back to
 			// the graceful "Affected package(s)" message (PR #761 behaviour),
 			// rather than rendering a misleading empty table row.
-			log.Debug(fmt.Sprintf("CVS fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
 				pin.Name, resolvedVersion, err))
 			continue
 		}
@@ -1391,7 +1391,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		headDetails := nc.httpClientDetails.Clone()
 		headResp, _, headErr := nc.rtManager.Client().SendHead(dlURL, headDetails)
 		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
-			log.Debug(fmt.Sprintf("CVS fallback: HEAD probe failed for %s==%s: %v",
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
 				pin.Name, resolvedVersion, headErr))
 			continue
 		}
@@ -1402,7 +1402,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 			var getErr error
 			pkStatus, getErr = nc.getBlockedPackageDetails(dlURL, pin.Name, resolvedVersion)
 			if getErr != nil {
-				log.Debug(fmt.Sprintf("CVS fallback: GET probe failed for %s==%s: %v",
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: GET probe failed for %s==%s: %v",
 					pin.Name, resolvedVersion, getErr))
 			}
 		}
