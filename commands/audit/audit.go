@@ -476,14 +476,10 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
 	if shouldIncludeServicesDetection(params) {
-		entitledForServicesDetection, err := isEntitledForServicesDetection(entitledForJas, xrayManager, params)
-		if err != nil {
-			return cmdResults.AddGeneralError(err, false)
-		}
-		if !entitledForServicesDetection {
+		if !entitledForJas {
 			return cmdResults.AddGeneralError(fmt.Errorf("services detection is requested but the JFrog instance is not entitled for it"), false)
 		}
-		cmdResults.SetEntitledForServicesDetection(entitledForServicesDetection)
+		cmdResults.SetEntitledForServicesDetection(true)
 	}
 	return
 }
@@ -502,13 +498,6 @@ func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.Xray
 	}
 	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
 	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.SnippetDetectionFeatureId)
-}
-
-func isEntitledForServicesDetection(isEntitledForJas bool, xrayManager *xray.XrayServicesManager, auditParams *AuditParams) (entitled bool, err error) {
-	if !isEntitledForJas {
-		return false, nil
-	}
-	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.ServicesDetectionFeatureId)
 }
 
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {

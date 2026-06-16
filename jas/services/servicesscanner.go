@@ -15,7 +15,7 @@ import (
 
 const (
 	servicesScannerType   = "services"
-	servicesScanCommand   = "serve"
+	servicesScanCommand   = "svc"
 	servicesDocsUrlSuffix = "services-scans"
 )
 
