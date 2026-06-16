@@ -49,6 +49,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
+
+	bibuildutils "github.com/jfrog/build-info-go/build/utils"
+	"github.com/jfrog/gofrog/version"
+	yarntech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
 
 const (
@@ -475,8 +479,10 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 	return nil
 }
 
-// resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml —
-// the developer ran 'jf yarn-config' but the file-system detector fell back to npm.
+// resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml
+// (the developer ran 'jf yarn-config' but the file-system detector fell back to npm),
+// or when the project has a yarn indicator file (.yarnrc.yml / yarn.lock / .yarnrc / .yarn)
+// without a yarn.yaml — which is the V4 native mode case where no jf yarn-config is needed.
 func resolveNpmYarnTech(tech string) string {
 	if techutils.Technology(tech) != techutils.Npm {
 		return tech
@@ -489,6 +495,30 @@ func resolveNpmYarnTech(tech string) string {
 	if yarnConfigExists {
 		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
 		return techutils.Yarn.String()
+	}
+	// V4 native mode: no yarn.yaml, but project may have a local yarn indicator
+	// (.yarnrc.yml / yarn.lock / .yarnrc / .yarn) OR only a global ~/.yarnrc.yml
+	// (set via 'yarn config set --home', as the Artifactory "Set Up" page instructs).
+	// Guard against false-positives: if package-lock.json exists the project is npm.
+	workingDir, wdErr := coreutils.GetWorkingDirectory()
+	if wdErr == nil {
+		if _, err := os.Stat(filepath.Join(workingDir, "package-lock.json")); err == nil {
+			// package-lock.json present — this is an npm project.
+			return tech
+		}
+		if techutils.DirectoryHasYarnIndicator(workingDir) {
+			log.Info("No npm.yaml or yarn.yaml found but yarn indicator file detected (.yarnrc.yml / yarn.lock / .yarnrc / .yarn) — treating project as yarn.")
+			return techutils.Yarn.String()
+		}
+		// Check global ~/.yarnrc.yml — customers using 'yarn config set --home'
+		// (as shown in the Artifactory "Set Up" page for Yarn V4) have no project-level
+		// .yarnrc.yml but a global one that carries the registry and auth token.
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			if _, err := os.Stat(filepath.Join(homeDir, ".yarnrc.yml")); err == nil {
+				log.Info("No npm.yaml or yarn.yaml found but global ~/.yarnrc.yml detected — treating project as yarn (V4 native mode).")
+				return techutils.Yarn.String()
+			}
+		}
 	}
 	return tech
 }
@@ -904,6 +934,30 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrcForPnpm()
 	}
 
+	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
+	// Detect the running yarn version and route to the appropriate path.
+	// Version detection failures are fatal — silently falling through to the
+	// V2/V3 path would use different flags and break the audit.
+	if tech == techutils.Yarn {
+		yarnExecPath, yarnExecErr := bibuildutils.GetYarnExecutable()
+		if yarnExecErr != nil {
+			return fmt.Errorf("could not locate the yarn executable: %w. Ensure yarn is installed and available on PATH before running 'jf ca'", yarnExecErr)
+		}
+		workingDir, wdErr := coreutils.GetWorkingDirectory()
+		if wdErr != nil {
+			return fmt.Errorf("could not determine working directory for yarn version detection: %w", wdErr)
+		}
+		versionStr, versionErr := bibuildutils.GetVersion(yarnExecPath, workingDir)
+		if versionErr != nil {
+			return fmt.Errorf("could not detect yarn version: %w. Ensure the yarn binary at %q is functional (try 'yarn --version') before running 'jf ca'", versionErr, yarnExecPath)
+		}
+		yarnVersion := version.NewVersion(versionStr)
+		if yarnVersion.Compare("4.0.0") <= 0 {
+			return ca.setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir)
+		}
+		// V2/V3: fall through to getRepoParams (yarn.yaml / npm.yaml).
+	}
+
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
 		// npm and yarn share the same Artifactory npm API for curation, so their
@@ -945,6 +999,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
 		// rather than an error (a warning is emitted in auditTree).
 		techutils.Pnpm: {},
+		// Yarn V4 always uses native mode (.yarnrc.yml), so --run-native is a
+		// redundant no-op rather than an error (a warning is emitted in auditTree).
+		techutils.Yarn: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
@@ -1028,6 +1085,50 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	log.Info(fmt.Sprintf("pnpm: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromYarnrcForYarnV4 reads Artifactory connection details from the
+// project's .yarnrc.yml via the Yarn CLI. Yarn V4 uses native mode — no
+// jf yarn-config step is required; the registry URL and auth token live in
+// .yarnrc.yml already. This is always called for Yarn V4 curation.
+//
+// Auth priority:
+//  1. Token from .yarnrc.yml — preferred, scoped to the exact registry URL.
+//  2. Token from 'jf c' server config — fallback when .yarnrc.yml carries no token.
+func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir string) error {
+	registryConfig, err := yarntech.GetNativeYarnV4RegistryConfig(yarnExecPath, workingDir)
+	if err != nil {
+		log.Warn("Ensure npmRegistryServer is configured in .yarnrc.yml (e.g. npmRegistryServer: \"https://<host>/artifactory/api/npm/<repo>/\")")
+		return fmt.Errorf("yarn V4: failed to read Artifactory details from .yarnrc.yml: %w", err)
+	}
+
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
+		log.Debug("yarn V4: using auth token from .yarnrc.yml")
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			AccessToken:    registryConfig.AuthToken,
+		}
+	} else {
+		log.Debug("yarn V4: no token in .yarnrc.yml — using 'jf c' server credentials")
+		serverDetails, err = ca.ServerDetails()
+		if err != nil || serverDetails == nil {
+			return fmt.Errorf("yarn V4: no auth token found in .yarnrc.yml and no 'jf c' server configured: %w", err)
+		}
+		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	// Populate depsRepo on the audit-params interface so getBuildInfoParamsByTech returns
+	// the correct repository name. For V4 native mode the user never passes --deps-repo,
+	// so ca.DepsRepo() would otherwise be "" and the curation endpoint URL would not be
+	// constructed in configureYarnResolutionServerAndRunInstall.
+	ca.AuditParamsInterface.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
