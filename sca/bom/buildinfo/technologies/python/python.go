@@ -295,14 +295,15 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (setupFileU
 		}
 		setupFileUsed = false
 	}
-	// When CVS hides the pinned version from the simple-index, pip fails
-	// with "No matching distribution found" instead of hitting a 403, so
-	// IsForbiddenOutput never fires. Replace the misleading pip error with
-	// a structured one.
-	if err != nil && params.IsCurationCmd && remoteUrl != "" &&
-		isCvsVersionFilteredOutput(errors.Join(err, reqErr).Error()) {
-		pins := parseCvsFailedPackages(errors.Join(err, reqErr).Error())
-		err = errors.Join(err, errors.New(formatCvsBlockedRequirementsMessage(pins)))
+	// When CVS hides the pinned version from the simple-index, pip fails with
+	// "No matching distribution found" instead of hitting a 403. Return a
+	// structured CvsBlockedError so the curation-audit command can recover
+	// policy details via the PyPI metadata-API fallback and still produce a
+	// (partial) curation table instead of failing with no report at all.
+	if err != nil && params.IsCurationCmd && remoteUrl != "" {
+		if combinedOutput := errors.Join(err, reqErr).Error(); isCvsVersionFilteredOutput(combinedOutput) {
+			err = &CvsBlockedError{Packages: parseCvsFailedPackages(combinedOutput), Cause: err}
+		}
 	}
 	if err != nil || reqErr != nil {
 		if msgToUser := technologies.GetMsgToUserForCurationBlock(params.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
