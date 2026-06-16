@@ -242,6 +242,9 @@ type CurationAuditCommand struct {
 	dockerImageName       string
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
+	// pendingWarnings collects log.Warn messages that must be emitted after the
+	// progress spinner stops; otherwise the spinner's ANSI clear codes overwrite them.
+	pendingWarnings []string
 	audit.AuditParamsInterface
 }
 
@@ -334,7 +337,10 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	if ca.Progress() != nil {
 		err = errors.Join(err, ca.Progress().Quit())
 	}
-	// Print after the spinner has stopped so the message appears on the terminal.
+	// Print after the spinner has stopped so messages are not overwritten by ANSI clear codes.
+	for _, w := range ca.pendingWarnings {
+		log.Warn(w)
+	}
 	if scanErr != nil {
 		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete: " + scanErr.Error())
 	}
@@ -442,8 +448,54 @@ func promotePnpmWorkspaceMember(techs []string) []string {
 	}
 }
 
+// promoteYarnWorkspaceMember replaces "npm" with "yarn" in the detected technologies
+// list when the current directory is a yarn workspace member — it has no yarn marker
+// itself, but an ancestor directory contains .yarnrc.yml or yarn.lock.
+// This lets `jf ca --working-dirs=<member>` audit the member as part of its yarn
+// workspace, consistently with how pnpm workspace members are promoted via
+// promotePnpmWorkspaceMember.
+func promoteYarnWorkspaceMember(techs []string) []string {
+	hasYarn, hasNpm := false, false
+	for _, t := range techs {
+		switch t {
+		case techutils.Yarn.String():
+			hasYarn = true
+		case techutils.Npm.String():
+			hasNpm = true
+		}
+	}
+	if hasYarn || !hasNpm {
+		return techs
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return techs
+	}
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return techs
+		}
+		dir = parent
+		for _, indicator := range []string{".yarnrc.yml", "yarn.lock", ".yarnrc"} {
+			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
+				log.Debug(fmt.Sprintf("Detected yarn workspace root at %s via %s; promoting current directory from npm to yarn.", dir, indicator))
+				promoted := make([]string, 0, len(techs))
+				for _, t := range techs {
+					if t == techutils.Npm.String() {
+						t = techutils.Yarn.String()
+					}
+					promoted = append(promoted, t)
+				}
+				return promoted
+			}
+		}
+	}
+}
+
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
+	techs = promoteYarnWorkspaceMember(techs)
 	if ca.DockerImageName() != "" {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
@@ -621,8 +673,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		params.IgnoreConfigFile = true
 	}
 	// Pnpm always resolves natively from .npmrc — --run-native is redundant and has no effect.
+	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Pnpm {
-		log.Warn("--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
+	}
+	// Yarn V4 always resolves natively from .yarnrc.yml — --run-native is redundant and has no effect.
+	// Deferred: emitted after the spinner stops so the message is not overwritten.
+	if ca.RunNative() && tech == techutils.Yarn {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn V4; yarn V4 always resolves natively from .yarnrc.yml")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)

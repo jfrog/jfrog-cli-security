@@ -2,6 +2,7 @@ package yarn
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +57,20 @@ const (
 	yarnV3Version       = "3.0.0"
 	yarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
+
+	// Command registered by the embedded resolution-only plugin.
+	resolveLockfilePluginCommand = "jfrog-yarn-resolve-lockfile"
+	// Plugin path inside the curation temp dir (the layout yarn loads from).
+	resolveLockfilePluginRelPath = ".yarn/plugins/jfrog-yarn-resolve-lockfile.cjs"
+	// Spec recorded in .yarnrc.yml; only the path matters to yarn.
+	resolveLockfilePluginSpec = "@yarnpkg/plugin-jfrog-yarn-resolve-lockfile"
 )
+
+// Resolution-only Yarn V3/V4 plugin: builds a complete yarn.lock from registry
+// metadata without fetching tarballs, so curation's 403s don't abort it.
+//
+//go:embed resources/jfrog-yarn-resolve-lockfile.cjs
+var resolveLockfilePluginJS []byte
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
@@ -175,6 +189,11 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		log.Debug(fmt.Sprintf(
 			"yarn workspace-member filter: scoped dependency map to '%s' — %d entries reachable from %s",
 			workspaceMemberRel, len(dependenciesMap), root.Value))
+	} else if params.IsCurationCmd {
+		// Workspace members are siblings of the root, not its deps, so their
+		// subgraphs would be orphaned and never probed. Attach each as a root
+		// child so 'jf ca' audits the whole workspace graph (matching npm/pnpm).
+		attachWorkspaceMembersToRoot(dependenciesMap, root)
 	}
 	// Inject synthetic dep-tree entries for any direct deps that curation
 	// blocked during 'yarn install --mode=update-lockfile' (which aborts the
@@ -1085,6 +1104,9 @@ func resolveCurationLockfileDir(
 		deferredInstallErr = installErr
 	}
 
+	// Mark yarn.lock as fresh so the next run skips re-resolution.
+	touchYarnLock(currentDir)
+
 	return tmpDir, cleanup, deferredInstallErr, nil
 }
 
@@ -1193,7 +1215,6 @@ func isInstallRequired(currentDir string, installCommandArgs []string, skipAutoI
 }
 
 // isYarnLockStale reports whether package.json is newer than yarn.lock.
-// Stat errors are treated as "not stale" to avoid unnecessary re-installs.
 func isYarnLockStale(curWd string) bool {
 	pkgJsonStat, err := os.Stat(filepath.Join(curWd, "package.json"))
 	if err != nil {
@@ -1204,6 +1225,13 @@ func isYarnLockStale(curWd string) bool {
 		return false
 	}
 	return pkgJsonStat.ModTime().After(lockStat.ModTime())
+}
+
+// touchYarnLock bumps yarn.lock mtime to now so isYarnLockStale won't re-trigger.
+func touchYarnLock(curWd string) {
+	lockPath := filepath.Join(curWd, yarn.YarnLockFileName)
+	now := time.Now()
+	_ = os.Chtimes(lockPath, now, now)
 }
 
 // runYarnInstallAccordingToVersion runs 'yarn install' (or the user-supplied
@@ -1252,31 +1280,88 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 		installCommandArgs = append(installCommandArgs, v1IgnoreScriptsFlag, v1SilentFlag, v1NonInteractiveFlag)
 	} else {
 		if yarnVersion.Compare(yarnV3Version) > 0 {
-			// V2 — has no equivalent to V3's --mode=update-lockfile, so install
-			// always fetches tarballs. For curation this means any blocked package
-			// returns 403 during fetch and yarn aborts before yarn.lock is written;
-			// handleCurationInstallError then surfaces an actionable error.
+			// V2 has no lockfile-only mode, so install fetches tarballs; a
+			// curation 403 aborts it before yarn.lock is written (handled by
+			// handleCurationInstallError).
 			installCommandArgs = append(installCommandArgs, v2SkipBuildFlag)
 		} else {
-			// V3+
+			// V3+ curation: resolve the full graph from metadata without
+			// fetching tarballs, so blocked (uncached) packages don't abort the
+			// lockfile. --mode=update-lockfile can't be used: it still fetches
+			// uncached tarballs to compute checksums.
 			if isCurationCmd {
-				// --mode=update-lockfile skips fetch and link entirely — yarn just
-				// resolves manifests and writes yarn.lock. The curation HEAD-check
-				// walker enumerates blocked packages from the lockfile afterwards,
-				// so we don't need yarn to download tarballs (which curation would
-				// 403 anyway).
-				// Note: yarn berry's clipanion takes the LAST --mode value, so
-				// passing both --mode=update-lockfile and --mode=skip-build would
-				// silently reduce to --mode=skip-build (a full install). For
-				// curation we MUST pass only --mode=update-lockfile.
-				installCommandArgs = append(installCommandArgs, v3UpdateLockfileFlag)
-			} else {
-				installCommandArgs = append(installCommandArgs, v3UpdateLockfileFlag, v3SkipBuildFlag)
+				return runYarnResolveOnlyLockfile(yarnExecPath, curWd)
 			}
+			installCommandArgs = append(installCommandArgs, v3UpdateLockfileFlag, v3SkipBuildFlag)
 		}
 	}
 	log.Info(fmt.Sprintf("Running 'yarn %s' command.", strings.Join(installCommandArgs, " ")))
 	return runYarn(yarnExecPath, curWd, installCommandArgs...)
+}
+
+// runYarnResolveOnlyLockfile installs the embedded plugin and runs it to write
+// a complete yarn.lock from registry metadata (no tarball fetch). Output is
+// captured quietly; on failure it's surfaced via handleCurationInstallError.
+func runYarnResolveOnlyLockfile(yarnExecPath, curWd string) error {
+	if err := installResolveLockfilePlugin(curWd); err != nil {
+		return fmt.Errorf("failed to install the resolution-only yarn plugin: %w", err)
+	}
+	log.Info("Running 'yarn jfrog-yarn-resolve-lockfile' command (resolving the dependency graph from registry metadata without downloading tarballs).")
+	return runYarnCommandQuiet(yarnExecPath, curWd, resolveLockfilePluginCommand)
+}
+
+// installResolveLockfilePlugin writes the embedded plugin into curWd/.yarn/plugins/
+// and registers it in curWd/.yarnrc.yml (preserving existing config). Idempotent.
+func installResolveLockfilePlugin(curWd string) error {
+	pluginPath := filepath.Join(curWd, filepath.FromSlash(resolveLockfilePluginRelPath))
+	if err := os.MkdirAll(filepath.Dir(pluginPath), 0700); err != nil {
+		return fmt.Errorf("creating yarn plugins dir: %w", err)
+	}
+	if err := os.WriteFile(pluginPath, resolveLockfilePluginJS, 0600); err != nil {
+		return fmt.Errorf("writing yarn plugin file: %w", err)
+	}
+	return registerYarnPluginInYarnrc(curWd, resolveLockfilePluginRelPath, resolveLockfilePluginSpec)
+}
+
+// registerYarnPluginInYarnrc adds a {path, spec} entry to the "plugins" list of
+// curWd/.yarnrc.yml, creating the file if absent and preserving every other
+// setting. If an entry with the same path already exists it is left untouched.
+func registerYarnPluginInYarnrc(curWd, pluginRelPath, pluginSpec string) error {
+	yarnrcPath := filepath.Join(curWd, yarn.YarnrcFileName)
+	rc := map[string]interface{}{}
+	if data, err := os.ReadFile(yarnrcPath); err == nil {
+		if unmarshalErr := yaml.Unmarshal(data, &rc); unmarshalErr != nil {
+			log.Debug(fmt.Sprintf("yarn curation: could not parse existing %s (%v); recreating it for the resolution-only plugin", yarn.YarnrcFileName, unmarshalErr))
+			rc = map[string]interface{}{}
+		}
+	}
+	if rc == nil {
+		rc = map[string]interface{}{}
+	}
+
+	// Normalize the existing "plugins" value into a slice we can append to.
+	var plugins []interface{}
+	if existing, ok := rc["plugins"].([]interface{}); ok {
+		plugins = existing
+	}
+	for _, p := range plugins {
+		if entry, ok := p.(map[string]interface{}); ok {
+			if path, _ := entry["path"].(string); path == pluginRelPath {
+				return nil // already registered
+			}
+		}
+	}
+	plugins = append(plugins, map[string]interface{}{
+		"path": pluginRelPath,
+		"spec": pluginSpec,
+	})
+	rc["plugins"] = plugins
+
+	updated, err := yaml.Marshal(rc)
+	if err != nil {
+		return fmt.Errorf("marshalling %s: %w", yarn.YarnrcFileName, err)
+	}
+	return os.WriteFile(yarnrcPath, updated, 0600)
 }
 
 // Parse the dependencies into a Xray dependency tree format
@@ -1379,6 +1464,46 @@ func findClaimingYarnWorkspaceRoot(targetDir string) (rootDir, memberRel string)
 			return "", ""
 		}
 		cur = parent
+	}
+}
+
+// attachWorkspaceMembersToRoot makes every workspace member a direct child of
+// the root node so the tree walk reaches each member's subgraph. Yarn only links
+// a member under the root when the root explicitly depends on it; otherwise
+// members are siblings whose deps would be orphaned. Root curation audits only;
+// already-linked members are deduped.
+func attachWorkspaceMembersToRoot(dependenciesMap map[string]*bibuildutils.YarnDependency, root *bibuildutils.YarnDependency) {
+	const workspaceMarker = "@workspace:"
+	const rootWorkspaceSuffix = "@workspace:."
+	if root == nil {
+		return
+	}
+	linked := map[string]struct{}{}
+	for _, ptr := range root.Details.Dependencies {
+		linked[bibuildutils.GetYarnDependencyKeyFromLocator(ptr.Locator)] = struct{}{}
+	}
+	var attached []string
+	for _, dep := range dependenciesMap {
+		if dep == nil || dep == root {
+			continue
+		}
+		// Only member workspaces; skip non-workspace packages and the root itself.
+		if !strings.Contains(dep.Value, workspaceMarker) || strings.HasSuffix(dep.Value, rootWorkspaceSuffix) {
+			continue
+		}
+		key := bibuildutils.GetYarnDependencyKeyFromLocator(dep.Value)
+		if _, already := linked[key]; already {
+			continue
+		}
+		root.Details.Dependencies = append(root.Details.Dependencies, bibuildutils.YarnDependencyPointer{Locator: dep.Value})
+		linked[key] = struct{}{}
+		attached = append(attached, dep.Value)
+	}
+	if len(attached) > 0 {
+		slices.Sort(attached)
+		log.Debug(fmt.Sprintf(
+			"yarn curation: attached %d workspace member(s) to the root so their dependencies are audited: %s",
+			len(attached), strings.Join(attached, ", ")))
 	}
 }
 
@@ -1499,7 +1624,7 @@ func setYarnConfigNpmRegistryServer(yarnExecPath, workingDir, registryURL string
 
 // yarnrcFile is the subset of .yarnrc.yml fields we need for curation.
 type yarnrcFile struct {
-	NpmAuthToken  string                       `yaml:"npmAuthToken"`
+	NpmAuthToken  string                         `yaml:"npmAuthToken"`
 	NpmRegistries map[string]yarnrcRegistryEntry `yaml:"npmRegistries"`
 }
 
