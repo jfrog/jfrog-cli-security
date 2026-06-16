@@ -3,6 +3,7 @@ package python
 import (
 	"testing"
 
+	"github.com/jfrog/gofrog/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -211,3 +212,29 @@ func TestVersionMatchesRange(t *testing.T) {
 		})
 	}
 }
+
+func TestVersionMatchesConstraintCompatibleRelease(t *testing.T) {
+	cases := []struct {
+		v          string
+		constraint string
+		want       bool
+	}{
+		// ~= 1.4 means >= 1.4 AND < 2.0
+		{"1.4.0", "~=1.4", true},
+		{"1.9.9", "~=1.4", true},
+		{"2.0.0", "~=1.4", false},
+		{"3.0.0", "~=1.4", false},
+		{"1.3.9", "~=1.4", false},
+		// ~= 1.4.2 means >= 1.4.2 AND < 1.5.0
+		{"1.4.2", "~=1.4.2", true},
+		{"1.4.9", "~=1.4.2", true},
+		{"1.5.0", "~=1.4.2", false},
+		{"1.4.1", "~=1.4.2", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.v+"_"+tc.constraint, func(t *testing.T) {
+			assert.Equal(t, tc.want, versionMatchesConstraint(version.NewVersion(tc.v), tc.constraint))
+		})
+	}
+}
+

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jfrog/gofrog/version"
@@ -231,7 +232,23 @@ func versionMatchesConstraint(ver *version.Version, constraint string) bool {
 		case "!=":
 			return ver.Compare(c) != 0
 		case "~=":
-			return ver.AtLeast(c)
+			// PEP 440: ~= X.Y means >= X.Y AND < (X+1).0; ~= X.Y.Z means >= X.Y.Z AND < X.(Y+1).0
+			if !ver.AtLeast(c) {
+				return false
+			}
+			parts := strings.Split(c, ".")
+			if len(parts) < 2 {
+				return false
+			}
+			upperParts := make([]string, len(parts)-1)
+			copy(upperParts, parts[:len(parts)-1])
+			last, err := strconv.Atoi(upperParts[len(upperParts)-1])
+			if err != nil {
+				return false
+			}
+			upperParts[len(upperParts)-1] = strconv.Itoa(last + 1)
+			upper := strings.Join(upperParts, ".") + ".0"
+			return !ver.AtLeast(upper)
 		}
 	}
 	return true

@@ -1943,6 +1943,121 @@ func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	assert.Empty(t, statuses, "a version absent from the metadata API must not be rendered as a blocked row")
 }
 
+// TestFetchCvsBlockedStatusSetsDepRelation verifies DepRelation is populated for both direct and transitive CVS-fallback rows.
+func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.1"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"releases":{%q:[]}}`, blockedVer)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'strict-policy'","policy":"strict-policy","condition":"immature","explanation":"too new","recommendation":"use older"}]}`))
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Transitive pin: parent differs from package → indirect.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, VersionRange: ">=1.4.0", ParentName: parentPkg, ParentVersion: parentVer},
+	}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, indirectRelation, statuses[0].DepRelation, "transitive CVS-fallback row must be indirect")
+
+	// Direct pin: parent equals package → direct.
+	pins = []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+	statuses = analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, directRelation, statuses[0].DepRelation, "direct CVS-fallback row must be direct")
+}
+
+// TestFetchCvsBlockedStatusHeadErrorNoFalsePositive verifies that a HEAD transport error does not
+// produce a spurious blocked row.
+func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		pkg             = "foo"
+		ver             = "1.0"
+		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusInternalServerError)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver}}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "HEAD transport error must not produce a false-positive blocked row")
+}
+
+// TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
+func TestEffectiveParentVersion(t *testing.T) {
+	cases := []struct {
+		name string
+		pin  python.PinnedRequirement
+		want string
+	}{
+		{"exact direct", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, "1.0"},
+		{"direct range — shows range spec", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, ">=1.4"},
+		{"transitive range — parent ver unknown", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar"}, ""},
+		{"transitive with known parent ver", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar", ParentVersion: "2.3"}, "2.3"},
+		{"ResolutionImpossible — all empty", python.PinnedRequirement{Name: "foo", ParentName: "foo"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+		})
+	}
+}
+
 func TestValidateRunNativeForTech(t *testing.T) {
 	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))

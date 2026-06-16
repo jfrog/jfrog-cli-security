@@ -349,10 +349,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	if scanErr != nil {
 		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete:")
 	}
-	for _, report := range results {
+	for projectPath, report := range results {
 		if report.isPartial {
-			log.Warn(cvsPartialReportWarning)
-			break
+			log.Warn(fmt.Sprintf("[%s] %s", projectPath, cvsPartialReportWarning))
 		}
 	}
 
@@ -1221,11 +1220,11 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, tech techutils.Technology, results map[string]*CurationReport) error {
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return cvsErr
+		return fmt.Errorf("CVS fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
-		return cvsErr
+		return fmt.Errorf("CVS fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
 	}
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -1343,6 +1342,9 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 // version) is NOT rendered as a row; with no recoverable blockers the command
 // falls back to the graceful PR #761 message listing affected package(s), so a
 // version that is not in the metadata API is never shown as a fake "blocked" row.
+//
+// HTTP calls are sequential per pin. This path is an error-recovery path that
+// typically processes 1-3 packages, so parallelism is not worth the complexity.
 func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) []*PackageStatus {
 	var statuses []*PackageStatus
 	for _, pin := range pins {
@@ -1391,6 +1393,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
 			log.Debug(fmt.Sprintf("CVS fallback: HEAD probe failed for %s==%s: %v",
 				pin.Name, resolvedVersion, headErr))
+			continue
 		}
 
 		// ── Step 3b: 403 from HEAD → recover policy details via GET with waiver
@@ -1403,6 +1406,10 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 					pin.Name, resolvedVersion, getErr))
 			}
 		}
+		depRelation := directRelation
+		if effectiveParent(pin) != pin.Name {
+			depRelation = indirectRelation
+		}
 		if pkStatus == nil {
 			// HEAD returned non-403 or GET probe errored — CVS stripped the
 			// version from the index but policy details aren't available via
@@ -1413,6 +1420,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 				PackageVersion:    resolvedVersion,
 				ParentName:        effectiveParent(pin),
 				ParentVersion:     effectiveParentVersion(pin),
+				DepRelation:       depRelation,
 				BlockedPackageUrl: dlURL,
 				Action:            blocked,
 				BlockingReason:    BlockingReasonUnknown,
@@ -1426,6 +1434,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		pkStatus.PackageVersion = resolvedVersion
 		pkStatus.ParentName = effectiveParent(pin)
 		pkStatus.ParentVersion = effectiveParentVersion(pin)
+		pkStatus.DepRelation = depRelation
 		statuses = append(statuses, pkStatus)
 	}
 	return statuses
