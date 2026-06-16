@@ -48,6 +48,10 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	// Set to "true" to skip downloading the Analyzer Manager (use the locally cached binary as-is).
 	skipAnalyzerManagerDownloadEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD"
+	// Overrides the Artifactory download path for the Analyzer Manager zip.
+	// Format: <repo-name>/<path/to/analyzerManager.zip>
+	// e.g. "analyzer_manager_test_ort/v1/1.34.1/mac-arm64/analyzerManager.zip"
+	analyzerManagerDownloadPathEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_DOWNLOAD_PATH"
 	JfPackageManagerEnvVariable            = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                  = "AM_LANGUAGE"
 	DiffScanEnvVariable                    = "AM_DIFF_SCAN"
@@ -216,16 +220,22 @@ func GetAnalyzerManagerExitCode(err error) int {
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
 // Set JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD=true to skip the download and use the local binary as-is.
+// Set JFROG_CLI_ANALYZER_MANAGER_DOWNLOAD_PATH=<repo>/<path/to/analyzerManager.zip> to download from a custom
+// Artifactory path (uses the server configured via JFROG_CLI_RELEASES_REPO, or the default server).
 func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 	if strings.EqualFold(os.Getenv(skipAnalyzerManagerDownloadEnvVariable), "true") {
 		log.Debug("Skipping Analyzer Manager download (JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD=true)")
 		return nil
 	}
-	downloadPath, err := GetAnalyzerManagerDownloadPath()
+	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
 	if err != nil {
 		return err
 	}
-	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
+	if customPath := os.Getenv(analyzerManagerDownloadPathEnvVariable); customPath != "" {
+		log.Debug(fmt.Sprintf("Using custom Analyzer Manager download path: %s", customPath))
+		return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", customPath, analyzerManagerDir, AnalyzerManagerZipName, true, threadId)
+	}
+	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
 	}
