@@ -46,11 +46,9 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
-	// Set to "true" to skip downloading the Analyzer Manager (use the locally cached binary as-is).
-	skipAnalyzerManagerDownloadEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD"
-	JfPackageManagerEnvVariable            = "AM_PACKAGE_MANAGER"
-	JfLanguageEnvVariable                  = "AM_LANGUAGE"
-	DiffScanEnvVariable                    = "AM_DIFF_SCAN"
+	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
+	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	DiffScanEnvVariable                       = "AM_DIFF_SCAN"
 	// #nosec G101 -- Not credentials.
 	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
@@ -215,12 +213,7 @@ func GetAnalyzerManagerExitCode(err error) int {
 
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
-// Set JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD=true to skip the download and use the local binary as-is.
 func DownloadAnalyzerManagerIfNeeded(threadId int) error {
-	if strings.EqualFold(os.Getenv(skipAnalyzerManagerDownloadEnvVariable), "true") {
-		log.Debug("Skipping Analyzer Manager download (JFROG_CLI_ANALYZER_MANAGER_SKIP_DOWNLOAD=true)")
-		return nil
-	}
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
