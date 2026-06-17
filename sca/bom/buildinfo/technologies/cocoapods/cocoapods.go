@@ -246,6 +246,9 @@ func parsePodDependenciesList(currNode *xrayUtils.GraphNode, dependenciesGraph m
 	if currNode.NodeHasLoop() {
 		return
 	}
+	if uniqueDepsSet.Exists(currNode.Id) {
+		return
+	}
 	uniqueDepsSet.Add(currNode.Id)
 	pkgName := strings.Split(strings.TrimPrefix(currNode.Id, techutils.Cocoapods.GetXrayPackageTypeId()), ":")[0]
 	currDepChildren := dependenciesGraph[pkgName]
