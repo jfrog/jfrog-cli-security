@@ -96,6 +96,7 @@ const (
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
+var osGetwd = os.Getwd
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
@@ -377,6 +378,7 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 			CuratedPackages: &formats.CuratedPackages{
 				PackageCount: packagesStatus.totalNumberOfPackages,
 				Blocked:      getBlocked(packagesStatus.packagesStatus),
+				IsPartial:    packagesStatus.isPartial,
 			},
 		})
 	}
@@ -1240,9 +1242,10 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 		// Fallback produced nothing — surface the original error (current behaviour).
 		return cvsErr
 	}
-	workPath, wdErr := os.Getwd()
+	workPath, wdErr := osGetwd()
 	if wdErr != nil {
-		return cvsErr
+		log.Warn(fmt.Sprintf("curation-blocked resolution fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
+		workPath = "unknown-project"
 	}
 	results[filepath.Base(workPath)] = &CurationReport{
 		packagesStatus:        packagesStatus,
@@ -1395,6 +1398,12 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 				pin.Name, resolvedVersion, headErr))
 			continue
 		}
+		// Package is accessible — CVS cache may be stale; not currently blocked.
+		if headErr == nil && headResp != nil && headResp.StatusCode != http.StatusForbidden {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe returned %d for %s==%s — not CVS-blocked, skipping",
+				headResp.StatusCode, pin.Name, resolvedVersion))
+			continue
+		}
 
 		// ── Step 3b: 403 from HEAD → recover policy details via GET with waiver
 		var pkStatus *PackageStatus
@@ -1409,12 +1418,15 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		depRelation := directRelation
 		if effectiveParent(pin) != pin.Name {
 			depRelation = indirectRelation
+		} else if pin.Version == "" && pin.VersionRange == "" {
+			// Name-only entry from ResolutionImpossible — parent attribution is
+			// unknown but these are always transitive deps by definition.
+			depRelation = indirectRelation
 		}
 		if pkStatus == nil {
-			// HEAD returned non-403 or GET probe errored — CVS stripped the
-			// version from the index but policy details aren't available via
-			// this path; record with unknown reason so the package is never
-			// silently dropped.
+			// HEAD returned 403 but GET probe errored — CVS stripped the version
+			// from the index but policy details aren't available via this path;
+			// record with unknown reason so the package is never silently dropped.
 			statuses = append(statuses, &PackageStatus{
 				PackageName:       pin.Name,
 				PackageVersion:    resolvedVersion,

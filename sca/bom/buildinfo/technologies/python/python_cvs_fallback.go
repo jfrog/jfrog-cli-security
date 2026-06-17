@@ -158,8 +158,10 @@ func formatCvsBlockedRequirementsMessage(pins []PinnedRequirement) string {
 		for _, p := range pins {
 			if p.VersionRange != "" {
 				fmt.Fprintf(&b, " - %s%s\n", p.Name, p.VersionRange)
-			} else {
+			} else if p.Version != "" {
 				fmt.Fprintf(&b, " - %s==%s\n", p.Name, p.Version)
+			} else {
+				fmt.Fprintf(&b, " - %s (version unknown)\n", p.Name)
 			}
 		}
 	}

@@ -138,6 +138,15 @@ func TestFormatCvsBlockedRequirementsMessageRange(t *testing.T) {
 	assert.Contains(t, msg, " - langchain-core>=1.4.0,<2.0.0")
 }
 
+func TestFormatCvsBlockedRequirementsMessageResolutionImpossible(t *testing.T) {
+	// ResolutionImpossible entries have no Version and no VersionRange — must not emit a trailing "==".
+	msg := formatCvsBlockedRequirementsMessage(
+		[]PinnedRequirement{{Name: "langgraph-sdk", ParentName: "langgraph-sdk"}})
+
+	assert.Contains(t, msg, " - langgraph-sdk (version unknown)")
+	assert.NotContains(t, msg, "langgraph-sdk==")
+}
+
 func TestCvsBlockedError(t *testing.T) {
 	pins := []PinnedRequirement{{Name: "deepagents", Version: "0.6.8", ParentName: "deepagents", ParentVersion: "0.6.8"}}
 	cause := assert.AnError
