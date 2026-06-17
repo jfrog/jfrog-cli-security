@@ -52,12 +52,11 @@ func copyDir(t *testing.T, src, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
 		}
-		//#nosec G304 -- path comes from filepath.Walk over a known test data directory.
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //#nosec G122 -- path comes from filepath.Walk over a known test data directory; symlink TOCTOU is acceptable in tests.
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode()) //#nosec G306 -- test helper writing to a temp directory.
+		return os.WriteFile(target, data, info.Mode()) //#nosec G703 -- target is derived from a controlled temp directory; path traversal is not a concern in tests.
 	})
 }
 
