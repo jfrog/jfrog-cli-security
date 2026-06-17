@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetFixedDescriptor(t *testing.T) {
+	integration.InitUnitTest(t)
 	npm := &NpmPackageUpdater{}
 
 	testcases := []struct {
@@ -148,6 +150,7 @@ func TestGetFixedDescriptor(t *testing.T) {
 }
 
 func TestEscapeJsonPathKey(t *testing.T) {
+	integration.InitUnitTest(t)
 	testcases := []struct {
 		name     string
 		input    string
@@ -194,6 +197,7 @@ func TestEscapeJsonPathKey(t *testing.T) {
 }
 
 func TestBuildIsolatedEnv(t *testing.T) {
+	integration.InitUnitTest(t)
 	testcases := []struct {
 		name         string
 		predefineEnv bool

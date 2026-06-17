@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBackupModuleFiles(t *testing.T) {
+	integration.InitUnitTest(t)
 	testcases := []struct {
 		name          string
 		goModContent  []byte
@@ -65,6 +67,7 @@ func TestBackupModuleFiles(t *testing.T) {
 }
 
 func TestHasVendorDirectory(t *testing.T) {
+	integration.InitUnitTest(t)
 	testcases := []struct {
 		name           string
 		setupVendor    bool

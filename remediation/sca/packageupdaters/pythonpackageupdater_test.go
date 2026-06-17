@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPipPackageRegex(t *testing.T) {
+	integration.InitUnitTest(t)
 	var pipPackagesRegexTests = []pipPackageRegexTest{
 		{"oslo.config", "oslo.config>=1.12.1,<1.13"},
 		{"oslo.utils", "oslo.utils<5.0,>=4.0.0"},

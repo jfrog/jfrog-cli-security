@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/build-info-go/tests"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -38,9 +39,7 @@ type pipPackageRegexTest struct {
 }
 
 func TestUpdateDependency(t *testing.T) {
-	if strings.TrimSuffix(os.Getenv("JF_URL"), "/") == "" {
-		t.Skipf("skipping: JF_URL is not set (package updater integration tests run in CI with platform credentials)")
-	}
+	integration.InitRemediationTest(t)
 
 	testCases := [][]dependencyFixTest{
 		// Go test cases
@@ -290,6 +289,7 @@ func verifyDependencyUpdate(t *testing.T, test dependencyFixTest) {
 }
 
 func TestGetFixedPackage(t *testing.T) {
+	integration.InitUnitTest(t)
 	var testcases = []struct {
 		impactedPackage       string
 		versionOperator       string
@@ -317,6 +317,7 @@ func TestGetFixedPackage(t *testing.T) {
 }
 
 func TestGetAllDescriptorFilesFullPaths(t *testing.T) {
+	integration.InitUnitTest(t)
 	var testcases = []struct {
 		testProjectRepo        string
 		suffixesToSearch       []string
@@ -358,6 +359,7 @@ func TestGetAllDescriptorFilesFullPaths(t *testing.T) {
 }
 
 func TestGetVulnerabilityLocations(t *testing.T) {
+	integration.InitUnitTest(t)
 	testcases := []struct {
 		name          string
 		fixDetails    *FixDetails
@@ -566,6 +568,7 @@ func TestGetVulnerabilityLocations(t *testing.T) {
 }
 
 func TestEnvWithCorepackIntegrityWorkaround(t *testing.T) {
+	integration.InitUnitTest(t)
 	t.Parallel()
 	base := []string{"FOO=1", "COREPACK_INTEGRITY_KEYS=old-value", "BAR=2"}
 	out := EnvWithCorepackIntegrityWorkaround(base)
@@ -587,6 +590,7 @@ func TestEnvWithCorepackIntegrityWorkaround(t *testing.T) {
 }
 
 func TestGetVulnerabilityRegexCompiler(t *testing.T) {
+	integration.InitUnitTest(t)
 	// Sample format patterns from different package managers
 	const (
 		npmPattern    = `\s*"%s"\s*:\s*"[~^]?%s"`
@@ -982,6 +986,7 @@ func copyDir(src, dst string) error {
 // TestGetCompatiblePackageUpdater verifies the factory routes every supported technology
 // to the correct updater type and returns (nil, false) for unsupported ones.
 func TestGetCompatiblePackageUpdater(t *testing.T) {
+	integration.InitUnitTest(t)
 	tests := []struct {
 		tech      techutils.Technology
 		supported bool

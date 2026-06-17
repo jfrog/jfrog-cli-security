@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestMavenUpdateDependency(t *testing.T) {
+	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
@@ -62,11 +64,11 @@ func TestMavenUpdateDependency(t *testing.T) {
 		{
 			name: "RegularDependency",
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "1.1.5",
-				IsDirectDependency:    true,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "1.1.5",
+				IsDirectDependency:     true,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "org.jfrog.filespecs:file-specs-java",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			expectedContains:   []string{"<version>1.1.5</version>"},
 			expectedNotContain: []string{"<version>1.1.1</version>"},
@@ -74,11 +76,11 @@ func TestMavenUpdateDependency(t *testing.T) {
 		{
 			name: "DependencyManagement",
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "2.15.0",
-				IsDirectDependency:    true,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "2.15.0",
+				IsDirectDependency:     true,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "com.fasterxml.jackson.core:jackson-core",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			expectedContains:   []string{"<version>2.15.0</version>"},
 			expectedNotContain: []string{"<version>2.13.4</version>"},
@@ -87,11 +89,11 @@ func TestMavenUpdateDependency(t *testing.T) {
 			name:      "PropertyVersion",
 			customPOM: propertyPOM,
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "2.13.0",
-				IsDirectDependency:    true,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "2.13.0",
+				IsDirectDependency:     true,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "com.fasterxml.jackson.core:jackson-databind",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			expectedContains:   []string{"2.13.0"},
 			expectedNotContain: []string{"2.9.8"},
@@ -100,11 +102,11 @@ func TestMavenUpdateDependency(t *testing.T) {
 			name:      "ParentPOM",
 			customPOM: parentPOM,
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "2.7.0",
-				IsDirectDependency:    true,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "2.7.0",
+				IsDirectDependency:     true,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "org.springframework.boot:spring-boot-starter-parent",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			expectedContains:   []string{"<version>2.7.0</version>"},
 			expectedNotContain: []string{"<version>2.5.0</version>"},
@@ -146,6 +148,7 @@ func TestMavenUpdateDependency(t *testing.T) {
 }
 
 func TestMavenUpdateDependencyErrors(t *testing.T) {
+	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
@@ -159,11 +162,11 @@ func TestMavenUpdateDependencyErrors(t *testing.T) {
 		{
 			name: "DependencyNotFound",
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "1.0.0",
-				IsDirectDependency:    true,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "1.0.0",
+				IsDirectDependency:     true,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "com.nonexistent:package",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			useTestData: true,
 			assertErr: func(t *testing.T, err error) {
@@ -174,11 +177,11 @@ func TestMavenUpdateDependencyErrors(t *testing.T) {
 		{
 			name: "IndirectDependencyNotSupported",
 			fixDetails: &FixDetails{
-				SuggestedFixedVersion: "1.0.0",
-				IsDirectDependency:    false,
-				Technology:            techutils.Maven,
+				SuggestedFixedVersion:  "1.0.0",
+				IsDirectDependency:     false,
+				Technology:             techutils.Maven,
 				ImpactedDependencyName: "org.springframework:spring-core",
-				Components:            []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "pom.xml"}}}},
 			},
 			useTestData: false,
 			assertErr: func(t *testing.T, err error) {

@@ -4,11 +4,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEvidencePathLooksLikeNpmPackageCoordinate(t *testing.T) {
+	integration.InitUnitTest(t)
 	t.Parallel()
 	tests := []struct {
 		path     string
@@ -32,6 +34,7 @@ func TestEvidencePathLooksLikeNpmPackageCoordinate(t *testing.T) {
 }
 
 func TestPnpmFilterCoordinateStyleDescriptorPaths(t *testing.T) {
+	integration.InitUnitTest(t)
 	t.Parallel()
 	in := []string{
 		"lodash@4.17.19/package.json",
@@ -45,6 +48,7 @@ func TestPnpmFilterCoordinateStyleDescriptorPaths(t *testing.T) {
 }
 
 func TestPnpmCollectLeavesNpmParityThenPnpmFilterDropsCoordinates(t *testing.T) {
+	integration.InitUnitTest(t)
 	t.Parallel()
 	pnpm := &PnpmPackageUpdater{}
 	vuln := createFixDetails(techutils.Pnpm, "lodash", "4.17.19", "4.17.21", true,
@@ -55,6 +59,7 @@ func TestPnpmCollectLeavesNpmParityThenPnpmFilterDropsCoordinates(t *testing.T) 
 }
 
 func TestPnpmLockRegenerationEnv(t *testing.T) {
+	integration.InitUnitTest(t)
 	t.Parallel()
 	pnpm := &PnpmPackageUpdater{}
 	env := EnvWithCorepackIntegrityWorkaround(pnpm.BuildEnvWithOverrides(PnpmLockfileInstallEnvOverrides))
