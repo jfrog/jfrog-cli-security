@@ -156,11 +156,12 @@ func formatCvsBlockedRequirementsMessage(pins []PinnedRequirement) string {
 	if len(pins) > 0 {
 		b.WriteString("\n\nAffected package(s):\n")
 		for _, p := range pins {
-			if p.VersionRange != "" {
+			switch {
+			case p.VersionRange != "":
 				fmt.Fprintf(&b, " - %s%s\n", p.Name, p.VersionRange)
-			} else if p.Version != "" {
+			case p.Version != "":
 				fmt.Fprintf(&b, " - %s==%s\n", p.Name, p.Version)
-			} else {
+			default:
 				fmt.Fprintf(&b, " - %s (version unknown)\n", p.Name)
 			}
 		}
