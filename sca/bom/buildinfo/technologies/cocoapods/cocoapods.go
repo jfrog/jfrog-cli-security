@@ -243,10 +243,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 
 // Parse the dependencies into a Xray dependency tree format
 func parsePodDependenciesList(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, versionMap map[string]string, uniqueDepsSet *datastructures.Set[string]) {
-	if currNode.NodeHasLoop() {
-		return
-	}
-	if uniqueDepsSet.Exists(currNode.Id) {
+	if currNode.NodeHasLoop() || uniqueDepsSet.Exists(currNode.Id) {
 		return
 	}
 	uniqueDepsSet.Add(currNode.Id)
