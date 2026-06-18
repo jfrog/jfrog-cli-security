@@ -60,6 +60,9 @@ type ScaScanResultSummary struct {
 type CuratedPackages struct {
 	Blocked      []BlockedPackages `json:"blocked,omitempty"`
 	PackageCount int               `json:"num_packages,omitempty"`
+	// IsPartial is true when the dependency tree could not be fully resolved (e.g. CVS pip fallback).
+	// PackageCount reflects only recovered blocked packages, not the full tree size.
+	IsPartial bool `json:"partial,omitempty"`
 }
 
 type BlockedPackages struct {
