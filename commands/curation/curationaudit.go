@@ -121,6 +121,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
 	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
+	},
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -1603,7 +1606,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip:
+	case techutils.Pip, techutils.Poetry:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:
@@ -1643,7 +1646,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	if dl, ok := downloadUrlsMap[normalizedId]; ok {
 		downloadUrls = []string{dl}
 	} else {
-		log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
+		log.Warn(fmt.Sprintf("Couldn't find download URL for node ID %s", id))
 	}
 	return
 }

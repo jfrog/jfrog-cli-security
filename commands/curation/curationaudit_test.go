@@ -1838,6 +1838,141 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
+// =============================================================================
+// Tests for Poetry support added to curationaudit.go.
+// Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the
+// supportedTech registration.
+// =============================================================================
+
+func Test_getPythonNameVersion(t *testing.T) {
+	const exampleUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
+
+	tests := []struct {
+		name             string
+		id               string
+		downloadUrlsMap  map[string]string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "pip id with matching download url",
+			id:               "pypi://flask:2.0.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask:2.0.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "flask",
+			wantVersion:      "2.0.0",
+		},
+		{
+			name:             "poetry id with matching download url (same pypi:// prefix)",
+			id:               "pypi://click:8.0.1",
+			downloadUrlsMap:  map[string]string{"pypi://click:8.0.1": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "click",
+			wantVersion:      "8.0.1",
+		},
+		{
+			name:             "id present in map but no entry returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  map[string]string{"pypi://other:1.0.0": exampleUrl},
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "nil downloadUrlsMap returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "malformed id (no version separator) returns empty",
+			id:               "pypi://malformed",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "hyphenated name resolved via normalization fallback",
+			id:               "pypi://Flask-Babel:1.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask_babel:1.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "Flask-Babel",
+			wantVersion:      "1.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getPythonNameVersion(tt.id, tt.downloadUrlsMap)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+// TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked verifies that
+// getBlockedPackageDetails returns a blocked PackageStatus (no error) when a 403
+// response body cannot be resolved to a known curation block reason:
+// (1) the body is not valid JSON (e.g. an HTML error page), or
+// (2) the body is valid JSON but the Errors array is empty.
+// In both cases the 403 itself is treated as authoritative — the package is
+// recorded as blocked with an unknown policy rather than being dropped silently.
+func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) {
+	tests := []struct {
+		name     string
+		respBody string
+	}{
+		{
+			name:     "non-JSON body (HTML error page)",
+			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
+		},
+		{
+			name:     "JSON body with empty errors list",
+			respBody: `{"errors":[]}`,
+		},
+	}
+
+	const (
+		pkgName    = "telnyx"
+		pkgVersion = "4.87.1"
+	)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.respBody))
+			})
+			defer serverMock.Close()
+
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			httpClientDetails := rtAuth.CreateHttpClientDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				rtAuth:               rtAuth,
+				httpClientDetails:    httpClientDetails,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				url:                  rtAuth.GetUrl(),
+				repo:                 "pypi-remote",
+				tech:                 techutils.Poetry,
+			}
+			packageUrl := fmt.Sprintf("%sapi/pypi/pypi-remote/packages/%s-%s.tar.gz", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+			require.NoError(t, err, "unparsable 403 body should not surface as an error")
+			require.NotNil(t, got, "a blocked PackageStatus must be returned when the 403 block reason is unknown")
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)
+			assert.Equal(t, pkgName, got.PackageName)
+			assert.Equal(t, pkgVersion, got.PackageVersion)
+		})
+	}
+}
 
 // TestFetchCvsBlockedStatusTransitive verifies the CVS fallback for a transitive range blocker:
 // the range is resolved to the newest satisfying version and the policy is recovered from the 403 probe.

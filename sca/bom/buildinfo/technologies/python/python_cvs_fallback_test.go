@@ -95,6 +95,16 @@ func TestParseCvsFailedPackages(t *testing.T) {
 			output: "ERROR: 403 Forbidden",
 			want:   nil,
 		},
+		{
+			name:   "poetry: doesn't match any versions",
+			output: "Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.",
+			want:   []PinnedRequirement{{Name: "telnyx", Version: "4.87.1", ParentName: "telnyx", ParentVersion: "4.87.1"}},
+		},
+		{
+			name:   "poetry: range specifier is not captured",
+			output: "Because sample-poetry-project depends on bar (>=1.0,<2.0) which doesn't match any versions, version solving failed.",
+			want:   nil,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,8 +118,9 @@ func TestIsCvsVersionFilteredOutput(t *testing.T) {
 		"Additionally, some packages in these conflicts have no matching distributions available for your environment:\n" +
 		"    langgraph-sdk"
 	cases := map[string]bool{
-		"ERROR: No matching distribution found for deepagents==0.5.5":                                 true,
-		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2": true,
+		"ERROR: No matching distribution found for deepagents==0.5.5":                                                          true,
+		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                          true,
+		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.":   true,
 		resolutionImpossible:                               true,
 		"ERROR: 403 Forbidden":                             false,
 		"ERROR: ResolutionImpossible: some other conflict": false, // no "no matching distributions" line

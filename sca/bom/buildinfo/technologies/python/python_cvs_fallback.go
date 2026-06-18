@@ -61,7 +61,15 @@ var pipResolutionImpossibleRegex = regexp.MustCompile(
 var pipDirectFromRequirementsRegex = regexp.MustCompile(
 	`Collecting\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([^\s(,;]+)\s+\(from\s+-r\s`)
 
-// parseCvsFailedPackages extracts blockers from pip's failure output.
+// poetryCvsBlockedReqRegex extracts a pinned `name (version)` from poetry's
+// "X (Y) which doesn't match any versions" error lines. Both `name (X.Y.Z)`
+// and `name (==X.Y.Z)` notations are accepted; range specifiers
+// (e.g. `name (>=1.0,<2.0)`) are skipped because they represent transitive
+// constraints, not the user's direct pin.
+var poetryCvsBlockedReqRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\((?:==)?\s*([0-9][0-9A-Za-z._+\-]*)\)\s+which doesn't match any versions`)
+
+// parseCvsFailedPackages extracts blockers from pip's and poetry's failure output.
 // Only packages that caused the failure are returned, not every requirements entry.
 func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 	seen := map[string]bool{}
@@ -141,6 +149,22 @@ func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 		}
 	}
 
+	// Poetry: "name (version) which doesn't match any versions"
+	for _, m := range poetryCvsBlockedReqRegex.FindAllStringSubmatch(pipOutput, -1) {
+		name := normalizePyPIName(m[1])
+		ver := strings.TrimRight(m[2], ")")
+		key := name + "==" + ver
+		if !seen[key] {
+			seen[key] = true
+			failed = append(failed, PinnedRequirement{
+				Name:          name,
+				Version:       ver,
+				ParentName:    name,
+				ParentVersion: ver,
+			})
+		}
+	}
+
 	return failed
 }
 
@@ -172,6 +196,7 @@ func formatCvsBlockedRequirementsMessage(pins []PinnedRequirement) string {
 func isCvsVersionFilteredOutput(output string) bool {
 	return strings.Contains(output, "No matching distribution found") ||
 		strings.Contains(output, "Could not find a version that satisfies the requirement") ||
+		strings.Contains(output, "doesn't match any versions") ||
 		// ResolutionImpossible: direct dep resolved but a transitive dep was stripped by CVS.
 		(strings.Contains(output, "ResolutionImpossible") &&
 			strings.Contains(output, "no matching distributions available for your environment"))
