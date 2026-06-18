@@ -53,9 +53,10 @@ const (
 	v3UpdateLockfileFlag = "--mode=update-lockfile"
 	// Ignores any build scripts
 	v3SkipBuildFlag     = "--mode=skip-build"
-	yarnV2Version       = "2.0.0"
-	yarnV3Version       = "3.0.0"
-	yarnV4Version       = "4.0.0"
+	yarnV2Version = "2.0.0"
+	yarnV3Version = "3.0.0"
+	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
+	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
 
 	// Command registered by the embedded resolution-only plugin.
@@ -1056,8 +1057,11 @@ func runYarnCommandQuiet(executablePath, srcPath string, args ...string) error {
 // resolveCurationLockfileDir prepares the directory from which the curation
 // audit reads yarn.lock. When install is needed it copies the project to a
 // temp dir, configures the curation registry there, and runs
-// 'yarn install --mode=update-lockfile' — so the customer's project is never
-// modified and read-only CI checkouts still work.
+// 'yarn install --mode=update-lockfile' — so the customer's project content is
+// never modified and read-only CI checkouts still work.
+//
+// Exception: it bumps the original yarn.lock's mtime (touchYarnLock) so the
+// next run skips re-resolution — mtime only, not content; failures are ignored.
 //
 // Returns:
 //   - lockfileDir: where to read yarn.lock / run GetYarnDependencies from
@@ -1125,28 +1129,9 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	}
 	yarnVersion := version.NewVersion(executableYarnVersion)
 
-	// Yarn V4 uses native mode: credentials are already stored in .yarnrc.yml (copied into curWd
-	// by resolveCurationLockfileDir). For curation we rewrite the registry URL to the audit
-	// endpoint and set a global npmAuthToken — no credential injection via ModifyYarnConfigurations.
-	if yarnVersion.Compare(yarnV4Version) <= 0 {
-		if params.IsCurationCmd {
-			artiURL := strings.TrimSuffix(params.ServerDetails.ArtifactoryUrl, "/")
-			registry := fmt.Sprintf("%s/api/npm/%s/", artiURL, depsRepo)
-			curationRegistry := yarnCurationRegistry(registry)
-			log.Debug(fmt.Sprintf("Yarn V4 native mode: rewriting npmRegistryServer to curation endpoint %s", curationRegistry))
-			if err = setYarnConfigNpmRegistryServer(yarnExecPath, curWd, curationRegistry); err != nil {
-				return err
-			}
-			// The original auth token in .yarnrc.yml is scoped to api/npm/<repo>/. After
-			// rewriting the URL to api/curation/audit/<repo>/, Yarn can no longer match the
-			// scoped token. Setting a global npmAuthToken ensures the curation endpoint is
-			// authenticated with the same credential.
-			if params.ServerDetails != nil && params.ServerDetails.AccessToken != "" {
-				if setErr := runYarnConfigSet(yarnExecPath, curWd, "npmAuthToken", params.ServerDetails.AccessToken); setErr != nil {
-					log.Warn(fmt.Sprintf("yarn V4: could not set global npmAuthToken for curation endpoint: %v", setErr))
-				}
-			}
-		}
+	// V4 always uses native mode (.yarnrc.yml); --deps-repo / yarn.yaml are not applicable.
+	// If depsRepo is somehow non-empty for V4, skip credential injection and install as-is.
+	if yarnVersion.Compare(YarnV4Version) <= 0 {
 		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
 	}
 
@@ -1482,8 +1467,11 @@ func attachWorkspaceMembersToRoot(dependenciesMap map[string]*bibuildutils.YarnD
 	for _, ptr := range root.Details.Dependencies {
 		linked[bibuildutils.GetYarnDependencyKeyFromLocator(ptr.Locator)] = struct{}{}
 	}
+	// Iterate in sorted key order so the appended root.Details.Dependencies (which
+	// feeds the tree walk) is deterministic across runs, not in map-random order.
 	var attached []string
-	for _, dep := range dependenciesMap {
+	for _, key := range slices.Sorted(maps.Keys(dependenciesMap)) {
+		dep := dependenciesMap[key]
 		if dep == nil || dep == root {
 			continue
 		}
@@ -1491,16 +1479,15 @@ func attachWorkspaceMembersToRoot(dependenciesMap map[string]*bibuildutils.YarnD
 		if !strings.Contains(dep.Value, workspaceMarker) || strings.HasSuffix(dep.Value, rootWorkspaceSuffix) {
 			continue
 		}
-		key := bibuildutils.GetYarnDependencyKeyFromLocator(dep.Value)
-		if _, already := linked[key]; already {
+		depKey := bibuildutils.GetYarnDependencyKeyFromLocator(dep.Value)
+		if _, already := linked[depKey]; already {
 			continue
 		}
 		root.Details.Dependencies = append(root.Details.Dependencies, bibuildutils.YarnDependencyPointer{Locator: dep.Value})
-		linked[key] = struct{}{}
+		linked[depKey] = struct{}{}
 		attached = append(attached, dep.Value)
 	}
 	if len(attached) > 0 {
-		slices.Sort(attached)
 		log.Debug(fmt.Sprintf(
 			"yarn curation: attached %d workspace member(s) to the root so their dependencies are audited: %s",
 			len(attached), strings.Join(attached, ", ")))
@@ -1602,24 +1589,6 @@ func runYarnConfigGet(yarnExecPath, workingDir, key string) (string, error) {
 		return "", fmt.Errorf("yarn config get %s: %w", key, err)
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// runYarnConfigSet runs 'yarn config set <key> <value>' in workingDir.
-func runYarnConfigSet(yarnExecPath, workingDir, key, value string) error {
-	cmd := exec.Command(yarnExecPath, "config", "set", key, value)
-	cmd.Dir = workingDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("yarn config set %s failed: %w\n%s", key, err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// setYarnConfigNpmRegistryServer runs 'yarn config set npmRegistryServer <url>'
-// in workingDir. Used in V4 native curation mode to route installs through the
-// curation audit endpoint without touching auth credentials.
-func setYarnConfigNpmRegistryServer(yarnExecPath, workingDir, registryURL string) error {
-	return runYarnConfigSet(yarnExecPath, workingDir, "npmRegistryServer", registryURL)
 }
 
 // yarnrcFile is the subset of .yarnrc.yml fields we need for curation.

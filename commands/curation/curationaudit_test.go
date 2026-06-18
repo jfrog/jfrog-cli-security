@@ -1801,31 +1801,20 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
 
-// TestValidateRunNativeForTech checks that --run-native is accepted for npm and
-// pnpm (both .npmrc-based) and rejected for all other techs with an error that
-// names the offending tech.
+// TestValidateRunNativeForTech checks that --run-native is accepted for the
+// allow-listed native-config techs (npm, pnpm, yarn) and rejected for all other
+// techs with an error that names the offending tech.
 func TestValidateRunNativeForTech(t *testing.T) {
-	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
+	// Sanity: npm and pnpm are allow-listed techs. Both flag states pass.
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, false))
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, false))
 
-	// The failing-test scenario from the bug report: yarn + --run-native
-	// must exit non-zero with a yarn-named error that points the user at
-	// the supported config flow.
-	t.Run("yarn rejects --run-native with actionable message", func(t *testing.T) {
-		err := validateRunNativeForTech(techutils.Yarn, true)
-		if assert.Error(t, err) {
-			msg := err.Error()
-			// Tech-neutral phrasing — the message must not hard-code
-			// "only supported for npm", because the allow-list is the
-			// source of truth and may grow over time.
-			assert.Contains(t, msg, "--run-native is not supported for 'yarn' projects")
-			assert.Contains(t, msg, "jf yarn-config", "the error must point the user at the supported config flow")
-		}
-		// Without the flag, yarn must pass validation cleanly — the
-		// guard is strictly conditional on --run-native being on.
+	// Yarn V4 always uses native mode (.yarnrc.yml), so --run-native is a
+	// redundant no-op rather than an error (a warning is emitted in auditTree).
+	t.Run("yarn accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
 	})
 
@@ -1949,6 +1938,11 @@ func TestResolveResolverTechForCuration(t *testing.T) {
 			// when nothing matches walking up from CWD).
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()
+			// Defensive: isolate the OS home too so a real ~/.yarnrc.yml can't leak
+			// in if this code path ever starts probing os.UserHomeDir().
+			dummyHome := t.TempDir()
+			t.Setenv("HOME", dummyHome)
+			t.Setenv("USERPROFILE", dummyHome)
 			restoreCwd := changeDirForTest(t, tempProjectDir)
 			defer restoreCwd()
 
@@ -2019,6 +2013,13 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			}
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()
+			// resolveNpmYarnTech also probes the OS home (~/.yarnrc.yml) via
+			// os.UserHomeDir(); point it at an empty dir so a real one on the
+			// developer's machine can't leak in and flip "neither yaml" to yarn.
+			// HOME (unix) and USERPROFILE (windows) cover os.UserHomeDir on all OSes.
+			dummyHome := t.TempDir()
+			t.Setenv("HOME", dummyHome)
+			t.Setenv("USERPROFILE", dummyHome)
 			restoreCwd := changeDirForTest(t, tempProjectDir)
 			defer restoreCwd()
 
@@ -2131,4 +2132,102 @@ func TestPromotePnpmWorkspaceMember(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPromoteYarnWorkspaceMember(t *testing.T) {
+	npm := techutils.Npm.String()
+	yarn := techutils.Yarn.String()
+	other := "maven"
+
+	tests := []struct {
+		name            string
+		techs           []string
+		ancestorFile    string // indicator file created in the ancestor dir ("" = none)
+		expectedHasYarn bool
+		expectedHasNpm  bool
+	}{
+		{
+			name:            "already has yarn — no change",
+			techs:           []string{yarn, npm},
+			expectedHasYarn: true,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "no npm — no change",
+			techs:           []string{other},
+			expectedHasYarn: false,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, no ancestor indicator — no promotion",
+			techs:           []string{npm},
+			expectedHasYarn: false,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "npm only, ancestor has .yarnrc.yml — promote",
+			techs:           []string{npm},
+			ancestorFile:    ".yarnrc.yml",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, ancestor has yarn.lock — promote",
+			techs:           []string{npm},
+			ancestorFile:    "yarn.lock",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm + other, ancestor has .yarnrc.yml — npm promoted, other kept",
+			techs:           []string{npm, other},
+			ancestorFile:    ".yarnrc.yml",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			sub := filepath.Join(root, "sub")
+			require.NoError(t, os.MkdirAll(sub, 0o755))
+			if tc.ancestorFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, tc.ancestorFile), []byte{}, 0o644))
+			}
+			t.Chdir(sub)
+
+			result := promoteYarnWorkspaceMember(tc.techs)
+
+			hasYarn, hasNpm := false, false
+			for _, tech := range result {
+				switch tech {
+				case yarn:
+					hasYarn = true
+				case npm:
+					hasNpm = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasYarn, hasYarn, "yarn presence mismatch")
+			assert.Equal(t, tc.expectedHasNpm, hasNpm, "npm presence mismatch")
+		})
+	}
+
+	// A personal ~/.yarnrc.yml must not misclassify an npm project under $HOME as a
+	// yarn workspace member: the walk stops at $HOME before statting it.
+	t.Run("indicator at $HOME — no promotion", func(t *testing.T) {
+		home := t.TempDir()
+		sub := filepath.Join(home, "project")
+		require.NoError(t, os.MkdirAll(sub, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte{}, 0o644))
+		// HOME (unix) and USERPROFILE (windows) cover os.UserHomeDir on all OSes.
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
+		t.Chdir(sub)
+
+		result := promoteYarnWorkspaceMember([]string{npm})
+
+		assert.Contains(t, result, npm, "npm should be kept when the only indicator is at $HOME")
+		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
+	})
 }

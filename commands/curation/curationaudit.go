@@ -471,12 +471,18 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	if err != nil {
 		return techs
 	}
+	// Stop at $HOME: a personal ~/.yarnrc.yml (created by 'jf c'/yarn setup) must
+	// not misclassify every npm project under $HOME as a yarn workspace member.
+	home, _ := os.UserHomeDir()
 	for {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return techs
 		}
 		dir = parent
+		if home != "" && dir == home {
+			return techs
+		}
 		for _, indicator := range []string{".yarnrc.yml", "yarn.lock", ".yarnrc"} {
 			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
 				log.Debug(fmt.Sprintf("Detected yarn workspace root at %s via %s; promoting current directory from npm to yarn.", dir, indicator))
@@ -1010,7 +1016,7 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 			return fmt.Errorf("could not detect yarn version: %w. Ensure the yarn binary at %q is functional (try 'yarn --version') before running 'jf ca'", versionErr, yarnExecPath)
 		}
 		yarnVersion := version.NewVersion(versionStr)
-		if yarnVersion.Compare("4.0.0") <= 0 {
+		if yarnVersion.Compare(yarntech.YarnV4Version) <= 0 {
 			return ca.setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir)
 		}
 		// V2/V3: fall through to getRepoParams (yarn.yaml / npm.yaml).
@@ -1170,11 +1176,15 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 		}
 	} else {
 		log.Debug("yarn V4: no token in .yarnrc.yml — using 'jf c' server credentials")
-		serverDetails, err = ca.ServerDetails()
-		if err != nil || serverDetails == nil {
-			return fmt.Errorf("yarn V4: no auth token found in .yarnrc.yml and no 'jf c' server configured: %w", err)
+		base, sdErr := ca.ServerDetails()
+		if sdErr != nil || base == nil {
+			return fmt.Errorf("yarn V4: no auth token found in .yarnrc.yml and no 'jf c' server configured: %w", sdErr)
 		}
-		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+		// Copy before mutating: ca.ServerDetails() returns the shared struct, and
+		// overwriting its URL would leak to other techs in a multi-tech audit.
+		copied := *base
+		copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+		serverDetails = &copied
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).
@@ -1185,7 +1195,7 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 	// the correct repository name. For V4 native mode the user never passes --deps-repo,
 	// so ca.DepsRepo() would otherwise be "" and the curation endpoint URL would not be
 	// constructed in configureYarnResolutionServerAndRunInstall.
-	ca.AuditParamsInterface.SetDepsRepo(registryConfig.RepoName)
+	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }

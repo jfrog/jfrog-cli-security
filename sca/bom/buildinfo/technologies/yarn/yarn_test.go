@@ -1008,23 +1008,24 @@ func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 
 	// The actual scope contract: the re-routing block in
 	// BuildDependencyTree wraps the helper call in 'if params.IsCurationCmd'.
-	// Read the source and assert the gate is present so a future
-	// refactor that drops the guard fails this test loudly.
+	// Assert the guard sits directly before this specific call so a future
+	// refactor that drops it fails loudly.
 	src, err := os.ReadFile("yarn.go")
 	if assert.NoError(t, err, "must be able to read yarn.go to verify the curation-only gate") {
-		// Look for the exact gate pattern. Two things together: the
-		// IsCurationCmd predicate AND the helper call inside it. A weaker
-		// substring check would pass if either drifted to a different
-		// site, so we anchor on both.
+		// Anchor on the helper call and scan only the lines immediately before
+		// it for the gate. A plain strings.Index for the gate would match the
+		// *first* of several 'if params.IsCurationCmd {' blocks in this file and
+		// pass even if this specific call lost its guard.
 		txt := string(src)
-		gateIdx := strings.Index(txt, "if params.IsCurationCmd {")
 		helperIdx := strings.Index(txt, "findClaimingYarnWorkspaceRoot(currentDir)")
-		assert.NotEqual(t, -1, gateIdx, "BuildDependencyTree must contain 'if params.IsCurationCmd' guard for the workspace re-route")
-		assert.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
-		if gateIdx != -1 && helperIdx != -1 {
-			assert.Less(t, gateIdx, helperIdx,
-				"the IsCurationCmd guard must come BEFORE findClaimingYarnWorkspaceRoot — otherwise the re-routing fires for non-curation flows too")
+		require.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
+		windowStart := helperIdx - 200
+		if windowStart < 0 {
+			windowStart = 0
 		}
+		context := txt[windowStart:helperIdx]
+		assert.Contains(t, context, "if params.IsCurationCmd {",
+			"findClaimingYarnWorkspaceRoot must be wrapped in an 'if params.IsCurationCmd' guard — otherwise the re-routing fires for non-curation flows too")
 	}
 }
 
@@ -1643,4 +1644,163 @@ func TestProbeBlockedDirectDeps(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegisterYarnPluginInYarnrc(t *testing.T) {
+	const relPath = ".yarn/plugins/jfrog-yarn-resolve-lockfile.cjs"
+	const spec = "@yarnpkg/plugin-jfrog-yarn-resolve-lockfile"
+	const yarnrcName = ".yarnrc.yml"
+
+	t.Run("creates yarnrc when absent", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), relPath)
+		assert.Contains(t, string(data), spec)
+	})
+
+	t.Run("idempotent - no duplicate entry", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Equal(t, 1, strings.Count(string(data), relPath))
+	})
+
+	t.Run("preserves unrelated settings", func(t *testing.T) {
+		curWd := t.TempDir()
+		yarnrc := "npmRegistryServer: \"https://example.com/artifactory/api/npm/repo/\"\nnpmAuthToken: secret-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte(yarnrc), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "npmRegistryServer")
+		assert.Contains(t, string(data), "secret-token")
+		assert.Contains(t, string(data), relPath)
+	})
+
+	t.Run("recovers from malformed yaml", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), relPath)
+	})
+}
+
+func TestAttachWorkspaceMembersToRoot(t *testing.T) {
+	newDep := func(value string, childLocators ...string) *bibuildutils.YarnDependency {
+		ptrs := make([]bibuildutils.YarnDependencyPointer, 0, len(childLocators))
+		for _, locator := range childLocators {
+			ptrs = append(ptrs, bibuildutils.YarnDependencyPointer{Locator: locator})
+		}
+		return &bibuildutils.YarnDependency{Value: value, Details: bibuildutils.YarnDepDetails{Dependencies: ptrs}}
+	}
+	rootChildLocators := func(root *bibuildutils.YarnDependency) []string {
+		var locs []string
+		for _, p := range root.Details.Dependencies {
+			locs = append(locs, p.Locator)
+		}
+		return locs
+	}
+
+	t.Run("attaches unlinked workspace members in deterministic (sorted-key) order", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":           root,
+			"ui@workspace:packages/ui":   newDep("ui@workspace:packages/ui"),
+			"api@workspace:packages/api": newDep("api@workspace:packages/api"),
+			"lodash@npm:4.17.21":         newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		// Keys "api@workspace:packages/api" < "ui@workspace:packages/ui" so api comes first.
+		assert.Equal(t, []string{"api@workspace:packages/api", "ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("dedups already-linked members", func(t *testing.T) {
+		root := newDep("root@workspace:.", "ui@workspace:packages/ui")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":         root,
+			"ui@workspace:packages/ui": newDep("ui@workspace:packages/ui"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Equal(t, []string{"ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("skips non-workspace deps and the root itself", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":   root,
+			"lodash@npm:4.17.21": newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Empty(t, rootChildLocators(root))
+	})
+
+	t.Run("nil root is a no-op", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			attachWorkspaceMembersToRoot(map[string]*bibuildutils.YarnDependency{}, nil)
+		})
+	})
+}
+
+func TestReadNpmAuthTokenFromYarnrcFiles(t *testing.T) {
+	const registryURL = "https://example.com/artifactory/api/npm/repo/"
+	scopedYarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\nnpmAuthToken: top-level-token\n"
+
+	// setHome points os.UserHomeDir() at dir on every OS (HOME on unix,
+	// USERPROFILE on windows) so a real ~/.yarnrc.yml can't leak in.
+	setHome := func(t *testing.T, dir string) {
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+	}
+
+	t.Run("scoped registry entry wins over top-level", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(scopedYarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("falls back to top-level npmAuthToken", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: top-level-token\n"), 0o600))
+		assert.Equal(t, "top-level-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("global ~/.yarnrc.yml used when project file absent", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("project file takes priority over global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: project-token\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "project-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("malformed project yaml falls through to global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("no token anywhere returns empty", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		assert.Empty(t, readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
 }
