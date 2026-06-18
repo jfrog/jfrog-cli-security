@@ -301,18 +301,7 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 			continue
 		}
 		g.Go(func() error {
-			localDetails := httpClientDetails.Clone()
-			downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, localDetails, artiUrl, repository, pkg)
-			if lookupErr != nil {
-				log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
-				return nil
-			}
-			normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
-			compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
-			mu.Lock()
-			urls[compId] = downloadUrl
-			mu.Unlock()
-			return nil
+			return resolvePoetryPackageURL(rtManager, httpClientDetails, artiUrl, repository, pkg, urls, &mu)
 		})
 	}
 	_ = g.Wait()
@@ -327,6 +316,21 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 	}
 	log.Debug(fmt.Sprintf("Poetry: resolved %d download URLs (skipped %d entries with no files)", resolved, skipped))
 	return urls, nil
+}
+
+func resolvePoetryPackageURL(rtManager artifactory.ArtifactoryServicesManager, httpClientDetails httputils.HttpClientDetails, artiUrl, repository string, pkg poetryLockPackage, urls map[string]string, mu *sync.Mutex) error {
+	localDetails := httpClientDetails.Clone()
+	downloadUrl, lookupErr := buildPoetryDownloadUrl(rtManager, localDetails, artiUrl, repository, pkg)
+	if lookupErr != nil {
+		log.Debug(fmt.Sprintf("Poetry: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
+		return nil
+	}
+	normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
+	compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
+	mu.Lock()
+	urls[compId] = downloadUrl
+	mu.Unlock()
+	return nil
 }
 
 // buildPoetryDownloadUrl is the Poetry equivalent of npm's buildNpmDownloadUrl: given a
