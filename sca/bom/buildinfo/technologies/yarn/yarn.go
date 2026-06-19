@@ -52,9 +52,9 @@ const (
 	// Skips linking and fetch only packages that are missing from yarn.lock file
 	v3UpdateLockfileFlag = "--mode=update-lockfile"
 	// Ignores any build scripts
-	v3SkipBuildFlag     = "--mode=skip-build"
-	yarnV2Version = "2.0.0"
-	yarnV3Version = "3.0.0"
+	v3SkipBuildFlag = "--mode=skip-build"
+	yarnV2Version   = "2.0.0"
+	yarnV3Version   = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -107,9 +107,9 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 
 	// Curation issues per-package HEAD requests to Artifactory, which only
 	// return meaningful curation JSON for packages Artifactory has resolved.
-	// The jfrog-cli yarn integration only resolves through Artifactory for
-	// Yarn V2/V3, so V1 and V4 would silently bypass Artifactory and produce
-	// unreliable curation results. Reject those versions up front.
+	// The jfrog-cli yarn integration resolves through Artifactory for Yarn
+	// V2/V3/V4; only V1 (classic) silently bypasses it and produces unreliable
+	// curation results, so reject V1 up front.
 	if params.IsCurationCmd {
 		if err = verifyYarnVersionSupportedForCuration(executablePath, currentDir); err != nil {
 			return
@@ -175,6 +175,8 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		err = errorutils.CheckErrorf("could not identify the root workspace from yarn dependency output")
 		return
 	}
+	// Normalize workspace versions for display (drop Yarn's "-use.local").
+	stripWorkspaceUseLocalSuffix(dependenciesMap)
 	// When --working-dirs targets a workspace member, prune dependenciesMap
 	// to the subgraph reachable from that member and reset root accordingly.
 	// This keeps the dependency tree and the uniqueDeps list
@@ -1114,6 +1116,16 @@ func resolveCurationLockfileDir(
 	return tmpDir, cleanup, deferredInstallErr, nil
 }
 
+// shouldRouteThroughCurationEndpoint reports whether 'yarn install' should hit
+// the api/curation/audit endpoint instead of the plain Artifactory npm repo.
+// Only Yarn V2 needs this: it has no lockfile-only mode, so blocked packages
+// must 403 at the curation endpoint. V3/V4 resolve from the plain repo (the
+// curation endpoint returns 403 HTML the plugin can't parse) and enforce
+// curation afterwards via the HEAD-walker.
+func shouldRouteThroughCurationEndpoint(yarnVersion *version.Version, isCurationCmd bool) bool {
+	return isCurationCmd && yarnVersion.Compare(yarnV3Version) > 0
+}
+
 // Sets up Artifactory server configurations for dependency resolution, if such were provided by the user.
 // Executes the user's 'install' command or a default 'install' command if none was specified.
 func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
@@ -1148,8 +1160,7 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		return errors.Join(err, restoreYarnrcFunc())
 	}
 
-	// For curation, route installs through the api/curation/audit endpoint.
-	if params.IsCurationCmd {
+	if shouldRouteThroughCurationEndpoint(yarnVersion, params.IsCurationCmd) {
 		registry = yarnCurationRegistry(registry)
 	}
 	log.Debug(fmt.Sprintf("Yarn npmRegistryServer set to: %s", registry))
@@ -1199,17 +1210,57 @@ func isInstallRequired(currentDir string, installCommandArgs []string, skipAutoI
 	return false, nil
 }
 
-// isYarnLockStale reports whether package.json is newer than yarn.lock.
+// isYarnLockStale reports whether yarn.lock needs regeneration.
+// If package.json is newer by mtime it does a specifier-coverage check: if
+// every declared direct dep already has an entry in yarn.lock the lockfile is
+// still fresh (handles yarn V4 stamping packageManager in package.json after
+// writing yarn.lock, which would otherwise always trigger re-resolution).
 func isYarnLockStale(curWd string) bool {
 	pkgJsonStat, err := os.Stat(filepath.Join(curWd, "package.json"))
 	if err != nil {
 		return false
 	}
-	lockStat, err := os.Stat(filepath.Join(curWd, yarn.YarnLockFileName))
+	lockPath := filepath.Join(curWd, yarn.YarnLockFileName)
+	lockStat, err := os.Stat(lockPath)
 	if err != nil {
 		return false
 	}
-	return pkgJsonStat.ModTime().After(lockStat.ModTime())
+	if !pkgJsonStat.ModTime().After(lockStat.ModTime()) {
+		return false
+	}
+	return yarnLockMissesDeclaredDeps(curWd, lockPath)
+}
+
+// yarnLockMissesDeclaredDeps returns true if any direct dep declared in
+// package.json has no entry in yarn.lock (Berry quoted format: "dep@...).
+func yarnLockMissesDeclaredDeps(curWd, lockPath string) bool {
+	pkgData, err := os.ReadFile(filepath.Join(curWd, "package.json"))
+	if err != nil {
+		return true
+	}
+	var pkg struct {
+		Dependencies    map[string]string `json:"dependencies"`
+		DevDependencies map[string]string `json:"devDependencies"`
+	}
+	if err = json.Unmarshal(pkgData, &pkg); err != nil {
+		return true
+	}
+	lockData, err := os.ReadFile(lockPath)
+	if err != nil {
+		return true
+	}
+	lockContent := string(lockData)
+	for dep := range pkg.Dependencies {
+		if !strings.Contains(lockContent, `"`+dep+`@`) {
+			return true
+		}
+	}
+	for dep := range pkg.DevDependencies {
+		if !strings.Contains(lockContent, `"`+dep+`@`) {
+			return true
+		}
+	}
+	return false
 }
 
 // touchYarnLock bumps yarn.lock mtime to now so isYarnLockStale won't re-trigger.
@@ -1305,13 +1356,13 @@ func installResolveLockfilePlugin(curWd string) error {
 	if err := os.WriteFile(pluginPath, resolveLockfilePluginJS, 0600); err != nil {
 		return fmt.Errorf("writing yarn plugin file: %w", err)
 	}
-	return registerYarnPluginInYarnrc(curWd, resolveLockfilePluginRelPath, resolveLockfilePluginSpec)
+	return registerYarnPluginInYarnrc(curWd)
 }
 
 // registerYarnPluginInYarnrc adds a {path, spec} entry to the "plugins" list of
 // curWd/.yarnrc.yml, creating the file if absent and preserving every other
 // setting. If an entry with the same path already exists it is left untouched.
-func registerYarnPluginInYarnrc(curWd, pluginRelPath, pluginSpec string) error {
+func registerYarnPluginInYarnrc(curWd string) error {
 	yarnrcPath := filepath.Join(curWd, yarn.YarnrcFileName)
 	rc := map[string]interface{}{}
 	if data, err := os.ReadFile(yarnrcPath); err == nil {
@@ -1331,14 +1382,14 @@ func registerYarnPluginInYarnrc(curWd, pluginRelPath, pluginSpec string) error {
 	}
 	for _, p := range plugins {
 		if entry, ok := p.(map[string]interface{}); ok {
-			if path, _ := entry["path"].(string); path == pluginRelPath {
+			if path, _ := entry["path"].(string); path == resolveLockfilePluginRelPath {
 				return nil // already registered
 			}
 		}
 	}
 	plugins = append(plugins, map[string]interface{}{
-		"path": pluginRelPath,
-		"spec": pluginSpec,
+		"path": resolveLockfilePluginRelPath,
+		"spec": resolveLockfilePluginSpec,
 	})
 	rc["plugins"] = plugins
 
@@ -1350,12 +1401,29 @@ func registerYarnPluginInYarnrc(curWd, pluginRelPath, pluginSpec string) error {
 }
 
 // Parse the dependencies into a Xray dependency tree format
+// stripWorkspaceUseLocalSuffix drops Yarn's "-use.local" marker so workspace
+// versions display as declared (e.g. 0.0.0), consistent across lockfile/plugin
+// paths. Display-only; members are excluded from the HEAD-check regardless.
+func stripWorkspaceUseLocalSuffix(dependencies map[string]*bibuildutils.YarnDependency) {
+	for _, dep := range dependencies {
+		if dep != nil && strings.Contains(dep.Value, "@workspace:") {
+			dep.Details.Version = strings.TrimSuffix(dep.Details.Version, "-use.local")
+		}
+	}
+}
+
 func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string, error) {
 	treeMap := make(map[string]xray.DepTreeNode)
+	workspaceMemberIds := make(map[string]bool)
 	for _, dependency := range dependencies {
 		xrayDepId, err := getXrayDependencyId(dependency)
 		if err != nil {
 			return nil, nil, err
+		}
+		// Workspace members are local packages, not registry artifacts (the root
+		// is exempt). Track them so they're skipped by the curation HEAD-check.
+		if strings.Contains(dependency.Value, "@workspace:") && xrayDepId != rootXrayId {
+			workspaceMemberIds[xrayDepId] = true
 		}
 		var subDeps []string
 		for _, subDepPtr := range dependency.Details.Dependencies {
@@ -1371,7 +1439,17 @@ func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependen
 		}
 	}
 	graph, uniqDeps := xray.BuildXrayDependencyTree(treeMap, rootXrayId)
-	return graph, slices.Collect(maps.Keys(uniqDeps)), nil
+	// Drop workspace members from the flat list curation HEAD-checks: a local
+	// package coincidentally matching a public one would be a false positive.
+	// They stay in the graph so their dependencies remain attributed to them.
+	uniqueDepsList := make([]string, 0, len(uniqDeps))
+	for id := range uniqDeps {
+		if workspaceMemberIds[id] {
+			continue
+		}
+		uniqueDepsList = append(uniqueDepsList, id)
+	}
+	return graph, uniqueDepsList, nil
 }
 
 func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) (string, error) {

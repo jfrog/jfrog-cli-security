@@ -66,6 +66,32 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			errorExpected:      false,
 		},
 		{
+			// Workspace members are local packages, not registry artifacts: they must
+			// stay in the graph (so their deps attribute to them) but be dropped from
+			// the flat uniqueDeps list curation HEAD-checks, otherwise a coincidental
+			// public package of the same name/version is reported as a false positive.
+			name: "Workspace member excluded from uniqueDeps but kept in tree",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
+				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
+				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
+			},
+			rootXrayId: npmId + "root:1.0.0",
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "root:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: npmId + "ui:0.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "express:3.0.1",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			// ui (workspace member) is absent; root and express remain.
+			expectedUniqueDeps: []string{npmId + "root:1.0.0", npmId + "express:3.0.1"},
+			errorExpected:      false,
+		},
+		{
 			name: "Incorrect formatted dependency name - error expected",
 			yarnDependencies: map[string]*bibuildutils.YarnDependency{
 				"@privateDep": {Value: "", Details: bibuildutils.YarnDepDetails{Version: "privateDep"}},
@@ -87,6 +113,22 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStripWorkspaceUseLocalSuffix(t *testing.T) {
+	deps := map[string]*bibuildutils.YarnDependency{
+		"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0-use.local"}},
+		"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0"}},
+		"axios@npm:1.6.0":          {Value: "axios@npm:1.6.0", Details: bibuildutils.YarnDepDetails{Version: "1.6.0"}},
+	}
+	stripWorkspaceUseLocalSuffix(deps)
+
+	// Workspace member: suffix stripped.
+	assert.Equal(t, "0.0.0", deps["ui@workspace:packages/ui"].Details.Version)
+	// Workspace root with a real version: unchanged.
+	assert.Equal(t, "1.0.0", deps["root@workspace:."].Details.Version)
+	// Registry package: never touched.
+	assert.Equal(t, "1.6.0", deps["axios@npm:1.6.0"].Details.Version)
 }
 
 func TestIsInstallRequired(t *testing.T) {
@@ -200,13 +242,11 @@ func TestIsYarnLockStale(t *testing.T) {
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
 
-	// Neither file present => staleness is undefined; treat as not stale so
-	// the check never forces an install on its own.
+	// Neither file present => not stale (caller handles missing lockfile separately).
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
-	// Only package.json present => same "undefined => not stale" contract
-	// (the caller handles missing-lockfile via fileutils.IsFileExists).
+	// Only package.json present => not stale.
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
@@ -215,10 +255,24 @@ func TestIsYarnLockStale(t *testing.T) {
 	assert.NoError(t, os.Chtimes(pkgJsonPath, older, older))
 	assert.False(t, isYarnLockStale(tempDirPath))
 
-	// package.json edited after lockfile written => stale.
+	// package.json newer than lockfile AND lockfile covers all declared deps => fresh.
+	// Simulates 'yarn install' writing yarn.lock then stamping packageManager in package.json.
+	lockBerry := `__metadata:
+  version: 8
+
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+`
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21"}}`), 0o644))
+	assert.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
 	newer := time.Now().Add(1 * time.Hour)
 	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
-	assert.True(t, isYarnLockStale(tempDirPath))
+	assert.False(t, isYarnLockStale(tempDirPath), "lockfile covers all deps — must not be stale even when package.json is newer")
+
+	// package.json newer AND a dep is missing from lockfile => stale.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`), 0o644))
+	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
+	assert.True(t, isYarnLockStale(tempDirPath), "missing dep in lockfile must be stale")
 }
 
 // TestIsInstallRequiredOverwriteYarnLock covers the overwriteYarnLock branch
@@ -231,7 +285,10 @@ func TestIsInstallRequiredOverwriteYarnLock(t *testing.T) {
 
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
-	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
+	// A declared dep that the (empty) lockfile does not cover, so the
+	// specifier-coverage check in isYarnLockStale reports staleness once
+	// package.json is the newer file.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x","dependencies":{"lodash":"^4.17.21"}}`), 0o644))
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
 
 	// yarn.lock is newer than package.json => fresh in either overwrite mode.
@@ -1647,47 +1704,46 @@ func TestProbeBlockedDirectDeps(t *testing.T) {
 }
 
 func TestRegisterYarnPluginInYarnrc(t *testing.T) {
-	const relPath = ".yarn/plugins/jfrog-yarn-resolve-lockfile.cjs"
 	const spec = "@yarnpkg/plugin-jfrog-yarn-resolve-lockfile"
 	const yarnrcName = ".yarnrc.yml"
 
 	t.Run("creates yarnrc when absent", func(t *testing.T) {
 		curWd := t.TempDir()
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
-		assert.Contains(t, string(data), relPath)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
 		assert.Contains(t, string(data), spec)
 	})
 
 	t.Run("idempotent - no duplicate entry", func(t *testing.T) {
 		curWd := t.TempDir()
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
-		assert.Equal(t, 1, strings.Count(string(data), relPath))
+		assert.Equal(t, 1, strings.Count(string(data), resolveLockfilePluginRelPath))
 	})
 
 	t.Run("preserves unrelated settings", func(t *testing.T) {
 		curWd := t.TempDir()
 		yarnrc := "npmRegistryServer: \"https://example.com/artifactory/api/npm/repo/\"\nnpmAuthToken: secret-token\n"
 		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte(yarnrc), 0o600))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "npmRegistryServer")
 		assert.Contains(t, string(data), "secret-token")
-		assert.Contains(t, string(data), relPath)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
 	})
 
 	t.Run("recovers from malformed yaml", func(t *testing.T) {
 		curWd := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte("{ not : valid : yaml ["), 0o600))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, relPath, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
-		assert.Contains(t, string(data), relPath)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
 	})
 }
 

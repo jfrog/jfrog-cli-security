@@ -89,9 +89,18 @@ const (
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
+
+	// cvsPartialReportWarning is shown when pip resolution failed because CVS
+	// stripped a required version from the simple index, but the metadata-API
+	// fallback succeeded in recovering at least one policy violation.
+	cvsPartialReportWarning = "The curation audit was unable to fully resolve the dependency tree because one or more pinned package versions " +
+		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
+		"Dependency analysis cannot proceed until these issues are addressed.\n" +
+		"Once you apply a waiver or switch to an approved version and re-run the audit, additional results will be available."
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
+var osGetwd = os.Getwd
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
@@ -116,6 +125,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
 	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
+	},
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -251,6 +263,11 @@ type CurationAuditCommand struct {
 type CurationReport struct {
 	packagesStatus        []*PackageStatus
 	totalNumberOfPackages int
+	// isPartial is set when the dependency tree could not be fully resolved
+	// (e.g. CVS blocked a pip version from the simple index) and the report
+	// was produced via the metadata-API fallback. The partial-report warning
+	// is printed after the spinner stops so it is not swallowed by the spinner.
+	isPartial bool
 }
 
 type WaiverResponse struct {
@@ -341,8 +358,15 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for _, w := range ca.pendingWarnings {
 		log.Warn(w)
 	}
+	// Don't include scanErr.Error() here — it is in the returned err and the CLI framework
+	// prints it once; printing it here too would duplicate the full error message.
 	if scanErr != nil {
-		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete: " + scanErr.Error())
+		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete:")
+	}
+	for projectPath, report := range results {
+		if report.isPartial {
+			log.Warn(fmt.Sprintf("[%s] %s", projectPath, cvsPartialReportWarning))
+		}
 	}
 
 	for projectPath, packagesStatus := range results {
@@ -367,6 +391,7 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 			CuratedPackages: &formats.CuratedPackages{
 				PackageCount: packagesStatus.totalNumberOfPackages,
 				Blocked:      getBlocked(packagesStatus.packagesStatus),
+				IsPartial:    packagesStatus.isPartial,
 			},
 		})
 	}
@@ -483,18 +508,16 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 		if home != "" && dir == home {
 			return techs
 		}
-		for _, indicator := range []string{".yarnrc.yml", "yarn.lock", ".yarnrc"} {
-			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
-				log.Debug(fmt.Sprintf("Detected yarn workspace root at %s via %s; promoting current directory from npm to yarn.", dir, indicator))
-				promoted := make([]string, 0, len(techs))
-				for _, t := range techs {
-					if t == techutils.Npm.String() {
-						t = techutils.Yarn.String()
-					}
-					promoted = append(promoted, t)
+		if techutils.DirectoryHasYarnIndicator(dir) {
+			log.Debug(fmt.Sprintf("Detected yarn workspace root at %s; promoting current directory from npm to yarn.", dir))
+			promoted := make([]string, 0, len(techs))
+			for _, t := range techs {
+				if t == techutils.Npm.String() {
+					t = techutils.Yarn.String()
 				}
-				return promoted
+				promoted = append(promoted, t)
 			}
+			return promoted
 		}
 	}
 }
@@ -696,6 +719,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
+		// When CVS strips a pinned version from the simple index, pip can't
+		// resolve the project and GetTechDependencyTree returns a CvsBlockedError.
+		// Instead of aborting with no output, run the metadata-API fallback to
+		// recover the curation policy and render a partial table.
+		var cvsErr *python.CvsBlockedError
+		if tech == techutils.Pip && errors.As(err, &cvsErr) {
+			return ca.runCvsFallback(cvsErr, tech, results)
+		}
 		return err
 	}
 	// Validate the graph isn't empty.
@@ -1191,10 +1222,11 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 		SetTargetRepo(registryConfig.RepoName).
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
-	// Populate depsRepo on the audit-params interface so getBuildInfoParamsByTech returns
-	// the correct repository name. For V4 native mode the user never passes --deps-repo,
-	// so ca.DepsRepo() would otherwise be "" and the curation endpoint URL would not be
-	// constructed in configureYarnResolutionServerAndRunInstall.
+	// Populate depsRepo on the audit-params interface so getBuildInfoParamsByTech
+	// returns the correct repository name. For V4 native mode the user never passes
+	// --deps-repo, so ca.DepsRepo() would otherwise be "". The repo name is consumed
+	// downstream by the curation error messages and probeBlockedDirectDeps HEAD checks
+	// (V4 does not route installs through the curation endpoint).
 	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
@@ -1354,6 +1386,272 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
+// runCvsFallback is called when pip resolution failed because CVS stripped a
+// pinned version from the simple index (CvsBlockedError). It uses the PyPI
+// metadata API to recover each blocker's real download URL, probes the normal
+// (non-audit) download path, and renders the policy in a partial curation table.
+func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, tech techutils.Technology, results map[string]*CurationReport) error {
+	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
+	if err != nil {
+		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
+	}
+	rtAuth, err := serverDetails.CreateArtAuthConfig()
+	if err != nil {
+		return fmt.Errorf("curation-blocked resolution fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
+	}
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: ca.extractPoliciesRegex,
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 ca.PackageManagerConfig.TargetRepo(),
+		tech:                 tech,
+	}
+	packagesStatus := analyzer.fetchCvsBlockedStatus(cvsErr.Packages)
+	if len(packagesStatus) == 0 {
+		// Fallback produced nothing — surface the original error (current behaviour).
+		return cvsErr
+	}
+	workPath, wdErr := osGetwd()
+	if wdErr != nil {
+		log.Warn(fmt.Sprintf("curation-blocked resolution fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
+		workPath = "unknown-project"
+	}
+	results[filepath.Base(workPath)] = &CurationReport{
+		packagesStatus:        packagesStatus,
+		totalNumberOfPackages: len(packagesStatus),
+		isPartial:             true,
+	}
+	return nil
+}
+
+// lookupPypiAllVersions calls the Artifactory PyPI metadata API for a package
+// name (no version — returns all releases) and returns all available version
+// strings. This endpoint is NOT filtered by CVS, so it includes versions that
+// have been stripped from the simple index.
+func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
+	metadataURL := fmt.Sprintf("%s/api/pypi/%s/pypi/%s/json",
+		strings.TrimSuffix(nc.url, "/"), nc.repo, name)
+
+	requestDetails := nc.httpClientDetails.Clone()
+	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	if err != nil {
+		return nil, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("all-versions metadata API returned HTTP %d for %s", resp.StatusCode, name)
+	}
+
+	var meta struct {
+		Releases map[string]json.RawMessage `json:"releases"`
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse all-versions metadata for %s: %w", name, err)
+	}
+
+	versions := make([]string, 0, len(meta.Releases))
+	for v := range meta.Releases {
+		versions = append(versions, v)
+	}
+	return versions, nil
+}
+
+// lookupPypiNormalDownloadURL calls the Artifactory PyPI metadata API for
+// name@version (which CVS does NOT filter) and returns the first available
+// download URL as a normal Artifactory path (no api/curation/audit/ prefix).
+// The url field in the metadata JSON is a relative path such as
+// "../../packages/packages/<hash>/<file>" — the stable anchor is "packages/"
+// so we slice from there and prepend the Artifactory base + repo.
+func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, error) {
+	metadataURL := fmt.Sprintf("%s/api/pypi/%s/pypi/%s/%s/json",
+		strings.TrimSuffix(nc.url, "/"), nc.repo, name, ver)
+
+	requestDetails := nc.httpClientDetails.Clone()
+	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	if err != nil {
+		return "", fmt.Errorf("metadata API request failed for %s==%s: %w", name, ver, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("metadata API returned HTTP %d for %s==%s", resp.StatusCode, name, ver)
+	}
+
+	var meta struct {
+		Urls []struct {
+			PackageType string `json:"packagetype"`
+			URL         string `json:"url"`
+		} `json:"urls"`
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return "", fmt.Errorf("failed to parse metadata for %s==%s: %w", name, ver, err)
+	}
+
+	// Prefer wheel over source dist — probe whichever we find first.
+	for _, preferred := range []string{"bdist_wheel", "sdist"} {
+		for _, u := range meta.Urls {
+			if u.PackageType != preferred {
+				continue
+			}
+			// Strip the leading relative components; the stable part is "packages/...".
+			idx := strings.Index(u.URL, "packages/")
+			if idx < 0 {
+				continue
+			}
+			return fmt.Sprintf("%s/api/pypi/%s/%s",
+				strings.TrimSuffix(nc.url, "/"), nc.repo, u.URL[idx:]), nil
+		}
+	}
+	return "", fmt.Errorf("no download URL found in metadata for %s==%s", name, ver)
+}
+
+// fetchCvsBlockedStatus recovers the curation policy for each CVS-blocked package:
+//
+//  1. For range-based blockers (PinnedRequirement.VersionRange set): resolve the
+//     newest version satisfying the range via the unfiltered all-versions metadata API.
+//  2. Call the version-specific metadata API to get the normal download URL.
+//  3. Probe the normal (non-audit) download URL via getBlockedPackageDetails.
+//
+// A blocker that cannot be confirmed as curation-blocked (its version is absent
+// from the metadata API — e.g. removed from the index, or a typo/nonexistent
+// version) is NOT rendered as a row; with no recoverable blockers the command
+// falls back to the graceful PR #761 message listing affected package(s), so a
+// version that is not in the metadata API is never shown as a fake "blocked" row.
+//
+// HTTP calls are sequential per pin. This path is an error-recovery path that
+// typically processes 1-3 packages, so parallelism is not worth the complexity.
+func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) []*PackageStatus {
+	var statuses []*PackageStatus
+	for _, pin := range pins {
+		// ── Step 1: resolve range / no-version → exact version ───────────────
+		resolvedVersion := pin.Version
+		if pin.VersionRange != "" || resolvedVersion == "" {
+			// Either a range spec or a ResolutionImpossible entry with no version.
+			// Use the unfiltered all-versions metadata API to find the newest match.
+			allVersions, err := nc.lookupPypiAllVersions(pin.Name)
+			if err != nil {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: all-versions lookup failed for %s%s: %v",
+					pin.Name, pin.VersionRange, err))
+				continue
+			}
+			if pin.VersionRange != "" {
+				resolvedVersion = python.ResolveVersionRange(pin.VersionRange, allVersions)
+			} else {
+				// No range — pick the newest available version.
+				resolvedVersion = python.ResolveVersionRange(">=0", allVersions)
+			}
+			if resolvedVersion == "" {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: no version found for %s%s",
+					pin.Name, pin.VersionRange))
+				continue
+			}
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: resolved %s%s → %s",
+				pin.Name, pin.VersionRange, resolvedVersion))
+		}
+
+		// ── Step 2: metadata API → normal download URL ────────────────────────
+		dlURL, err := nc.lookupPypiNormalDownloadURL(pin.Name, resolvedVersion)
+		if err != nil {
+			// Version is absent from the metadata API (removed from the index, or
+			// a typo/nonexistent version). There is no recoverable policy to show,
+			// so skip it: with no recoverable blockers the command falls back to
+			// the graceful "Affected package(s)" message (PR #761 behaviour),
+			// rather than rendering a misleading empty table row.
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
+				pin.Name, resolvedVersion, err))
+			continue
+		}
+
+		// ── Step 3a: HEAD probe — detect whether the version is download-blocked
+		headDetails := nc.httpClientDetails.Clone()
+		headResp, _, headErr := nc.rtManager.Client().SendHead(dlURL, headDetails)
+		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
+				pin.Name, resolvedVersion, headErr))
+			continue
+		}
+		// Package is accessible — CVS cache may be stale; not currently blocked.
+		if headErr == nil && headResp != nil && headResp.StatusCode != http.StatusForbidden {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe returned %d for %s==%s — not CVS-blocked, skipping",
+				headResp.StatusCode, pin.Name, resolvedVersion))
+			continue
+		}
+
+		// ── Step 3b: 403 from HEAD → recover policy details via GET with waiver
+		var pkStatus *PackageStatus
+		if headResp != nil && headResp.StatusCode == http.StatusForbidden {
+			var getErr error
+			pkStatus, getErr = nc.getBlockedPackageDetails(dlURL, pin.Name, resolvedVersion)
+			if getErr != nil {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: GET probe failed for %s==%s: %v",
+					pin.Name, resolvedVersion, getErr))
+			}
+		}
+		depRelation := directRelation
+		if effectiveParent(pin) != pin.Name {
+			depRelation = indirectRelation
+		} else if pin.Version == "" && pin.VersionRange == "" {
+			// Name-only entry from ResolutionImpossible — parent attribution is
+			// unknown but these are always transitive deps by definition.
+			depRelation = indirectRelation
+		}
+		if pkStatus == nil {
+			// HEAD returned 403 but GET probe errored — CVS stripped the version
+			// from the index but policy details aren't available via this path;
+			// record with unknown reason so the package is never silently dropped.
+			statuses = append(statuses, &PackageStatus{
+				PackageName:       pin.Name,
+				PackageVersion:    resolvedVersion,
+				ParentName:        effectiveParent(pin),
+				ParentVersion:     effectiveParentVersion(pin),
+				DepRelation:       depRelation,
+				BlockedPackageUrl: dlURL,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			})
+			continue
+		}
+
+		// Policy recovered — set parent attribution from the parsed blocker.
+		pkStatus.PackageName = pin.Name
+		pkStatus.PackageVersion = resolvedVersion
+		pkStatus.ParentName = effectiveParent(pin)
+		pkStatus.ParentVersion = effectiveParentVersion(pin)
+		pkStatus.DepRelation = depRelation
+		statuses = append(statuses, pkStatus)
+	}
+	return statuses
+}
+
+// effectiveParent returns the parent name to populate in the curation table row.
+// For direct exact pins, ParentName equals Name (set by parseCvsFailedPackages);
+// for transitive range blockers it is the requiring package. When not yet set,
+// fall back to the package itself.
+func effectiveParent(pin python.PinnedRequirement) string {
+	if pin.ParentName != "" && pin.ParentName != pin.Name {
+		return pin.ParentName
+	}
+	return pin.Name
+}
+
+// effectiveParentVersion returns the version to show in the "Direct Dependency
+// Version" column. For exact pins it is the pinned version.
+//
+// For a ranged DIRECT dependency (parent == package, e.g. requirements.txt has
+// "langchain-core>=1.4.0") the range spec itself is shown so the column is not
+// blank. For a TRANSITIVE blocker (parent differs from the package) the range
+// describes the blocked package, not the parent — so it must not be shown in
+// the parent column; we leave it blank when the parent version is unknown.
+func effectiveParentVersion(pin python.PinnedRequirement) string {
+	if pin.ParentVersion != "" {
+		return pin.ParentVersion
+	}
+	if pin.VersionRange != "" && (pin.ParentName == "" || pin.ParentName == pin.Name) {
+		return pin.VersionRange
+	}
+	return pin.Version
+}
+
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
 	requestDetails := nc.httpClientDetails.Clone()
@@ -1476,7 +1774,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip:
+	case techutils.Pip, techutils.Poetry:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:
@@ -1516,7 +1814,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	if dl, ok := downloadUrlsMap[normalizedId]; ok {
 		downloadUrls = []string{dl}
 	} else {
-		log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
+		log.Warn(fmt.Sprintf("Couldn't find download URL for node ID %s", id))
 	}
 	return
 }

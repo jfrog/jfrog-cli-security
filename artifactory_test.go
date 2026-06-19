@@ -225,6 +225,13 @@ func clearOrRedirectLocalCacheIfNeeded(t *testing.T, projectType project.Project
 			envVarCallbackFunc()
 			createTempDirCallback()
 		}
+	case project.Poetry:
+		poetryTempCachePath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+		envVarCallbackFunc := clientTests.SetEnvWithCallbackAndAssert(t, "POETRY_CACHE_DIR", poetryTempCachePath)
+		callbackFunc = func() {
+			envVarCallbackFunc()
+			createTempDirCallback()
+		}
 	}
 	return
 }
