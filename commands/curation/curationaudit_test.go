@@ -22,8 +22,8 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -1838,6 +1838,7 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
+
 // =============================================================================
 // Tests for Poetry support added to curationaudit.go.
 // Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the

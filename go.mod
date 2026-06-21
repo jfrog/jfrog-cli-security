@@ -13,12 +13,12 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260609044040-eaeffe5a20c3
+	github.com/jfrog/build-info-go v1.13.1-0.20260615080618-42488b58c305
 	github.com/jfrog/froggit-go v1.22.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260609101705-321f68d15a6d
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260609101026-df3091b39d06
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260618051529-1b76b6ad2606
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260615072209-8ccac4f0072e
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20260603130552-af1dd449b994
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
