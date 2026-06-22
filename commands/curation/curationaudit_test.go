@@ -22,8 +22,8 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -1838,6 +1838,7 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
+
 // =============================================================================
 // Tests for Poetry support added to curationaudit.go.
 // Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the
@@ -2342,8 +2343,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, false))
 
-	// Yarn V4 always uses native mode (.yarnrc.yml), so --run-native is a
-	// redundant no-op rather than an error (a warning is emitted in auditTree).
+	// --run-native has no effect for yarn regardless of version; a warning is emitted in auditTree.
 	t.Run("yarn accepts --run-native as a redundant no-op", func(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
@@ -2485,8 +2485,11 @@ func TestResolveResolverTechForCuration(t *testing.T) {
 
 func TestResolveNpmYarnTech(t *testing.T) {
 	type setup struct {
-		writeYarnYaml bool
-		writeNpmYaml  bool
+		writeYarnYaml       bool
+		writeNpmYaml        bool
+		writeLocalYarnrc    bool   // write .yarnrc.yml into the project dir (V4 native, local)
+		writeGlobalYarnrc   bool   // write .yarnrc.yml into dummyHome (V4 native, global)
+		writePackageLockJSON bool  // write package-lock.json — marks project as npm, blocks promotion
 	}
 	testCases := []struct {
 		name  string
@@ -2530,6 +2533,25 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			setup: setup{writeYarnYaml: true},
 			want:  techutils.Maven.String(),
 		},
+		// V4 native-mode paths: no yarn.yaml / npm.yaml, detection via yarn indicator files.
+		{
+			name:  "npm, local .yarnrc.yml present — promoted to yarn (V4 native, local indicator)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeLocalYarnrc: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm, global ~/.yarnrc.yml only — promoted to yarn (V4 native, global indicator)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeGlobalYarnrc: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm, yarn indicator present but package-lock.json exists — NOT promoted",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeLocalYarnrc: true, writePackageLockJSON: true},
+			want:  techutils.Npm.String(),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2542,6 +2564,12 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			if tc.setup.writeNpmYaml {
 				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
 			}
+			if tc.setup.writeLocalYarnrc {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, ".yarnrc.yml"), []byte("npmRegistryServer: https://example.com\n"), 0o644))
+			}
+			if tc.setup.writePackageLockJSON {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, "package-lock.json"), []byte("{}"), 0o644))
+			}
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()
 			// resolveNpmYarnTech also probes the OS home (~/.yarnrc.yml) via
@@ -2551,6 +2579,9 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			dummyHome := t.TempDir()
 			t.Setenv("HOME", dummyHome)
 			t.Setenv("USERPROFILE", dummyHome)
+			if tc.setup.writeGlobalYarnrc {
+				require.NoError(t, os.WriteFile(filepath.Join(dummyHome, ".yarnrc.yml"), []byte("npmRegistryServer: https://example.com\n"), 0o644))
+			}
 			restoreCwd := changeDirForTest(t, tempProjectDir)
 			defer restoreCwd()
 

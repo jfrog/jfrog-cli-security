@@ -706,10 +706,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pnpm {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
 	}
-	// Yarn V4 always resolves natively from .yarnrc.yml — --run-native is redundant and has no effect.
+	// --run-native has no effect for yarn regardless of version; the registry is
+	// always read from the yarn-specific config (yarn.yaml for V2/V3, .yarnrc.yml for V4).
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Yarn {
-		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn V4; yarn V4 always resolves natively from .yarnrc.yml")
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1094,8 +1095,7 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
 		// rather than an error (a warning is emitted in auditTree).
 		techutils.Pnpm: {},
-		// Yarn V4 always uses native mode (.yarnrc.yml), so --run-native is a
-		// redundant no-op rather than an error (a warning is emitted in auditTree).
+		// --run-native has no effect for yarn regardless of version; a warning is emitted in auditTree.
 		techutils.Yarn: {},
 	}
 	if _, ok := supported[tech]; ok {

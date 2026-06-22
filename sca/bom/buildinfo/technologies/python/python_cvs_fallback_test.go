@@ -118,9 +118,9 @@ func TestIsCvsVersionFilteredOutput(t *testing.T) {
 		"Additionally, some packages in these conflicts have no matching distributions available for your environment:\n" +
 		"    langgraph-sdk"
 	cases := map[string]bool{
-		"ERROR: No matching distribution found for deepagents==0.5.5":                                                          true,
-		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                          true,
-		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.":   true,
+		"ERROR: No matching distribution found for deepagents==0.5.5":                                                        true,
+		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                        true,
+		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.": true,
 		resolutionImpossible:                               true,
 		"ERROR: 403 Forbidden":                             false,
 		"ERROR: ResolutionImpossible: some other conflict": false, // no "no matching distributions" line
@@ -260,4 +260,3 @@ func TestVersionMatchesConstraintCompatibleRelease(t *testing.T) {
 		})
 	}
 }
-

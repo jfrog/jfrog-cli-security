@@ -1059,8 +1059,8 @@ func runYarnCommandQuiet(executablePath, srcPath string, args ...string) error {
 // resolveCurationLockfileDir prepares the directory from which the curation
 // audit reads yarn.lock. When install is needed it copies the project to a
 // temp dir, configures the curation registry there, and runs
-// 'yarn install --mode=update-lockfile' — so the customer's project content is
-// never modified and read-only CI checkouts still work.
+// 'yarn jfrog-yarn-resolve-lockfile' (V3/V4) or 'yarn install' (V2) —
+// so the customer's project content is never modified and read-only CI checkouts still work.
 //
 // Exception: it bumps the original yarn.lock's mtime (touchYarnLock) so the
 // next run skips re-resolution — mtime only, not content; failures are ignored.

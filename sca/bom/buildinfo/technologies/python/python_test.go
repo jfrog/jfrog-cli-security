@@ -963,4 +963,3 @@ func TestInstallPoetryDepsNonCurationErrorPropagated(t *testing.T) {
 
 	require.Error(t, err, "non-curation poetry install failure must propagate to the caller")
 }
-
