@@ -1709,7 +1709,7 @@ func TestRegisterYarnPluginInYarnrc(t *testing.T) {
 
 	t.Run("creates yarnrc when absent", func(t *testing.T) {
 		curWd := t.TempDir()
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
 		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
@@ -1718,8 +1718,8 @@ func TestRegisterYarnPluginInYarnrc(t *testing.T) {
 
 	t.Run("idempotent - no duplicate entry", func(t *testing.T) {
 		curWd := t.TempDir()
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
 		assert.Equal(t, 1, strings.Count(string(data), resolveLockfilePluginRelPath))
@@ -1729,7 +1729,7 @@ func TestRegisterYarnPluginInYarnrc(t *testing.T) {
 		curWd := t.TempDir()
 		yarnrc := "npmRegistryServer: \"https://example.com/artifactory/api/npm/repo/\"\nnpmAuthToken: secret-token\n"
 		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte(yarnrc), 0o600))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "npmRegistryServer")
@@ -1740,7 +1740,7 @@ func TestRegisterYarnPluginInYarnrc(t *testing.T) {
 	t.Run("recovers from malformed yaml", func(t *testing.T) {
 		curWd := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte("{ not : valid : yaml ["), 0o600))
-		require.NoError(t, registerYarnPluginInYarnrc(curWd, spec))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
 		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
 		require.NoError(t, err)
 		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
