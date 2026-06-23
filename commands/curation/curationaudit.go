@@ -92,7 +92,7 @@ const (
 	cvsPartialReportWarning = "The curation audit was unable to fully resolve the dependency tree because one or more pinned package versions " +
 		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
 		"Dependency analysis cannot proceed until these issues are addressed.\n" +
-		"Once you apply a waiver or switch to an approved version and re-run the audit, additional results will be available."
+		"Once you switch to an approved version and re-run the audit, additional results will be available."
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -361,6 +361,12 @@ func (ca *CurationAuditCommand) Run() (err error) {
 
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
+
+		// A partial report comes from the CVS fallback: the dependency tree could
+		// not be fully resolved. Never offers a waiver when the full tree wasn't built
+		if packagesStatus.isPartial {
+			continue
+		}
 
 		for _, ps := range packagesStatus.packagesStatus {
 			if ps.WaiverAllowed && !utils.IsCI() {
@@ -632,7 +638,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// Instead of aborting with no output, run the metadata-API fallback to
 		// recover the curation policy and render a partial table.
 		var cvsErr *python.CvsBlockedError
-		if tech == techutils.Pip && errors.As(err, &cvsErr) {
+		if (tech == techutils.Pip || tech == techutils.Poetry) && errors.As(err, &cvsErr) {
 			return ca.runCvsFallback(cvsErr, tech, results)
 		}
 		return err
@@ -1218,18 +1224,19 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
-// runCvsFallback is called when pip resolution failed because CVS stripped a
-// pinned version from the simple index (CvsBlockedError). It uses the PyPI
-// metadata API to recover each blocker's real download URL, probes the normal
-// (non-audit) download path, and renders the policy in a partial curation table.
+// runCvsFallback is called when pip or poetry resolution failed because CVS
+// stripped a pinned version from the simple index (CvsBlockedError). It uses
+// the PyPI metadata API to recover each blocker's real download URL, probes
+// the normal (non-audit) download path, and renders the policy in a partial
+// curation table.
 func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, tech techutils.Technology, results map[string]*CurationReport) error {
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
+		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
-		return fmt.Errorf("curation-blocked resolution fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
+		return fmt.Errorf("curation-blocked resolution fallback: failed to create auth config (%w); %s error: %w", err, tech, cvsErr)
 	}
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
