@@ -987,3 +987,17 @@ func TestWrapPoetryCurationErrNonCvsPassesThrough(t *testing.T) {
 	assert.False(t, errors.As(wrapped, &cvsErr), "non-CVS poetry error must not be wrapped as *CvsBlockedError")
 	assert.ErrorIs(t, wrapped, lockErr)
 }
+
+func TestWrapPoetryCurationErrMsgToUserPath(t *testing.T) {
+	// Poetry emits an HTTP 403 during poetry lock (real download block, not CVS
+	// index stripping). IsForbiddenOutput recognises "http error 403" for poetry,
+	// so GetMsgToUserForCurationBlock returns a non-empty user-facing message.
+	// wrapPoetryCurationErr must join the original error with that message.
+	lockErr := errors.New("http error 403 downloading https://artifactory.example.com/telnyx-4.87.1.tar.gz")
+	wrapped := wrapPoetryCurationErr(lockErr)
+
+	var cvsErr *CvsBlockedError
+	assert.False(t, errors.As(wrapped, &cvsErr), "403-blocked poetry error must not be wrapped as *CvsBlockedError")
+	assert.ErrorIs(t, wrapped, lockErr, "original lockErr must be in the error chain")
+	assert.Contains(t, wrapped.Error(), "poetry", "user-facing message must mention the package manager")
+}

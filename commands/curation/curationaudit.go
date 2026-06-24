@@ -86,7 +86,7 @@ const (
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
 
-	// cvsPartialReportWarning is shown when pip resolution failed because CVS
+	// cvsPartialReportWarning is shown when pip or poetry resolution failed because CVS
 	// stripped a required version from the simple index, but the metadata-API
 	// fallback succeeded in recovering at least one policy violation.
 	cvsPartialReportWarning = "The curation audit was unable to fully resolve the dependency tree because one or more pinned package versions " +
