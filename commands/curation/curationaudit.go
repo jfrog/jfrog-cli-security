@@ -40,6 +40,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -56,6 +57,7 @@ const (
 	BlockingReasonPolicy   = "Policy violations"
 	BlockingReasonNotFound = "Package pending update"
 	BlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
+	BlockingReasonUnknown  = "Blocked by curation (response could not be parsed)"
 
 	directRelation   = "direct"
 	indirectRelation = "indirect"
@@ -83,12 +85,23 @@ const (
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
+
+	// cvsPartialReportWarning is shown when pip resolution failed because CVS
+	// stripped a required version from the simple index, but the metadata-API
+	// fallback succeeded in recovering at least one policy violation.
+	cvsPartialReportWarning = "The curation audit was unable to fully resolve the dependency tree because one or more pinned package versions " +
+		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
+		"Dependency analysis cannot proceed until these issues are addressed.\n" +
+		"Once you apply a waiver or switch to an approved version and re-run the audit, additional results will be available."
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
+var osGetwd = os.Getwd
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
-	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Yarn: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Pnpm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
@@ -108,6 +121,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
 	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
+	},
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -233,12 +249,18 @@ type CurationAuditCommand struct {
 	parallelRequests      int
 	dockerImageName       string
 	includeCachedPackages bool
+	mvnIncludePluginDeps  bool
 	audit.AuditParamsInterface
 }
 
 type CurationReport struct {
 	packagesStatus        []*PackageStatus
 	totalNumberOfPackages int
+	// isPartial is set when the dependency tree could not be fully resolved
+	// (e.g. CVS blocked a pip version from the simple index) and the report
+	// was produced via the metadata-API fallback. The partial-report warning
+	// is printed after the spinner stops so it is not swallowed by the spinner.
+	isPartial bool
 }
 
 type WaiverResponse struct {
@@ -283,6 +305,11 @@ func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages b
 	return ca
 }
 
+func (ca *CurationAuditCommand) SetMvnIncludePluginDeps(mvnIncludePluginDeps bool) *CurationAuditCommand {
+	ca.mvnIncludePluginDeps = mvnIncludePluginDeps
+	return ca
+}
+
 func (ca *CurationAuditCommand) Run() (err error) {
 	rootDir, err := os.Getwd()
 	if err != nil {
@@ -298,6 +325,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		ca.workingDirs = append(ca.workingDirs, rootDir)
 	}
 	results := map[string]*CurationReport{}
+	var scanErr error
 	for _, workDir := range ca.workingDirs {
 		var absWd string
 		absWd, err = filepath.Abs(workDir)
@@ -312,11 +340,23 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		}
 		// If error returned, continue to print results(if any), and return error at the end.
 		if e := ca.doCurateAudit(results); e != nil {
+			scanErr = errors.Join(scanErr, e)
 			err = errors.Join(err, e)
 		}
 	}
 	if ca.Progress() != nil {
 		err = errors.Join(err, ca.Progress().Quit())
+	}
+	// Print after the spinner has stopped so the messages appear on the terminal.
+	// Don't include scanErr.Error() here — it is in the returned err and the CLI framework
+	// prints it once; printing it here too would duplicate the full error message.
+	if scanErr != nil {
+		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete:")
+	}
+	for projectPath, report := range results {
+		if report.isPartial {
+			log.Warn(fmt.Sprintf("[%s] %s", projectPath, cvsPartialReportWarning))
+		}
 	}
 
 	for projectPath, packagesStatus := range results {
@@ -341,6 +381,7 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 			CuratedPackages: &formats.CuratedPackages{
 				PackageCount: packagesStatus.totalNumberOfPackages,
 				Blocked:      getBlocked(packagesStatus.packagesStatus),
+				IsPartial:    packagesStatus.isPartial,
 			},
 		})
 	}
@@ -378,11 +419,60 @@ func getPolicyAndConditionId(policy, condition string) string {
 	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
+// promotePnpmWorkspaceMember replaces "npm" with "pnpm" in the detected technologies
+// list when the current directory is a pnpm workspace member — it has no pnpm marker
+// itself, but an ancestor directory contains pnpm-workspace.yaml or pnpm-lock.yaml.
+// This lets `jf ca --working-dirs=<member>` audit the member as part of its pnpm
+// workspace, consistently with the lockfile resolution which also walks up to the root.
+func promotePnpmWorkspaceMember(techs []string) []string {
+	hasPnpm, hasNpm := false, false
+	for _, t := range techs {
+		switch t {
+		case techutils.Pnpm.String():
+			hasPnpm = true
+		case techutils.Npm.String():
+			hasNpm = true
+		}
+	}
+	if hasPnpm || !hasNpm {
+		return techs
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return techs
+	}
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return techs
+		}
+		dir = parent
+		for _, indicator := range []string{"pnpm-workspace.yaml", "pnpm-lock.yaml"} {
+			if _, statErr := os.Stat(filepath.Join(dir, indicator)); statErr == nil {
+				log.Debug(fmt.Sprintf("Detected pnpm workspace root at %s via %s; promoting current directory from npm to pnpm.", dir, indicator))
+				promoted := make([]string, 0, len(techs))
+				for _, t := range techs {
+					if t == techutils.Npm.String() {
+						t = techutils.Pnpm.String()
+					}
+					promoted = append(promoted, t)
+				}
+				return promoted
+			}
+		}
+	}
+}
+
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
-	techs := techutils.DetectedTechnologiesList()
+	techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 	if ca.DockerImageName() != "" {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
+	}
+	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
+	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
+	for i, tech := range techs {
+		techs[i] = resolveNpmYarnTech(tech)
 	}
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
@@ -408,6 +498,41 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 
 	}
 	return nil
+}
+
+// resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml —
+// the developer ran 'jf yarn-config' but the file-system detector fell back to npm.
+func resolveNpmYarnTech(tech string) string {
+	if techutils.Technology(tech) != techutils.Npm {
+		return tech
+	}
+	_, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType())
+	if npmConfigExists {
+		return tech
+	}
+	_, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType())
+	if yarnConfigExists {
+		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
+		return techutils.Yarn.String()
+	}
+	return tech
+}
+
+// resolveResolverTechForCuration returns the tech whose *.yaml config drives
+// SetResolutionRepoInParamsIfExists. For yarn with no yarn.yaml, falls back to
+// npm.yaml — npm and yarn share the same Artifactory npm API.
+func resolveResolverTechForCuration(tech techutils.Technology) techutils.Technology {
+	if tech != techutils.Yarn {
+		return tech
+	}
+	if _, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType()); yarnConfigExists {
+		return tech
+	}
+	if _, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType()); !npmConfigExists {
+		return tech
+	}
+	log.Info("No yarn.yaml found; using npm.yaml for resolver configuration (npm and yarn share the same Artifactory npm API).")
+	return techutils.Npm
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
@@ -439,7 +564,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 	serverDetails, err := ca.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.GetXrayVersion(),
-		ExclusionPattern: technologies.GetExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
+		ExclusionPattern: technologies.GetScaExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
 		Progress:         ca.Progress(),
 		// Artifactory Repository params
 		ServerDetails:          serverDetails,
@@ -451,7 +576,10 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		Args:               ca.Args(),
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
-		IsCurationCmd: true,
+		IsCurationCmd:        true,
+		MvnIncludePluginDeps: ca.mvnIncludePluginDeps,
+		ParallelRequests:     ca.parallelRequests,
+		OutputFormat:         ca.OutputFormat(),
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.UseWrapper(),
@@ -460,6 +588,10 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		NpmOverwritePackageLock: true,
 		NpmRunNative:            ca.RunNative(),
 		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
+		// Yarn: always refresh yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
+		YarnOverwriteYarnLock: true,
+		// Pnpm params
+		MaxTreeDepth: ca.MaxTreeDepth(),
 		// Python params
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
@@ -470,21 +602,39 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
+	// --run-native is only meaningful for npm/pnpm (.npmrc-based); reject it early for other techs.
+	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
+		return err
+	}
 	params, err := ca.getBuildInfoParamsByTech()
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
-	// When --run-native is set for npm, the Artifactory details are already populated from .npmrc.
-	// Skip the npm.yaml config file lookup to avoid requiring 'jf npm-config'.
-	if ca.RunNative() && tech == techutils.Npm {
+	// When --run-native is set for npm, or for pnpm (always .npmrc-based), the Artifactory
+	// details are already populated from .npmrc. Skip the yaml config file lookup.
+	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
 		params.IgnoreConfigFile = true
 	}
-	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
+	// Pnpm always resolves natively from .npmrc — --run-native is redundant and has no effect.
+	if ca.RunNative() && tech == techutils.Pnpm {
+		log.Warn("--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
+	}
+	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
+	resolverTech := resolveResolverTechForCuration(tech)
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, resolverTech)
 	if err != nil {
 		return err
 	}
 	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
+		// When CVS strips a pinned version from the simple index, pip can't
+		// resolve the project and GetTechDependencyTree returns a CvsBlockedError.
+		// Instead of aborting with no output, run the metadata-API fallback to
+		// recover the curation policy and render a partial table.
+		var cvsErr *python.CvsBlockedError
+		if tech == techutils.Pip && errors.As(err, &cvsErr) {
+			return ca.runCvsFallback(cvsErr, tech, results)
+		}
 		return err
 	}
 	// Validate the graph isn't empty.
@@ -543,9 +693,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	// Fetch status for each node from a flatten graph which, has no duplicate nodes.
 	packagesStatusMap := sync.Map{}
-	// if error returned we still want to produce a report, so we don't fail the next step
 	err = analyzer.fetchNodesStatus(depTreeResult.FlatTree, &packagesStatusMap, rootNodes)
-	// Auth errors are unrecoverable — skip building a misleading partial report.
+	// Auth errors are unrecoverable — abort before building a misleading partial report.
 	if analyzer.cancelled.Load() {
 		return err
 	}
@@ -782,12 +931,61 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrc()
 	}
 
+	// Pnpm always reads from .npmrc — there is no 'jf pnpm-config' command.
+	// pnpm shares the npm registry protocol, so the same .npmrc key/URL format applies.
+	if tech == techutils.Pnpm {
+		return ca.setRepoFromNpmrcForPnpm()
+	}
+
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
-		return err
+		// npm and yarn share the same Artifactory npm API for curation, so their
+		// repository configs are interchangeable. Fall back to the sibling tech's
+		// config when the primary one is missing (e.g. the project was configured
+		// with 'jf yarn-config' but is detected as npm because yarn.lock is absent).
+		primaryErr := err
+		switch tech {
+		case techutils.Npm:
+			resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType())
+		case techutils.Yarn:
+			resolverParams, err = ca.getRepoParams(techutils.Npm.GetProjectType())
+		}
+		if err != nil {
+			// Return the primary tech's error so the user sees the correct command.
+			// Yarn's CLI config command is 'jf yarn-config', not 'jf yarn c'.
+			if tech == techutils.Yarn {
+				return errorutils.CheckErrorf("no config file was found! Before running jf ca on a yarn project for the first time, the project should be configured using the 'jf yarn-config' command")
+			}
+			return primaryErr
+		}
 	}
 	ca.setPackageManagerConfig(resolverParams)
 	return nil
+}
+
+// validateRunNativeForTech rejects --run-native for techs that don't implement
+// native-config semantics. npm uses it to read Artifactory details from .npmrc;
+// pnpm accepts it as a no-op (it always resolves from .npmrc). Extend the
+// allow-list below when a new tech adds the matching native-config flow.
+func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
+	if !runNative {
+		return nil
+	}
+	// Extend this set when a new tech grows native-config semantics on
+	// both 'jf <tech>' and 'jf ca'.
+	supported := map[techutils.Technology]struct{}{
+		techutils.Npm: {},
+		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
+		// rather than an error (a warning is emitted in auditTree).
+		techutils.Pnpm: {},
+	}
+	if _, ok := supported[tech]; ok {
+		return nil
+	}
+	return errorutils.CheckErrorf(
+		"--run-native is not supported for '%s' projects. "+
+			"Run 'jf ca' without --run-native; configure the resolution repository using 'jf %s-config'.",
+		tech.String(), tech.String())
 }
 
 // setRepoFromNpmrc builds PackageManagerConfig by reading the npm registry URL from the
@@ -821,6 +1019,48 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromNpmrcForPnpm reads Artifactory connection details from the project's .npmrc
+// via the pnpm CLI. pnpm uses the same .npmrc format and registry protocol as npm, so the
+// URL parsing logic is identical. This is always called for pnpm — there is no 'jf pnpm-config'.
+//
+// Auth priority:
+//  1. Token from .npmrc — preferred, because it is scoped to the exact registry URL.
+//  2. Token from 'jf c' server config — used as fallback when .npmrc carries no token
+//     (e.g. user relies on a jf-managed credential store).
+func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
+	registryConfig, err := pnpmtech.GetNativePnpmRegistryConfig()
+	if err != nil {
+		log.Warn("Ensure the pnpm registry is configured in .npmrc (e.g. registry=https://<host>/artifactory/api/npm/<repo>/)")
+		return fmt.Errorf("pnpm: failed to read Artifactory details from .npmrc: %w", err)
+	}
+
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
+		// .npmrc has an auth token that matches the registry — use it directly.
+		log.Debug("pnpm: using auth token from .npmrc")
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			AccessToken:    registryConfig.AuthToken,
+		}
+	} else {
+		// No token in .npmrc — fall back to whatever 'jf c' has stored, overriding
+		// only the Artifactory URL so requests go to the correct registry.
+		log.Debug("pnpm: no token in .npmrc — using 'jf c' server credentials")
+		serverDetails, err = ca.ServerDetails()
+		if err != nil || serverDetails == nil {
+			return fmt.Errorf("pnpm: no auth token found in .npmrc and no 'jf c' server configured: %w", err)
+		}
+		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	log.Info(fmt.Sprintf("pnpm: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
@@ -978,6 +1218,272 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
+// runCvsFallback is called when pip resolution failed because CVS stripped a
+// pinned version from the simple index (CvsBlockedError). It uses the PyPI
+// metadata API to recover each blocker's real download URL, probes the normal
+// (non-audit) download path, and renders the policy in a partial curation table.
+func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, tech techutils.Technology, results map[string]*CurationReport) error {
+	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
+	if err != nil {
+		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); pip error: %w", err, cvsErr)
+	}
+	rtAuth, err := serverDetails.CreateArtAuthConfig()
+	if err != nil {
+		return fmt.Errorf("curation-blocked resolution fallback: failed to create auth config (%w); pip error: %w", err, cvsErr)
+	}
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: ca.extractPoliciesRegex,
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 ca.PackageManagerConfig.TargetRepo(),
+		tech:                 tech,
+	}
+	packagesStatus := analyzer.fetchCvsBlockedStatus(cvsErr.Packages)
+	if len(packagesStatus) == 0 {
+		// Fallback produced nothing — surface the original error (current behaviour).
+		return cvsErr
+	}
+	workPath, wdErr := osGetwd()
+	if wdErr != nil {
+		log.Warn(fmt.Sprintf("curation-blocked resolution fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
+		workPath = "unknown-project"
+	}
+	results[filepath.Base(workPath)] = &CurationReport{
+		packagesStatus:        packagesStatus,
+		totalNumberOfPackages: len(packagesStatus),
+		isPartial:             true,
+	}
+	return nil
+}
+
+// lookupPypiAllVersions calls the Artifactory PyPI metadata API for a package
+// name (no version — returns all releases) and returns all available version
+// strings. This endpoint is NOT filtered by CVS, so it includes versions that
+// have been stripped from the simple index.
+func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
+	metadataURL := fmt.Sprintf("%s/api/pypi/%s/pypi/%s/json",
+		strings.TrimSuffix(nc.url, "/"), nc.repo, name)
+
+	requestDetails := nc.httpClientDetails.Clone()
+	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	if err != nil {
+		return nil, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("all-versions metadata API returned HTTP %d for %s", resp.StatusCode, name)
+	}
+
+	var meta struct {
+		Releases map[string]json.RawMessage `json:"releases"`
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse all-versions metadata for %s: %w", name, err)
+	}
+
+	versions := make([]string, 0, len(meta.Releases))
+	for v := range meta.Releases {
+		versions = append(versions, v)
+	}
+	return versions, nil
+}
+
+// lookupPypiNormalDownloadURL calls the Artifactory PyPI metadata API for
+// name@version (which CVS does NOT filter) and returns the first available
+// download URL as a normal Artifactory path (no api/curation/audit/ prefix).
+// The url field in the metadata JSON is a relative path such as
+// "../../packages/packages/<hash>/<file>" — the stable anchor is "packages/"
+// so we slice from there and prepend the Artifactory base + repo.
+func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, error) {
+	metadataURL := fmt.Sprintf("%s/api/pypi/%s/pypi/%s/%s/json",
+		strings.TrimSuffix(nc.url, "/"), nc.repo, name, ver)
+
+	requestDetails := nc.httpClientDetails.Clone()
+	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	if err != nil {
+		return "", fmt.Errorf("metadata API request failed for %s==%s: %w", name, ver, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("metadata API returned HTTP %d for %s==%s", resp.StatusCode, name, ver)
+	}
+
+	var meta struct {
+		Urls []struct {
+			PackageType string `json:"packagetype"`
+			URL         string `json:"url"`
+		} `json:"urls"`
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return "", fmt.Errorf("failed to parse metadata for %s==%s: %w", name, ver, err)
+	}
+
+	// Prefer wheel over source dist — probe whichever we find first.
+	for _, preferred := range []string{"bdist_wheel", "sdist"} {
+		for _, u := range meta.Urls {
+			if u.PackageType != preferred {
+				continue
+			}
+			// Strip the leading relative components; the stable part is "packages/...".
+			idx := strings.Index(u.URL, "packages/")
+			if idx < 0 {
+				continue
+			}
+			return fmt.Sprintf("%s/api/pypi/%s/%s",
+				strings.TrimSuffix(nc.url, "/"), nc.repo, u.URL[idx:]), nil
+		}
+	}
+	return "", fmt.Errorf("no download URL found in metadata for %s==%s", name, ver)
+}
+
+// fetchCvsBlockedStatus recovers the curation policy for each CVS-blocked package:
+//
+//  1. For range-based blockers (PinnedRequirement.VersionRange set): resolve the
+//     newest version satisfying the range via the unfiltered all-versions metadata API.
+//  2. Call the version-specific metadata API to get the normal download URL.
+//  3. Probe the normal (non-audit) download URL via getBlockedPackageDetails.
+//
+// A blocker that cannot be confirmed as curation-blocked (its version is absent
+// from the metadata API — e.g. removed from the index, or a typo/nonexistent
+// version) is NOT rendered as a row; with no recoverable blockers the command
+// falls back to the graceful PR #761 message listing affected package(s), so a
+// version that is not in the metadata API is never shown as a fake "blocked" row.
+//
+// HTTP calls are sequential per pin. This path is an error-recovery path that
+// typically processes 1-3 packages, so parallelism is not worth the complexity.
+func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) []*PackageStatus {
+	var statuses []*PackageStatus
+	for _, pin := range pins {
+		// ── Step 1: resolve range / no-version → exact version ───────────────
+		resolvedVersion := pin.Version
+		if pin.VersionRange != "" || resolvedVersion == "" {
+			// Either a range spec or a ResolutionImpossible entry with no version.
+			// Use the unfiltered all-versions metadata API to find the newest match.
+			allVersions, err := nc.lookupPypiAllVersions(pin.Name)
+			if err != nil {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: all-versions lookup failed for %s%s: %v",
+					pin.Name, pin.VersionRange, err))
+				continue
+			}
+			if pin.VersionRange != "" {
+				resolvedVersion = python.ResolveVersionRange(pin.VersionRange, allVersions)
+			} else {
+				// No range — pick the newest available version.
+				resolvedVersion = python.ResolveVersionRange(">=0", allVersions)
+			}
+			if resolvedVersion == "" {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: no version found for %s%s",
+					pin.Name, pin.VersionRange))
+				continue
+			}
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: resolved %s%s → %s",
+				pin.Name, pin.VersionRange, resolvedVersion))
+		}
+
+		// ── Step 2: metadata API → normal download URL ────────────────────────
+		dlURL, err := nc.lookupPypiNormalDownloadURL(pin.Name, resolvedVersion)
+		if err != nil {
+			// Version is absent from the metadata API (removed from the index, or
+			// a typo/nonexistent version). There is no recoverable policy to show,
+			// so skip it: with no recoverable blockers the command falls back to
+			// the graceful "Affected package(s)" message (PR #761 behaviour),
+			// rather than rendering a misleading empty table row.
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
+				pin.Name, resolvedVersion, err))
+			continue
+		}
+
+		// ── Step 3a: HEAD probe — detect whether the version is download-blocked
+		headDetails := nc.httpClientDetails.Clone()
+		headResp, _, headErr := nc.rtManager.Client().SendHead(dlURL, headDetails)
+		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
+				pin.Name, resolvedVersion, headErr))
+			continue
+		}
+		// Package is accessible — CVS cache may be stale; not currently blocked.
+		if headErr == nil && headResp != nil && headResp.StatusCode != http.StatusForbidden {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe returned %d for %s==%s — not CVS-blocked, skipping",
+				headResp.StatusCode, pin.Name, resolvedVersion))
+			continue
+		}
+
+		// ── Step 3b: 403 from HEAD → recover policy details via GET with waiver
+		var pkStatus *PackageStatus
+		if headResp != nil && headResp.StatusCode == http.StatusForbidden {
+			var getErr error
+			pkStatus, getErr = nc.getBlockedPackageDetails(dlURL, pin.Name, resolvedVersion)
+			if getErr != nil {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: GET probe failed for %s==%s: %v",
+					pin.Name, resolvedVersion, getErr))
+			}
+		}
+		depRelation := directRelation
+		if effectiveParent(pin) != pin.Name {
+			depRelation = indirectRelation
+		} else if pin.Version == "" && pin.VersionRange == "" {
+			// Name-only entry from ResolutionImpossible — parent attribution is
+			// unknown but these are always transitive deps by definition.
+			depRelation = indirectRelation
+		}
+		if pkStatus == nil {
+			// HEAD returned 403 but GET probe errored — CVS stripped the version
+			// from the index but policy details aren't available via this path;
+			// record with unknown reason so the package is never silently dropped.
+			statuses = append(statuses, &PackageStatus{
+				PackageName:       pin.Name,
+				PackageVersion:    resolvedVersion,
+				ParentName:        effectiveParent(pin),
+				ParentVersion:     effectiveParentVersion(pin),
+				DepRelation:       depRelation,
+				BlockedPackageUrl: dlURL,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			})
+			continue
+		}
+
+		// Policy recovered — set parent attribution from the parsed blocker.
+		pkStatus.PackageName = pin.Name
+		pkStatus.PackageVersion = resolvedVersion
+		pkStatus.ParentName = effectiveParent(pin)
+		pkStatus.ParentVersion = effectiveParentVersion(pin)
+		pkStatus.DepRelation = depRelation
+		statuses = append(statuses, pkStatus)
+	}
+	return statuses
+}
+
+// effectiveParent returns the parent name to populate in the curation table row.
+// For direct exact pins, ParentName equals Name (set by parseCvsFailedPackages);
+// for transitive range blockers it is the requiring package. When not yet set,
+// fall back to the package itself.
+func effectiveParent(pin python.PinnedRequirement) string {
+	if pin.ParentName != "" && pin.ParentName != pin.Name {
+		return pin.ParentName
+	}
+	return pin.Name
+}
+
+// effectiveParentVersion returns the version to show in the "Direct Dependency
+// Version" column. For exact pins it is the pinned version.
+//
+// For a ranged DIRECT dependency (parent == package, e.g. requirements.txt has
+// "langchain-core>=1.4.0") the range spec itself is shown so the column is not
+// blank. For a TRANSITIVE blocker (parent differs from the package) the range
+// describes the blocked package, not the parent — so it must not be shown in
+// the parent column; we leave it blank when the parent version is unknown.
+func effectiveParentVersion(pin python.PinnedRequirement) string {
+	if pin.ParentVersion != "" {
+		return pin.ParentVersion
+	}
+	if pin.VersionRange != "" && (pin.ParentName == "" || pin.ParentName == pin.Name) {
+		return pin.VersionRange
+	}
+	return pin.Version
+}
+
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
 	requestDetails := nc.httpClientDetails.Clone()
@@ -994,11 +1500,29 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	if getResp.StatusCode == http.StatusForbidden {
 		respError := &ErrorsResp{}
 		if err := json.Unmarshal(respBody, respError); err != nil {
-			return nil, errorutils.CheckError(err)
+			// Body is not valid JSON (e.g. Artifactory returned an HTML error page).
+			// The 403 itself is authoritative — record the package as blocked with
+			// unknown policy rather than dropping it from results.
+			log.Debug(fmt.Sprintf("curation: could not parse 403 body for %s@%s as JSON (%s) — recording as blocked with unknown policy", name, version, err.Error()))
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			}, nil
 		}
 		if len(respError.Errors) == 0 {
-			return nil, errorutils.CheckErrorf("received 403 for unknown reason, no curation status will be presented for this package. "+
-				"package name: %s, version: %s, download url: %s ", name, version, packageUrl)
+			log.Debug(fmt.Sprintf("curation: received 403 with empty error list for %s@%s — recording as blocked with unknown policy", name, version))
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonUnknown,
+				PkgType:           string(nc.tech),
+			}, nil
 		}
 		// if the error message contains the curation string key, then we can be sure it got blocked by Curation service.
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {
@@ -1009,6 +1533,13 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				blockingReason = BlockingReasonOnDemand
 			}
 			policies := nc.extractPoliciesFromMsg(respError)
+			// extractPoliciesFromMsg may return empty when BlockMessageKey is present
+			// but no {policy,...} groups were found in the message.  In that case
+			// keep the 403 signal but be honest: use BlockingReasonUnknown rather
+			// than "Policy violations" with every detail column blank.
+			if blockingReason == BlockingReasonPolicy && len(policies) == 0 {
+				blockingReason = BlockingReasonUnknown
+			}
 			return &PackageStatus{
 				PackageName:       name,
 				PackageVersion:    version,
@@ -1066,7 +1597,8 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 
 func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
-	case techutils.Npm:
+	case techutils.Npm, techutils.Yarn, techutils.Pnpm:
+		// Yarn and pnpm both use npm:// node IDs and the same Artifactory /api/npm/ endpoint as npm.
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
 	case techutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
@@ -1074,7 +1606,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip:
+	case techutils.Pip, techutils.Poetry:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:
@@ -1114,7 +1646,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	if dl, ok := downloadUrlsMap[normalizedId]; ok {
 		downloadUrls = []string{dl}
 	} else {
-		log.Warn(fmt.Sprintf("couldn't find download url for node id %s in report.json", id))
+		log.Warn(fmt.Sprintf("Couldn't find download URL for node ID %s", id))
 	}
 	return
 }
@@ -1251,6 +1783,12 @@ func getNpmNameScopeAndVersion(id, artiUrl, repo, tech string) (downloadUrl []st
 	if len(nameVersion) > 1 {
 		version = nameVersion[1]
 	}
+	// Skip local workspace members — they have no remote artifact.
+	// Yarn V1: version ends in "-use.local". Yarn V2+: name ends with a
+	// 6-char hex hash and version is "0.0.0" (e.g. "admin-ui-428bae:0.0.0").
+	if strings.HasSuffix(version, "-use.local") || isYarnBerryWorkspaceMember(name, version) {
+		return nil, name, "", version
+	}
 	scopeSplit := strings.Split(name, "/")
 	if len(scopeSplit) > 1 {
 		scope = scopeSplit[0]
@@ -1267,6 +1805,28 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
+}
+
+// isYarnBerryWorkspaceMember reports whether a graph node is a Yarn V2/V3
+// workspace member. Yarn Berry appends a 6-char lowercase hex hash to the
+// package name (e.g. "admin-ui-428bae") and sets their version to "0.0.0".
+func isYarnBerryWorkspaceMember(name, version string) bool {
+	if version != "0.0.0" {
+		return false
+	}
+	if len(name) < 8 {
+		return false
+	}
+	suffix := name[len(name)-7:]
+	if suffix[0] != '-' {
+		return false
+	}
+	for _, c := range suffix[1:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {

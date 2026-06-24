@@ -3,6 +3,7 @@ package results
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,20 +50,39 @@ type SecurityCommandResults struct {
 
 type ResultsMetaData struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId        string                         `json:"multi_scan_id,omitempty"`
-	XrayVersion        string                         `json:"xray_version"`
-	XscVersion         string                         `json:"xsc_version,omitempty"`
-	Entitlements       Entitlements                   `json:"entitlements"`
-	SecretValidation   bool                           `json:"secret_validation"`
-	CmdType            utils.CommandType              `json:"command_type"`
-	ResultContext      ResultContext                  `json:"result_context"`
-	GitContext         *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime          time.Time                      `json:"start_time"`
-	ResultsPlatformUrl string                         `json:"results_platform_url,omitempty"`
+	MultiScanId         string                         `json:"multi_scan_id,omitempty"`
+	XrayVersion         string                         `json:"xray_version"`
+	XscVersion          string                         `json:"xsc_version,omitempty"`
+	Entitlements        Entitlements                   `json:"entitlements"`
+	SecretValidation    bool                           `json:"secret_validation"`
+	CmdType             utils.CommandType              `json:"command_type"`
+	ResultContext       ResultContext                  `json:"result_context"`
+	GitContext          *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime           time.Time                      `json:"start_time"`
+	ResultsPlatformUrl  string                         `json:"results_platform_url,omitempty"`
+	AllowPartialResults bool                           `json:"allow_partial_results,omitempty"`
 	// GeneralError that occurred during the command execution
-	GeneralError error `json:"general_error,omitempty"`
+	GeneralErrors []SkippableError `json:"general_errors,omitempty"`
 }
 
+func (rm *ResultsMetaData) GetAllErrors() (allErrors []SkippableError) {
+	return append(allErrors, rm.GeneralErrors...)
+}
+
+func (rm *ResultsMetaData) GetNotSkippedErrors() (notSkippedErrors []error) {
+	for _, generalError := range rm.GetAllErrors() {
+		if generalError.Skip {
+			continue
+		}
+		notSkippedErrors = append(notSkippedErrors, generalError.ActualError)
+	}
+	return notSkippedErrors
+}
+
+type SkippableError struct {
+	ActualError error `json:"error"`
+	Skip        bool  `json:"skip"`
+}
 type Entitlements struct {
 	Jas              bool `json:"jas"`
 	SnippetDetection bool `json:"snippet_detection"`
@@ -183,14 +203,13 @@ func shouldUpdateStatus(currentStatus, newStatus *int) bool {
 
 type TargetResults struct {
 	ScanTarget
-	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
 	ScaResults    *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults    *JasScansResults `json:"jas_scans,omitempty"`
 	ResultsStatus ResultsStatus    `json:"status,omitempty"`
 	// Errors that occurred during the scans
-	Errors      []error    `json:"errors,omitempty"`
-	errorsMutex sync.Mutex `json:"-"`
+	TargetErrors []SkippableError `json:"errors,omitempty"`
+	errorsMutex  sync.Mutex       `json:"-"`
 }
 
 type ScaScanResults struct {
@@ -221,27 +240,166 @@ type JasScanResults struct {
 type ScanTarget struct {
 	// Physical location of the target: Working directory (audit) / binary to scan (scan / docker scan)
 	Target string `json:"target,omitempty"`
+	// Optional field to provide the include patterns of the target
+	Include []string `json:"include,omitempty"`
+	// Optional field to provide the exclude patterns of the target
+	Exclude []string `json:"exclude,omitempty"`
 	// Logical name of the target (build name / module name / docker image name...)
 	Name string `json:"name,omitempty"`
-	// Optional field (not used only in build scan) to provide the technology of the target
-	Technology techutils.Technology `json:"technology,omitempty"`
+	// Technologies detected or assigned for this target
+	Technologies []techutils.Technology `json:"technologies,omitempty"`
+	// Optional field to provide the deprecated apps config module for the target
+	DeprecatedAppsConfigModule *jfrogappsconfig.Module `json:"deprecated_apps_config_module,omitempty"`
+	// Optional field to provide the central config modules for the target
+	CentralConfigModules []xscServices.Module `json:"central_config_modules,omitempty"`
 }
 
-func (st ScanTarget) Copy(newTarget string) ScanTarget {
-	return ScanTarget{Target: newTarget, Name: st.Name, Technology: st.Technology}
+func (st ScanTarget) DetectedTechnologies() []techutils.Technology {
+	seen := datastructures.MakeSet[techutils.Technology]()
+	technologies := make([]techutils.Technology, 0, len(st.Technologies))
+	for _, tech := range st.Technologies {
+		if tech == techutils.NoTech || seen.Exists(tech) {
+			continue
+		}
+		seen.Add(tech)
+		technologies = append(technologies, tech)
+	}
+	return technologies
+}
+
+func (st ScanTarget) HasTechnology(tech techutils.Technology) bool {
+	for _, t := range st.Technologies {
+		if t == tech {
+			return true
+		}
+	}
+	return false
 }
 
 func (st ScanTarget) String() (str string) {
-	str = st.Target
+	if len(st.Include) > 0 {
+		relativePaths := []string{}
+		for _, path := range st.Include {
+			relativePaths = append(relativePaths, utils.GetRelativePath(path, st.Target))
+		}
+		str = fmt.Sprintf("%s {%s}", st.Target, strings.Join(relativePaths, ", "))
+	} else {
+		str = st.Target
+	}
 	if st.Name != "" {
+		// If project name is provided, use it instead of the target path
 		str = st.Name
 	}
-	tech := st.Technology.String()
-	if tech == techutils.NoTech.String() {
-		tech = "unknown"
+	seenTechnologies := datastructures.MakeSet[string]()
+	formalTechnologies := make([]string, 0, len(st.Technologies))
+	for _, tech := range st.Technologies {
+		if tech == techutils.NoTech {
+			continue
+		}
+		formal := tech.ToFormal()
+		if seenTechnologies.Exists(formal) {
+			continue
+		}
+		seenTechnologies.Add(formal)
+		formalTechnologies = append(formalTechnologies, formal)
 	}
-	str += fmt.Sprintf(" [%s]", tech)
+	if len(formalTechnologies) == 0 {
+		str += " [unknown]"
+	} else {
+		str += fmt.Sprintf(" [%s]", strings.Join(formalTechnologies, ", "))
+	}
 	return
+}
+
+func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) *bool {
+	if len(st.CentralConfigModules) == 0 {
+		return nil
+	}
+	for _, module := range st.CentralConfigModules {
+		switch scanType {
+		case utils.ScaScan:
+			if module.ScanConfig.ScaScannerConfig.EnableScaScan {
+				return utils.NewBoolPtr(true)
+			}
+		case utils.ContextualAnalysisScan:
+			if module.ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && module.ScanConfig.ScaScannerConfig.EnableScaScan {
+				return utils.NewBoolPtr(true)
+			}
+		case utils.IacScan:
+			if module.ScanConfig.IacScannerConfig.EnableIacScan {
+				return utils.NewBoolPtr(true)
+			}
+		case utils.SecretsScan:
+			if module.ScanConfig.SecretsScannerConfig.EnableSecretsScan {
+				return utils.NewBoolPtr(true)
+			}
+		case utils.SastScan:
+			if module.ScanConfig.SastScannerConfig.EnableSastScan {
+				return utils.NewBoolPtr(true)
+			}
+		default:
+			return utils.NewBoolPtr(false)
+		}
+	}
+	return utils.NewBoolPtr(false)
+}
+
+func (st ScanTarget) ShouldValidateSecrets(cliRequested bool) bool {
+	if len(st.CentralConfigModules) > 0 {
+		for _, module := range st.CentralConfigModules {
+			cfg := module.ScanConfig.SecretsScannerConfig
+			if cfg.EnableSecretsScan && cfg.ValidateSecrets {
+				return true
+			}
+		}
+		return false
+	}
+	return cliRequested
+}
+
+func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
+	exclusions := datastructures.MakeSet[string]()
+	for _, module := range st.CentralConfigModules {
+		// Always add the general exclude patterns from the module
+		exclusions.AddElements(module.ExcludePatterns...)
+		// Add the exclude patterns for the specific scan type
+		switch scanType {
+		case utils.ScaScan:
+			exclusions.AddElements(module.ScanConfig.ScaScannerConfig.ExcludePatterns...)
+		case utils.ContextualAnalysisScan:
+			exclusions.AddElements(module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
+		case utils.IacScan:
+			exclusions.AddElements(module.ScanConfig.IacScannerConfig.ExcludePatterns...)
+		case utils.SecretsScan:
+			exclusions.AddElements(module.ScanConfig.SecretsScannerConfig.ExcludePatterns...)
+		case utils.SastScan:
+			exclusions.AddElements(module.ScanConfig.SastScannerConfig.ExcludePatterns...)
+		}
+	}
+	return exclusions.ToSlice()
+}
+
+func (st ScanTarget) GetDeprecatedAppsConfigModuleExclusions(scanType jasutils.JasScanType) []string {
+	if st.DeprecatedAppsConfigModule == nil {
+		return nil
+	}
+	exclusions := datastructures.MakeSet[string]()
+	exclusions.AddElements(st.DeprecatedAppsConfigModule.ExcludePatterns...)
+	switch scanType {
+	case jasutils.Secrets:
+		if st.DeprecatedAppsConfigModule.Scanners.Secrets != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Secrets.ExcludePatterns...)
+		}
+	case jasutils.Sast:
+		if st.DeprecatedAppsConfigModule.Scanners.Sast != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Sast.ExcludePatterns...)
+		}
+	case jasutils.IaC:
+		if st.DeprecatedAppsConfigModule.Scanners.Iac != nil {
+			exclusions.AddElements(st.DeprecatedAppsConfigModule.Scanners.Iac.ExcludePatterns...)
+		}
+	}
+	return exclusions.ToSlice()
 }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
@@ -268,6 +426,19 @@ func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *Securit
 	return r
 }
 
+// FinalizeEnrichedSbomsWithApplicability merges JAS contextual-analysis data into each target's canonical enriched SBOM.
+func (r *SecurityCommandResults) FinalizeEnrichedSbomsWithApplicability() (err error) {
+	for _, target := range r.Targets {
+		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.JasResults == nil {
+			continue
+		}
+		if e := EnrichSbomWithApplicability(target.ScaResults.Sbom, r.Entitlements.Jas, target.JasResults.ApplicabilityScanResults); e != nil {
+			err = errors.Join(err, e)
+		}
+	}
+	return
+}
+
 func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnippetDetection bool) *SecurityCommandResults {
 	r.Entitlements.SnippetDetection = entitledForSnippetDetection
 	return r
@@ -276,6 +447,44 @@ func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnipp
 func (r *SecurityCommandResults) SetSecretValidation(secretValidation bool) *SecurityCommandResults {
 	r.SecretValidation = secretValidation
 	return r
+}
+
+func (r *SecurityCommandResults) IsJASRequested(requestedScans ...utils.SubScanType) bool {
+	return utils.IsScanRequested(r.CmdType, utils.ContextualAnalysisScan, r.IsScanRequestedByCentralConfig(utils.ContextualAnalysisScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.SecretsScan, r.IsScanRequestedByCentralConfig(utils.SecretsScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.IacScan, r.IsScanRequestedByCentralConfig(utils.IacScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.SastScan, r.IsScanRequestedByCentralConfig(utils.SastScan), requestedScans...)
+}
+
+func (r *SecurityCommandResults) IsScanRequestedByCentralConfig(scanType utils.SubScanType) (requested *bool) {
+	hadModules := false
+	for _, target := range r.Targets {
+		if len(target.CentralConfigModules) == 0 {
+			continue
+		}
+		hadModules = true
+		if targetRequested := target.IsScanRequestedByCentralConfig(scanType); targetRequested != nil && *targetRequested {
+			return targetRequested
+		}
+	}
+	if hadModules {
+		return utils.NewBoolPtr(false)
+	}
+	return nil
+}
+
+// IsSecretValidationActive returns whether secret token validation is requested for any scan target.
+// SecretValidation on the command results reflects system entitlement; cliRequested reflects the --validate-secrets flag.
+func (r *SecurityCommandResults) IsSecretValidationActive(cliRequested bool) bool {
+	if !r.SecretValidation {
+		return false
+	}
+	for _, target := range r.Targets {
+		if target.ShouldValidateSecrets(cliRequested) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {
@@ -293,6 +502,11 @@ func (r *SecurityCommandResults) SetGitContext(gitContext *xscServices.XscGitInf
 	return r
 }
 
+func (r *SecurityCommandResults) SetAllowPartialResults(allowPartialResults bool) *SecurityCommandResults {
+	r.AllowPartialResults = allowPartialResults
+	return r
+}
+
 func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
 	r.ResultsPlatformUrl = resultsPlatformUrl
 	return r
@@ -302,12 +516,14 @@ func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string
 // Adds a general error to the command results in different phases of its execution.
 // Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
 func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError bool) *SecurityCommandResults {
-	if allowSkippingError && err != nil {
-		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
+	if err == nil {
 		return r
 	}
+	if allowSkippingError {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
+	}
 	r.errorsMutex.Lock()
-	r.GeneralError = errors.Join(r.GeneralError, err)
+	r.GeneralErrors = append(r.GeneralErrors, SkippableError{ActualError: err, Skip: allowSkippingError})
 	r.errorsMutex.Unlock()
 	return r
 }
@@ -327,7 +543,8 @@ func (r *SecurityCommandResults) IncludesLicenses() bool {
 	return r.ResultContext.IncludeLicenses
 }
 
-func (r *SecurityCommandResults) IncludeSbom() bool {
+// Is the result includes sbom
+func (r *SecurityCommandResults) IncludesSbom() bool {
 	return r.ResultContext.IncludeSbom
 }
 
@@ -377,14 +594,26 @@ func (r *SecurityCommandResults) HasJasScansResults(scanType jasutils.JasScanTyp
 	return false
 }
 
-func (r *SecurityCommandResults) GetErrors() (err error) {
-	err = r.GeneralError
+func (r *SecurityCommandResults) GetAllErrors() []SkippableError {
+	errors := r.ResultsMetaData.GetAllErrors()
 	for _, target := range r.Targets {
-		if targetErr := target.GetErrors(); targetErr != nil {
-			err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr))
+		errors = append(errors, target.TargetErrors...)
+	}
+	return errors
+}
+
+func (r *SecurityCommandResults) GetErrors() (err error) {
+	for _, generalError := range r.GetNotSkippedErrors() {
+		err = errors.Join(err, generalError)
+	}
+	for _, target := range r.Targets {
+		if targetErrs := target.GetNotSkippedErrors(); len(targetErrs) > 0 {
+			for _, targetErr := range targetErrs {
+				err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr.Error()))
+			}
 		}
 	}
-	return
+	return err
 }
 
 func (r *SecurityCommandResults) GetTechnologies(additionalTechs ...techutils.Technology) []techutils.Technology {
@@ -463,8 +692,23 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	return targetResults
 }
 
+func (sr *TargetResults) GetAllErrors() (errors []SkippableError) {
+	return append(errors, sr.TargetErrors...)
+}
+
+func (sr *TargetResults) GetNotSkippedErrors() []error {
+	errors := []error{}
+	for _, targetErr := range sr.TargetErrors {
+		if targetErr.Skip {
+			continue
+		}
+		errors = append(errors, targetErr.ActualError)
+	}
+	return errors
+}
+
 func (sr *TargetResults) GetErrors() (err error) {
-	for _, targetErr := range sr.Errors {
+	for _, targetErr := range sr.GetNotSkippedErrors() {
 		err = errors.Join(err, targetErr)
 	}
 	return
@@ -512,9 +756,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 
 func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	technologiesSet := datastructures.MakeSet[techutils.Technology]()
-	if sr.Technology != "" {
-		technologiesSet.Add(sr.Technology)
-	}
+	technologiesSet.AddElements(sr.DetectedTechnologies()...)
 	if sr.ScaResults == nil {
 		return technologiesSet.ToSlice()
 	}
@@ -568,13 +810,16 @@ func (sr *TargetResults) HasFindings() bool {
 }
 
 func (sr *TargetResults) AddTargetError(err error, allowSkippingError bool) error {
-	if allowSkippingError && err != nil {
-		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
+	if err == nil {
 		return nil
 	}
 	sr.errorsMutex.Lock()
-	sr.Errors = append(sr.Errors, err)
+	sr.TargetErrors = append(sr.TargetErrors, SkippableError{ActualError: err, Skip: allowSkippingError})
 	sr.errorsMutex.Unlock()
+	if allowSkippingError {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
+		return nil
+	}
 	return err
 }
 

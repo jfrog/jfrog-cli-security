@@ -97,9 +97,13 @@ func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (s
 		SyncStderr: stderrWriter,
 	}
 	client := goplugin.NewClient(clientConfig)
+	cleanup = func() {
+		client.Kill()
+		closeLogFileWriter(stderrWriter)
+	}
 	defer func() {
 		if err != nil {
-			client.Kill()
+			cleanup()
 		}
 	}()
 	rpcClient, err := client.Client()
@@ -116,7 +120,13 @@ func CreateScannerPluginClient(scangBinary string, envVars map[string]string) (s
 	if !ok {
 		return nil, "", nil, fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
 	}
-	return scanPlugin, logPath, client.Kill, nil
+	return scanPlugin, logPath, cleanup, nil
+}
+
+func closeLogFileWriter(writer io.Writer) {
+	if f, ok := writer.(*os.File); ok {
+		_ = f.Close()
+	}
 }
 
 func getPluginLogger() (writer io.Writer, logPath string, err error) {
@@ -189,7 +199,7 @@ func (p *Plugin) Client(broker *goplugin.MuxBroker, client *rpc.Client) (any, er
 	return &ScannerRPCClient{client: client}, nil
 }
 
-func DownloadXrayLibPluginIfNeeded() error {
+func DownloadXrayLibPluginIfNeeded(remoteRepo string, remoteServerDetails *config.ServerDetails) error {
 	downloadPath, err := GetXrayLibPluginDownloadPath()
 	if err != nil {
 		return err
@@ -198,7 +208,7 @@ func DownloadXrayLibPluginIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, path.Base(downloadPath), true, 0)
+	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, path.Base(downloadPath), true, remoteRepo, remoteServerDetails, 0)
 }
 
 func getXrayLibPluginFullName() (string, error) {

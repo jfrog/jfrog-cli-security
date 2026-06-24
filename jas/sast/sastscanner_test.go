@@ -71,7 +71,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -94,7 +94,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, sastDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -336,7 +336,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		changedFilesMode bool
-		// sastForCall is the slice passed to createConfigFile; nil to pass nil.
+		// sastForCall is the slice passed to deprecatedCreateConfigFile; nil to pass nil.
 		sastForCall []string
 		want        []string
 		emptyRoots  bool
@@ -369,7 +369,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ssm.changedFilesMode = tc.changedFilesMode
-			require.NoError(t, ssm.createConfigFile(module, false, tc.sastForCall, nil))
+			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, tc.sastForCall, nil))
 			got := readConfigRoots(t)
 			if tc.emptyRoots {
 				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")

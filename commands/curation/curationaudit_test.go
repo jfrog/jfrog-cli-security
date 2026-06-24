@@ -3,6 +3,7 @@ package curation
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -30,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -208,6 +211,29 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 			assert.Equal(t, tt.wantName, gotName, "getNpmNameScopeAndVersion() gotName = %v, want %v", gotName, tt.wantName)
 			assert.Equal(t, tt.wantScope, gotScope, "getNpmNameScopeAndVersion() gotScope = %v, want %v", gotScope, tt.wantScope)
 			assert.Equal(t, tt.wantVersion, gotVersion, "getNpmNameScopeAndVersion() gotVersion = %v, want %v", gotVersion, tt.wantVersion)
+		})
+	}
+}
+
+func TestIsYarnBerryWorkspaceMember(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkgName string
+		version string
+		want    bool
+	}{
+		{"workspace member — typical", "admin-ui-428bae", "0.0.0", true},
+		{"workspace member — root style", "root-workspace-0b6124", "0.0.0", true},
+		{"real package version 0.0.0", "my-pkg", "0.0.0", false},           // no hex suffix
+		{"real package with hex-looking name", "a-1b2c3d", "1.2.3", false}, // wrong version
+		{"Yarn V1 use.local", "my-pkg", "0.0.0-use.local", false},          // caught by earlier check
+		{"suffix too short", "pkg-4abc", "0.0.0", false},                   // 4 chars, not 6
+		{"suffix uppercase", "pkg-4ABC12", "0.0.0", false},                 // uppercase hex not matched
+		{"suffix has non-hex", "pkg-4xyzab", "0.0.0", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isYarnBerryWorkspaceMember(tt.pkgName, tt.version))
 		})
 	}
 }
@@ -545,6 +571,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
+	curationCmd.SetMvnIncludePluginDeps(tt.mvnIncludePluginDeps)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -568,6 +595,15 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 	}
 	// the number of packages is not deterministic for gem, as it depends on the version of the package manager.
 	if testCase.tech == techutils.Gem {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
+	// Cases that exercise Maven plugin-dep injection pull in a plugin's full transitive
+	// closure (e.g. maven-jar-plugin -> maven-archiver -> plexus-utils ...), which varies
+	// across plugin/Maven versions. Suppress the count assertion when requested.
+	if testCase.skipPackageCount {
 		for key := range results {
 			result := results[key]
 			result.totalNumberOfPackages = 0
@@ -600,6 +636,13 @@ type testCase struct {
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 	allowInsecureTls         bool
+	// mvnIncludePluginDeps wires the --mvn-include-plugin-deps CLI flag into the curation
+	// audit command so the test exercises Maven build-plugin transitive dep collection.
+	mvnIncludePluginDeps bool
+	// skipPackageCount tells validateCurationResults to ignore totalNumberOfPackages.
+	// Use for cases where the count depends on a Maven plugin's transitive closure
+	// (e.g. maven-jar-plugin) and would otherwise be brittle across Maven/plugin versions.
+	skipPackageCount bool
 }
 
 func (tc testCase) getPathToTests() string {
@@ -682,7 +725,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
 				defer restoreWD()
 
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle.String())
 				require.NoError(t, err)
 
 				return []string{
@@ -854,6 +897,70 @@ func getTestCasesForDoCurationAudit() []testCase {
 			allowInsecureTls: true,
 		},
 		{
+			// Regression coverage for --mvn-include-plugin-deps. The customer scenario was a
+			// build that downloaded a curated artifact only via a Maven build-plugin's transitive
+			// closure; `jf ca` would report "0 blocked" because mvn dependency:tree never sees
+			// plugin deps. The test pom pins maven-jar-plugin to 3.4.1, whose fixed transitive
+			// closure includes org.ow2.asm:asm:9.8 (via plexus-archiver:4.9.2). The mock server
+			// blocks that exact jar URL. With the flag on, the curation audit must resolve plugin
+			// deps, inject asm into the tree, and surface it as blocked.
+			name:          "maven tree - one blocked plugin dependency",
+			tech:          techutils.Maven,
+			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation-plugin-deps"),
+			pathToTest:    "test",
+			pathToPreTest: "pretest",
+			preTestExec:   "mvn",
+			funcToGetGoals: func(t *testing.T) []string {
+				// Curation cache is keyed off the project directory — compute it from the
+				// test/ dir (where the real test will run) so pretest writes into the same
+				// folder that the test phase reads. Mirrors the maven-curation case above.
+				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
+				require.NoError(t, err)
+				cleanUpTestDirChange()
+				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
+				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
+				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
+				// re-run during the test phase against the mock server.
+				return []string{
+					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
+					"-DdepsTreeOutputFile=output",
+					"-Dmaven.repo.local=" + curationCache,
+					"dependency:resolve-plugins",
+					"help:effective-pom",
+				}
+			},
+			mvnIncludePluginDeps: true,
+			// The full plugin closure depends on the runner's ambient Maven plugin versions;
+			// only asm:9.8 (pinned via maven-jar-plugin:3.4.1) is deterministic, so we assert
+			// just that blocked package and skip the non-deterministic total count.
+			skipPackageCount: true,
+			requestToFail: map[string]bool{
+				"/maven-remote/org/ow2/asm/asm/9.8/asm-9.8.jar": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"test:plugin-dep-app:1.0.0": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentVersion:     "9.8",
+						ParentName:        "org.ow2.asm:asm",
+						BlockedPackageUrl: "/maven-remote/org/ow2/asm/asm/9.8/asm-9.8.jar",
+						PackageName:       "org.ow2.asm:asm",
+						PackageVersion:    "9.8",
+						BlockingReason:    "Policy violations",
+						PkgType:           "maven",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				}},
+			},
+		},
+		{
 			name:          "maven tree - one blocked package",
 			tech:          techutils.Maven,
 			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation"),
@@ -865,7 +972,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				// The cache directory is determined by the project directory, so we need to "simulate" the cache directory when running the pretest build.
 				// During the test, the blocked package will be resolved from the same cache directory that was populated in the pretest build.
 				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
 				return []string{"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
@@ -939,6 +1046,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			// One HEAD probe 500s, the other 403s. The 500 is logged as a warning
+			// and the walk continues; expect a partial report containing only the
+			// confirmed-blocked package (underscore@1.13.6) plus the error.
 			name:                   "npm tree - two blocked one error",
 			tech:                   techutils.Npm,
 			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
@@ -1367,6 +1477,41 @@ func Test_convertResultsToSummary(t *testing.T) {
 			},
 		},
 		{
+			name: "partial CVS fallback report — IsPartial propagates to summary",
+			input: map[string]*CurationReport{
+				"project1": {
+					packagesStatus: []*PackageStatus{
+						{
+							PackageName:    "langchain-core",
+							PackageVersion: "1.4.7",
+							ParentVersion:  "1.4.7",
+							ParentName:     "langchain-core",
+							Action:         "blocked",
+							Policy:         []Policy{{Policy: "p", Condition: "immature"}},
+						},
+					},
+					totalNumberOfPackages: 1,
+					isPartial:             true,
+				},
+			},
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
+					{
+						Target: "project1",
+						CuratedPackages: &formats.CuratedPackages{
+							PackageCount: 1,
+							IsPartial:    true,
+							Blocked: []formats.BlockedPackages{{
+								Policy:    "p",
+								Condition: "immature",
+								Packages:  map[string]int{"langchain-core:1.4.7": 1},
+							}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "results for three result - aggregate one, same component in two policies",
 			input: map[string]*CurationReport{
 				"project1": {
@@ -1692,4 +1837,827 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 		return true
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
+}
+
+// =============================================================================
+// Tests for Poetry support added to curationaudit.go.
+// Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the
+// supportedTech registration.
+// =============================================================================
+
+func Test_getPythonNameVersion(t *testing.T) {
+	const exampleUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
+
+	tests := []struct {
+		name             string
+		id               string
+		downloadUrlsMap  map[string]string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "pip id with matching download url",
+			id:               "pypi://flask:2.0.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask:2.0.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "flask",
+			wantVersion:      "2.0.0",
+		},
+		{
+			name:             "poetry id with matching download url (same pypi:// prefix)",
+			id:               "pypi://click:8.0.1",
+			downloadUrlsMap:  map[string]string{"pypi://click:8.0.1": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "click",
+			wantVersion:      "8.0.1",
+		},
+		{
+			name:             "id present in map but no entry returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  map[string]string{"pypi://other:1.0.0": exampleUrl},
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "nil downloadUrlsMap returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "malformed id (no version separator) returns empty",
+			id:               "pypi://malformed",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "hyphenated name resolved via normalization fallback",
+			id:               "pypi://Flask-Babel:1.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask_babel:1.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "Flask-Babel",
+			wantVersion:      "1.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getPythonNameVersion(tt.id, tt.downloadUrlsMap)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+// TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked verifies that
+// getBlockedPackageDetails returns a blocked PackageStatus (no error) when a 403
+// response body cannot be resolved to a known curation block reason:
+// (1) the body is not valid JSON (e.g. an HTML error page), or
+// (2) the body is valid JSON but the Errors array is empty.
+// In both cases the 403 itself is treated as authoritative — the package is
+// recorded as blocked with an unknown policy rather than being dropped silently.
+func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) {
+	tests := []struct {
+		name     string
+		respBody string
+	}{
+		{
+			name:     "non-JSON body (HTML error page)",
+			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
+		},
+		{
+			name:     "JSON body with empty errors list",
+			respBody: `{"errors":[]}`,
+		},
+	}
+
+	const (
+		pkgName    = "telnyx"
+		pkgVersion = "4.87.1"
+	)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.respBody))
+			})
+			defer serverMock.Close()
+
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			httpClientDetails := rtAuth.CreateHttpClientDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				rtAuth:               rtAuth,
+				httpClientDetails:    httpClientDetails,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				url:                  rtAuth.GetUrl(),
+				repo:                 "pypi-remote",
+				tech:                 techutils.Poetry,
+			}
+			packageUrl := fmt.Sprintf("%sapi/pypi/pypi-remote/packages/%s-%s.tar.gz", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+			require.NoError(t, err, "unparsable 403 body should not surface as an error")
+			require.NotNil(t, got, "a blocked PackageStatus must be returned when the 403 block reason is unknown")
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)
+			assert.Equal(t, pkgName, got.PackageName)
+			assert.Equal(t, pkgVersion, got.PackageVersion)
+		})
+	}
+}
+
+// TestFetchCvsBlockedStatusTransitive verifies the CVS fallback for a transitive range blocker:
+// the range is resolved to the newest satisfying version and the policy is recovered from the 403 probe.
+func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.1"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "strict-immature-policy"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	// Curation 403 body returned when the normal download URL is probed.
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	// All-versions metadata JSON (the simple-index-unfiltered endpoint).
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+
+	// Version-specific metadata JSON (returns the whl download URL).
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// All-versions metadata: /api/pypi/<repo>/pypi/<name>/json
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+
+		// Version-specific metadata: /api/pypi/<repo>/pypi/<name>/<ver>/json
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+
+		// Normal download URL probe: HEAD first → 403 (detection step)
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+
+		// Normal download URL probe: GET with waiver → 403 with policy body
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+		parallelRequests:     1,
+	}
+
+	// Transitive PinnedRequirement: langchain-core with deepagents as parent.
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+
+	// Policy details recovered from the 403 probe
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy, "violated policy name")
+	assert.Equal(t, expectedCond, s.Policy[0].Condition, "violated condition name")
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation, "explanation")
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation, "recommendation")
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusNotInMetadataNotRendered verifies that a version absent from the metadata API is not rendered as a blocked row.
+func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
+	const (
+		repo = "test-pip-repo"
+		pkg  = "telnyx"
+		ver  = "4.87.1000" // not in the metadata API
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "a version absent from the metadata API must not be rendered as a blocked row")
+}
+
+// TestFetchCvsBlockedStatusSetsDepRelation verifies DepRelation is populated for both direct and transitive CVS-fallback rows.
+func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.1"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"releases":{%q:[]}}`, blockedVer)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'strict-policy'","policy":"strict-policy","condition":"immature","explanation":"too new","recommendation":"use older"}]}`))
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Transitive pin: parent differs from package → indirect.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, VersionRange: ">=1.4.0", ParentName: parentPkg, ParentVersion: parentVer},
+	}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, indirectRelation, statuses[0].DepRelation, "transitive CVS-fallback row must be indirect")
+
+	// Direct pin: parent equals package → direct.
+	pins = []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+	statuses = analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, directRelation, statuses[0].DepRelation, "direct CVS-fallback row must be direct")
+
+	// ResolutionImpossible: name-only, self-attributed → must be indirect.
+	pins = []python.PinnedRequirement{
+		{Name: blockedPkg, ParentName: blockedPkg}, // no Version, no VersionRange
+	}
+	statuses = analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, indirectRelation, statuses[0].DepRelation,
+		"ResolutionImpossible CVS-fallback row must be indirect (parent unknown)")
+}
+
+// TestFetchCvsBlockedStatusHeadErrorNoFalsePositive verifies that a HEAD transport error does not
+// produce a spurious blocked row.
+func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		pkg             = "foo"
+		ver             = "1.0"
+		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusInternalServerError)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver}}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "HEAD transport error must not produce a false-positive blocked row")
+}
+
+// TestFetchCvsBlockedStatusHeadOKNoFalsePositive verifies that a HEAD 200 (stale CVS cache scenario)
+// does not produce a spurious blocked row. When pip's CVS-filtered simple-index hid a version but
+// the artifact is now accessible (policy changed, waiver granted), HEAD returns 200 and the package
+// must be skipped entirely.
+func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		pkg             = "foo"
+		ver             = "1.0"
+		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			// Stale CVS cache cleared; package is now accessible.
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver}}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "HEAD 200 (stale CVS cache) must not produce a false-positive blocked row")
+}
+
+// TestRunCvsFallbackGetWdFailurePreservesResults verifies that a failed os.Getwd() does not cause
+// runCvsFallback to discard the already-recovered packagesStatus. The results map must be populated
+// under the "unknown-project" fallback key instead of silently returning cvsErr.
+func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+	blockJSON := `{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'p'","policy":"p","condition":"immature","explanation":"too new","recommendation":"use older"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	// Simulate os.Getwd() failure via the injectable function variable.
+	orig := osGetwd
+	osGetwd = func() (string, error) { return "", errors.New("simulated: no such file or directory") }
+	t.Cleanup(func() { osGetwd = orig })
+
+	cvsErr := &python.CvsBlockedError{
+		Packages: []python.PinnedRequirement{
+			{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+		},
+	}
+	results := map[string]*CurationReport{}
+	err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+	assert.NoError(t, err, "os.Getwd failure must not surface as an error")
+	assert.Len(t, results, 1, "recovered packagesStatus must be stored even when Getwd fails")
+	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
+}
+
+// TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
+func TestEffectiveParentVersion(t *testing.T) {
+	cases := []struct {
+		name string
+		pin  python.PinnedRequirement
+		want string
+	}{
+		{"exact direct", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, "1.0"},
+		{"direct range — shows range spec", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, ">=1.4"},
+		{"transitive range — parent ver unknown", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar"}, ""},
+		{"transitive with known parent ver", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar", ParentVersion: "2.3"}, "2.3"},
+		{"ResolutionImpossible — all empty", python.PinnedRequirement{Name: "foo", ParentName: "foo"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+		})
+	}
+}
+
+func TestValidateRunNativeForTech(t *testing.T) {
+	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
+	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
+	assert.NoError(t, validateRunNativeForTech(techutils.Npm, false))
+	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, true))
+	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, false))
+
+	// The failing-test scenario from the bug report: yarn + --run-native
+	// must exit non-zero with a yarn-named error that points the user at
+	// the supported config flow.
+	t.Run("yarn rejects --run-native with actionable message", func(t *testing.T) {
+		err := validateRunNativeForTech(techutils.Yarn, true)
+		if assert.Error(t, err) {
+			msg := err.Error()
+			// Tech-neutral phrasing — the message must not hard-code
+			// "only supported for npm", because the allow-list is the
+			// source of truth and may grow over time.
+			assert.Contains(t, msg, "--run-native is not supported for 'yarn' projects")
+			assert.Contains(t, msg, "jf yarn-config", "the error must point the user at the supported config flow")
+		}
+		// Without the flag, yarn must pass validation cleanly — the
+		// guard is strictly conditional on --run-native being on.
+		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
+	})
+
+	// Every other supported tech follows the same contract. Catch silent
+	// acceptance for any tech that's in the doc-table-of-supported but
+	// hasn't implemented a native flow — same UX as yarn.
+	otherTechs := []techutils.Technology{
+		techutils.Gradle,
+		techutils.Maven,
+		techutils.Gem,
+		techutils.Pip,
+		techutils.Go,
+		techutils.Nuget,
+		techutils.Dotnet,
+		techutils.Conan,
+		techutils.Cocoapods,
+		techutils.Swift,
+		techutils.Docker,
+	}
+	for _, tech := range otherTechs {
+		t.Run(tech.String()+" rejects --run-native", func(t *testing.T) {
+			err := validateRunNativeForTech(tech, true)
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), tech.String(),
+					"error message must name the offending tech so users running mixed-tech audits know which sub-audit complained")
+			}
+			assert.NoError(t, validateRunNativeForTech(tech, false))
+		})
+	}
+}
+
+// TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
+// fallback for the resolver-config lookup in auditTree. The exact
+// reason this fallback has to live here, separate from the existing
+// SetRepo fallback, is that auditTree calls
+// SetResolutionRepoInParamsIfExists *before* it reaches SetRepo — and
+// that earlier call is what populates params.DependenciesRepository,
+// which in turn decides whether configureYarnResolutionServerAndRunInstall
+// performs the .yarnrc.yml backup/replace/restore round-trip. Without
+// the round-trip, a 'yarn install' against curation that hits a 403
+// can leave the workspace install state inconsistent and the
+// downstream 'yarn info' enumeration fails with a workspace-assertion
+// error. So the contract under test is twofold:
+//
+//  1. For tech=Yarn with only npm.yaml present, return Npm so the
+//     resolver lookup reads npm.yaml (npm and yarn share the same
+//     Artifactory npm API, so the same repo serves both ecosystems).
+//  2. For any other input (yarn.yaml present, both present, neither
+//     present, or tech≠Yarn) return the input tech unchanged.
+//
+// The Npm-detected case is intentionally not exercised here because
+// resolveNpmYarnTech already upgrades that case to Yarn at the
+// detection layer (see TestResolveNpmYarnTech-style coverage in
+// resolveNpmYarnTech consumers); by the time auditTree sees tech=Npm
+// a matching npm.yaml is guaranteed to exist.
+//
+// Each subtest builds a hermetic .jfrog/projects/ directory, chdirs
+// into it, and isolates JFROG_CLI_HOME_DIR so a real config on the
+// developer's machine can't leak in.
+func TestResolveResolverTechForCuration(t *testing.T) {
+	type setup struct {
+		writeYarnYaml bool
+		writeNpmYaml  bool
+	}
+	testCases := []struct {
+		name string
+		tech techutils.Technology
+		setup
+		want techutils.Technology
+	}{
+		{
+			name:  "yarn with yarn.yaml present — no fallback, lookup must use yarn.yaml directly",
+			tech:  techutils.Yarn,
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn,
+		},
+		{
+			name:  "yarn with only npm.yaml — falls back to npm so the resolver lookup reads npm.yaml",
+			tech:  techutils.Yarn,
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Npm,
+		},
+		{
+			name:  "yarn with both configs — yarn.yaml wins; fallback only triggers when primary is missing",
+			tech:  techutils.Yarn,
+			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
+			want:  techutils.Yarn,
+		},
+		{
+			name: "yarn with neither config — no fallback target; return Yarn so the downstream lookup no-ops cleanly",
+			tech: techutils.Yarn,
+			want: techutils.Yarn,
+		},
+		{
+			name:  "npm input — never rewritten by this helper (resolveNpmYarnTech owns the inverse direction at the detection layer)",
+			tech:  techutils.Npm,
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Npm,
+		},
+		{
+			name:  "non-npm/yarn tech is passed through untouched even when npm.yaml exists",
+			tech:  techutils.Maven,
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Maven,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempProjectDir := t.TempDir()
+			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
+			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+			if tc.writeYarnYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
+			}
+			if tc.writeNpmYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
+			}
+			// Isolate JFROG_CLI_HOME_DIR so a real ~/.jfrog/projects/*.yaml
+			// on the developer's machine can't leak into the fallback
+			// (GetProjectConfFilePath falls back to JFROG_CLI_HOME_DIR
+			// when nothing matches walking up from CWD).
+			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
+			defer restoreHome()
+			restoreCwd := changeDirForTest(t, tempProjectDir)
+			defer restoreCwd()
+
+			got := resolveResolverTechForCuration(tc.tech)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestResolveNpmYarnTech(t *testing.T) {
+	type setup struct {
+		writeYarnYaml bool
+		writeNpmYaml  bool
+	}
+	testCases := []struct {
+		name  string
+		tech  string
+		setup setup
+		want  string
+	}{
+		{
+			name:  "npm with yarn.yaml only — promoted to yarn",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm with both yaml files — npm.yaml wins, no promotion",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "npm with npm.yaml only — stays npm",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeNpmYaml: true},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "npm with neither yaml — stays npm",
+			tech:  techutils.Npm.String(),
+			setup: setup{},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "yarn input is never rewritten by this helper",
+			tech:  techutils.Yarn.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "non-npm/yarn tech passes through untouched",
+			tech:  techutils.Maven.String(),
+			setup: setup{writeYarnYaml: true},
+			want:  techutils.Maven.String(),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempProjectDir := t.TempDir()
+			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
+			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+			if tc.setup.writeYarnYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
+			}
+			if tc.setup.writeNpmYaml {
+				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
+			}
+			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
+			defer restoreHome()
+			restoreCwd := changeDirForTest(t, tempProjectDir)
+			defer restoreCwd()
+
+			got := resolveNpmYarnTech(tc.tech)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func changeDirForTest(t *testing.T, dir string) func() {
+	t.Helper()
+	origCwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	return func() {
+		// Restore CWD even if the test fails partway, so the next
+		// subtest's GetProjectConfFilePath walk starts from a known dir.
+		require.NoError(t, os.Chdir(origCwd))
+	}
+}
+
+func TestPromotePnpmWorkspaceMember(t *testing.T) {
+	npm := "npm"
+	pnpm := "pnpm"
+	other := "maven"
+
+	tests := []struct {
+		name             string
+		techs            []string
+		ancestorFile     string // file to create in the ancestor dir ("" = none)
+		expectedHasPnpm  bool
+		expectedHasNpm   bool
+		expectNpmRemoved bool // npm was present in input and should be replaced by pnpm
+	}{
+		{
+			// pnpm already present: function returns early, npm is NOT replaced.
+			name:            "already has pnpm — no change",
+			techs:           []string{pnpm, npm},
+			expectedHasPnpm: true,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "no npm — no change",
+			techs:           []string{other},
+			expectedHasPnpm: false,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, no ancestor indicator — no promotion",
+			techs:           []string{npm},
+			ancestorFile:    "",
+			expectedHasPnpm: false,
+			expectedHasNpm:  true,
+		},
+		{
+			name:             "npm only, ancestor has pnpm-workspace.yaml — promote",
+			techs:            []string{npm},
+			ancestorFile:     "pnpm-workspace.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+		{
+			name:             "npm only, ancestor has pnpm-lock.yaml — promote",
+			techs:            []string{npm},
+			ancestorFile:     "pnpm-lock.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+		{
+			name:             "npm + other, ancestor has pnpm-workspace.yaml — npm promoted, other kept",
+			techs:            []string{npm, other},
+			ancestorFile:     "pnpm-workspace.yaml",
+			expectedHasPnpm:  true,
+			expectedHasNpm:   false,
+			expectNpmRemoved: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build a two-level temp dir: root/sub — we run from sub so the walk finds root.
+			root := t.TempDir()
+			sub := filepath.Join(root, "sub")
+			require.NoError(t, os.MkdirAll(sub, 0o755))
+
+			if tc.ancestorFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, tc.ancestorFile), []byte{}, 0o644))
+			}
+
+			t.Chdir(sub)
+
+			result := promotePnpmWorkspaceMember(tc.techs)
+
+			hasPnpm, hasNpm := false, false
+			for _, tech := range result {
+				switch tech {
+				case pnpm:
+					hasPnpm = true
+				case npm:
+					hasNpm = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasPnpm, hasPnpm, "pnpm presence mismatch")
+			assert.Equal(t, tc.expectedHasNpm, hasNpm, "npm presence mismatch")
+			if tc.expectNpmRemoved {
+				assert.False(t, hasNpm, "npm should have been replaced by pnpm")
+				assert.True(t, hasPnpm, "pnpm should be present after promotion")
+			}
+		})
+	}
 }
