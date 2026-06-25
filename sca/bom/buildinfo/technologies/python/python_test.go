@@ -1,6 +1,7 @@
 package python
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -962,4 +963,41 @@ func TestInstallPoetryDepsNonCurationErrorPropagated(t *testing.T) {
 	})
 
 	require.Error(t, err, "non-curation poetry install failure must propagate to the caller")
+}
+
+func TestWrapPoetryCurationErrReturnsCvsBlockedError(t *testing.T) {
+	// CVS-stripped version: poetry emits "X (version) which doesn't match any versions".
+	lockErr := errors.New("Because sample-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.")
+	wrapped := wrapPoetryCurationErr(lockErr)
+
+	var cvsErr *CvsBlockedError
+	require.ErrorAs(t, wrapped, &cvsErr, "CVS-filtered poetry error must be wrapped as *CvsBlockedError")
+	require.Len(t, cvsErr.Packages, 1)
+	assert.Equal(t, "telnyx", cvsErr.Packages[0].Name)
+	assert.Equal(t, "4.87.1", cvsErr.Packages[0].Version)
+	assert.ErrorIs(t, cvsErr, lockErr, "CvsBlockedError must unwrap to the original lock error")
+}
+
+func TestWrapPoetryCurationErrNonCvsPassesThrough(t *testing.T) {
+	// A plain poetry install error (not CVS) must not be wrapped as CvsBlockedError.
+	lockErr := errors.New("SolverProblemError: incompatible package constraint")
+	wrapped := wrapPoetryCurationErr(lockErr)
+
+	var cvsErr *CvsBlockedError
+	assert.False(t, errors.As(wrapped, &cvsErr), "non-CVS poetry error must not be wrapped as *CvsBlockedError")
+	assert.ErrorIs(t, wrapped, lockErr)
+}
+
+func TestWrapPoetryCurationErrMsgToUserPath(t *testing.T) {
+	// Poetry emits an HTTP 403 during poetry lock (real download block, not CVS
+	// index stripping). IsForbiddenOutput recognises "http error 403" for poetry,
+	// so GetMsgToUserForCurationBlock returns a non-empty user-facing message.
+	// wrapPoetryCurationErr must join the original error with that message.
+	lockErr := errors.New("http error 403 downloading https://artifactory.example.com/telnyx-4.87.1.tar.gz")
+	wrapped := wrapPoetryCurationErr(lockErr)
+
+	var cvsErr *CvsBlockedError
+	assert.False(t, errors.As(wrapped, &cvsErr), "403-blocked poetry error must not be wrapped as *CvsBlockedError")
+	assert.ErrorIs(t, wrapped, lockErr, "original lockErr must be in the error chain")
+	assert.Contains(t, wrapped.Error(), "poetry", "user-facing message must mention the package manager")
 }
