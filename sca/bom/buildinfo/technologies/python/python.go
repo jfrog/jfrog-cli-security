@@ -636,8 +636,7 @@ func wrapPoetryCurationErr(lockErr error) error {
 		return nil
 	}
 	if isCvsVersionFilteredOutput(lockErr.Error()) {
-		pins := parseCvsFailedPackages(lockErr.Error())
-		lockErr = errors.Join(lockErr, errors.New(formatCvsBlockedRequirementsMessage(pins)))
+		return &CvsBlockedError{Packages: parseCvsFailedPackages(lockErr.Error()), Cause: lockErr}
 	}
 	if msgToUser := technologies.GetMsgToUserForCurationBlock(true, techutils.Poetry, lockErr.Error()); msgToUser != "" {
 		return errors.Join(lockErr, errors.New(msgToUser))

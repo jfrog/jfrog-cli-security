@@ -2077,6 +2077,79 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	assert.Equal(t, blocked, s.Action)
 }
 
+// TestFetchCvsBlockedStatusPoetry verifies that the CVS fallback works for a
+// poetry-pinned package: wrapPoetryCurationErr produces a *CvsBlockedError
+// and fetchCvsBlockedStatus recovers the policy from the 403 probe, with the
+// package type set to "poetry".
+func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "telnyx"
+		blockedVer      = "4.87.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 5 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/te/ln/telnyx-4.87.1-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	// Exact-pin PinnedRequirement produced by wrapPoetryCurationErr for a poetry project.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
 // TestFetchCvsBlockedStatusNotInMetadataNotRendered verifies that a version absent from the metadata API is not rendered as a blocked row.
 func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	const (
