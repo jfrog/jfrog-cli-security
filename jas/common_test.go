@@ -317,8 +317,8 @@ func TestGetJasEnvVars(t *testing.T) {
 		name           string
 		serverDetails  *config.ServerDetails
 		diffMode       JasDiffScanEnvValue
-		extraEnvVars   map[string]string
-		expectedOutput map[string]string
+		extraEnvVars   utils.EnvironmentVariables
+		expectedOutput utils.EnvironmentVariables
 	}{
 		{
 			name: "Valid server details",
@@ -328,7 +328,7 @@ func TestGetJasEnvVars(t *testing.T) {
 				Password:    "password",
 				AccessToken: "token",
 			},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				jfPlatformUrlEnvVariable: "url",
 				jfUserEnvVariable:        "user",
 				jfPasswordEnvVariable:    "password",
@@ -343,8 +343,8 @@ func TestGetJasEnvVars(t *testing.T) {
 				Password:    "password",
 				AccessToken: "token",
 			},
-			extraEnvVars: map[string]string{"test": "testValue"},
-			expectedOutput: map[string]string{
+			extraEnvVars: utils.EnvironmentVariables{"test": "testValue"},
+			expectedOutput: utils.EnvironmentVariables{
 				jfPlatformUrlEnvVariable: "url",
 				jfUserEnvVariable:        "user",
 				jfPasswordEnvVariable:    "password",
@@ -361,7 +361,7 @@ func TestGetJasEnvVars(t *testing.T) {
 				Password:    "password",
 				AccessToken: "token",
 			},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				jfPlatformUrlEnvVariable:     "",
 				jfPlatformXrayUrlEnvVariable: "url/xray",
 				jfUserEnvVariable:            "user",
@@ -378,7 +378,7 @@ func TestGetJasEnvVars(t *testing.T) {
 				Password:    "password",
 				AccessToken: "token",
 			},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				jfPlatformUrlEnvVariable:     "url",
 				jfPlatformXrayUrlEnvVariable: "url/xray",
 				jfUserEnvVariable:            "user",
@@ -395,7 +395,7 @@ func TestGetJasEnvVars(t *testing.T) {
 				AccessToken: "token",
 			},
 			diffMode: FirstScanDiffScanEnvValue,
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				jfPlatformUrlEnvVariable: "url",
 				jfUserEnvVariable:        "user",
 				jfPasswordEnvVariable:    "password",
@@ -425,13 +425,13 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 		projectKey     string
 		watches        []string
 		technologies   []techutils.Technology
-		expectedOutput map[string]string
+		expectedOutput utils.EnvironmentVariables
 	}{
 		{
 			name:         "One valid technology",
 			msi:          "msi",
 			technologies: []techutils.Technology{techutils.Maven},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Maven),
 				JfLanguageEnvVariable:       string(techutils.Java),
 				utils.JfMsiEnvVariable:      "msi",
@@ -443,20 +443,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			name:           "Multiple technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
+			expectedOutput: utils.EnvironmentVariables{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:           "Zero technologies",
 			msi:            "msi",
 			technologies:   []techutils.Technology{},
-			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
+			expectedOutput: utils.EnvironmentVariables{utils.JfMsiEnvVariable: "msi", newFlowEnvVariable: "false", jfXrayVersionEnvVariable: ""},
 		},
 		{
 			name:         "With git repo url",
 			msi:          "msi",
 			gitRepoUrl:   "gitRepoUrl",
 			technologies: []techutils.Technology{techutils.Npm},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Npm),
 				JfLanguageEnvVariable:       string(techutils.JavaScript),
 				utils.JfMsiEnvVariable:      "msi",
@@ -471,7 +471,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			gitRepoUrl:   "gitRepoUrl",
 			projectKey:   "projectKey",
 			technologies: []techutils.Technology{techutils.Npm},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Npm),
 				JfLanguageEnvVariable:       string(techutils.JavaScript),
 				utils.JfMsiEnvVariable:      "msi",
@@ -487,7 +487,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			gitRepoUrl:   "gitRepoUrl",
 			watches:      []string{"watch1", "watch2"},
 			technologies: []techutils.Technology{techutils.Npm},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Npm),
 				JfLanguageEnvVariable:       string(techutils.JavaScript),
 				utils.JfMsiEnvVariable:      "msi",
@@ -502,7 +502,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			newFlow:      true,
 			msi:          "msi",
 			technologies: []techutils.Technology{techutils.Go},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Go),
 				JfLanguageEnvVariable:       string(techutils.Go),
 				utils.JfMsiEnvVariable:      "msi",
@@ -515,7 +515,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			msi:          "msi",
 			xrayVersion:  "3.111.0",
 			technologies: []techutils.Technology{techutils.Npm},
-			expectedOutput: map[string]string{
+			expectedOutput: utils.EnvironmentVariables{
 				JfPackageManagerEnvVariable: string(techutils.Npm),
 				JfLanguageEnvVariable:       string(techutils.JavaScript),
 				utils.JfMsiEnvVariable:      "msi",

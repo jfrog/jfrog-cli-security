@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -275,12 +276,48 @@ func toHash(hash crypto.Hash, values ...string) (string, error) {
 }
 
 // map[string]string to []string (key=value format)
-func ToCommandEnvVars(envVarsMap map[string]string) (converted []string) {
-	converted = make([]string, 0, len(envVarsMap))
-	for key, value := range envVarsMap {
+// func ToCommandEnvVars(envVarsMap map[string]string) (converted []string) {
+// 	converted = make([]string, 0, len(envVarsMap))
+// 	for key, value := range envVarsMap {
+// 		converted = append(converted, fmt.Sprintf("%s=%s", key, value))
+// 	}
+// 	return
+// }
+
+type EnvironmentVariables map[string]string
+
+func (envVars EnvironmentVariables) ToCommandEnvVars() []string {
+	converted := make([]string, 0, len(envVars))
+	for key, value := range envVars {
 		converted = append(converted, fmt.Sprintf("%s=%s", key, value))
 	}
-	return
+	return converted
+}
+
+func (envVars EnvironmentVariables) ToString() string {
+	envVarsStr := []string{}
+	for key, value := range envVars {
+		envVarsStr = append(envVarsStr, fmt.Sprintf("%s=%s", key, MaskSensitiveData(key, value)))
+	}
+	return strings.Join(envVarsStr, "\n")
+}
+
+func MaskSensitiveData(flagName, flagValue string) (masked string) {
+	// Mask url if required
+	if strings.Contains(strings.ToLower(flagName), "url") {
+		// Regex to match credentials in URL: http(s)://username:password@host...
+		re := regexp.MustCompile(`(https?://)([^:/\s]+):([^@/\s]+)@`)
+		masked = re.ReplaceAllString(flagValue, `${1}${2}:****@`)
+		return masked
+	}
+	// Mask password, token, key, passphrase flags
+	lowerFlagName := strings.ToLower(flagName)
+	if strings.Contains(lowerFlagName, "password") || strings.Contains(lowerFlagName, "passphrase") ||
+		strings.Contains(lowerFlagName, "token") || strings.Contains(lowerFlagName, "key") {
+		return "****"
+	}
+	// Return original input if no masking required
+	return flagValue
 }
 
 // []string (key=value format) to map[string]string

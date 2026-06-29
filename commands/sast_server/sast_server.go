@@ -6,6 +6,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
@@ -21,7 +22,7 @@ type SastServerCommand struct {
 	ErrorPipe     io.Writer
 }
 
-func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars map[string]string) (err error) {
+func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars utils.EnvironmentVariables) (err error) {
 	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
 }
 
