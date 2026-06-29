@@ -317,7 +317,7 @@ var flagsMap = map[string]components.Flag{
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
 	UploadRepoPath:      components.NewStringFlag(UploadRepoPath, "Artifactory repository name or path to upload the cyclonedx file to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray.", components.WithStrDefaultValue("import-cdx-scan-results")),
-	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported only for some package managers.", components.SetHiddenBoolFlag()),
+	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn, NPM, Pip, and Poetry.", components.SetHiddenBoolFlag()),
 	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
@@ -351,7 +351,7 @@ var flagsMap = map[string]components.Flag{
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
-	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are included in the curation evaluation. Requires two additional Maven invocations (help:effective-pom, dependency:resolve-plugins) which may slow down the scan. By default only project dependencies are scanned."),
+	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are resolved and included in the curation evaluation. By default only project dependencies are scanned."),
 	LegacyPeerDeps:                components.NewBoolFlag(LegacyPeerDeps, "[npm] Pass --legacy-peer-deps to npm install to bypass peer-dependency version conflicts."),
 	RunNative:                     components.NewBoolFlag(RunNative, "[npm] Use the native npm client for dependency resolution. Reads Artifactory URL and repository from the project's .npmrc registry — no 'jf npm-config' required. Respects .npmrc and Volta configuration."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),

@@ -3,6 +3,7 @@ package curation
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -30,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -915,16 +918,15 @@ func getTestCasesForDoCurationAudit() []testCase {
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
-				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
-				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
-				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
-				// re-run during the test phase against the mock server.
+				// Pre-populate the curation cache with all plugin artifact downloads so that
+				// during the actual test run against the mock server only the blocked artifact
+				// triggers an HTTP request. The -DincludePluginDeps=true flag causes
+				// maven-dep-tree to resolve plugin transitive deps in the same invocation.
 				return []string{
 					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
 					"-DdepsTreeOutputFile=output",
 					"-Dmaven.repo.local=" + curationCache,
-					"dependency:resolve-plugins",
-					"help:effective-pom",
+					"-DincludePluginDeps=true",
 				}
 			},
 			mvnIncludePluginDeps: true,
@@ -1474,6 +1476,41 @@ func Test_convertResultsToSummary(t *testing.T) {
 			},
 		},
 		{
+			name: "partial CVS fallback report — IsPartial propagates to summary",
+			input: map[string]*CurationReport{
+				"project1": {
+					packagesStatus: []*PackageStatus{
+						{
+							PackageName:    "langchain-core",
+							PackageVersion: "1.4.7",
+							ParentVersion:  "1.4.7",
+							ParentName:     "langchain-core",
+							Action:         "blocked",
+							Policy:         []Policy{{Policy: "p", Condition: "immature"}},
+						},
+					},
+					totalNumberOfPackages: 1,
+					isPartial:             true,
+				},
+			},
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
+					{
+						Target: "project1",
+						CuratedPackages: &formats.CuratedPackages{
+							PackageCount: 1,
+							IsPartial:    true,
+							Blocked: []formats.BlockedPackages{{
+								Policy:    "p",
+								Condition: "immature",
+								Packages:  map[string]int{"langchain-core:1.4.7": 1},
+							}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "results for three result - aggregate one, same component in two policies",
 			input: map[string]*CurationReport{
 				"project1": {
@@ -1801,9 +1838,573 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
 }
 
-// TestValidateRunNativeForTech checks that --run-native is accepted for npm and
-// pnpm (both .npmrc-based) and rejected for all other techs with an error that
-// names the offending tech.
+// =============================================================================
+// Tests for Poetry support added to curationaudit.go.
+// Covers the new dispatcher case (Pip, Poetry -> getPythonNameVersion) and the
+// supportedTech registration.
+// =============================================================================
+
+func Test_getPythonNameVersion(t *testing.T) {
+	const exampleUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/flask-2.0.0-py3-none-any.whl"
+
+	tests := []struct {
+		name             string
+		id               string
+		downloadUrlsMap  map[string]string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "pip id with matching download url",
+			id:               "pypi://flask:2.0.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask:2.0.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "flask",
+			wantVersion:      "2.0.0",
+		},
+		{
+			name:             "poetry id with matching download url (same pypi:// prefix)",
+			id:               "pypi://click:8.0.1",
+			downloadUrlsMap:  map[string]string{"pypi://click:8.0.1": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "click",
+			wantVersion:      "8.0.1",
+		},
+		{
+			name:             "id present in map but no entry returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  map[string]string{"pypi://other:1.0.0": exampleUrl},
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "nil downloadUrlsMap returns name+version only",
+			id:               "pypi://requests:2.31.0",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "requests",
+			wantVersion:      "2.31.0",
+		},
+		{
+			name:             "malformed id (no version separator) returns empty",
+			id:               "pypi://malformed",
+			downloadUrlsMap:  nil,
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "hyphenated name resolved via normalization fallback",
+			id:               "pypi://Flask-Babel:1.0",
+			downloadUrlsMap:  map[string]string{"pypi://flask_babel:1.0": exampleUrl},
+			wantDownloadUrls: []string{exampleUrl},
+			wantName:         "Flask-Babel",
+			wantVersion:      "1.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getPythonNameVersion(tt.id, tt.downloadUrlsMap)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+// TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked verifies that
+// getBlockedPackageDetails returns a blocked PackageStatus (no error) when a 403
+// response body cannot be resolved to a known curation block reason:
+// (1) the body is not valid JSON (e.g. an HTML error page), or
+// (2) the body is valid JSON but the Errors array is empty.
+// In both cases the 403 itself is treated as authoritative — the package is
+// recorded as blocked with an unknown policy rather than being dropped silently.
+func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) {
+	tests := []struct {
+		name     string
+		respBody string
+	}{
+		{
+			name:     "non-JSON body (HTML error page)",
+			respBody: "<html><body><h1>403 Forbidden</h1></body></html>",
+		},
+		{
+			name:     "JSON body with empty errors list",
+			respBody: `{"errors":[]}`,
+		},
+	}
+
+	const (
+		pkgName    = "telnyx"
+		pkgVersion = "4.87.1"
+	)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.respBody))
+			})
+			defer serverMock.Close()
+
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			httpClientDetails := rtAuth.CreateHttpClientDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				rtAuth:               rtAuth,
+				httpClientDetails:    httpClientDetails,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				url:                  rtAuth.GetUrl(),
+				repo:                 "pypi-remote",
+				tech:                 techutils.Poetry,
+			}
+			packageUrl := fmt.Sprintf("%sapi/pypi/pypi-remote/packages/%s-%s.tar.gz", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+			require.NoError(t, err, "unparsable 403 body should not surface as an error")
+			require.NotNil(t, got, "a blocked PackageStatus must be returned when the 403 block reason is unknown")
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)
+			assert.Equal(t, pkgName, got.PackageName)
+			assert.Equal(t, pkgVersion, got.PackageVersion)
+		})
+	}
+}
+
+// TestFetchCvsBlockedStatusTransitive verifies the CVS fallback for a transitive range blocker:
+// the range is resolved to the newest satisfying version and the policy is recovered from the 403 probe.
+func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.1"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "strict-immature-policy"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	// Curation 403 body returned when the normal download URL is probed.
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	// All-versions metadata JSON (the simple-index-unfiltered endpoint).
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+
+	// Version-specific metadata JSON (returns the whl download URL).
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// All-versions metadata: /api/pypi/<repo>/pypi/<name>/json
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+
+		// Version-specific metadata: /api/pypi/<repo>/pypi/<name>/<ver>/json
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+
+		// Normal download URL probe: HEAD first → 403 (detection step)
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+
+		// Normal download URL probe: GET with waiver → 403 with policy body
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+		parallelRequests:     1,
+	}
+
+	// Transitive PinnedRequirement: langchain-core with deepagents as parent.
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+
+	// Policy details recovered from the 403 probe
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy, "violated policy name")
+	assert.Equal(t, expectedCond, s.Policy[0].Condition, "violated condition name")
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation, "explanation")
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation, "recommendation")
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusPoetry verifies that the CVS fallback works for a
+// poetry-pinned package: wrapPoetryCurationErr produces a *CvsBlockedError
+// and fetchCvsBlockedStatus recovers the policy from the 403 probe, with the
+// package type set to "poetry".
+func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "telnyx"
+		blockedVer      = "4.87.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 5 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/te/ln/telnyx-4.87.1-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	// Exact-pin PinnedRequirement produced by wrapPoetryCurationErr for a poetry project.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusNotInMetadataNotRendered verifies that a version absent from the metadata API is not rendered as a blocked row.
+func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
+	const (
+		repo = "test-pip-repo"
+		pkg  = "telnyx"
+		ver  = "4.87.1000" // not in the metadata API
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "a version absent from the metadata API must not be rendered as a blocked row")
+}
+
+// TestFetchCvsBlockedStatusSetsDepRelation verifies DepRelation is populated for both direct and transitive CVS-fallback rows.
+func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.1"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"releases":{%q:[]}}`, blockedVer)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'strict-policy'","policy":"strict-policy","condition":"immature","explanation":"too new","recommendation":"use older"}]}`))
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Transitive pin: parent differs from package → indirect.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, VersionRange: ">=1.4.0", ParentName: parentPkg, ParentVersion: parentVer},
+	}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, indirectRelation, statuses[0].DepRelation, "transitive CVS-fallback row must be indirect")
+
+	// Direct pin: parent equals package → direct.
+	pins = []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+	statuses = analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, directRelation, statuses[0].DepRelation, "direct CVS-fallback row must be direct")
+
+	// ResolutionImpossible: name-only, self-attributed → must be indirect.
+	pins = []python.PinnedRequirement{
+		{Name: blockedPkg, ParentName: blockedPkg}, // no Version, no VersionRange
+	}
+	statuses = analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, indirectRelation, statuses[0].DepRelation,
+		"ResolutionImpossible CVS-fallback row must be indirect (parent unknown)")
+}
+
+// TestFetchCvsBlockedStatusHeadErrorNoFalsePositive verifies that a HEAD transport error does not
+// produce a spurious blocked row.
+func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		pkg             = "foo"
+		ver             = "1.0"
+		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusInternalServerError)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver}}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "HEAD transport error must not produce a false-positive blocked row")
+}
+
+// TestFetchCvsBlockedStatusHeadOKNoFalsePositive verifies that a HEAD 200 (stale CVS cache scenario)
+// does not produce a spurious blocked row. When pip's CVS-filtered simple-index hid a version but
+// the artifact is now accessible (policy changed, waiver granted), HEAD returns 200 and the package
+// must be skipped entirely.
+func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		pkg             = "foo"
+		ver             = "1.0"
+		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
+	)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			// Stale CVS cache cleared; package is now accessible.
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{{Name: pkg, Version: ver, ParentName: pkg, ParentVersion: ver}}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	assert.Empty(t, statuses, "HEAD 200 (stale CVS cache) must not produce a false-positive blocked row")
+}
+
+// TestRunCvsFallbackGetWdFailurePreservesResults verifies that a failed os.Getwd() does not cause
+// runCvsFallback to discard the already-recovered packagesStatus. The results map must be populated
+// under the "unknown-project" fallback key instead of silently returning cvsErr.
+func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+	blockJSON := `{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'p'","policy":"p","condition":"immature","explanation":"too new","recommendation":"use older"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	// Simulate os.Getwd() failure via the injectable function variable.
+	orig := osGetwd
+	osGetwd = func() (string, error) { return "", errors.New("simulated: no such file or directory") }
+	t.Cleanup(func() { osGetwd = orig })
+
+	cvsErr := &python.CvsBlockedError{
+		Packages: []python.PinnedRequirement{
+			{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+		},
+	}
+	results := map[string]*CurationReport{}
+	err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+	assert.NoError(t, err, "os.Getwd failure must not surface as an error")
+	assert.Len(t, results, 1, "recovered packagesStatus must be stored even when Getwd fails")
+	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
+}
+
+// TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
+func TestEffectiveParentVersion(t *testing.T) {
+	cases := []struct {
+		name string
+		pin  python.PinnedRequirement
+		want string
+	}{
+		{"exact direct", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, "1.0"},
+		{"direct range — shows range spec", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, ">=1.4"},
+		{"transitive range — parent ver unknown", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar"}, ""},
+		{"transitive with known parent ver", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar", ParentVersion: "2.3"}, "2.3"},
+		{"ResolutionImpossible — all empty", python.PinnedRequirement{Name: "foo", ParentName: "foo"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+		})
+	}
+}
+
 func TestValidateRunNativeForTech(t *testing.T) {
 	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
