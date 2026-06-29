@@ -161,7 +161,7 @@ func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
 	if sbg.snippetDetection {
 		envVars[plugin.SnippetDetectionEnvVariable] = "true"
 	}
-	return utils.EnvironmentVariables(envVars)
+	return envVars
 }
 
 func (sbg *XrayLibBomGenerator) CleanUp() (err error) {
