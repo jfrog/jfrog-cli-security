@@ -346,6 +346,12 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			shouldBeInstalled:           true,
 			successfulTreeBuiltExpected: true,
 		},
+		{
+			name:                        "yarn V4 - installed | install not required",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v4"),
+			shouldBeInstalled:           true,
+			successfulTreeBuiltExpected: true,
+		},
 	}
 
 	for _, test := range testCases {

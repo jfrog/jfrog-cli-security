@@ -294,6 +294,11 @@ func TestXrayAuditYarn(t *testing.T) {
 			project: "yarn-v3",
 			format:  format.SimpleJson,
 		},
+		{
+			name:    "Yarn v4",
+			project: "yarn-v4",
+			format:  format.SimpleJson,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
