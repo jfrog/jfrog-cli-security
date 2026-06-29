@@ -28,6 +28,8 @@ const (
 
 	SnippetDetectionEnvVariable = "JFROG_XRAY_SNIPPET_SCAN_ENABLE"
 	XrayUrlEnvVariable          = "JFROG_XRAY_PLATFORM_URL"
+	XrayUserEnvVariable         = "JFROG_XRAY_USER"
+	XrayPasswordEnvVariable     = "JFROG_XRAY_PASSWORD"
 	// #nosec G101 -- Not credentials.
 	XrayTokenEnvVariable = "JFROG_XRAY_TOKEN"
 

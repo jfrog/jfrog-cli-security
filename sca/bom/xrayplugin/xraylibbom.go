@@ -155,8 +155,13 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
 	envVars := utils.EnvironmentVariables{}
 	if sbg.ServerDetails != nil {
-		envVars[plugin.XrayUrlEnvVariable] = sbg.ServerDetails.Url
-		envVars[plugin.XrayTokenEnvVariable] = sbg.ServerDetails.AccessToken
+		envVars[plugin.XrayUrlEnvVariable] = sbg.ServerDetails.XrayUrl
+		if sbg.ServerDetails.AccessToken != "" {
+			envVars[plugin.XrayTokenEnvVariable] = sbg.ServerDetails.AccessToken
+		} else {
+			envVars[plugin.XrayUserEnvVariable] = sbg.ServerDetails.User
+			envVars[plugin.XrayPasswordEnvVariable] = sbg.ServerDetails.Password
+		}
 	}
 	if sbg.snippetDetection {
 		envVars[plugin.SnippetDetectionEnvVariable] = "true"
