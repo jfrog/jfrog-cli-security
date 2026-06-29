@@ -167,7 +167,8 @@ func TestRemediationGo(t *testing.T) {
 func TestRemediationUnsupportedIndirect(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	for _, tech := range []techutils.Technology{techutils.Npm, techutils.Maven, techutils.Go} {
+	// Go supports indirect updates via `go get` and does not return ErrUnsupportedFix for indirect deps.
+	for _, tech := range []techutils.Technology{techutils.Npm, techutils.Maven} {
 		t.Run(tech.String(), func(t *testing.T) {
 			fix := newFixDetails(tech, "some-package", "1.0.0", "1.0.1", false)
 			updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
