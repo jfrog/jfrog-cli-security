@@ -339,9 +339,9 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, cu
 		yarnVersion := version.NewVersion(yarnVersionStr)
 		isV2 := yarnVersion.Compare(yarnV2Version) <= 0 && yarnVersion.Compare(yarnV3Version) > 0
 		if isV2 {
-			return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — V2 has no lockfile-only install mode, so any blocked package aborts the install before the lockfile is written.%s Secondary option: upgrade the project to Yarn V3 ('yarn set version 3.6.4'). V3's '--mode=update-lockfile' writes the lockfile during resolve, so 'jf ca' can audit even while curation blocks tarballs. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("install"), installErr.Error())
+			return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — V2 has no lockfile-only install mode, so any blocked package aborts the install before the lockfile is written.%s Secondary option: upgrade the project to Yarn V3+ ('yarn set version 3.6.4'). V3/V4 resolve the lockfile from registry metadata (via the jfrog-yarn-resolve-lockfile plugin) without downloading tarballs, so 'jf ca' can audit even while curation blocks tarballs. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("install"), installErr.Error())
 		}
-		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — 'yarn install --mode=update-lockfile' aborted before the lockfile was written (curation is blocking manifests, not just tarballs).%s Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("resolve"), installErr.Error())
+		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' with Yarn %s — 'yarn jfrog-yarn-resolve-lockfile' aborted before the lockfile was written (curation is blocking manifests, not just tarballs).%s Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, yarnVersionStr, buildSuffix("resolve"), installErr.Error())
 	}
 	return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' — 'yarn install' failed before the lockfile was written (curation is likely blocking manifests, not just tarballs).%s Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, buildSuffix("install"), installErr.Error())
 }
@@ -1110,8 +1110,12 @@ func resolveCurationLockfileDir(
 		deferredInstallErr = installErr
 	}
 
-	// Mark yarn.lock as fresh so the next run skips re-resolution.
-	touchYarnLock(currentDir)
+	// Bump the original yarn.lock mtime so the next run skips re-resolution, but
+	// only when its content already covers all declared deps. The resolved lock
+	// lives in tmpDir; touching an incomplete original would mask staleness.
+	if !yarnLockMissesDeclaredDeps(currentDir, filepath.Join(currentDir, yarn.YarnLockFileName)) {
+		touchYarnLock(currentDir)
+	}
 
 	return tmpDir, cleanup, deferredInstallErr, nil
 }
@@ -1233,14 +1237,18 @@ func isYarnLockStale(curWd string) bool {
 
 // yarnLockMissesDeclaredDeps returns true if any direct dep declared in
 // package.json has no entry in yarn.lock (Berry quoted format: "dep@...).
+// Covers all four dependency sections (matching mergeDirectDeps) so adding a
+// peer/optional dep also triggers re-resolution.
 func yarnLockMissesDeclaredDeps(curWd, lockPath string) bool {
 	pkgData, err := os.ReadFile(filepath.Join(curWd, "package.json"))
 	if err != nil {
 		return true
 	}
 	var pkg struct {
-		Dependencies    map[string]string `json:"dependencies"`
-		DevDependencies map[string]string `json:"devDependencies"`
+		Dependencies         map[string]string `json:"dependencies"`
+		DevDependencies      map[string]string `json:"devDependencies"`
+		OptionalDependencies map[string]string `json:"optionalDependencies"`
+		PeerDependencies     map[string]string `json:"peerDependencies"`
 	}
 	if err = json.Unmarshal(pkgData, &pkg); err != nil {
 		return true
@@ -1250,14 +1258,11 @@ func yarnLockMissesDeclaredDeps(curWd, lockPath string) bool {
 		return true
 	}
 	lockContent := string(lockData)
-	for dep := range pkg.Dependencies {
-		if !strings.Contains(lockContent, `"`+dep+`@`) {
-			return true
-		}
-	}
-	for dep := range pkg.DevDependencies {
-		if !strings.Contains(lockContent, `"`+dep+`@`) {
-			return true
+	for _, section := range []map[string]string{pkg.Dependencies, pkg.DevDependencies, pkg.OptionalDependencies, pkg.PeerDependencies} {
+		for dep := range section {
+			if !strings.Contains(lockContent, `"`+dep+`@`) {
+				return true
+			}
 		}
 	}
 	return false
@@ -1699,8 +1704,8 @@ func readNpmAuthTokenFromYarnrcFiles(registryURL, workingDir string) string {
 			log.Debug(fmt.Sprintf("yarn V4: could not parse %s: %s", path, err))
 			continue
 		}
-		// Scoped registry entry takes priority.
-		if entry, ok := rc.NpmRegistries[registryURL]; ok && entry.NpmAuthToken != "" {
+		// Scoped registry entry takes priority (trailing-slash tolerant).
+		if entry, ok := lookupNpmRegistryEntry(rc.NpmRegistries, registryURL); ok && entry.NpmAuthToken != "" {
 			log.Debug(fmt.Sprintf("yarn V4: using auth token from scoped npmRegistries entry in %s", path))
 			return entry.NpmAuthToken
 		}
@@ -1711,4 +1716,21 @@ func readNpmAuthTokenFromYarnrcFiles(registryURL, workingDir string) string {
 		}
 	}
 	return ""
+}
+
+// lookupNpmRegistryEntry resolves a npmRegistries entry for registryURL,
+// tolerating a trailing-slash mismatch between the query and the stored key.
+func lookupNpmRegistryEntry(registries map[string]yarnrcRegistryEntry, registryURL string) (yarnrcRegistryEntry, bool) {
+	if entry, ok := registries[registryURL]; ok {
+		return entry, true
+	}
+	withSlash := strings.TrimSuffix(registryURL, "/") + "/"
+	if entry, ok := registries[withSlash]; ok {
+		return entry, true
+	}
+	withoutSlash := strings.TrimSuffix(registryURL, "/")
+	if entry, ok := registries[withoutSlash]; ok {
+		return entry, true
+	}
+	return yarnrcRegistryEntry{}, false
 }

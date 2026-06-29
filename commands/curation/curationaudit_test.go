@@ -2557,11 +2557,12 @@ func TestResolveResolverTechForCuration(t *testing.T) {
 
 func TestResolveNpmYarnTech(t *testing.T) {
 	type setup struct {
-		writeYarnYaml       bool
-		writeNpmYaml        bool
-		writeLocalYarnrc    bool   // write .yarnrc.yml into the project dir (V4 native, local)
-		writeGlobalYarnrc   bool   // write .yarnrc.yml into dummyHome (V4 native, global)
-		writePackageLockJSON bool  // write package-lock.json — marks project as npm, blocks promotion
+		writeYarnYaml           bool
+		writeNpmYaml            bool
+		writeLocalYarnrc        bool // write .yarnrc.yml into the project dir (V4 native, local)
+		writeGlobalYarnrc       bool // write .yarnrc.yml into dummyHome (V4 native, global)
+		writePackageLockJSON    bool // write package-lock.json — marks project as npm, blocks promotion
+		writeYarnPackageManager bool // package.json pins yarn via Corepack "packageManager"
 	}
 	testCases := []struct {
 		name  string
@@ -2613,10 +2614,16 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			want:  techutils.Yarn.String(),
 		},
 		{
-			name:  "npm, global ~/.yarnrc.yml only — promoted to yarn (V4 native, global indicator)",
+			name:  "npm, global ~/.yarnrc.yml + package.json pins yarn — promoted to yarn (V4 native, global indicator)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeGlobalYarnrc: true, writeYarnPackageManager: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm, global ~/.yarnrc.yml but package.json does NOT pin yarn — stays npm (guard against personal global config)",
 			tech:  techutils.Npm.String(),
 			setup: setup{writeGlobalYarnrc: true},
-			want:  techutils.Yarn.String(),
+			want:  techutils.Npm.String(),
 		},
 		{
 			name:  "npm, yarn indicator present but package-lock.json exists — NOT promoted",
@@ -2641,6 +2648,9 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			}
 			if tc.setup.writePackageLockJSON {
 				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, "package-lock.json"), []byte("{}"), 0o644))
+			}
+			if tc.setup.writeYarnPackageManager {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, "package.json"), []byte(`{"packageManager":"yarn@4.1.0"}`), 0o644))
 			}
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()

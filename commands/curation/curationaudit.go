@@ -600,14 +600,34 @@ func resolveNpmYarnTech(tech string) string {
 		// Check global ~/.yarnrc.yml — customers using 'yarn config set --home'
 		// (as shown in the Artifactory "Set Up" page for Yarn V4) have no project-level
 		// .yarnrc.yml but a global one that carries the registry and auth token.
-		if homeDir, err := os.UserHomeDir(); err == nil {
-			if _, err := os.Stat(filepath.Join(homeDir, ".yarnrc.yml")); err == nil {
-				log.Info("No npm.yaml or yarn.yaml found but global ~/.yarnrc.yml detected — treating project as yarn (V4 native mode).")
-				return techutils.Yarn.String()
+		// Gate on package.json pinning yarn (Corepack "packageManager"): a personal
+		// global ~/.yarnrc.yml must not promote an npm-only project to yarn.
+		if projectPinsYarnPackageManager(workingDir) {
+			if homeDir, err := os.UserHomeDir(); err == nil {
+				if _, err := os.Stat(filepath.Join(homeDir, ".yarnrc.yml")); err == nil {
+					log.Info("No npm.yaml or yarn.yaml found but package.json pins yarn and global ~/.yarnrc.yml detected — treating project as yarn (V4 native mode).")
+					return techutils.Yarn.String()
+				}
 			}
 		}
 	}
 	return tech
+}
+
+// projectPinsYarnPackageManager reports whether package.json pins yarn via the
+// Corepack "packageManager" field (e.g. "yarn@4.1.0").
+func projectPinsYarnPackageManager(workingDir string) bool {
+	data, err := os.ReadFile(filepath.Join(workingDir, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(pkg.PackageManager), "yarn@")
 }
 
 // resolveResolverTechForCuration returns the tech whose *.yaml config drives

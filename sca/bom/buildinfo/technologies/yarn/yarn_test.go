@@ -276,6 +276,33 @@ func TestIsYarnLockStale(t *testing.T) {
 	assert.True(t, isYarnLockStale(tempDirPath), "missing dep in lockfile must be stale")
 }
 
+// TestYarnLockMissesDeclaredDeps verifies all four dependency sections are
+// checked, so a missing peer/optional dep also reports the lockfile as stale.
+func TestYarnLockMissesDeclaredDeps(t *testing.T) {
+	lockBerry := "__metadata:\n  version: 8\n\n\"lodash@npm:^4.17.21\":\n  version: 4.17.21\n"
+
+	cases := []struct {
+		name    string
+		pkgJSON string
+		want    bool
+	}{
+		{"all declared deps covered", `{"dependencies":{"lodash":"^4.17.21"}}`, false},
+		{"missing dependency", `{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`, true},
+		{"missing devDependency", `{"dependencies":{"lodash":"^4.17.21"},"devDependencies":{"jest":"^29.0.0"}}`, true},
+		{"missing optionalDependency", `{"dependencies":{"lodash":"^4.17.21"},"optionalDependencies":{"fsevents":"^2.3.0"}}`, true},
+		{"missing peerDependency", `{"dependencies":{"lodash":"^4.17.21"},"peerDependencies":{"react":"^18.0.0"}}`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			lockPath := filepath.Join(dir, "yarn.lock")
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(tc.pkgJSON), 0o644))
+			require.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
+			assert.Equal(t, tc.want, yarnLockMissesDeclaredDeps(dir, lockPath))
+		})
+	}
+}
+
 // TestIsInstallRequiredOverwriteYarnLock covers the overwriteYarnLock branch
 // of isInstallRequired with synthetic files, decoupled from a real
 // 'yarn install' so the test stays green when the test project's registry is
@@ -1878,5 +1905,23 @@ func TestReadNpmAuthTokenFromYarnrcFiles(t *testing.T) {
 		wd := t.TempDir()
 		setHome(t, t.TempDir())
 		assert.Empty(t, readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	// Scoped lookup must tolerate a trailing-slash mismatch in both directions.
+	t.Run("scoped entry resolves when key omits trailing slash but query has it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		const keyNoSlash = "https://example.com/artifactory/api/npm/repo"
+		yarnrc := "npmRegistries:\n  \"" + keyNoSlash + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("scoped entry resolves when key has trailing slash but query omits it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		yarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(strings.TrimSuffix(registryURL, "/"), wd))
 	})
 }
