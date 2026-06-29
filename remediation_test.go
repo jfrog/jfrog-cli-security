@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/remediation/sca/packageupdaters"
+	securityTests "github.com/jfrog/jfrog-cli-security/tests"
+	testutils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	integrationUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -14,50 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// remediationTestDataDir returns the absolute path to the remediation test data directory.
-func remediationTestDataDir(t *testing.T, subPath ...string) string {
-	t.Helper()
-	parts := append([]string{"tests", "testdata", "projects", "remediation"}, subPath...)
-	absPath, err := filepath.Abs(filepath.Join(parts...))
-	require.NoError(t, err)
-	return absPath
-}
-
-// copyProjectToTemp copies a named project from the remediation testdata and chdirs into it.
-// Returns a cleanup function that restores the working directory and removes the temp dir.
-func copyProjectToTemp(t *testing.T, projectDir string) (tmpDir string, cleanup func()) {
-	t.Helper()
-	tmpDir = t.TempDir()
-	require.NoError(t, copyDir(t, projectDir, tmpDir))
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(tmpDir))
-	return tmpDir, func() {
-		assert.NoError(t, os.Chdir(origDir))
-	}
-}
-
-// copyDir copies the directory tree rooted at src into dst.
-func copyDir(t *testing.T, src, dst string) error {
-	t.Helper()
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		data, err := os.ReadFile(path) //#nosec G122 -- path comes from filepath.Walk over a known test data directory; symlink TOCTOU is acceptable in tests.
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, info.Mode()) //#nosec G703 -- target is derived from a controlled temp directory; path traversal is not a concern in tests.
-	})
+// remediationProjectDir returns the path to a remediation test project under
+// tests/testdata/projects/package-managers/<tech>/<subdir>.
+func remediationProjectDir(tech, subdir string) string {
+	return filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", tech, subdir)
 }
 
 // newFixDetails builds a FixDetails value for use in remediation integration tests.
@@ -89,9 +51,9 @@ func newFixDetails(tech techutils.Technology, pkg, currentVersion, fixedVersion 
 func TestRemediationNpm(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	projectDir := remediationTestDataDir(t, "projects", "npm")
-	_, cleanup := copyProjectToTemp(t, projectDir)
+	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("npm", "remediation"))
 	defer cleanup()
+	_ = tmpDir
 
 	fix := newFixDetails(techutils.Npm, "minimist", "1.2.5", "1.2.6", true, "package.json", "package-lock.json")
 	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
@@ -115,8 +77,7 @@ func TestRemediationNpm(t *testing.T) {
 func TestRemediationMaven(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	projectDir := remediationTestDataDir(t, "projects", "maven")
-	_, cleanup := copyProjectToTemp(t, projectDir)
+	_, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("maven", "remediation"))
 	defer cleanup()
 
 	fix := newFixDetails(techutils.Maven, "commons-io:commons-io", "", "2.7", true, filepath.Join("multi1", "pom.xml"))
@@ -134,8 +95,7 @@ func TestRemediationMaven(t *testing.T) {
 func TestRemediationGo(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	projectDir := remediationTestDataDir(t, "projects", "go")
-	tmpDir, cleanup := copyProjectToTemp(t, projectDir)
+	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("go", "remediation"))
 	defer cleanup()
 
 	// The go test-data files are stored with a .txt suffix to avoid Go toolchain interference.
@@ -189,8 +149,7 @@ func TestRemediationUnsupportedIndirect(t *testing.T) {
 func TestRemediationNpmRollback(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	projectDir := remediationTestDataDir(t, "projects", "npm-rollback")
-	_, cleanup := copyProjectToTemp(t, projectDir)
+	_, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("npm", "remediation-rollback"))
 	defer cleanup()
 
 	descriptorBefore, err := os.ReadFile("package.json")

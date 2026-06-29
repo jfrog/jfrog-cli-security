@@ -16,7 +16,7 @@ import (
 
 func TestMavenUpdateDependency(t *testing.T) {
 	integration.InitUnitTest(t)
-	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "remediation-packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
 
@@ -149,7 +149,7 @@ func TestMavenUpdateDependency(t *testing.T) {
 
 func TestMavenUpdateDependencyErrors(t *testing.T) {
 	integration.InitUnitTest(t)
-	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "packageupdaters")
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "remediation-packageupdaters")
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
 

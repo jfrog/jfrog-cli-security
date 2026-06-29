@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/build-info-go/tests"
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -164,12 +165,11 @@ func TestUpdateDependency(t *testing.T) {
 			packageUpdater, _ := GetCompatiblePackageUpdater(test.fixDetails)
 			t.Run(getUpdateDependencyTestcaseName(test.fixDetails.Technology.String()+test.specificTechVersion, test.fixDetails.IsDirectDependency, test.testcaseInfo),
 				func(t *testing.T) {
-					testDataDir := getTestDataDir(t, test.fixDetails.IsDirectDependency)
 					testDirName := test.fixDetails.Technology.String()
 					if test.testDirName != "" {
 						testDirName = test.testDirName
 					}
-					cleanup := createTempDirAndChdir(t, testDataDir, testDirName+test.specificTechVersion)
+					cleanup := createTempDirAndChdir(t, testDirName+test.specificTechVersion, test.fixDetails.IsDirectDependency)
 					defer cleanup()
 
 					var lockFileContentBeforeUpdate []byte
@@ -216,32 +216,25 @@ func TestUpdateDependency(t *testing.T) {
 	}
 }
 
-func getTestDataDir(t *testing.T, directDependency bool) string {
-	var projectDir string
+// projectSubdir returns the testdata subdirectory name for direct vs indirect dependencies.
+func projectSubdir(directDependency bool) string {
 	if directDependency {
-		projectDir = "projects"
-	} else {
-		projectDir = "indirect-projects"
+		return "remediation"
 	}
-	testdataDir, err := filepath.Abs(filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", projectDir))
-	assert.NoError(t, err)
-	return testdataDir
+	return "indirect-project"
 }
 
-func createTempDirAndChdir(t *testing.T, testdataDir string, tech string) func() {
-	// Create temp technology project
-	projectPath := filepath.Join(testdataDir, tech)
+func createTempDirAndChdir(t *testing.T, tech string, directDependency bool) func() {
+	subdir := projectSubdir(directDependency)
+	projectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", tech, subdir)
 	tmpProjectPath, cleanup := tests.CreateTestProject(t, projectPath)
 	currDir, err := os.Getwd()
 	assert.NoError(t, err)
 	assert.NoError(t, os.Chdir(tmpProjectPath))
 	if tech == "go" {
-		err = removeTxtSuffix("go.mod.txt")
-		assert.NoError(t, err)
-		err = removeTxtSuffix("go.sum.txt")
-		assert.NoError(t, err)
-		err = removeTxtSuffix("main.go.txt")
-		assert.NoError(t, err)
+		assert.NoError(t, removeTxtSuffix("go.mod.txt"))
+		assert.NoError(t, removeTxtSuffix("go.sum.txt"))
+		assert.NoError(t, removeTxtSuffix("main.go.txt"))
 	}
 	return func() {
 		cleanup()
@@ -337,7 +330,7 @@ func TestGetAllDescriptorFilesFullPaths(t *testing.T) {
 	for _, testcase := range testcases {
 		tmpDir, err := os.MkdirTemp("", "")
 		assert.NoError(t, err)
-		assert.NoError(t, copyDir(filepath.Join("..", "..", "..", "tests", "testdata", "projects", "remediation", "projects", testcase.testProjectRepo), tmpDir))
+		assert.NoError(t, biutils.CopyDir(filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", testcase.testProjectRepo, "remediation"), tmpDir, true, nil))
 		assert.NoError(t, os.Chdir(tmpDir))
 
 		finalDirPath, err := os.Getwd()
@@ -958,29 +951,6 @@ func createFixDetails(technology techutils.Technology, packageName, packageVersi
 			},
 		},
 	}
-}
-
-// copyDir is a simple helper to copy a directory tree for tests.
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		dstPath := filepath.Join(dst, relPath)
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-		//#nosec G122 -- test helper; path comes from filepath.WalkDir over a known test directory.
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(dstPath, data, info.Mode()) //#nosec G703 -- test helper writing to a known temp directory.
-	})
 }
 
 // TestGetCompatiblePackageUpdater verifies the factory routes every supported technology
