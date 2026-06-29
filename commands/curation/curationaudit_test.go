@@ -1385,6 +1385,99 @@ func Test_getDockerNameAndVersion(t *testing.T) {
 		})
 	}
 }
+func Test_getHuggingFaceNameAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "model with explicit sha revision",
+			id:               "huggingfaceml://mcpotato/42-eicar-street:8fb61c4d511e9aaff0ea55396a124aa292830efc",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/mcpotato/42-eicar-street/revision/8fb61c4d511e9aaff0ea55396a124aa292830efc"},
+			wantName:         "mcpotato/42-eicar-street",
+			wantVersion:      "8fb61c4d511e9aaff0ea55396a124aa292830efc",
+		},
+		{
+			name:             "model with branch revision",
+			id:               "huggingfaceml://bert-base-uncased:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/bert-base-uncased/revision/main"},
+			wantName:         "bert-base-uncased",
+			wantVersion:      "main",
+		},
+		{
+			name:             "model id with no revision defaults to main",
+			id:               "huggingfaceml://org/model",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "dataset is probed via api/datasets endpoint",
+			id:               "huggingfaceml://dataset|squad:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/datasets/squad/revision/main"},
+			wantName:         "squad",
+			wantVersion:      "main",
+		},
+		{
+			name:             "dataset with org and explicit revision",
+			id:               "huggingfaceml://dataset|stanfordnlp/squad:v2.0",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/datasets/stanfordnlp/squad/revision/v2.0"},
+			wantName:         "stanfordnlp/squad",
+			wantVersion:      "v2.0",
+		},
+		{
+			name:             "empty artiUrl and repo produce no download URL",
+			id:               "huggingfaceml://org/model:main",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "empty id returns empty results",
+			id:               "",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "trailing slash stripped from artiUrl",
+			id:               "huggingfaceml://org/model:v1.0",
+			artiUrl:          "https://test.jfrogdev.org/artifactory/",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/v1.0"},
+			wantName:         "org/model",
+			wantVersion:      "v1.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getHuggingFaceNameAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string

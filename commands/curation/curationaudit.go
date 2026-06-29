@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,6 +40,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
 	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
@@ -97,6 +99,9 @@ const (
 		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
 		"Dependency analysis cannot proceed until these issues are addressed.\n" +
 		"Once you switch to an approved version and re-run the audit, additional results will be available."
+
+	// hfUnresolvedReportKey is used when an HF scan found only dynamic references — no table, just warnings.
+	hfUnresolvedReportKey = "huggingface (unresolved references)"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -124,7 +129,8 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
-	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Docker:        func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.HuggingFaceMl: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
 	},
@@ -252,6 +258,7 @@ type CurationAuditCommand struct {
 	OriginPath            string
 	parallelRequests      int
 	dockerImageName       string
+	huggingFaceModel      string
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
 	// pendingWarnings collects log.Warn messages that must be emitted after the
@@ -268,6 +275,11 @@ type CurationReport struct {
 	// was produced via the metadata-API fallback. The partial-report warning
 	// is printed after the spinner stops so it is not swallowed by the spinner.
 	isPartial bool
+	// warnings carries non-fatal, user-facing messages produced while building
+	// the dependency tree (e.g. Hugging Face references that could not be
+	// statically resolved). They are printed after the curation table so the
+	// coverage gap stays visible instead of being buried in BOM-build output.
+	warnings []string
 }
 
 type WaiverResponse struct {
@@ -304,6 +316,15 @@ func (ca *CurationAuditCommand) DockerImageName() string {
 
 func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *CurationAuditCommand {
 	ca.dockerImageName = dockerImageName
+	return ca
+}
+
+func (ca *CurationAuditCommand) HuggingFaceModel() string {
+	return ca.huggingFaceModel
+}
+
+func (ca *CurationAuditCommand) SetHuggingFaceModel(huggingFaceModel string) *CurationAuditCommand {
+	ca.huggingFaceModel = huggingFaceModel
 	return ca
 }
 
@@ -372,8 +393,12 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 
+		for _, w := range packagesStatus.warnings {
+			log.Warn(w)
+		}
+
 		// A partial report comes from the CVS fallback: the dependency tree could
-		// not be fully resolved. Never offers a waiver when the full tree wasn't built
+		// not be fully resolved. Never offers a waiver when the full tree wasn't built.
 		if packagesStatus.isPartial {
 			continue
 		}
@@ -535,6 +560,19 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
 	}
+	// --hugging-face-model: explicit spot-check — run HF only (skip pip/npm/etc. so
+	// the user gets a fast single-model verdict without waiting for full dep resolution).
+	// Auto-discovery (HF_ENDPOINT set + .py files present): additive — HF runs alongside
+	// the detected package managers so a full audit still covers both surfaces.
+	if ca.HuggingFaceModel() != "" {
+		log.Debug(fmt.Sprintf("Hugging Face models '%s' were provided explicitly — running HF-only audit.", ca.HuggingFaceModel()))
+		techs = []string{techutils.HuggingFaceMl.String()}
+	} else if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
+		// Auto-discovery: attempt an HF source scan when HF_ENDPOINT is configured and
+		// .py/.ipynb files are present. BuildDependencyTree returns gracefully if no
+		// HF call sites are found.
+		techs = appendIfMissing(techs, techutils.HuggingFaceMl.String())
+	}
 	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
 	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
 	for i, tech := range techs {
@@ -564,6 +602,42 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 
 	}
 	return nil
+}
+
+// appendIfMissing appends value to slice only if not already present.
+func appendIfMissing(slice []string, value string) []string {
+	for _, v := range slice {
+		if v == value {
+			return slice
+		}
+	}
+	return append(slice, value)
+}
+
+// hasPythonFiles returns true if dir contains at least one .py or .ipynb file,
+// indicating the project may have Hugging Face model references to discover.
+func hasPythonFiles(dir string) bool {
+	if dir == "" {
+		dir = "."
+	}
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || found {
+			return nil
+		}
+		if d.IsDir() {
+			if n := d.Name(); n == ".git" || n == ".venv" || n == "venv" || n == "__pycache__" || n == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".py" || ext == ".ipynb" {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 // resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml
@@ -708,6 +782,9 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
 		DockerImageName: ca.DockerImageName(),
+		// Hugging Face params
+		HuggingFaceModel: ca.HuggingFaceModel(),
+		WorkingDirectory: ca.OriginPath,
 		// NuGet params
 		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
@@ -758,6 +835,17 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	// Validate the graph isn't empty.
 	if len(depTreeResult.FullDepTrees) == 0 {
+		// For HuggingFace auto-discovery, no models found is a normal outcome
+		// (the project has .py files but no HF call sites) — not an error.
+		if tech == techutils.HuggingFaceMl {
+			log.Debug("Hugging Face: no model references discovered in source — skipping HF curation probe")
+			// There may still be unresolved (dynamic) references worth surfacing
+			// even when nothing statically resolved to a curation probe.
+			if len(depTreeResult.Warnings) > 0 {
+				results[hfUnresolvedReportKey] = &CurationReport{warnings: depTreeResult.Warnings}
+			}
+			return nil
+		}
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
 	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
@@ -826,6 +914,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		packagesStatus: packagesStatus,
 		// We subtract 1 because the root node is not a package.
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
+		warnings:              depTreeResult.Warnings,
 	}
 	return err
 }
@@ -1037,6 +1126,17 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	// If the technology is Docker, we need to get the repository config from the Docker image name
 	if tech == techutils.Docker {
 		repoConfig, err := docker.GetDockerRepositoryConfig(ca.DockerImageName())
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(repoConfig)
+		return nil
+	}
+
+	// Hugging Face resolves its Artifactory repo from the --hugging-face-model reference,
+	// not from a 'jf <tech>-config' yaml file.
+	if tech == techutils.HuggingFaceMl {
+		repoConfig, err := huggingface.GetHuggingFaceRepositoryConfig()
 		if err != nil {
 			return err
 		}
@@ -1377,6 +1477,14 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 					"Run 'jf c' to update your server configuration, or verify that the correct server-id is configured", packageUrl, name, version))
 			}
 			return nil
+		}
+		// Hugging Face: a 404 means the model/dataset+revision is not resolvable through the
+		// proxy (e.g. uncached with on-demand repositories disabled, an unknown revision, or a
+		// dataset the catalog does not track). That is not a curation block and must not fail
+		// the whole audit — treat it as "not blocked" and move on, like the NuGet 404 skip below.
+		if resp != nil && resp.StatusCode == http.StatusNotFound && nc.tech == techutils.HuggingFaceMl {
+			log.Debug(fmt.Sprintf("Hugging Face: %s:%s not resolvable at %s (HTTP 404) — skipping", name, version, packageUrl))
+			continue
 		}
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
@@ -1812,6 +1920,9 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 	case techutils.Docker:
 		downloadUrls, name, version = getDockerNameAndVersion(node.Id, artiUrl, repo)
 		return
+	case techutils.HuggingFaceMl:
+		downloadUrls, name, version = getHuggingFaceNameAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
@@ -2054,6 +2165,44 @@ func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, n
 			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
 	}
 
+	return
+}
+
+// getHuggingFaceNameAndVersion extracts the model id and revision from a node id of the
+// form "huggingfaceml://<repo_id>:<revision>" and builds the model-info probe URL.
+//
+// The probe targets the model metadata endpoint, which the curation service blocks
+// (HEAD returns 403) for a malicious revision — independent of any specific file:
+//
+//	{artiUrl}/api/huggingfaceml/{repo}/api/models/{repo_id}/revision/{revision}
+func getHuggingFaceNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	if id == "" {
+		return
+	}
+	id = strings.TrimPrefix(id, huggingface.HuggingFacePackagePrefix)
+
+	// Datasets are probed via api/datasets/ instead of api/models/. The repo type is
+	// carried by an optional "dataset|" marker placed right after the scheme prefix.
+	repoTypePath := "api/models"
+	if strings.HasPrefix(id, huggingface.DatasetNodeMarker) {
+		repoTypePath = "api/datasets"
+		id = strings.TrimPrefix(id, huggingface.DatasetNodeMarker)
+	}
+
+	// The repo id (e.g. "mcpotato/42-eicar-street") contains '/' but never ':'; the
+	// revision suffix never contains '/', so split on the last ':'.
+	if idx := strings.LastIndex(id, ":"); idx > 0 && !strings.Contains(id[idx+1:], "/") {
+		name = id[:idx]
+		version = id[idx+1:]
+	} else {
+		name = id
+		version = huggingface.DefaultRevision
+	}
+
+	if artiUrl != "" && repo != "" {
+		downloadUrls = []string{fmt.Sprintf("%s/api/huggingfaceml/%s/%s/%s/revision/%s",
+			strings.TrimSuffix(artiUrl, "/"), repo, repoTypePath, name, version)}
+	}
 	return
 }
 

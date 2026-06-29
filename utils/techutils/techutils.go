@@ -59,14 +59,15 @@ const (
 	Swift     Technology = "swift"
 	Gem       Technology = "ruby"
 	// Not Supported by build-info BOM generator
-	Docker   Technology = "docker"
-	Oci      Technology = "oci"
-	Rpm      Technology = "rpm"
-	Debian   Technology = "deb"
-	Composer Technology = "composer"
-	Alpine   Technology = "alpine"
-	Cpp      Technology = "cpp"
-	NoTech   Technology = ""
+	Docker        Technology = "docker"
+	HuggingFaceMl Technology = "huggingfaceml"
+	Oci           Technology = "oci"
+	Rpm           Technology = "rpm"
+	Debian        Technology = "deb"
+	Composer      Technology = "composer"
+	Alpine        Technology = "alpine"
+	Cpp           Technology = "cpp"
+	NoTech        Technology = ""
 )
 
 // Alternative package types for some technologies
@@ -86,6 +87,7 @@ var AllTechnologiesStrings = []string{
 	Nuget.String(),
 	Dotnet.String(),
 	Docker.String(),
+	HuggingFaceMl.String(),
 	Oci.String(),
 	Conan.String(),
 	Cocoapods.String(),
@@ -298,6 +300,10 @@ var technologiesData = map[Technology]TechData{
 	Docker: {
 		formal:      "Docker",
 		projectType: project.Docker,
+	},
+	HuggingFaceMl: {
+		formal:          "Hugging Face",
+		xrayPackageType: "huggingfaceml",
 	},
 	Oci:      {},
 	Rpm:      {formal: "RPM"},
