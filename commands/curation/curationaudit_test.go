@@ -918,16 +918,15 @@ func getTestCasesForDoCurationAudit() []testCase {
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
-				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
-				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
-				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
-				// re-run during the test phase against the mock server.
+				// Pre-populate the curation cache with all plugin artifact downloads so that
+				// during the actual test run against the mock server only the blocked artifact
+				// triggers an HTTP request. The -DincludePluginDeps=true flag causes
+				// maven-dep-tree to resolve plugin transitive deps in the same invocation.
 				return []string{
 					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
 					"-DdepsTreeOutputFile=output",
 					"-Dmaven.repo.local=" + curationCache,
-					"dependency:resolve-plugins",
-					"help:effective-pom",
+					"-DincludePluginDeps=true",
 				}
 			},
 			mvnIncludePluginDeps: true,
@@ -2075,6 +2074,79 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	assert.Equal(t, expectedCond, s.Policy[0].Condition, "violated condition name")
 	assert.Equal(t, expectedExpl, s.Policy[0].Explanation, "explanation")
 	assert.Equal(t, expectedRec, s.Policy[0].Recommendation, "recommendation")
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusPoetry verifies that the CVS fallback works for a
+// poetry-pinned package: wrapPoetryCurationErr produces a *CvsBlockedError
+// and fetchCvsBlockedStatus recovers the policy from the 403 probe, with the
+// package type set to "poetry".
+func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "telnyx"
+		blockedVer      = "4.87.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 5 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/te/ln/telnyx-4.87.1-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	// Exact-pin PinnedRequirement produced by wrapPoetryCurationErr for a poetry project.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
 	assert.Equal(t, blocked, s.Action)
 }
 
