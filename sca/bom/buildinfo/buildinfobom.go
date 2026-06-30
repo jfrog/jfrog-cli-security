@@ -234,10 +234,7 @@ type DependencyTreeResult struct {
 	FlatTree     *xrayUtils.GraphNode
 	FullDepTrees []*xrayUtils.GraphNode
 	DownloadUrls map[string]string
-	// Warnings carries non-fatal, user-facing messages produced while building the
-	// tree (e.g. Hugging Face references that could not be statically resolved).
-	// They are surfaced to the user after the curation tables rather than during
-	// the noisy BOM-build phase, so coverage gaps stay visible instead of silent.
+	// Warnings holds user-facing messages from tree-build (e.g. unresolved HF references).
 	Warnings []string
 }
 
@@ -304,7 +301,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = swift.BuildDependencyTree(params)
 	case techutils.Docker:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = docker.BuildDependencyTree(params)
-	case techutils.HuggingFaceMl:
+	case techutils.HuggingFaceML:
 		depTreeResult.FullDepTrees, uniqueDepsIds, depTreeResult.Warnings, err = huggingface.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))

@@ -22,16 +22,18 @@ type ipynbCell struct {
 // ParseNotebook reads a .ipynb file and returns discovered/unresolved entries.
 // Code cells are extracted and fed through the Python scanner. Cells that
 // contain notebook magic commands (leading ! or %) are cleaned before parsing.
-func ParseNotebook(path string) (discovered []DiscoveredModel, unresolved []UnresolvedSite, err error) {
+// root is an optional scan root, forwarded to ParsePythonSource for filesystem-backed
+// classification of ambiguous local-output-path literals (see classifyRepoIDLiteral).
+func ParseNotebook(path string, root ...string) (discovered []DiscoveredModel, unresolved []UnresolvedSite, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading notebook %s: %w", path, err)
 	}
-	return parseNotebookBytes(data, path)
+	return parseNotebookBytes(data, path, root...)
 }
 
 // parseNotebookBytes is the testable core of ParseNotebook.
-func parseNotebookBytes(data []byte, filename string) (discovered []DiscoveredModel, unresolved []UnresolvedSite, err error) {
+func parseNotebookBytes(data []byte, filename string, root ...string) (discovered []DiscoveredModel, unresolved []UnresolvedSite, err error) {
 	var nb ipynbNotebook
 	if err = json.Unmarshal(data, &nb); err != nil {
 		return nil, nil, fmt.Errorf("parsing notebook JSON %s: %w", filename, err)
@@ -51,7 +53,7 @@ func parseNotebookBytes(data []byte, filename string) (discovered []DiscoveredMo
 		}
 		src = stripMagics(src)
 		cellFile := fmt.Sprintf("%s#cell-%d", filename, cellIdx)
-		d, u := ParsePythonSource(src, cellFile, nil)
+		d, u := ParsePythonSource(src, cellFile, nil, root...)
 		discovered = append(discovered, d...)
 		unresolved = append(unresolved, u...)
 	}

@@ -14,7 +14,7 @@ When to use:
 
 Prerequisites:
 - A configured JFrog Platform server (jf c add) with JFrog Curation entitlement.
-- Project must use a supported package manager (npm, yarn, pip, maven, gradle, nuget, go) resolved through a curation-configured remote. Docker images and Hugging Face models/datasets are audited via dedicated flags.
+- Project must use a supported package manager (npm, yarn, pip, maven, gradle, nuget, go) resolved through a curation-configured remote. Docker images and Hugging Face models are audited via dedicated flags (datasets are detected but not audited).
 - The package manager and its lockfile must be present in the working directory.
 
 Common patterns:

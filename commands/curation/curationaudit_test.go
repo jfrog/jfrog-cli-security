@@ -1423,24 +1423,6 @@ func Test_getHuggingFaceNameAndVersion(t *testing.T) {
 			wantVersion:      "main",
 		},
 		{
-			name:             "dataset is probed via api/datasets endpoint",
-			id:               "huggingfaceml://dataset|squad:main",
-			artiUrl:          "https://test.jfrogdev.org/artifactory",
-			repo:             "my-hugging-face-repo",
-			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/datasets/squad/revision/main"},
-			wantName:         "squad",
-			wantVersion:      "main",
-		},
-		{
-			name:             "dataset with org and explicit revision",
-			id:               "huggingfaceml://dataset|stanfordnlp/squad:v2.0",
-			artiUrl:          "https://test.jfrogdev.org/artifactory",
-			repo:             "my-hugging-face-repo",
-			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/datasets/stanfordnlp/squad/revision/v2.0"},
-			wantName:         "stanfordnlp/squad",
-			wantVersion:      "v2.0",
-		},
-		{
 			name:             "empty artiUrl and repo produce no download URL",
 			id:               "huggingfaceml://org/model:main",
 			artiUrl:          "",
@@ -1467,6 +1449,36 @@ func Test_getHuggingFaceNameAndVersion(t *testing.T) {
 			wantName:         "org/model",
 			wantVersion:      "v1.0",
 		},
+		{
+			name:             "trailing colon defaults to main (not empty string)",
+			id:               "huggingfaceml://org/model:",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "leading colon only (no repo id) returns empty",
+			id:               "huggingfaceml://:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			// refs/pr/3 is a valid Hugging Face revision (a PR ref) and contains '/'.
+			// It must be split off as the revision (not glued onto name) and
+			// path-escaped in the URL so it lands as a single path segment.
+			name:             "PR ref revision containing slashes is split and path-escaped",
+			id:               "huggingfaceml://org/model:refs/pr/3",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/refs%2Fpr%2F3"},
+			wantName:         "org/model",
+			wantVersion:      "refs/pr/3",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1476,6 +1488,160 @@ func Test_getHuggingFaceNameAndVersion(t *testing.T) {
 			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
 		})
 	}
+}
+
+func Test_validateCurationAuditFlags_DockerAndHuggingFaceConflict(t *testing.T) {
+	ca := NewCurationAuditCommand().
+		SetDockerImageName("my.registry/image:tag").
+		SetHuggingFaceModel("org/model:main")
+	err := validateCurationAuditFlags(ca)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--docker-image and --hugging-face-model cannot be used together")
+}
+
+func Test_validateCurationAuditFlags_DockerOnly(t *testing.T) {
+	ca := NewCurationAuditCommand().SetDockerImageName("my.registry/image:tag")
+	assert.NoError(t, validateCurationAuditFlags(ca))
+}
+
+func Test_hasPythonFiles_ExcludesDist(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	require.NoError(t, os.MkdirAll(distDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "only_here.py"), []byte("x = 1\n"), 0644))
+	assert.False(t, hasPythonFiles(dir))
+}
+
+func Test_hasPythonFiles_FindsProjectSource(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app.py"), []byte("x = 1\n"), 0644))
+	assert.True(t, hasPythonFiles(dir))
+}
+
+func Test_isHuggingFaceReport(t *testing.T) {
+	hfPkg := &PackageStatus{PkgType: techutils.HuggingFaceML.String()}
+	tests := []struct {
+		name   string
+		report *CurationReport
+		want   bool
+	}{
+		{
+			name:   "empty report",
+			report: &CurationReport{},
+			want:   false,
+		},
+		{
+			name:   "warnings only without HF marker",
+			report: &CurationReport{warnings: []string{"unresolved"}},
+			want:   false,
+		},
+		{
+			name:   "HF warnings-only placeholder",
+			report: &CurationReport{warnings: []string{"unresolved"}, huggingFaceReport: true},
+			want:   true,
+		},
+		{
+			name:   "all HF packages",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg}},
+			want:   true,
+		},
+		{
+			name:   "mixed package types",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg, {PkgType: techutils.Pip.String()}}},
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isHuggingFaceReport(tt.report))
+		})
+	}
+}
+
+func Test_isWarningsOnlyReport(t *testing.T) {
+	assert.False(t, isWarningsOnlyReport(&CurationReport{}))
+	assert.True(t, isWarningsOnlyReport(&CurationReport{warnings: []string{"warn"}}))
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		packagesStatus: []*PackageStatus{{PkgType: techutils.HuggingFaceML.String()}},
+	}))
+	// packagesStatus only ever holds blocked packages (see fetchNodeStatus), so an
+	// all-clean audit of a real package also has an empty packagesStatus — same
+	// shape as the true "nothing was audited" placeholder. totalNumberOfPackages
+	// must be the signal that disambiguates them, not packagesStatus emptiness.
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		totalNumberOfPackages: 1,
+		warnings:              []string{"dynamic revision"},
+	}))
+}
+
+func Test_countPackageNodes(t *testing.T) {
+	rootNodes := func(ids ...string) map[string]struct{} {
+		m := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			m[id] = struct{}{}
+		}
+		return m
+	}
+	nodes := func(ids ...string) []*xrayUtils.GraphNode {
+		var n []*xrayUtils.GraphNode
+		for _, id := range ids {
+			n = append(n, &xrayUtils.GraphNode{Id: id})
+		}
+		return n
+	}
+
+	// Single root (e.g. npm/pip): FlatTree.Nodes includes the root's own self-entry
+	// alongside its dependencies — that self-entry must be excluded from the count.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root"), nodes("root", "dep-a", "dep-b")))
+
+	// Multiple roots (e.g. multiple --working-dirs): every root self-entry present
+	// in the flat graph must be excluded, not just the first.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root-a", "root-b"), nodes("root-a", "dep-a", "root-b", "dep-b")))
+
+	// Hugging Face: BuildDependencyTree never adds a root self-entry, so nothing
+	// should be subtracted — a single-dependency project must not undercount to 0.
+	assert.Equal(t, 1, countPackageNodes(
+		rootNodes("huggingface-project"), nodes("huggingfaceml://org/model:main")))
+
+	assert.Equal(t, 0, countPackageNodes(rootNodes("root"), nil))
+}
+
+func Test_convertResultsToSummary_SkipsWarningsOnly(t *testing.T) {
+	results := map[string]*CurationReport{
+		"pip-project":         {packagesStatus: []*PackageStatus{{PackageName: "requests"}}, totalNumberOfPackages: 1},
+		hfUnresolvedReportKey: {warnings: []string{"unresolved HF ref"}, huggingFaceReport: true},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "pip-project", summary.Scans[0].Target)
+}
+
+func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	// Use a mock server so server resolution succeeds; the HF_ENDPOINT error then
+	// fires naturally from getHuggingFaceRepositoryConfig → repoFromHFEndpoint.
+	mockServer, serverConfig := hfMockServer(t, map[string]bool{}, map[string]bool{}, "hf-repo")
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", "")
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(serverConfig)
+	ca.SetIsCurationCmd(true)
+	ca.SetInsecureTls(true)
+	ca.SetHuggingFaceModel("org/model:main")
+	results := map[string]*CurationReport{}
+	err := ca.doCurateAudit(results)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HF_ENDPOINT")
 }
 
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
@@ -1929,6 +2095,74 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 		return true
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
+}
+
+// TestFetchNodeStatus_HFExplicit404ReturnsError verifies an unresolvable explicit
+// --hugging-face-model (HTTP 404) is a hard error, not a silently-skipped node.
+func TestFetchNodeStatus_HFExplicit404ReturnsError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      true,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "org/nonexistent-model")
+	assert.Contains(t, err.Error(), "404")
+	assert.Empty(t, analyzer.hfUnresolvedNodes, "explicit mode must error, not silently record as unresolved")
+}
+
+// TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError verifies an
+// unresolvable auto-discovered reference (HTTP 404) is recorded as a warning,
+// not a hard error.
+func TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      false,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.NoError(t, err)
+	require.Len(t, analyzer.hfUnresolvedNodes, 1)
+	assert.Equal(t, "org/nonexistent-model:main", analyzer.hfUnresolvedNodes[0])
 }
 
 // =============================================================================

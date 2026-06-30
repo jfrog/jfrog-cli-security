@@ -372,7 +372,7 @@ var flagsMap = map[string]components.Flag{
 
 	// Docker flags
 	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
-	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Specifies one or more Hugging Face models or datasets to audit, comma-separated, in the format '<model-id>:<revision>' (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased'). The revision is optional and defaults to 'main' when omitted. These models are audited in addition to any auto-discovered from source. The Artifactory repository is read from the HF_ENDPOINT environment variable."),
+	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Hugging Face models to audit, as '<repo-id>[:<revision>]' (revision defaults to 'main'). Multiple entries are comma-separated (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased'). Datasets are not audited (curation does not currently cover datasets). Requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

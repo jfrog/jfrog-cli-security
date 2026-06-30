@@ -4,8 +4,8 @@ package discovery
 // mirroring the Hugging Face client's default behaviour.
 const DefaultRevision = "main"
 
-// RepoType distinguishes HF model repos from dataset repos.
-// The probe URL path differs: api/models/ vs api/datasets/.
+// RepoType distinguishes HF model repos from dataset repos. Only models are
+// audited; datasets are detected and reported but not curated (see RepoTypeDataset).
 type RepoType string
 
 const (
@@ -42,16 +42,34 @@ type DiscoveredModel struct {
 // pass them explicitly via --hugging-face-model.
 type UnresolvedSite struct {
 	Location Location
-	Snippet  string
-	// Reason is one of "non-literal repo_id", "f-string repo_id", "dynamic repo_id".
+	// Snippet shows the call's arguments; quoted content is redacted as
+	// <redacted> since it may embed a secret and this text goes to CI logs.
+	Snippet string
+	// Reason is one of "non-literal repo_id", "f-string repo_id",
+	// "dynamic repo_id", "local filesystem path",
+	// "ambiguous local path or Hub repo id", "non-literal repo_type",
+	// "f-string repo_type", or "unsupported repo_type".
 	Reason string
+}
+
+// SkippedFile records a source file/entry that could not be read or parsed
+// during the scan — any HF references it held were not discovered.
+type SkippedFile struct {
+	Path string
+	Err  string
 }
 
 // ScanResult is the output of a full directory scan.
 type ScanResult struct {
-	// Discovered holds deduplicated (repo_type, repo_id, revision) tuples ready
-	// to hand to the curation walker.
+	// Discovered holds deduplicated model (repo_type == model) tuples ready to
+	// hand to the curation walker.
 	Discovered []DiscoveredModel
+	// Datasets holds deduplicated dataset references. These are reported but NOT
+	// audited: Catalog does not score datasets, so curation cannot evaluate them.
+	Datasets []DiscoveredModel
 	// Unresolved holds call sites that could not be statically resolved.
 	Unresolved []UnresolvedSite
+	// Skipped holds files/entries that could not be read or parsed. Non-empty
+	// means the scan is partial.
+	Skipped []SkippedFile
 }

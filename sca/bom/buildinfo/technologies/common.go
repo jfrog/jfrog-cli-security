@@ -83,6 +83,10 @@ type BuildInfoBomGeneratorParams struct {
 	// WorkingDirectory is the project root used for Hugging Face auto-discovery.
 	// Defaults to "." when empty.
 	WorkingDirectory string
+	// HFProjectName overrides the HF root-node name (falls back to the working
+	// directory basename when empty). Set by the curation command to a collision-free
+	// name when auditing multiple --working-dirs entries that share a basename.
+	HFProjectName string
 	// NuGet params
 	SolutionFilePath string
 }

@@ -58,6 +58,24 @@ func TestParseNotebook_MarkdownCellSkipped(t *testing.T) {
 	assert.Empty(t, disc)
 }
 
+func TestParseNotebook_SentenceTransformer(t *testing.T) {
+	nb := `{
+  "cells": [
+    {
+      "cell_type": "code",
+      "source": ["from sentence_transformers import SentenceTransformer\n", "model = SentenceTransformer(\"sentence-transformers/all-MiniLM-L6-v2\")\n"]
+    }
+  ]
+}`
+	disc, unres, err := parseNotebookBytes([]byte(nb), "inference.ipynb")
+	require.NoError(t, err)
+	require.Len(t, disc, 1)
+	assert.Equal(t, "sentence-transformers/all-MiniLM-L6-v2", disc[0].RepoID)
+	assert.Equal(t, DefaultRevision, disc[0].Revision)
+	assert.Contains(t, disc[0].Sources[0].File, "inference.ipynb#cell-")
+	assert.Empty(t, unres)
+}
+
 func TestParseNotebook_InvalidJSON(t *testing.T) {
 	_, _, err := parseNotebookBytes([]byte("not json"), "bad.ipynb")
 	require.Error(t, err)
