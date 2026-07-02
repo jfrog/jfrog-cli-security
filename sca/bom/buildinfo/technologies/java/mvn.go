@@ -13,6 +13,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -31,6 +32,10 @@ const (
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
 	mavenDepTreeVersion = "1.2.0"
 	settingsXmlFile     = "settings.xml"
+
+	// curationSettingsID is the stable XML id for the server/mirror/profile entries
+	// injected into the temp settings.xml, ensuring idempotent re-runs.
+	curationSettingsID = "artifactory"
 )
 
 var mavenConfigPath = filepath.Join(".mvn", "maven.config")
@@ -59,6 +64,9 @@ type MavenDepTreeManager struct {
 	curationCacheFolder string
 	cmdName             MavenDepTreeCmd
 	settingsXmlPath     string
+	// userSettingsXmlPath overrides the default ~/.m2/settings.xml seed path used
+	// in createSettingsXmlWithConfiguredArtifactory. Empty means use the default.
+	userSettingsXmlPath string
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
@@ -307,8 +315,10 @@ func removeMavenConfig() (func() error, error) {
 	return restoreMavenConfig, err
 }
 
-// Creates a new settings.xml file configured with the provided server and repository from the current MavenDepTreeManager instance.
-// The settings.xml will be written to the given path.
+// createSettingsXmlWithConfiguredArtifactory creates a disposable settings.xml for the
+// curation-audit Maven run. When ~/.m2/settings.xml exists it is used as the base so
+// existing configuration (e.g. <proxies>) is preserved; curation entries are upserted on
+// top. Falls back to the built-in template when no user settings file is found.
 func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(settingsXmlPath string) error {
 	username, password, err := getArtifactoryAuthFromServer(mdt.server)
 	if err != nil {
@@ -324,6 +334,31 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	}
 
 	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+
+	userSettingsPath := mdt.userSettingsXmlPath
+	if userSettingsPath == "" {
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return fmt.Errorf("failed to get user home directory: %w", homeErr)
+		}
+		userSettingsPath = filepath.Join(homeDir, ".m2", settingsXmlFile)
+	}
+
+	exists, err := fileutils.IsFileExists(userSettingsPath, false)
+	if err != nil {
+		return err
+	}
+	if exists {
+		log.Debug("Seeding temp settings.xml from existing user settings:", userSettingsPath)
+		return mdt.createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath)
+	}
+
+	// No existing user settings.xml: render from the built-in template.
+	return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+}
+
+// createSettingsXmlFromTemplate renders the built-in settings.xml template (fallback path).
+func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath string) error {
 	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
 	if err != nil {
 		return err
@@ -342,6 +377,93 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 		return err
 	}
 	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
+}
+
+// createSettingsXmlFromExisting seeds the temp settings.xml from the user's file,
+// upserts curation entries, and writes to mdt.settingsXmlPath. The source file is unchanged.
+func (mdt *MavenDepTreeManager) createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath string) error {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromFile(userSettingsPath); err != nil {
+		return fmt.Errorf("failed to read settings.xml at %s: %w", userSettingsPath, err)
+	}
+	root := doc.SelectElement("settings")
+	if root == nil {
+		return fmt.Errorf("invalid settings.xml at %s: missing <settings> root element", userSettingsPath)
+	}
+
+	upsertCurationServer(root, username, password)
+	upsertCurationMirror(root, remoteRepositoryFullPath)
+	upsertCurationProfile(root, remoteRepositoryFullPath)
+	upsertCurationActiveProfile(root)
+
+	doc.Indent(4)
+	return errorutils.CheckError(doc.WriteToFile(mdt.settingsXmlPath))
+}
+
+func xmlGetOrCreate(parent *etree.Element, name string) *etree.Element {
+	if el := parent.SelectElement(name); el != nil {
+		return el
+	}
+	return parent.CreateElement(name)
+}
+
+func xmlFindByID(parent *etree.Element, elementName, id string) *etree.Element {
+	for _, el := range parent.SelectElements(elementName) {
+		if idEl := el.SelectElement("id"); idEl != nil && idEl.Text() == id {
+			return el
+		}
+	}
+	return nil
+}
+
+func xmlGetOrCreateByID(parent *etree.Element, elementName, id string) *etree.Element {
+	if el := xmlFindByID(parent, elementName, id); el != nil {
+		return el
+	}
+	return parent.CreateElement(elementName)
+}
+
+func xmlSetChild(parent *etree.Element, name, text string) {
+	xmlGetOrCreate(parent, name).SetText(text)
+}
+
+func upsertCurationServer(root *etree.Element, username, password string) {
+	servers := xmlGetOrCreate(root, "servers")
+	server := xmlGetOrCreateByID(servers, "server", curationSettingsID)
+	xmlSetChild(server, "id", curationSettingsID)
+	xmlSetChild(server, "username", username)
+	xmlSetChild(server, "password", password) // #nosec G117 -- written to local temp file only
+}
+
+func upsertCurationMirror(root *etree.Element, repoURL string) {
+	mirrors := xmlGetOrCreate(root, "mirrors")
+	mirror := xmlGetOrCreateByID(mirrors, "mirror", curationSettingsID)
+	xmlSetChild(mirror, "id", curationSettingsID)
+	xmlSetChild(mirror, "url", repoURL)
+	xmlSetChild(mirror, "mirrorOf", "*")
+}
+
+func upsertCurationProfile(root *etree.Element, repoURL string) {
+	profiles := xmlGetOrCreate(root, "profiles")
+	profile := xmlGetOrCreateByID(profiles, "profile", curationSettingsID)
+	xmlSetChild(profile, "id", curationSettingsID)
+
+	repos := xmlGetOrCreate(profile, "repositories")
+	repo := xmlGetOrCreateByID(repos, "repository", curationSettingsID)
+	xmlSetChild(xmlGetOrCreate(repo, "snapshots"), "enabled", "true")
+	xmlSetChild(repo, "id", curationSettingsID)
+	xmlSetChild(repo, "name", "mavenRepo")
+	xmlSetChild(repo, "url", repoURL)
+}
+
+func upsertCurationActiveProfile(root *etree.Element) {
+	activeProfiles := xmlGetOrCreate(root, "activeProfiles")
+	for _, ap := range activeProfiles.SelectElements("activeProfile") {
+		if ap.Text() == curationSettingsID {
+			return // already present
+		}
+	}
+	activeProfiles.CreateElement("activeProfile").SetText(curationSettingsID)
 }
 
 // Creates a temporary directory.

@@ -357,6 +357,9 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 			},
 			depsRepo: "testRepo",
 		},
+		// Point to a non-existent path so the test always exercises the template
+		// code path regardless of whether ~/.m2/settings.xml exists on the CI machine.
+		userSettingsXmlPath: filepath.Join(t.TempDir(), "no-settings.xml"),
 	}
 	// Create a temporary directory for testing and settings.xml creation
 	tempDir := t.TempDir()
@@ -401,6 +404,125 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 	actualContent = []byte(strings.ReplaceAll(string(actualContent), "\r\n", "\n"))
 	assert.NoError(t, err)
 	assert.Equal(t, settingsXmlWithAccessToken, string(actualContent))
+}
+
+// TestCreateSettingsXmlPreservesExistingProxy verifies that when the user already has a
+// settings.xml (containing e.g. a <proxies> block), the curation-audit temp file is
+// seeded from that file so the proxy configuration is preserved.
+func TestCreateSettingsXmlPreservesExistingProxy(t *testing.T) {
+	//#nosec G101 - test credentials only
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <proxies>
+        <proxy>
+            <id>corp-proxy</id>
+            <active>true</active>
+            <protocol>http</protocol>
+            <host>10.56.80.80</host>
+            <port>8080</port>
+        </proxy>
+    </proxies>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	resultBytes, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	result := string(resultBytes)
+
+	// Proxy must be preserved from the user's original settings.
+	assert.Contains(t, result, "10.56.80.80", "proxy host must be preserved")
+	assert.Contains(t, result, "corp-proxy", "proxy id must be preserved")
+
+	// Curation entries must be injected.
+	assert.Contains(t, result, "api/curation/audit/testRepo", "curation mirror URL must be present")
+	assert.Contains(t, result, "<mirrorOf>*</mirrorOf>", "catch-all mirror must be present")
+	assert.Contains(t, result, "testUser", "username must be present")
+	assert.Contains(t, result, "testPass", "password must be present")
+	assert.Contains(t, result, "<activeProfile>artifactory</activeProfile>", "activeProfile must be present")
+
+	// The user's original settings.xml must be untouched.
+	originalContent, err := os.ReadFile(userSettingsPath)
+	require.NoError(t, err)
+	assert.Equal(t, userSettings, string(originalContent), "user's settings.xml must not be modified")
+}
+
+// TestCreateSettingsXmlIdempotent verifies that calling createSettingsXmlWithConfiguredArtifactory
+// multiple times with the same user settings does not create duplicate entries in the temp file.
+func TestCreateSettingsXmlIdempotent(t *testing.T) {
+	//#nosec G101 - test credentials only
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <proxies>
+        <proxy>
+            <id>corp-proxy</id>
+            <active>true</active>
+            <protocol>http</protocol>
+            <host>10.56.80.80</host>
+            <port>8080</port>
+        </proxy>
+    </proxies>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	// Run twice — each invocation reads the unchanged user settings and writes to tempDir.
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	firstRun, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	secondRun, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+
+	// Both runs must produce identical output — no duplicate entries.
+	assert.Equal(t, string(firstRun), string(secondRun), "second run must produce identical output (no duplicates)")
+
+	result := string(secondRun)
+	// Structural uniqueness: exactly one <server>, one <mirror>, one top-level <profile>,
+	// and one <activeProfile> entry with the curation ID.
+	assert.Equal(t, 1, strings.Count(result, "<server>"), "expected exactly one <server> block")
+	assert.Equal(t, 1, strings.Count(result, "<mirror>"), "expected exactly one <mirror> block")
+	assert.Equal(t, 1, strings.Count(result, "<activeProfile>artifactory</activeProfile>"),
+		"expected exactly one <activeProfile>artifactory</activeProfile>")
 }
 
 func TestRunProjectsCmd(t *testing.T) {
