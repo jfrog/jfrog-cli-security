@@ -15,6 +15,7 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -66,6 +67,32 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			errorExpected:      false,
 		},
 		{
+			// Workspace members are local packages, not registry artifacts: they must
+			// stay in the graph (so their deps attribute to them) but be dropped from
+			// the flat uniqueDeps list curation HEAD-checks, otherwise a coincidental
+			// public package of the same name/version is reported as a false positive.
+			name: "Workspace member excluded from uniqueDeps but kept in tree",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
+				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
+				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
+			},
+			rootXrayId: npmId + "root:1.0.0",
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "root:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: npmId + "ui:0.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "express:3.0.1",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			// ui (workspace member) is absent; root and express remain.
+			expectedUniqueDeps: []string{npmId + "root:1.0.0", npmId + "express:3.0.1"},
+			errorExpected:      false,
+		},
+		{
 			name: "Incorrect formatted dependency name - error expected",
 			yarnDependencies: map[string]*bibuildutils.YarnDependency{
 				"@privateDep": {Value: "", Details: bibuildutils.YarnDepDetails{Version: "privateDep"}},
@@ -87,6 +114,22 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStripWorkspaceUseLocalSuffix(t *testing.T) {
+	deps := map[string]*bibuildutils.YarnDependency{
+		"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0-use.local"}},
+		"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0"}},
+		"axios@npm:1.6.0":          {Value: "axios@npm:1.6.0", Details: bibuildutils.YarnDepDetails{Version: "1.6.0"}},
+	}
+	stripWorkspaceUseLocalSuffix(deps)
+
+	// Workspace member: suffix stripped.
+	assert.Equal(t, "0.0.0", deps["ui@workspace:packages/ui"].Details.Version)
+	// Workspace root with a real version: unchanged.
+	assert.Equal(t, "1.0.0", deps["root@workspace:."].Details.Version)
+	// Registry package: never touched.
+	assert.Equal(t, "1.6.0", deps["axios@npm:1.6.0"].Details.Version)
 }
 
 func TestIsInstallRequired(t *testing.T) {
@@ -200,13 +243,11 @@ func TestIsYarnLockStale(t *testing.T) {
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
 
-	// Neither file present => staleness is undefined; treat as not stale so
-	// the check never forces an install on its own.
+	// Neither file present => not stale (caller handles missing lockfile separately).
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
-	// Only package.json present => same "undefined => not stale" contract
-	// (the caller handles missing-lockfile via fileutils.IsFileExists).
+	// Only package.json present => not stale.
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
@@ -215,10 +256,51 @@ func TestIsYarnLockStale(t *testing.T) {
 	assert.NoError(t, os.Chtimes(pkgJsonPath, older, older))
 	assert.False(t, isYarnLockStale(tempDirPath))
 
-	// package.json edited after lockfile written => stale.
+	// package.json newer than lockfile AND lockfile covers all declared deps => fresh.
+	// Simulates 'yarn install' writing yarn.lock then stamping packageManager in package.json.
+	lockBerry := `__metadata:
+  version: 8
+
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+`
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21"}}`), 0o644))
+	assert.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
 	newer := time.Now().Add(1 * time.Hour)
 	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
-	assert.True(t, isYarnLockStale(tempDirPath))
+	assert.False(t, isYarnLockStale(tempDirPath), "lockfile covers all deps — must not be stale even when package.json is newer")
+
+	// package.json newer AND a dep is missing from lockfile => stale.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`), 0o644))
+	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
+	assert.True(t, isYarnLockStale(tempDirPath), "missing dep in lockfile must be stale")
+}
+
+// TestYarnLockMissesDeclaredDeps verifies all four dependency sections are
+// checked, so a missing peer/optional dep also reports the lockfile as stale.
+func TestYarnLockMissesDeclaredDeps(t *testing.T) {
+	lockBerry := "__metadata:\n  version: 8\n\n\"lodash@npm:^4.17.21\":\n  version: 4.17.21\n"
+
+	cases := []struct {
+		name    string
+		pkgJSON string
+		want    bool
+	}{
+		{"all declared deps covered", `{"dependencies":{"lodash":"^4.17.21"}}`, false},
+		{"missing dependency", `{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`, true},
+		{"missing devDependency", `{"dependencies":{"lodash":"^4.17.21"},"devDependencies":{"jest":"^29.0.0"}}`, true},
+		{"missing optionalDependency", `{"dependencies":{"lodash":"^4.17.21"},"optionalDependencies":{"fsevents":"^2.3.0"}}`, true},
+		{"missing peerDependency", `{"dependencies":{"lodash":"^4.17.21"},"peerDependencies":{"react":"^18.0.0"}}`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			lockPath := filepath.Join(dir, "yarn.lock")
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(tc.pkgJSON), 0o644))
+			require.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
+			assert.Equal(t, tc.want, yarnLockMissesDeclaredDeps(dir, lockPath))
+		})
+	}
 }
 
 // TestIsInstallRequiredOverwriteYarnLock covers the overwriteYarnLock branch
@@ -231,7 +313,10 @@ func TestIsInstallRequiredOverwriteYarnLock(t *testing.T) {
 
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
-	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
+	// A declared dep that the (empty) lockfile does not cover, so the
+	// specifier-coverage check in isYarnLockStale reports staleness once
+	// package.json is the newer file.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x","dependencies":{"lodash":"^4.17.21"}}`), 0o644))
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
 
 	// yarn.lock is newer than package.json => fresh in either overwrite mode.
@@ -1008,23 +1093,24 @@ func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 
 	// The actual scope contract: the re-routing block in
 	// BuildDependencyTree wraps the helper call in 'if params.IsCurationCmd'.
-	// Read the source and assert the gate is present so a future
-	// refactor that drops the guard fails this test loudly.
+	// Assert the guard sits directly before this specific call so a future
+	// refactor that drops it fails loudly.
 	src, err := os.ReadFile("yarn.go")
 	if assert.NoError(t, err, "must be able to read yarn.go to verify the curation-only gate") {
-		// Look for the exact gate pattern. Two things together: the
-		// IsCurationCmd predicate AND the helper call inside it. A weaker
-		// substring check would pass if either drifted to a different
-		// site, so we anchor on both.
+		// Anchor on the helper call and scan only the lines immediately before
+		// it for the gate. A plain strings.Index for the gate would match the
+		// *first* of several 'if params.IsCurationCmd {' blocks in this file and
+		// pass even if this specific call lost its guard.
 		txt := string(src)
-		gateIdx := strings.Index(txt, "if params.IsCurationCmd {")
 		helperIdx := strings.Index(txt, "findClaimingYarnWorkspaceRoot(currentDir)")
-		assert.NotEqual(t, -1, gateIdx, "BuildDependencyTree must contain 'if params.IsCurationCmd' guard for the workspace re-route")
-		assert.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
-		if gateIdx != -1 && helperIdx != -1 {
-			assert.Less(t, gateIdx, helperIdx,
-				"the IsCurationCmd guard must come BEFORE findClaimingYarnWorkspaceRoot — otherwise the re-routing fires for non-curation flows too")
+		require.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
+		windowStart := helperIdx - 200
+		if windowStart < 0 {
+			windowStart = 0
 		}
+		context := txt[windowStart:helperIdx]
+		assert.Contains(t, context, "if params.IsCurationCmd {",
+			"findClaimingYarnWorkspaceRoot must be wrapped in an 'if params.IsCurationCmd' guard — otherwise the re-routing fires for non-curation flows too")
 	}
 }
 
@@ -1510,6 +1596,25 @@ func TestYarnCurationRegistry(t *testing.T) {
 	}
 }
 
+func TestShouldRouteThroughCurationEndpoint(t *testing.T) {
+	cases := []struct {
+		name         string
+		yarnVersion  string
+		isCurationCmd bool
+		want         bool
+	}{
+		{"V2 + curation cmd → route through endpoint", "2.5.0", true, true},
+		{"V2 + non-curation cmd → skip endpoint", "2.5.0", false, false},
+		{"V3 + curation cmd → skip endpoint", "3.0.0", true, false},
+		{"V4 + curation cmd → skip endpoint", "4.0.0", true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, shouldRouteThroughCurationEndpoint(version.NewVersion(tc.yarnVersion), tc.isCurationCmd))
+		})
+	}
+}
+
 // TestBlockedDepJSONRowTagsMatchPackageStatus pins the JSON field contract of
 // blockedDepJSONRow and blockedDepPolicyJSON against the expected tags of
 // commands/curation.PackageStatus and commands/curation.Policy. An import cycle
@@ -1643,4 +1748,180 @@ func TestProbeBlockedDirectDeps(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegisterYarnPluginInYarnrc(t *testing.T) {
+	const spec = "@yarnpkg/plugin-jfrog-yarn-resolve-lockfile"
+	const yarnrcName = ".yarnrc.yml"
+
+	t.Run("creates yarnrc when absent", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+		assert.Contains(t, string(data), spec)
+	})
+
+	t.Run("idempotent - no duplicate entry", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Equal(t, 1, strings.Count(string(data), resolveLockfilePluginRelPath))
+	})
+
+	t.Run("preserves unrelated settings", func(t *testing.T) {
+		curWd := t.TempDir()
+		yarnrc := "npmRegistryServer: \"https://example.com/artifactory/api/npm/repo/\"\nnpmAuthToken: secret-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte(yarnrc), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "npmRegistryServer")
+		assert.Contains(t, string(data), "secret-token")
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+	})
+
+	t.Run("recovers from malformed yaml", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+	})
+}
+
+func TestAttachWorkspaceMembersToRoot(t *testing.T) {
+	newDep := func(value string, childLocators ...string) *bibuildutils.YarnDependency {
+		ptrs := make([]bibuildutils.YarnDependencyPointer, 0, len(childLocators))
+		for _, locator := range childLocators {
+			ptrs = append(ptrs, bibuildutils.YarnDependencyPointer{Locator: locator})
+		}
+		return &bibuildutils.YarnDependency{Value: value, Details: bibuildutils.YarnDepDetails{Dependencies: ptrs}}
+	}
+	rootChildLocators := func(root *bibuildutils.YarnDependency) []string {
+		var locs []string
+		for _, p := range root.Details.Dependencies {
+			locs = append(locs, p.Locator)
+		}
+		return locs
+	}
+
+	t.Run("attaches unlinked workspace members in deterministic (sorted-key) order", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":           root,
+			"ui@workspace:packages/ui":   newDep("ui@workspace:packages/ui"),
+			"api@workspace:packages/api": newDep("api@workspace:packages/api"),
+			"lodash@npm:4.17.21":         newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		// Keys "api@workspace:packages/api" < "ui@workspace:packages/ui" so api comes first.
+		assert.Equal(t, []string{"api@workspace:packages/api", "ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("dedups already-linked members", func(t *testing.T) {
+		root := newDep("root@workspace:.", "ui@workspace:packages/ui")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":         root,
+			"ui@workspace:packages/ui": newDep("ui@workspace:packages/ui"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Equal(t, []string{"ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("skips non-workspace deps and the root itself", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":   root,
+			"lodash@npm:4.17.21": newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Empty(t, rootChildLocators(root))
+	})
+
+	t.Run("nil root is a no-op", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			attachWorkspaceMembersToRoot(map[string]*bibuildutils.YarnDependency{}, nil)
+		})
+	})
+}
+
+func TestReadNpmAuthTokenFromYarnrcFiles(t *testing.T) {
+	const registryURL = "https://example.com/artifactory/api/npm/repo/"
+	scopedYarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\nnpmAuthToken: top-level-token\n"
+
+	// setHome points os.UserHomeDir() at dir on every OS (HOME on unix,
+	// USERPROFILE on windows) so a real ~/.yarnrc.yml can't leak in.
+	setHome := func(t *testing.T, dir string) {
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+	}
+
+	t.Run("scoped registry entry wins over top-level", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(scopedYarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("falls back to top-level npmAuthToken", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: top-level-token\n"), 0o600))
+		assert.Equal(t, "top-level-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("global ~/.yarnrc.yml used when project file absent", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("project file takes priority over global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: project-token\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "project-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("malformed project yaml falls through to global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("no token anywhere returns empty", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		assert.Empty(t, readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	// Scoped lookup must tolerate a trailing-slash mismatch in both directions.
+	t.Run("scoped entry resolves when key omits trailing slash but query has it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		const keyNoSlash = "https://example.com/artifactory/api/npm/repo"
+		yarnrc := "npmRegistries:\n  \"" + keyNoSlash + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("scoped entry resolves when key has trailing slash but query omits it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		yarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(strings.TrimSuffix(registryURL, "/"), wd))
+	})
 }
