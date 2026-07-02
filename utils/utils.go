@@ -275,15 +275,6 @@ func toHash(hash crypto.Hash, values ...string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// map[string]string to []string (key=value format)
-// func ToCommandEnvVars(envVarsMap map[string]string) (converted []string) {
-// 	converted = make([]string, 0, len(envVarsMap))
-// 	for key, value := range envVarsMap {
-// 		converted = append(converted, fmt.Sprintf("%s=%s", key, value))
-// 	}
-// 	return
-// }
-
 type EnvironmentVariables map[string]string
 
 func (envVars EnvironmentVariables) ToCommandEnvVars() []string {
