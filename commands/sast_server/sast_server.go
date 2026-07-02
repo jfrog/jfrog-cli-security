@@ -3,6 +3,7 @@ package sast_server
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -28,6 +29,7 @@ func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars utils.Envi
 
 func (sastCmd *SastServerCommand) Run() (err error) {
 	amEnv, err := jas.GetAnalyzerManagerEnvVariables(sastCmd.ServerDetails)
+	allEnvVars := utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amEnv)
 	if err != nil {
 		return err
 	}
@@ -36,7 +38,7 @@ func (sastCmd *SastServerCommand) Run() (err error) {
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
 	}
-	return sastCmd.runWithTimeout(0, amEnv)
+	return sastCmd.runWithTimeout(0, allEnvVars)
 }
 
 func isEntitledForSastServer(serverDetails *config.ServerDetails) (entitled bool, err error) {
