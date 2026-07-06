@@ -67,14 +67,14 @@ const (
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <servers>
         <server>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
             <username>testUser</username>
             <password>testPass</password>
         </server>
     </servers>
     <mirrors>
         <mirror>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
             <url>https://myartifactory.com/artifactory/api/curation/audit/testRepo</url>
             <mirrorOf>*</mirrorOf>
         </mirror>
@@ -86,16 +86,16 @@ const (
                     <snapshots>
                         <enabled>true</enabled>
                     </snapshots>
-                    <id>artifactory</id>
+                    <id>jfrog-curation-audit</id>
                     <name>mavenRepo</name>
                     <url>https://myartifactory.com/artifactory/api/curation/audit/testRepo</url>
                 </repository>
             </repositories>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
         </profile>
     </profiles>
     <activeProfiles>
-        <activeProfile>artifactory</activeProfile>
+        <activeProfile>jfrog-curation-audit</activeProfile>
     </activeProfiles>
 </settings>`
 	//#nosec G101 - dummy token for testing
@@ -412,6 +412,7 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 // settings.xml (containing e.g. a <proxies> block), the curation-audit temp file is
 // seeded from that file so the proxy configuration is preserved.
 func TestCreateSettingsXmlPreservesExistingProxy(t *testing.T) {
+	t.Parallel()
 	//#nosec G101 - test credentials only
 	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
@@ -471,6 +472,7 @@ func TestCreateSettingsXmlPreservesExistingProxy(t *testing.T) {
 // TestCreateSettingsXmlIdempotent verifies that calling createSettingsXmlWithConfiguredArtifactory
 // multiple times with the same user settings does not create duplicate entries in the temp file.
 func TestCreateSettingsXmlIdempotent(t *testing.T) {
+	t.Parallel()
 	//#nosec G101 - test credentials only
 	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
@@ -532,6 +534,7 @@ func TestCreateSettingsXmlIdempotent(t *testing.T) {
 // document-order selection routes through curation. It also covers the id-collision case:
 // the pre-existing mirror uses id="artifactory", which must not be overwritten.
 func TestCreateSettingsXmlCurationMirrorIsFirst(t *testing.T) {
+	t.Parallel()
 	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -582,6 +585,7 @@ func TestCreateSettingsXmlCurationMirrorIsFirst(t *testing.T) {
 // TestCreateSettingsXmlFromExistingIsPrivate verifies the generated temp settings.xml,
 // which carries credentials, is written with restrictive 0600 permissions.
 func TestCreateSettingsXmlFromExistingIsPrivate(t *testing.T) {
+	t.Parallel()
 	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -609,7 +613,10 @@ func TestCreateSettingsXmlFromExistingIsPrivate(t *testing.T) {
 
 	info, err := os.Stat(filepath.Join(tempDir, settingsXmlFile))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "temp settings.xml must be private (0600)")
+	if !coreutils.IsWindows() {
+		// Windows does not enforce Unix permission bits — skip the mode check there.
+		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "temp settings.xml must be private (0600)")
+	}
 }
 
 // TestCreateSettingsXmlFallsBackWhenNoHome verifies that an unresolvable home directory
@@ -630,6 +637,9 @@ func TestCreateSettingsXmlFallsBackWhenNoHome(t *testing.T) {
 			},
 			depsRepo: "testRepo",
 		},
+		// isCurationCmd must be true so this test actually reaches the os.UserHomeDir()
+		// lookup below; non-curation runs short-circuit to the template before that point.
+		isCurationCmd: true,
 		// userSettingsXmlPath left empty so the default (home-based) lookup runs and fails.
 	}
 
@@ -639,8 +649,8 @@ func TestCreateSettingsXmlFallsBackWhenNoHome(t *testing.T) {
 	actualContent, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
 	require.NoError(t, err)
 	actualContent = []byte(strings.ReplaceAll(string(actualContent), "\r\n", "\n"))
-	// Template path uses the generic "artifactory" id and the direct (non-curation) repo path.
-	assert.Equal(t, settingsXmlWithUsernameAndPassword, string(actualContent))
+	// Template fallback for a curation run still uses the curation-specific id.
+	assert.Equal(t, settingsXmlWithUsernameAndPasswordAndCurationDedicatedAPi, string(actualContent))
 }
 
 func TestRunProjectsCmd(t *testing.T) {
@@ -828,6 +838,7 @@ func TestInjectPluginDeps(t *testing.T) {
 // cannot be parsed (e.g. mid-write by an IDE or CI script) is treated as absent and the
 // built-in template is used, rather than aborting the whole scan (Finding 5).
 func TestCreateSettingsXmlMalformedFallsBackToTemplate(t *testing.T) {
+	t.Parallel()
 	malformed := `<?xml version="1.0"?><settings><UNCLOSED`
 	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
 	require.NoError(t, os.WriteFile(userSettingsPath, []byte(malformed), 0600))
@@ -852,6 +863,7 @@ func TestCreateSettingsXmlMalformedFallsBackToTemplate(t *testing.T) {
 // TestCreateSettingsXmlNoRootFallsBackToTemplate verifies that a settings.xml missing the
 // <settings> root element is treated as absent and falls back to the built-in template.
 func TestCreateSettingsXmlNoRootFallsBackToTemplate(t *testing.T) {
+	t.Parallel()
 	noRoot := `<?xml version="1.0"?><notSettings><foo/></notSettings>`
 	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
 	require.NoError(t, os.WriteFile(userSettingsPath, []byte(noRoot), 0600))
@@ -877,6 +889,7 @@ func TestCreateSettingsXmlNoRootFallsBackToTemplate(t *testing.T) {
 // uses the built-in template directly without consulting ~/.m2/settings.xml, so the
 // jf audit code path is fully unaffected by the proxy-preservation feature (Finding 6).
 func TestNonCurationSkipsUserSettingsXml(t *testing.T) {
+	t.Parallel()
 	// Point userSettingsXmlPath at a file with valid but distinct proxy config.
 	// If the code incorrectly reads it, the proxy host would appear in the output.
 	userSettings := `<?xml version="1.0"?><settings><proxies><proxy><id>should-not-appear</id><host>1.2.3.4</host></proxy></proxies></settings>`
@@ -904,6 +917,7 @@ func TestNonCurationSkipsUserSettingsXml(t *testing.T) {
 // ~/.m2/settings.xml (e.g. EACCES on a volume owned by a different UID in containerised
 // CI) falls back to the built-in template rather than aborting the scan.
 func TestCreateSettingsXmlStatErrorFallsBackToTemplate(t *testing.T) {
+	t.Parallel()
 	if os.Getuid() == 0 {
 		t.Skip("running as root — permission checks do not apply")
 	}

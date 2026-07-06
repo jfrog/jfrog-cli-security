@@ -14,8 +14,8 @@ import (
 	"github.com/jfrog/build-info-go/build"
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
-	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/gofrog/version"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -1598,10 +1598,10 @@ func TestYarnCurationRegistry(t *testing.T) {
 
 func TestShouldRouteThroughCurationEndpoint(t *testing.T) {
 	cases := []struct {
-		name         string
-		yarnVersion  string
+		name          string
+		yarnVersion   string
 		isCurationCmd bool
-		want         bool
+		want          bool
 	}{
 		{"V2 + curation cmd → route through endpoint", "2.5.0", true, true},
 		{"V2 + non-curation cmd → skip endpoint", "2.5.0", false, false},

@@ -36,6 +36,9 @@ const (
 	// curationSettingsID is the stable XML id for server/mirror/profile entries injected
 	// into the temp settings.xml. Dedicated id keeps re-runs idempotent.
 	curationSettingsID = "jfrog-curation-audit"
+	// defaultSettingsID is the generic id used for non-curation runs, and is also the
+	// id rendered by the built-in template (resources/settings.xml).
+	defaultSettingsID = "artifactory"
 )
 
 var mavenConfigPath = filepath.Join(".mvn", "maven.config")
@@ -316,15 +319,15 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 
 	// Plain audit runs use the template directly; only curation seeds from ~/.m2/settings.xml.
 	if !mdt.isCurationCmd {
-		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, defaultSettingsID)
 	}
 
 	userSettingsPath := mdt.userSettingsXmlPath
 	if userSettingsPath == "" {
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
-			log.Debug("Could not resolve user home directory, using settings.xml template:", homeErr.Error())
-			return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+			log.Warn("Could not resolve user home directory, using settings.xml template:", homeErr.Error())
+			return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
 		}
 		userSettingsPath = filepath.Join(homeDir, ".m2", settingsXmlFile)
 	}
@@ -332,26 +335,28 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	exists, err := fileutils.IsFileExists(userSettingsPath, false)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Could not stat settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
-		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
 	}
 	if exists {
 		log.Debug("Seeding temp settings.xml from existing user settings:", userSettingsPath)
 		return mdt.createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath)
 	}
-	return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+	return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
 }
 
-func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath string) error {
+func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, id string) error {
 	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
 	if err != nil {
 		return err
 	}
 	buf := &bytes.Buffer{}
 	err = SettingsTemplate.Execute(buf, struct {
+		ID                       string
 		Username                 string
 		Password                 string // #nosec G117 -- written to local temp file only
 		RemoteRepositoryFullPath string
 	}{
+		ID:                       id,
 		Username:                 username,
 		Password:                 password,
 		RemoteRepositoryFullPath: remoteRepositoryFullPath,
@@ -364,17 +369,18 @@ func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password
 
 // createSettingsXmlFromExisting seeds the temp settings.xml from the user's file and
 // upserts curation entries. Falls back to the built-in template if the file is
-// unparsable (e.g. mid-write) or missing the <settings> root.
+// unparsable (e.g. mid-write) or missing the <settings> root. Only called for curation
+// runs, so the template fallback here always uses curationSettingsID.
 func (mdt *MavenDepTreeManager) createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath string) error {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromFile(userSettingsPath); err != nil {
 		log.Warn(fmt.Sprintf("Could not parse settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
-		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
 	}
 	root := doc.SelectElement("settings")
 	if root == nil {
 		log.Warn(fmt.Sprintf("settings.xml at %s has no <settings> root; falling back to built-in template.", userSettingsPath))
-		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath)
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
 	}
 
 	upsertCurationServer(root, username, password)
