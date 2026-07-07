@@ -23,12 +23,14 @@ Common patterns:
   $ jf curation-audit --format=json --threads=4
   $ jf curation-audit --requirements-file=requirements-dev.txt
   $ jf curation-audit --docker-image=my-image:tag
+  $ jf ca --script=script.py
 
 Gotchas:
 - The user/token must be entitled for Curation; otherwise the command exits with an entitlement notice.
 - Requires the project's package manager binary on PATH (npm, mvn, etc.).
 - Run from the project root or pass --working-dirs.
 - For Maven multi-module: --use-wrapper if mvnw is used.
+- --script (uv only) audits one PEP 723 inline-script .py file directly; --script and --working-dirs cannot be used together, run separate commands for each.
 
 Related: jf audit, jf rt npm-install, jf rt mvn`
 }
