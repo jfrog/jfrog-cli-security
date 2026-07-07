@@ -38,6 +38,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/swift"
+	uvtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/uv"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
 
@@ -279,6 +280,8 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = _go.BuildDependencyTree(params)
+	case techutils.Uv:
+		depTreeResult.FullDepTrees, uniqueDepsIds, depTreeResult.DownloadUrls, err = uvtech.BuildDependencyTree(params)
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
 		depTreeResult.FullDepTrees, uniqueDepsIds,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(params, tech)

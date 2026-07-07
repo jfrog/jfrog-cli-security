@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -52,6 +53,7 @@ const (
 	Pip       Technology = "pip"
 	Pipenv    Technology = "pipenv"
 	Poetry    Technology = "poetry"
+	Uv        Technology = "uv"
 	Nuget     Technology = "nuget"
 	Dotnet    Technology = "dotnet"
 	Conan     Technology = "conan"
@@ -83,6 +85,7 @@ var AllTechnologiesStrings = []string{
 	Pip.String(),
 	Pipenv.String(),
 	Poetry.String(),
+	Uv.String(),
 	Nuget.String(),
 	Dotnet.String(),
 	Docker.String(),
@@ -243,6 +246,16 @@ var technologiesData = map[Technology]TechData{
 		packageVersionOperator:     "==",
 		projectType:                project.Poetry,
 		language:                   Python,
+	},
+	Uv: {
+		formal:             "uv",
+		packageType:        Pypi,
+		xrayPackageType:    Pypi,
+		indicators:         []string{"uv.lock"},
+		packageDescriptors: []string{"pyproject.toml"},
+		execCommand:        "uv",
+		projectType:        project.UV,
+		language:           Python,
 	},
 	Nuget: {
 		formal:             "NuGet",
@@ -438,6 +451,11 @@ func DetectedTechnologiesList() (technologies []string) {
 // commands ('jf audit', 'jf scan', etc.) keep the legacy npm-fallback
 // behaviour for yarn workspace members so this change cannot regress them.
 //
+// Unlike DetectedTechnologiesList, this does not log the result: the caller still has
+// more promotions to apply (pnpm/yarn, pip→uv) before the list is final, and logging
+// early could show a technology immediately superseded (e.g. "Detected: pip." right
+// before "...treating as uv.").
+//
 // Used by doCurateAudit so 'jf ca --working-dirs=<workspace member>'
 // resolves through yarn (matching how the project's lockfile was produced)
 // instead of npm (which would synthesise a different dependency set and
@@ -455,9 +473,74 @@ func DetectedTechnologiesListForCurationAudit() (technologies []string) {
 		return
 	}
 	promoteYarnWorkspaceMembers(detected)
-	techStringsList := DetectedTechnologiesToSlice(detected)
-	log.Info(fmt.Sprintf("Detected: %s.", strings.Join(techStringsList, ", ")))
-	return techStringsList
+	return DetectedTechnologiesToSlice(detected)
+}
+
+// Pep723ScriptUnauditedHint returns a hint when wd contains a PEP 723 script (or "" if
+// none), since jf ca only audits one via --script.
+//
+// Callers must only invoke this once uv was confirmed detected in wd, and must log the
+// result themselves — this function never logs directly, since jf ca's progress spinner
+// would swallow a log line emitted while it's active.
+func Pep723ScriptUnauditedHint(wd string) string {
+	found, err := hasUnauditedPep723Script(wd)
+	if err != nil || !found {
+		return ""
+	}
+	return "Found PEP 723 inline-script(s) that were not audited by this run — use 'jf ca --script <file>' to audit them."
+}
+
+var (
+	pep723OpenMarkerRegex  = regexp.MustCompile(`(?m)^#\s*///\s*script\s*$`)
+	pep723CloseMarkerRegex = regexp.MustCompile(`(?m)^#\s*///\s*$`)
+)
+
+// HasPep723ScriptMetadata reports whether content contains a PEP 723 inline
+// script metadata block: a "# /// script" line followed later by a lone
+// "# ///" closing line.
+func HasPep723ScriptMetadata(content string) bool {
+	loc := pep723OpenMarkerRegex.FindStringIndex(content)
+	if loc == nil {
+		return false
+	}
+	return pep723CloseMarkerRegex.MatchString(content[loc[1]:])
+}
+
+// hasUnauditedPep723Script reports whether dir contains, at any depth, a .py file with
+// PEP 723 inline script metadata. It stops at the first match (filepath.SkipAll) since
+// only a yes/no signal is needed, and prunes directories matching
+// utils.DefaultScaExcludePatterns (.git, node_modules, venv, test, dist, target) instead
+// of filtering them out after walking, since walking into a large excluded tree (e.g. a
+// committed .venv) is the dominant cost.
+func hasUnauditedPep723Script(dir string) (bool, error) {
+	var found bool
+	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == dir {
+			return nil
+		}
+		if d.IsDir() {
+			if utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".py") || utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		if HasPep723ScriptMetadata(string(data)) {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return false, walkErr
+	}
+	return found, nil
 }
 
 func detectedTechnologiesListInPath(path string, recursive bool) (technologies []string) {
@@ -1079,7 +1162,7 @@ func technologySharesXrayEcosystem(tech Technology, xrayType string) bool {
 	}
 	switch xrayType {
 	case Pypi:
-		return tech == Pip || tech == Pipenv || tech == Poetry
+		return tech == Pip || tech == Pipenv || tech == Poetry || tech == Uv
 	case Gav:
 		return tech == Maven || tech == Gradle
 	case string(Npm):

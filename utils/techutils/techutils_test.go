@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )
 
@@ -1164,4 +1165,161 @@ func TestPromoteYarnWorkspaceMembers(t *testing.T) {
 		assert.Contains(t, detected, Npm, "npm-workspaces member must stay in npm — no yarn hijack")
 		assert.NotContains(t, detected, Yarn)
 	})
+}
+
+// TestUvToFormal verifies that uv's formal name matches the tool's own branding (lowercase).
+func TestUvToFormal(t *testing.T) {
+	assert.Equal(t, "uv", Uv.ToFormal())
+}
+
+func TestPep723ScriptUnauditedHint(t *testing.T) {
+	// This only returns a hint message; it never alters detection itself.
+	t.Run("PEP 723 script present returns a hint", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "script.py"),
+			[]byte("# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"), 0644))
+		assert.NotEmpty(t, Pep723ScriptUnauditedHint(dir))
+	})
+
+	t.Run("no PEP 723 script present returns no hint", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+		assert.Empty(t, Pep723ScriptUnauditedHint(dir))
+	})
+}
+
+// TestPep723Hint_BareScript_NoHint: a lone .py file with nothing else in the directory
+// detects no technology, so the PEP 723 hint must not fire either.
+func TestPep723Hint_BareScript_NoHint(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "script.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAudit()
+
+	assert.Empty(t, techs, "a lone .py file detects no technology at all")
+}
+
+// TestPep723Hint_UvSibling_HintFires: a uv project can have an unrelated PEP 723 script
+// alongside it. The project's own audit never resolves that script's deps, so the hint
+// must fire even though uv was also detected.
+func TestPep723Hint_UvSibling_HintFires(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "verify_isolation.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAudit()
+
+	assert.Contains(t, techs, Uv.String(), "the project itself must still be detected normally")
+	found, findErr := hasUnauditedPep723Script(root)
+	require.NoError(t, findErr)
+	assert.True(t, found, "the sibling script's inline deps are out of scope for the project's own audit")
+}
+
+func TestHasPep723ScriptMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name: "valid PEP 723 block",
+			content: `# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "requests<3",
+# ]
+# ///
+
+import requests
+`,
+			expected: true,
+		},
+		{
+			name:     "no metadata block at all",
+			content:  "import requests\nprint('hello')\n",
+			expected: false,
+		},
+		{
+			name: "open marker with no closing marker",
+			content: `# /// script
+# dependencies = ["requests"]
+import requests
+`,
+			expected: false,
+		},
+		{
+			name:     "closing marker with no opening marker",
+			content:  "# ///\nimport requests\n",
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, HasPep723ScriptMetadata(tt.content))
+		})
+	}
+}
+
+func TestHasUnauditedPep723Script_FindsNestedScript(t *testing.T) {
+	dir := t.TempDir()
+
+	pep723Content := "# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("# /// script\n# ///\n"), 0644))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "subdir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "subdir", "nested.py"), []byte(pep723Content), 0644))
+
+	found, err := hasUnauditedPep723Script(dir)
+	require.NoError(t, err)
+	assert.True(t, found, "a PEP 723 file nested at any depth must be found, even with plain .py and non-.py files present")
+}
+
+// TestHasUnauditedPep723Script_ExcludesDefaultPatterns verifies excluded directories
+// (venv, node_modules, .git, etc.) are skipped, while non-excluded ones are still scanned.
+func TestHasUnauditedPep723Script_ExcludesDefaultPatterns(t *testing.T) {
+	pep723Content := "# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"
+
+	t.Run("only excluded dir has a script — not found", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".venv", "lib"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".venv", "lib", "vendored.py"), []byte(pep723Content), 0644))
+
+		found, err := hasUnauditedPep723Script(dir)
+		require.NoError(t, err)
+		assert.False(t, found, "a script only under an excluded directory like .venv must be pruned, not found")
+	})
+
+	t.Run("non-excluded sibling also has a script — found", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".venv", "lib"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".venv", "lib", "vendored.py"), []byte(pep723Content), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tools", "deploy.py"), []byte(pep723Content), 0644))
+
+		found, err := hasUnauditedPep723Script(dir)
+		require.NoError(t, err)
+		assert.True(t, found, "a script under a non-excluded subdirectory must still be found")
+	})
+}
+
+func TestHasUnauditedPep723Script_NoScripts(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+
+	found, err := hasUnauditedPep723Script(dir)
+	require.NoError(t, err)
+	assert.False(t, found)
 }
