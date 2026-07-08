@@ -161,7 +161,7 @@ func (s *SecretScanManager) createConfigFileForTarget(target results.ScanTarget)
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
-	envVars := utils.MergeMaps(s.scanner.EnvVars)
+	envVars := utils.EnvironmentVariables(utils.MergeMaps(s.scanner.EnvVars))
 	envVars[jas.JfSecretValidationEnvVariable] = strconv.FormatBool(s.validateSecrets)
 	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails, envVars)
 }
