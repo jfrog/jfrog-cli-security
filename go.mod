@@ -17,7 +17,7 @@ require (
 	github.com/jfrog/froggit-go v1.23.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260623062654-89dd771ef4de
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260708065639-7c53c506fbcf
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260624085155-5ba797de2616
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20260624085832-de0c68a23c43
 	github.com/magiconair/properties v1.8.10
