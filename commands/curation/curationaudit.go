@@ -128,6 +128,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
 	},
+	techutils.Pipenv: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Pipenv, MinArtiPassThroughSupport)
+	},
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -718,6 +721,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
 	}
+	// When JFROG_CLI_CURATION_SUPPORT=true, checkSupportByVersionOrEnv short-circuits
+	// before calling getRtVersion→GetAuth→SetRepo, so ca.DepsRepo() is never populated
+	// for Pipenv. Call SetRepo explicitly so getBuildInfoParamsByTech sees the right repo.
+	if tech == techutils.Pipenv && ca.PackageManagerConfig == nil {
+		if err := ca.SetRepo(tech); err != nil {
+			return err
+		}
+	}
 	params, err := ca.getBuildInfoParamsByTech()
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
@@ -751,7 +762,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// Instead of aborting with no output, run the metadata-API fallback to
 		// recover the curation policy and render a partial table.
 		var cvsErr *python.CvsBlockedError
-		if (tech == techutils.Pip || tech == techutils.Poetry) && errors.As(err, &cvsErr) {
+		if (tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv) && errors.As(err, &cvsErr) {
 			return ca.runCvsFallback(cvsErr, tech, results)
 		}
 		return err
@@ -1056,6 +1067,10 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrcForPnpm()
 	}
 
+	if tech == techutils.Pipenv {
+		return ca.setRepoFromPipfile()
+	}
+
 	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
 	// Detect the running yarn version and route to the appropriate path.
 	// Version detection failures are fatal — silently falling through to the
@@ -1104,6 +1119,60 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	}
 	ca.setPackageManagerConfig(resolverParams)
 	return nil
+}
+
+// setRepoFromPipfile detects the Artifactory PyPI source for pipenv curation.
+//
+// Detection priority:
+//  1. pipenv.yaml — explicit 'jf pipenv-config' (highest priority, JFrog-specific).
+//  2. ~/.pip/pip.conf index-url — customer followed the Artifactory "Set me up"
+//     guide for pip (most common real-world setup; no Pipfile changes needed).
+//  3. Pipfile [[source]] — customer explicitly added an Artifactory source URL
+//     directly in the Pipfile.
+func (ca *CurationAuditCommand) setRepoFromPipfile() error {
+	// 1. pipenv.yaml — explicit 'jf pipenv-config'.
+	resolverParams, yamlErr := ca.getRepoParams(techutils.Pipenv.GetProjectType())
+	if yamlErr == nil {
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		return nil
+	}
+
+	// 2. ~/.pip/pip.conf index-url (Artifactory "Set me up" path).
+	pipConfPath := python.DefaultPipConfPath()
+	sd, repo, err := python.ParsePipConfigIndexUrl(pipConfPath)
+	if err != nil {
+		log.Debug(fmt.Sprintf("pipenv native: failed to read pip.conf: %v", err))
+	}
+	if repo != "" && sd != nil {
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(repo).
+			SetServerDetails(sd)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
+		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from %s", repo, pipConfPath))
+		return nil
+	}
+
+	// 3. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
+	sd, repo, err = python.ParsePipfileArtifactorySource("Pipfile")
+	if err != nil {
+		log.Debug(fmt.Sprintf("pipenv native: failed to read Pipfile: %v", err))
+	}
+	if repo != "" && sd != nil {
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(repo).
+			SetServerDetails(sd)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
+		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from Pipfile [[source]]", repo))
+		return nil
+	}
+
+	return errorutils.CheckErrorf(
+		"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
+			"Either run 'jf pipenv-config', configure index-url in ~/.pip/pip.conf via " +
+			"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
 }
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
@@ -1801,7 +1870,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip, techutils.Poetry:
+	case techutils.Pip, techutils.Poetry, techutils.Pipenv:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:

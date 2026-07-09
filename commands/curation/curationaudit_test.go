@@ -2875,3 +2875,24 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
 	})
 }
+
+// =============================================================================
+// Tests for Pipenv support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsPipenv(t *testing.T) {
+	_, ok := supportedTech[techutils.Pipenv]
+	assert.True(t, ok, "techutils.Pipenv must be registered in supportedTech so that 'jf curation-audit' processes pipenv projects")
+}
+
+func TestGetUrlNameAndVersionByTechPipenv(t *testing.T) {
+	const whlUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/requests-2.31.0-py3-none-any.whl"
+	downloadUrlsMap := map[string]string{"pypi://requests:2.31.0": whlUrl}
+
+	downloadUrls, name, scope, ver := getUrlNameAndVersionByTech(techutils.Pipenv, &xrayUtils.GraphNode{Id: "pypi://requests:2.31.0"}, downloadUrlsMap, "https://test.jfrog.io", "pypi-remote")
+
+	assert.Equal(t, []string{whlUrl}, downloadUrls)
+	assert.Equal(t, "requests", name)
+	assert.Equal(t, "", scope, "python packages have no scope")
+	assert.Equal(t, "2.31.0", ver)
+}
