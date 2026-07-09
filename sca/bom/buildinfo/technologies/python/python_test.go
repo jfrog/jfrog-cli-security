@@ -1001,3 +1001,560 @@ func TestWrapPoetryCurationErrMsgToUserPath(t *testing.T) {
 	assert.ErrorIs(t, wrapped, lockErr, "original lockErr must be in the error chain")
 	assert.Contains(t, wrapped.Error(), "poetry", "user-facing message must mention the package manager")
 }
+
+func TestParsePipenvVersion(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"pipenv, version 2023.7.4", "2023.7.4"},
+		{"pipenv, version 2026.6.1", "2026.6.1"},
+		{"pipenv, version 2022.1.8", "2022.1.8"},
+		// Extra whitespace / prefix lines must still match
+		{"some preamble\npipenv, version 2024.11.26\n", "2024.11.26"},
+		// Non-matching strings
+		{"", ""},
+		{"some unrelated output", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, parsePipenvVersion(tt.in))
+		})
+	}
+}
+
+func TestValidateMinimumPipenvVersionOk(t *testing.T) {
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\necho 'pipenv, version 2025.0.0'\n",
+		"@echo off\necho pipenv, version 2025.0.0\n",
+	)
+	require.NoError(t, validateMinimumPipenvVersion(CurationPipenvMinimumVersion))
+}
+
+func TestValidateMinimumPipenvVersionTooOld(t *testing.T) {
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\necho 'pipenv, version 2022.1.1'\n",
+		"@echo off\necho pipenv, version 2022.1.1\n",
+	)
+	err := validateMinimumPipenvVersion(CurationPipenvMinimumVersion)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "2023.7.4", "error must mention the minimum required version")
+	assert.Contains(t, err.Error(), "2022.1.1", "error must mention the installed version")
+}
+
+func TestValidateMinimumPipenvVersionUnparsable(t *testing.T) {
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\necho 'unrecognized output'\n",
+		"@echo off\necho unrecognized output\n",
+	)
+	err := validateMinimumPipenvVersion(CurationPipenvMinimumVersion)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse")
+}
+
+func TestInstallPipenvDepsCurationNoRepoNoNativeErrors(t *testing.T) {
+	// When IsCurationCmd=true, no DependenciesRepository, and no Pipfile with an
+	// Artifactory [[source]], installPipenvDeps must return an actionable error.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Prevent real ~/.pip/pip.conf from being picked up.
+	t.Setenv("PIP_CONFIG_FILE", filepath.Join(dir, "no-such-pip.conf"))
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "",
+	}
+	_, _, err := installPipenvDeps(params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pipenv-config")
+	assert.Contains(t, err.Error(), "Pipfile")
+}
+
+func TestInstallPipenvDepsCurationNativeFromPipfile(t *testing.T) {
+	// When IsCurationCmd=true and no DependenciesRepository but Pipfile has an
+	// Artifactory [[source]], installPipenvDeps must detect the repo natively
+	// and call runPipenvInstallFromRemoteRegistry (which will fail here because
+	// pipenv isn't installed in the test env — but it must NOT error with the
+	// "pipenv-config" message; it must get past native detection).
+	fakeDir := t.TempDir()
+	pipfileContent := `[[source]]
+url = "https://myuser:mytoken@myartifactory.jfrog.io/artifactory/api/pypi/my-pip-repo/simple"
+verify_ssl = true
+name = "artifactory"
+
+[packages]
+requests = "==2.31.0"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(fakeDir, "Pipfile"), []byte(pipfileContent), 0644))
+	t.Chdir(fakeDir)
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "",
+	}
+	_, _, err := installPipenvDeps(params)
+	// The call will fail because pipenv/virtualenv is not available in the test
+	// environment, but it must NOT fail with a "pipenv-config/Pipfile" config error.
+	if err != nil {
+		assert.NotContains(t, err.Error(), "pipenv-config", "native detection must succeed; error must come from pipenv CLI, not config")
+		assert.NotContains(t, err.Error(), "Artifactory [[source]]", "native detection must succeed; error must come from pipenv CLI, not config")
+	}
+}
+
+func TestParsePipfileArtifactorySource(t *testing.T) {
+	tests := []struct {
+		name       string
+		content    string
+		wantRepo   string
+		wantArtURL string
+		wantUser   string
+		wantPass   string
+	}{
+		{
+			name: "standard Artifactory pypi source with credentials",
+			content: `[[source]]
+url = "https://myuser:mytoken@myartifactory.jfrog.io/artifactory/api/pypi/my-pip-repo/simple"
+verify_ssl = true
+name = "artifactory"`,
+			wantRepo:   "my-pip-repo",
+			wantArtURL: "https://myartifactory.jfrog.io/artifactory/",
+			wantUser:   "myuser",
+			wantPass:   "mytoken",
+		},
+		{
+			name: "multiple sources — Artifactory one is picked",
+			content: `[[source]]
+url = "https://pypi.org/simple"
+name = "pypi"
+
+[[source]]
+url = "https://admin:s3cret@acme.jfrog.io/artifactory/api/pypi/curation-repo/simple"
+name = "jfrog"`,
+			wantRepo:   "curation-repo",
+			wantArtURL: "https://acme.jfrog.io/artifactory/",
+			wantUser:   "admin",
+			wantPass:   "s3cret",
+		},
+		{
+			name: "no Artifactory source — returns empty",
+			content: `[[source]]
+url = "https://pypi.org/simple"
+name = "pypi"`,
+			wantRepo: "",
+		},
+		{
+			name:     "empty Pipfile",
+			content:  "",
+			wantRepo: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			pipfilePath := filepath.Join(dir, "Pipfile")
+			require.NoError(t, os.WriteFile(pipfilePath, []byte(tt.content), 0644))
+
+			sd, repo, err := ParsePipfileArtifactorySource(pipfilePath)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantRepo, repo)
+			if tt.wantRepo == "" {
+				assert.Nil(t, sd)
+				return
+			}
+			require.NotNil(t, sd)
+			assert.Equal(t, tt.wantArtURL, sd.ArtifactoryUrl)
+			assert.Equal(t, tt.wantUser, sd.User)
+			assert.Equal(t, tt.wantPass, sd.Password)
+		})
+	}
+}
+
+func TestParsePipfileArtifactorySourceNotFound(t *testing.T) {
+	_, _, err := ParsePipfileArtifactorySource("/nonexistent/path/Pipfile")
+	require.Error(t, err)
+}
+
+func TestParsePipConfigIndexUrl(t *testing.T) {
+	cases := []struct {
+		name        string
+		content     string
+		wantRepo    string
+		wantArtURL  string
+		wantUser    string
+		wantNoMatch bool
+	}{
+		{
+			name: "artifactory index-url with credentials",
+			content: "[global]\n" +
+				"index-url = https://admin:mytoken@myrt.jfrogdev.org/artifactory/api/pypi/my-pip-repo/simple\n",
+			wantRepo:   "my-pip-repo",
+			wantArtURL: "https://myrt.jfrogdev.org/artifactory/",
+			wantUser:   "admin",
+		},
+		{
+			name:        "plain pypi.org — not an artifactory URL",
+			content:     "[global]\nindex-url = https://pypi.org/simple\n",
+			wantNoMatch: true,
+		},
+		{
+			name:        "no index-url key",
+			content:     "[global]\ntimeout = 60\n",
+			wantNoMatch: true,
+		},
+		{
+			name:        "empty file",
+			content:     "",
+			wantNoMatch: true,
+		},
+		{
+			name: "index-url with no credentials",
+			content: "[global]\n" +
+				"index-url = https://myrt.example.com/artifactory/api/pypi/libs-pypi/simple\n",
+			wantRepo:   "libs-pypi",
+			wantArtURL: "https://myrt.example.com/artifactory/",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.CreateTemp(t.TempDir(), "pip.conf")
+			require.NoError(t, err)
+			_, err = f.WriteString(tc.content)
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+
+			sd, repo, err := ParsePipConfigIndexUrl(f.Name())
+			require.NoError(t, err)
+			if tc.wantNoMatch {
+				assert.Empty(t, repo)
+				assert.Nil(t, sd)
+				return
+			}
+			assert.Equal(t, tc.wantRepo, repo)
+			require.NotNil(t, sd)
+			assert.Equal(t, tc.wantArtURL, sd.ArtifactoryUrl)
+			if tc.wantUser != "" {
+				assert.Equal(t, tc.wantUser, sd.User)
+			}
+		})
+	}
+}
+
+func TestParsePipConfigIndexUrlMissingFile(t *testing.T) {
+	// A missing pip.conf is not an error — just returns nil/empty (graceful no-op).
+	sd, repo, err := ParsePipConfigIndexUrl("/nonexistent/path/pip.conf")
+	require.NoError(t, err)
+	assert.Empty(t, repo)
+	assert.Nil(t, sd)
+}
+
+func TestRunPipenvInstallFromRemoteRegistryCurationVersionGate(t *testing.T) {
+	// A pipenv below the minimum version must be rejected before any install attempt.
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\necho 'pipenv, version 2021.5.29'\n",
+		"@echo off\necho pipenv, version 2021.5.29\n",
+	)
+	err := runPipenvInstallFromRemoteRegistry(nil, "my-repo", true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), CurationPipenvMinimumVersion)
+}
+
+func TestRunPipenvInstallFromRemoteRegistryCuration403Detection(t *testing.T) {
+	// Pipenv emits "HTTP error 403" during install of a blocked package.
+	// build-info-go's IsForbiddenOutput has no "pipenv" case, so we check the
+	// pattern directly.
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\n"+
+			"if [ \"$1\" = \"--version\" ]; then echo 'pipenv, version 2025.0.0'; exit 0; fi\n"+
+			"echo 'CRITICAL:pipenv.patched.pip._internal.network.download:HTTP error 403 while getting https://rt.example.com/api/pypi/repo/simple/urllib3/'\n"+
+			"echo '[ResolutionFailure]: ...'\n"+
+			"exit 1\n",
+		"@echo off\n"+
+			"if \"%1\"==\"--version\" (echo pipenv, version 2025.0.0 & exit /b 0)\n"+
+			"echo HTTP error 403 while getting https://rt.example.com/api/pypi/repo/simple/urllib3/\n"+
+			"exit /b 1\n",
+	)
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+origPath)
+
+	wd := t.TempDir()
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(wd))
+	defer func() { _ = os.Chdir(origWd) }()
+
+	sd := &config.ServerDetails{ArtifactoryUrl: "https://rt.example.com/artifactory/"}
+	err = runPipenvInstallFromRemoteRegistry(sd, "repo", true)
+	require.Error(t, err)
+	// Must contain the user-facing curation message, not just a raw install error.
+	assert.Contains(t, err.Error(), "Failed to retrieve the dependencies tree")
+}
+
+func TestRunPipenvInstallFromRemoteRegistryNoLockFileSucceeds(t *testing.T) {
+	// Unlike the earlier (incorrect) assumption, 'pipenv install' does NOT need a
+	// pre-existing Pipfile.lock for curation. --pypi-mirror points at the audit
+	// pass-through endpoint, which — like pip's and poetry's pass-through routes —
+	// always returns the artifact (200) regardless of policy. So pipenv's internal
+	// auto-lock-on-install (triggered when Pipfile.lock is missing) succeeds even
+	// though it downloads wheels to compute hashes.
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'pipenv, version 2025.0.0'; exit 0; fi\nexit 0\n",
+		"@echo off\nif \"%1\"==\"--version\" (echo pipenv, version 2025.0.0 & exit /b 0)\nexit /b 0\n",
+	)
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+origPath)
+
+	// Run in a directory with NO Pipfile.lock — must not error just because of that.
+	wd := t.TempDir()
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(wd))
+	defer func() { _ = os.Chdir(origWd) }()
+
+	sd := &config.ServerDetails{ArtifactoryUrl: "https://rt.example.com/artifactory/"}
+	require.NoError(t, runPipenvInstallFromRemoteRegistry(sd, "repo", true))
+}
+
+func TestRunPipenvInstallFromRemoteRegistryReturnsCvsBlockedError(t *testing.T) {
+	// When pipenv's internal pip emits a CVS-filtered error ("No matching distribution
+	// found" / "Could not find a version that satisfies the requirement"),
+	// runPipenvInstallFromRemoteRegistry must wrap it as *CvsBlockedError so that
+	// the curation-audit command can run the metadata-API fallback instead of
+	// aborting with no report.
+	fakeDir := t.TempDir()
+	writeFakeExecutable(t, fakeDir, "pipenv",
+		"#!/bin/sh\n"+
+			"if [ \"$1\" = \"--version\" ]; then echo 'pipenv, version 2025.0.0'; exit 0; fi\n"+
+			"echo 'CRITICAL:pipenv.patched.pip._internal.resolution.resolvelib.factory:Could not find a version that satisfies the requirement urllib3==2.0.7 (from versions: none)'\n"+
+			"echo 'ERROR: No matching distribution found for urllib3==2.0.7'\n"+
+			"exit 1\n",
+		"@echo off\n"+
+			"if \"%1\"==\"--version\" (echo pipenv, version 2025.0.0 & exit /b 0)\n"+
+			"echo Could not find a version that satisfies the requirement urllib3==2.0.7\n"+
+			"echo ERROR: No matching distribution found for urllib3==2.0.7\n"+
+			"exit /b 1\n",
+	)
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+origPath)
+
+	wd := t.TempDir()
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(wd))
+	defer func() { _ = os.Chdir(origWd) }()
+
+	sd := &config.ServerDetails{ArtifactoryUrl: "https://rt.example.com/artifactory/"}
+	err = runPipenvInstallFromRemoteRegistry(sd, "repo", true)
+	require.Error(t, err)
+
+	var cvsErr *CvsBlockedError
+	require.ErrorAs(t, err, &cvsErr, "CVS-filtered pipenv error must be wrapped as *CvsBlockedError")
+	require.Len(t, cvsErr.Packages, 1)
+	assert.Equal(t, "urllib3", cvsErr.Packages[0].Name)
+	assert.Equal(t, "2.0.7", cvsErr.Packages[0].Version)
+}
+
+func TestParsePipfileLockPackages(t *testing.T) {
+	t.Run("default and develop sections both parsed", func(t *testing.T) {
+		fixture := []byte(`{
+			"_meta": {"hash": {"sha256": "abc"}},
+			"default": {
+				"urllib3": {
+					"version": "==2.0.7",
+					"hashes": ["sha256:aaa", "sha256:bbb"]
+				},
+				"certifi": {
+					"version": "==2023.7.22",
+					"hashes": ["sha256:ccc"]
+				}
+			},
+			"develop": {
+				"pytest": {
+					"version": "==7.4.0",
+					"hashes": ["sha256:ddd"]
+				}
+			}
+		}`)
+		got, err := parsePipfileLockPackages(fixture)
+		require.NoError(t, err)
+		require.Len(t, got, 3)
+
+		byName := map[string]pipfileLockPackage{}
+		for _, p := range got {
+			byName[p.Name] = p
+		}
+		require.Contains(t, byName, "urllib3")
+		assert.Equal(t, "2.0.7", byName["urllib3"].Version)
+		assert.ElementsMatch(t, []string{"sha256:aaa", "sha256:bbb"}, byName["urllib3"].Hashes)
+
+		require.Contains(t, byName, "certifi")
+		assert.Equal(t, "2023.7.22", byName["certifi"].Version)
+
+		require.Contains(t, byName, "pytest")
+		assert.Equal(t, "7.4.0", byName["pytest"].Version)
+	})
+
+	t.Run("entry with no version is skipped", func(t *testing.T) {
+		fixture := []byte(`{
+			"default": {
+				"somepkg": {"hashes": ["sha256:aaa"]}
+			}
+		}`)
+		got, err := parsePipfileLockPackages(fixture)
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+
+	t.Run("duplicate name+version across sections is deduplicated", func(t *testing.T) {
+		fixture := []byte(`{
+			"default": {
+				"urllib3": {"version": "==2.0.7", "hashes": ["sha256:aaa"]}
+			},
+			"develop": {
+				"urllib3": {"version": "==2.0.7", "hashes": ["sha256:aaa"]}
+			}
+		}`)
+		got, err := parsePipfileLockPackages(fixture)
+		require.NoError(t, err)
+		assert.Len(t, got, 1)
+	})
+
+	t.Run("invalid json returns error", func(t *testing.T) {
+		_, err := parsePipfileLockPackages([]byte("not json"))
+		require.Error(t, err)
+	})
+
+	t.Run("empty content returns empty slice", func(t *testing.T) {
+		got, err := parsePipfileLockPackages([]byte(`{}`))
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+}
+
+func TestPickHrefByHashFragment(t *testing.T) {
+	body := []byte(`<html><body>
+<a href="../../packages/aa/bb/urllib3-2.0.6-py3-none-any.whl#sha256=old111">urllib3-2.0.6-py3-none-any.whl</a>
+<a href="../../packages/cc/dd/urllib3-2.0.7-py3-none-any.whl#sha256=aaa111">urllib3-2.0.7-py3-none-any.whl</a>
+</body></html>`)
+
+	t.Run("returns href whose hash fragment matches", func(t *testing.T) {
+		wanted := map[string]struct{}{"#sha256=aaa111": {}}
+		got := pickHrefByHashFragment(body, wanted)
+		assert.Equal(t, "../../packages/cc/dd/urllib3-2.0.7-py3-none-any.whl#sha256=aaa111", got)
+	})
+
+	t.Run("returns empty when no hash matches", func(t *testing.T) {
+		wanted := map[string]struct{}{"#sha256=nonexistent": {}}
+		got := pickHrefByHashFragment(body, wanted)
+		assert.Equal(t, "", got)
+	})
+
+	t.Run("returns empty for empty body", func(t *testing.T) {
+		got := pickHrefByHashFragment(nil, map[string]struct{}{"#sha256=aaa111": {}})
+		assert.Equal(t, "", got)
+	})
+}
+
+// TestBuildPipenvDownloadUrl_HTTP mirrors TestBuildPoetryDownloadUrl_HTTP: it spins
+// up a mock Artifactory simple-index endpoint and verifies that
+// buildPipenvDownloadUrl resolves the correct absolute URL by matching the
+// sha256 hash fragment (Pipfile.lock hashes, not filenames like Poetry).
+func TestBuildPipenvDownloadUrl_HTTP(t *testing.T) {
+	const repo = "my-pip-repo"
+	pkg := pipfileLockPackage{
+		Name:    "urllib3",
+		Version: "2.0.7",
+		Hashes:  []string{"sha256:aaa111"},
+	}
+
+	t.Run("200 with matching hash returns absolute URL without fragment", func(t *testing.T) {
+		server, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/simple/urllib3/") {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`<html><body>
+<a href="../../packages/cc/dd/urllib3-2.0.7-py3-none-any.whl#sha256=aaa111">urllib3-2.0.7-py3-none-any.whl</a>
+</body></html>`))
+				return
+			}
+			t.Fatalf("unexpected request to %s", r.URL.Path)
+		})
+		defer server.Close()
+		httpDetails := rtManager.GetConfig().GetServiceDetails().CreateHttpClientDetails()
+
+		got, err := buildPipenvDownloadUrl(rtManager, &httpDetails, server.URL, repo, pkg)
+		require.NoError(t, err)
+		assert.Contains(t, got, "/packages/cc/dd/urllib3-2.0.7-py3-none-any.whl")
+		assert.True(t, strings.HasPrefix(got, server.URL), "resolved URL must be absolute against the simple-index base, got %q", got)
+		assert.NotContains(t, got, "#", "fragment must be stripped from the returned URL")
+	})
+
+	t.Run("non-200 from simple-index surfaces status code", func(t *testing.T) {
+		server, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+		defer server.Close()
+		httpDetails := rtManager.GetConfig().GetServiceDetails().CreateHttpClientDetails()
+
+		_, err := buildPipenvDownloadUrl(rtManager, &httpDetails, server.URL, repo, pkg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "404")
+		assert.Contains(t, err.Error(), "simple-index")
+	})
+
+	t.Run("200 with no matching hash returns error", func(t *testing.T) {
+		server, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<html><body>
+<a href="../../packages/aa/bb/urllib3-1.0.0-py3-none-any.whl#sha256=different">urllib3-1.0.0-py3-none-any.whl</a>
+</body></html>`))
+		})
+		defer server.Close()
+		httpDetails := rtManager.GetConfig().GetServiceDetails().CreateHttpClientDetails()
+
+		_, err := buildPipenvDownloadUrl(rtManager, &httpDetails, server.URL, repo, pkg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no matching href")
+	})
+
+	t.Run("uses normalized name in simple-index URL", func(t *testing.T) {
+		var seenPath string
+		server, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			seenPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<a href="../../packages/aa/Flask_Babel-1.0.tar.gz#sha256=xyz">Flask_Babel-1.0.tar.gz</a>`))
+		})
+		defer server.Close()
+		httpDetails := rtManager.GetConfig().GetServiceDetails().CreateHttpClientDetails()
+
+		quirky := pipfileLockPackage{Name: "Flask_Babel", Version: "1.0", Hashes: []string{"sha256:xyz"}}
+		_, err := buildPipenvDownloadUrl(rtManager, &httpDetails, server.URL, repo, quirky)
+		require.NoError(t, err)
+		assert.Contains(t, seenPath, "/simple/flask-babel/", "must use PEP 503 normalized name in the simple-index URL, got %q", seenPath)
+	})
+}
+
+func TestBuildPipenvDownloadUrlsMapInputValidation(t *testing.T) {
+	t.Run("nil server details returns error", func(t *testing.T) {
+		_, err := buildPipenvDownloadUrlsMap(nil, "my-pip-repo")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "server details")
+	})
+
+	t.Run("empty artifactory URL returns error", func(t *testing.T) {
+		_, err := buildPipenvDownloadUrlsMap(&config.ServerDetails{}, "my-pip-repo")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "server details")
+	})
+
+	t.Run("empty repository returns error", func(t *testing.T) {
+		sd := &config.ServerDetails{ArtifactoryUrl: "https://rt.example.com/artifactory/"}
+		_, err := buildPipenvDownloadUrlsMap(sd, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "repository")
+	})
+}
