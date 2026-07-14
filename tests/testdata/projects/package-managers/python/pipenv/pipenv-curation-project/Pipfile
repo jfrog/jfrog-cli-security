@@ -1,0 +1,10 @@
+[[source]]
+name = "pypi"
+url = "http://replace-with-mock-server.invalid/api/pypi/pypi-curation/simple"
+verify_ssl = true
+
+[packages]
+urllib3 = "==1.26.20"
+
+[requires]
+python_version = "*"

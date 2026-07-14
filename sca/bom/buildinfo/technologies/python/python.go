@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jfrog/gofrog/version"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -38,7 +39,9 @@ import (
 	"sync"
 
 	"github.com/spf13/viper"
+	"github.com/subosito/gotenv"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/ini.v1"
 )
 
 const (
@@ -52,6 +55,7 @@ const (
 	CurationPoetryMinimumVersion = "1.2.0"
 	CurationPipenvMinimumVersion = "2023.7.4"
 	pipfileFile                  = "Pipfile"
+	pipfileLockFile              = "Pipfile.lock"
 
 	poetryDownloadUrlWorkers = 8
 )
@@ -164,7 +168,8 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 	}
 
 	pythonTool := pythonutils.PythonTool(technology)
-	if technology == techutils.Pipenv || !params.SkipAutoInstall {
+
+	if shouldRunPythonInstall(params, technology) {
 		var restoreEnv func() error
 		rootDetected, restoreEnv, err = runPythonInstall(params, pythonTool)
 		defer func() {
@@ -174,8 +179,8 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 			return
 		}
 	} else {
-		log.Debug(fmt.Sprintf("JF_SKIP_AUTO_INSTALL was set to 'true' with one of the following technologies: %s, %s. Skipping installation...\n"+
-			"NOTE: in this case all dependencies must be manually pre-installed by the user", techutils.Pip, techutils.Poetry))
+		log.Debug(fmt.Sprintf("JF_SKIP_AUTO_INSTALL was set to 'true' for %s. Skipping installation...\n"+
+			"NOTE: in this case all dependencies must be manually pre-installed by the user", technology))
 	}
 
 	localDependenciesPath, err := config.GetJfrogDependenciesPath()
@@ -215,6 +220,10 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 		log.Debug(fmt.Sprintf("Pipenv: curation download-URL map built — %d packages resolved", len(downloadUrls)))
 	}
 	return
+}
+
+func shouldRunPythonInstall(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) bool {
+	return !params.SkipAutoInstall || (technology == techutils.Pipenv && params.IsCurationCmd)
 }
 
 func processPipDownloadsUrlsFromReportFile() (map[string]string, error) {
@@ -414,8 +423,42 @@ func NormalizePypiName(name string) string {
 
 // pipfileLockEntry is one package entry in Pipfile.lock's "default" or "develop" section.
 type pipfileLockEntry struct {
-	Version string   `json:"version"` // e.g. "==2.0.7"
-	Hashes  []string `json:"hashes"`  // e.g. ["sha256:abc123..."]
+	Version  string   `json:"version"`
+	Hashes   []string `json:"hashes"`
+	Index    string   `json:"index"`
+	File     string   `json:"file"`
+	URL      string   `json:"url"`
+	Path     string   `json:"path"`
+	Editable bool     `json:"editable"`
+	Git      string   `json:"git"`
+	Hg       string   `json:"hg"`
+	Svn      string   `json:"svn"`
+	Bzr      string   `json:"bzr"`
+	Unknown  []string `json:"-"`
+}
+
+func (e *pipfileLockEntry) UnmarshalJSON(data []byte) error {
+	type lockEntryAlias pipfileLockEntry
+	var decoded lockEntryAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	known := map[string]struct{}{
+		"version": {}, "hashes": {}, "index": {}, "file": {}, "url": {}, "path": {},
+		"editable": {}, "git": {}, "hg": {}, "svn": {}, "bzr": {}, "ref": {},
+		"subdirectory": {}, "markers": {}, "extras": {},
+	}
+	for field := range fields {
+		if _, ok := known[field]; !ok {
+			decoded.Unknown = append(decoded.Unknown, field)
+		}
+	}
+	*e = pipfileLockEntry(decoded)
+	return nil
 }
 
 // pipfileLockContent is the top-level structure of Pipfile.lock.
@@ -450,48 +493,46 @@ func buildPipenvDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 	if err != nil {
 		return nil, err
 	}
-	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
 	if err != nil {
 		return nil, err
 	}
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 	artiUrl := strings.TrimSuffix(serverDetails.GetArtifactoryUrl(), "/")
 	urls := map[string]string{}
-	skipped := 0
 	var mu sync.Mutex
+	var lookupErrs []error
 
 	g := new(errgroup.Group)
 	g.SetLimit(poetryDownloadUrlWorkers)
 	for _, pkg := range packages {
-		if pkg.Name == "" || pkg.Version == "" || len(pkg.Hashes) == 0 {
-			skipped++
-			continue
-		}
 		g.Go(func() error {
-			return resolvePipenvPackageURL(rtManager, httpClientDetails, artiUrl, repository, pkg, urls, &mu)
+			return resolvePipenvPackageURL(rtManager, httpClientDetails, artiUrl, repository, pkg, urls, &mu, &lookupErrs)
 		})
 	}
-	_ = g.Wait()
+	_ = g.Wait() // failures are collected into lookupErrs, not returned here
 
-	expected := len(packages) - skipped
-	resolved := len(urls)
-	if resolved < expected {
-		log.Warn(fmt.Sprintf(
-			"Pipenv: resolved download URLs for %d/%d packages — %d package(s) will not be HEAD-checked by curation. "+
-				"Re-run with JFROG_CLI_LOG_LEVEL=DEBUG to see per-package resolution errors.",
-			resolved, expected, expected-resolved))
+	if len(lookupErrs) > 0 {
+		// Unresolved packages are never HEAD-checked; fail loudly instead of a false-clean partial audit.
+		return nil, errorutils.CheckErrorf(
+			"pipenv: failed to resolve download URLs for %d of %d package(s) — curation cannot verify these packages: %s",
+			len(lookupErrs), len(packages), errors.Join(lookupErrs...))
 	}
+	log.Debug(fmt.Sprintf("Pipenv: resolved %d download URLs", len(urls)))
 	return urls, nil
 }
 
-func resolvePipenvPackageURL(rtManager artifactory.ArtifactoryServicesManager, httpClientDetails httputils.HttpClientDetails, artiUrl, repository string, pkg pipfileLockPackage, urls map[string]string, mu *sync.Mutex) error {
+func resolvePipenvPackageURL(rtManager artifactory.ArtifactoryServicesManager, httpClientDetails httputils.HttpClientDetails, artiUrl, repository string, pkg pipfileLockPackage, urls map[string]string, mu *sync.Mutex, lookupErrs *[]error) error {
 	localDetails := httpClientDetails.Clone()
 	downloadUrl, lookupErr := buildPipenvDownloadUrl(rtManager, localDetails, artiUrl, repository, pkg)
 	if lookupErr != nil {
-		log.Debug(fmt.Sprintf("Pipenv: could not resolve download URL for %s:%s: %v", pkg.Name, pkg.Version, lookupErr))
+		mu.Lock()
+		*lookupErrs = append(*lookupErrs, fmt.Errorf("%s:%s: %w", pkg.Name, pkg.Version, lookupErr))
+		mu.Unlock()
 		return nil
 	}
-	normalizedName := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(pkg.Name)), "-", "_")
+	// PEP 503 normalization keeps the map key aligned with the hyphenated pipenv graph node IDs.
+	normalizedName := NormalizePypiName(pkg.Name)
 	compId := PythonPackageTypeIdentifier + normalizedName + ":" + pkg.Version
 	mu.Lock()
 	urls[compId] = downloadUrl
@@ -504,9 +545,15 @@ func resolvePipenvPackageURL(rtManager artifactory.ArtifactoryServicesManager, h
 // one of the hashes recorded in Pipfile.lock.
 func buildPipenvDownloadUrl(rtManager artifactory.ArtifactoryServicesManager, clientDetails *httputils.HttpClientDetails, artiUrl, repository string, pkg pipfileLockPackage) (string, error) {
 	normalized := NormalizePypiName(pkg.Name)
-	simpleIndexUrl := fmt.Sprintf("%s/api/pypi/%s/simple/%s/", artiUrl, repository, normalized)
+	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", artiUrl, repository)
+	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	if err != nil {
+		return "", err
+	}
+	simpleIndexUrl := repositoryURL + "simple/" + normalized + "/"
 	log.Debug(fmt.Sprintf("Pipenv: GET simple-index %s (matching against %d hashes)", simpleIndexUrl, len(pkg.Hashes)))
-	resp, body, _, err := rtManager.Client().SendGet(simpleIndexUrl, true, clientDetails)
+	resp, body, err := utils.SendWithBoundedRedirects(rtManager.Client(), http.MethodGet, simpleIndexUrl,
+		clientDetails, boundary, utils.MaxAuthenticatedRedirects)
 	if err != nil {
 		return "", err
 	}
@@ -539,6 +586,9 @@ func buildPipenvDownloadUrl(rtManager artifactory.ArtifactoryServicesManager, cl
 		return "", err
 	}
 	absolute := base.ResolveReference(ref)
+	if err := boundary.Validate(absolute.String()); err != nil {
+		return "", fmt.Errorf("resolved href %q for %s escapes the configured Artifactory endpoint %q", href, pkg.Name, artiUrl)
+	}
 	// Strip the fragment — fetchNodeStatus only needs the bare download URL.
 	absolute.Fragment = ""
 	log.Debug(fmt.Sprintf("Pipenv: resolved %s:%s -> %s", pkg.Name, pkg.Version, absolute))
@@ -561,14 +611,17 @@ func pickHrefByHashFragment(body []byte, wantedFragments map[string]struct{}) st
 }
 
 func readPipfileLockPackages() ([]pipfileLockPackage, error) {
-	exists, err := fileutils.IsFileExists("Pipfile.lock", false)
+	exists, err := fileutils.IsFileExists(pipfileLockFile, false)
 	if err != nil {
 		return nil, errorutils.CheckError(err)
 	}
 	if !exists {
-		return nil, errorutils.CheckErrorf("Pipfile.lock not found — run 'pipenv lock' to generate it before running 'jf ca'")
+		// 'pipenv install' (run earlier in this flow) auto-generates Pipfile.lock when
+		// missing, so reaching this point means it unexpectedly failed to do so —
+		// this is not something the user needs to fix manually.
+		return nil, errorutils.CheckErrorf("pipenv: Pipfile.lock is unexpectedly missing after 'pipenv install' completed successfully")
 	}
-	content, err := os.ReadFile("Pipfile.lock")
+	content, err := os.ReadFile(pipfileLockFile) // #nosec G304 -- temp-dir copy of the project's Pipfile.lock
 	if err != nil {
 		return nil, errorutils.CheckError(err)
 	}
@@ -581,33 +634,100 @@ func parsePipfileLockPackages(content []byte) ([]pipfileLockPackage, error) {
 	if err := json.Unmarshal(content, &lock); err != nil {
 		return nil, fmt.Errorf("failed to parse Pipfile.lock: %w", err)
 	}
-	seen := map[string]struct{}{}
+	if lock.Default == nil && lock.Develop == nil {
+		return nil, errors.New("pipenv: Pipfile.lock has no default or develop dependency sections")
+	}
+	seen := map[string]pipfileLockPackage{}
 	var packages []pipfileLockPackage
 
-	addEntry := func(name string, entry pipfileLockEntry) {
-		// Version field is like "==2.0.7" — strip the == operator.
+	addEntry := func(name string, entry pipfileLockEntry) error {
+		if name == "" {
+			return errors.New("pipenv: Pipfile.lock contains an entry with no package name")
+		}
+		if len(entry.Unknown) > 0 {
+			return fmt.Errorf("pipenv: package %q has unknown lock fields %q", name, entry.Unknown)
+		}
+		vcsCount := 0
+		for _, value := range []string{entry.Git, entry.Hg, entry.Svn, entry.Bzr} {
+			if value != "" {
+				vcsCount++
+			}
+		}
+		directKinds := 0
+		if entry.Path != "" {
+			directKinds++
+		}
+		if entry.File != "" {
+			directKinds++
+		}
+		if entry.URL != "" {
+			directKinds++
+		}
+		if vcsCount > 0 {
+			directKinds++
+		}
+		if vcsCount > 1 || directKinds > 1 || (directKinds > 0 && (entry.Version != "" || entry.Index != "")) {
+			return fmt.Errorf("pipenv: package %q has conflicting provenance in Pipfile.lock", name)
+		}
+		if entry.File != "" || entry.URL != "" {
+			return fmt.Errorf("pipenv: package %q uses an unsupported direct-file dependency", name)
+		}
+		if entry.Path != "" || vcsCount == 1 {
+			return nil
+		}
+		if entry.Editable {
+			return fmt.Errorf("pipenv: editable package %q has no recognized local path or VCS provenance", name)
+		}
+		if entry.Version == "" {
+			return fmt.Errorf("pipenv: package %q has unknown provenance in Pipfile.lock", name)
+		}
+		if !strings.HasPrefix(entry.Version, "==") || len(entry.Version) == 2 {
+			return fmt.Errorf("pipenv: registry package %q has unsupported locked version %q", name, entry.Version)
+		}
 		version := strings.TrimPrefix(entry.Version, "==")
-		if name == "" || version == "" {
-			return
+		if len(entry.Hashes) == 0 {
+			return fmt.Errorf("pipenv: registry package %q at version %q has no hashes in Pipfile.lock", name, version)
 		}
-		key := strings.ToLower(name) + ":" + version
-		if _, dup := seen[key]; dup {
-			return
+		pkg := pipfileLockPackage{Name: name, Version: version, Hashes: entry.Hashes}
+		key := NormalizePypiName(name)
+		if existing, dup := seen[key]; dup {
+			if existing.Version != pkg.Version || !sameStringSet(existing.Hashes, pkg.Hashes) {
+				return fmt.Errorf("pipenv: package %q has conflicting locked entries", name)
+			}
+			return nil
 		}
-		seen[key] = struct{}{}
-		packages = append(packages, pipfileLockPackage{
-			Name:    name,
-			Version: version,
-			Hashes:  entry.Hashes,
-		})
+		seen[key] = pkg
+		packages = append(packages, pkg)
+		return nil
 	}
 	for name, entry := range lock.Default {
-		addEntry(name, entry)
+		if err := addEntry(name, entry); err != nil {
+			return nil, err
+		}
 	}
 	for name, entry := range lock.Develop {
-		addEntry(name, entry)
+		if err := addEntry(name, entry); err != nil {
+			return nil, err
+		}
 	}
 	return packages, nil
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	values := make(map[string]int, len(left))
+	for _, value := range left {
+		values[value]++
+	}
+	for _, value := range right {
+		if values[value] == 0 {
+			return false
+		}
+		values[value]--
+	}
+	return true
 }
 
 func readPoetryLockIfExists() ([]poetryLockPackage, error) {
@@ -989,8 +1109,9 @@ func parsePipenvVersion(out string) string {
 	return m[1]
 }
 
-// validateMinimumPipenvVersion checks that the pipenv CLI on PATH meets minVersion.
-func validateMinimumPipenvVersion(minVersion string) error {
+// validateMinimumPipenvVersion checks that the pipenv CLI on PATH meets CurationPipenvMinimumVersion.
+func validateMinimumPipenvVersion() error {
+	minVersion := CurationPipenvMinimumVersion
 	out, err := executeCommand("pipenv", "--version")
 	if err != nil {
 		log.Debug(fmt.Sprintf("pipenv is not installed or not on PATH: %v", err))
@@ -1008,33 +1129,156 @@ func validateMinimumPipenvVersion(minVersion string) error {
 	return nil
 }
 
-// pipfileSourceURLRegex extracts `url = "..."` values from Pipfile [[source]] blocks.
-var pipfileSourceURLRegex = regexp.MustCompile(`(?m)^\s*url\s*=\s*"([^"]+)"`)
+var (
+	pipfileEnvVarRegex        = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)\}|\$([A-Za-z0-9_]+)`)
+	pipfileWindowsExpandVars  = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)\}|\$([A-Za-z0-9_]+)|%[0-9A-Fa-f]{2}|%([A-Za-z0-9_]+)%|%%`)
+	pipfilePercentEncodedByte = regexp.MustCompile(`^%[0-9A-Fa-f]{2}$`)
+)
 
-// pipConfigIndexURLRegex matches the `index-url = ...` key in pip.conf / pip.ini.
-// The value may or may not be quoted; leading/trailing whitespace is trimmed.
-var pipConfigIndexURLRegex = regexp.MustCompile(`(?im)^\s*index-url\s*=\s*(.+)`)
+type pipfileSource struct {
+	Name      string `toml:"name"`
+	URL       string `toml:"url"`
+	VerifySSL bool   `toml:"verify_ssl"`
+}
 
-// parseArtifactoryPypiURL parses a raw PyPI index URL and, if it matches the
-// Artifactory pattern (.../artifactory/api/pypi/<repo>/simple[/]), returns the
-// extracted ServerDetails (with credentials) and the repo name.
-// Returns (nil, "", nil) when the URL is not an Artifactory PyPI URL.
-func parseArtifactoryPypiURL(rawURL string) (*config.ServerDetails, string, error) {
+type pipfileConfig struct {
+	Sources     []pipfileSource `toml:"source"`
+	Packages    map[string]any  `toml:"packages"`
+	DevPackages map[string]any  `toml:"dev-packages"`
+	Pipenv      struct {
+		InstallSearchAllSources bool `toml:"install_search_all_sources"`
+	} `toml:"pipenv"`
+}
+
+type pipfileSourceRecord struct {
+	index      int
+	name       string
+	rawURL     string
+	parsedURL  *url.URL
+	server     *config.ServerDetails
+	repository string
+	isPyPI     bool
+}
+
+type pipenvEndpoint struct {
+	scheme     string
+	host       string
+	basePath   string
+	repository string
+}
+
+func (e pipenvEndpoint) String() string {
+	return fmt.Sprintf("%s://%s%s/api/pypi/%s", e.scheme, e.host, e.basePath, e.repository)
+}
+
+type pipfileVariableError struct {
+	Source   string
+	Variable string
+}
+
+func (e *pipfileVariableError) Error() string {
+	return fmt.Sprintf("pipenv: source %q references unset environment variable %q", e.Source, e.Variable)
+}
+
+func expandPipfileEnvVars(raw, sourceName string, environment map[string]string) (string, error) {
+	return expandPipfileEnvVarsForOS(raw, sourceName, environment, runtime.GOOS)
+}
+
+func expandPipfileEnvVarsForOS(raw, sourceName string, environment map[string]string, goos string) (string, error) {
+	if strings.Contains(pipfileEnvVarRegex.ReplaceAllString(raw, ""), "$") {
+		return "", fmt.Errorf("pipenv: source %q contains a malformed environment variable reference", sourceName)
+	}
+	var expansionErr error
+	expand := func(pattern *regexp.Regexp, value string) string {
+		return pattern.ReplaceAllStringFunc(value, func(match string) string {
+			if match == "%%" { // cmd.exe/ntpath convention: an escaped literal '%'
+				return "%"
+			}
+			if pipfilePercentEncodedByte.MatchString(match) {
+				// A URL percent-encoded byte (e.g. %40, %2F), not a %VAR% reference.
+				// Leave it untouched here; url.Parse decodes it once the caller parses the URL.
+				return match
+			}
+			groups := pattern.FindStringSubmatch(match)
+			name := ""
+			for _, group := range groups[1:] {
+				if group != "" {
+					name = group
+					break
+				}
+			}
+			expanded, ok := environment[name]
+			if !ok && goos == "windows" {
+				for environmentName, value := range environment {
+					if strings.EqualFold(environmentName, name) {
+						expanded, ok = value, true
+						break
+					}
+				}
+			}
+			if !ok {
+				expansionErr = &pipfileVariableError{Source: sourceName, Variable: name}
+				return match
+			}
+			return expanded
+		})
+	}
+	if goos == "windows" {
+		expanded := expand(pipfileWindowsExpandVars, raw)
+		if expansionErr != nil {
+			return "", expansionErr
+		}
+		return expanded, nil
+	}
+	expanded := expand(pipfileEnvVarRegex, raw)
+	if expansionErr != nil {
+		return "", expansionErr
+	}
+	return expanded, nil
+}
+
+func pipfileEnvironment(pipfilePath string) (map[string]string, error) {
+	environment := map[string]string{}
+	dontLoad := strings.ToLower(strings.TrimSpace(os.Getenv("PIPENV_DONT_LOAD_ENV")))
+	skipDotenv := dontLoad == "1" || dontLoad == "true" || dontLoad == "yes" || dontLoad == "on"
+	if !skipDotenv {
+		envPath := os.Getenv("PIPENV_DOTENV_LOCATION")
+		if envPath == "" {
+			envPath = filepath.Join(filepath.Dir(pipfilePath), ".env")
+		}
+		envFile, err := gotenv.Read(envPath) // #nosec G304 -- Pipenv supports a user-selected dotenv path
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("pipenv: failed to parse environment file %q", filepath.Base(envPath))
+		}
+		for name, value := range envFile {
+			environment[name] = value
+		}
+	}
+	for _, entry := range os.Environ() {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok {
+			environment[name] = value
+		}
+	}
+	return environment, nil
+}
+
+func parseArtifactoryPypiURL(rawURL string) (*config.ServerDetails, string) {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || u.Host == "" {
-		return nil, "", nil
+	if err != nil || u.Host == "" || u.RawQuery != "" || u.Fragment != "" ||
+		(!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
+		return nil, ""
 	}
 	const pypiSegment = "/api/pypi/"
 	pypiIdx := strings.Index(u.Path, pypiSegment)
 	if pypiIdx < 0 {
-		return nil, "", nil
+		return nil, ""
 	}
-	rest := strings.TrimPrefix(u.Path[pypiIdx:], pypiSegment)
-	repoSlashIdx := strings.Index(rest, "/")
-	if repoSlashIdx <= 0 {
-		return nil, "", nil
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(u.Path[pypiIdx:], pypiSegment), "/"), "/")
+	if len(parts) != 2 || !validPipenvRepository(parts[0]) || parts[1] != "simple" {
+		return nil, ""
 	}
-	repoName := rest[:repoSlashIdx]
+	repoName := parts[0]
 	artURL := fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path[:pypiIdx+1])
 	sd := &config.ServerDetails{ArtifactoryUrl: artURL}
 	if u.User != nil {
@@ -1043,129 +1287,634 @@ func parseArtifactoryPypiURL(rawURL string) (*config.ServerDetails, string, erro
 			sd.Password = p
 		}
 	}
-	return sd, repoName, nil
+	return sd, repoName
 }
 
-// ParsePipfileArtifactorySource reads the Pipfile at the given path and returns
-// the first [[source]] entry whose URL matches the Artifactory PyPI pattern
-// (.../artifactory/api/pypi/<repo>/simple). Credentials embedded in the URL are
-// extracted into the returned ServerDetails.
-// Returns (nil, "", nil) when no matching source is found (not an error).
-func ParsePipfileArtifactorySource(pipfilePath string) (serverDetails *config.ServerDetails, repoName string, err error) {
-	data, err := os.ReadFile(pipfilePath)
+func parsePipfileSource(index int, source pipfileSource, environment map[string]string) (pipfileSourceRecord, error) {
+	if strings.TrimSpace(source.Name) == "" {
+		return pipfileSourceRecord{}, fmt.Errorf("pipenv: [[source]] entry %d has no name", index+1)
+	}
+	if strings.TrimSpace(source.URL) == "" {
+		return pipfileSourceRecord{}, fmt.Errorf("pipenv: source %q has no URL", source.Name)
+	}
+	expanded, err := expandPipfileEnvVars(source.URL, source.Name, environment)
+	if err != nil {
+		return pipfileSourceRecord{}, err
+	}
+	u, err := url.Parse(expanded)
+	if err != nil || u.Host == "" || u.RawQuery != "" || u.Fragment != "" ||
+		(!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
+		return pipfileSourceRecord{}, fmt.Errorf("pipenv: source %q has an invalid absolute URL", source.Name)
+	}
+	if u.User != nil {
+		user := u.User.Username()
+		password, hasPassword := u.User.Password()
+		if user == "" || !hasPassword || password == "" {
+			return pipfileSourceRecord{}, fmt.Errorf("pipenv: source %q has incomplete URL credentials", source.Name)
+		}
+	}
+	sd, repo := parseArtifactoryPypiURL(expanded)
+	return pipfileSourceRecord{
+		index:      index,
+		name:       source.Name,
+		rawURL:     source.URL,
+		parsedURL:  u,
+		server:     sd,
+		repository: repo,
+		isPyPI:     strings.EqualFold(u.Hostname(), "pypi.org") && path.Clean(u.Path) == "/simple",
+	}, nil
+}
+
+func packageIndex(spec any) (string, bool, error) {
+	value, ok := spec.(map[string]any)
+	if !ok {
+		return "", false, nil
+	}
+	indexValue, exists := value["index"]
+	if !exists {
+		return "", false, nil
+	}
+	index, ok := indexValue.(string)
+	if !ok || strings.TrimSpace(index) == "" {
+		return "", false, errors.New("index must be a non-empty string")
+	}
+	return index, true, nil
+}
+
+func effectivePipfileSourceNames(cfg pipfileConfig) ([]string, error) {
+	if len(cfg.Sources) == 0 {
+		for packageName, spec := range cfg.Packages {
+			if _, assigned, err := packageIndex(spec); err != nil || assigned {
+				return nil, fmt.Errorf("pipenv: package %q assigns an index but Pipfile has no [[source]] entries", packageName)
+			}
+		}
+		for packageName, spec := range cfg.DevPackages {
+			if _, assigned, err := packageIndex(spec); err != nil || assigned {
+				return nil, fmt.Errorf("pipenv: dev package %q assigns an index but Pipfile has no [[source]] entries", packageName)
+			}
+		}
+		return nil, nil
+	}
+
+	// Sources[0] is effective only for index-less packages (or when there are none);
+	// an index-assigned package never falls back to it (pipenv dependency-confusion fix).
+	names := map[string]struct{}{}
+	addSpecs := func(section string, specs map[string]any) error {
+		for packageName, spec := range specs {
+			index, assigned, err := packageIndex(spec)
+			if err != nil {
+				return fmt.Errorf("pipenv: %s package %q has invalid index assignment: %w", section, packageName, err)
+			}
+			if assigned {
+				names[index] = struct{}{}
+			} else {
+				names[cfg.Sources[0].Name] = struct{}{}
+			}
+		}
+		return nil
+	}
+	if err := addSpecs("regular", cfg.Packages); err != nil {
+		return nil, err
+	}
+	if err := addSpecs("development", cfg.DevPackages); err != nil {
+		return nil, err
+	}
+	if len(names) == 0 {
+		names[cfg.Sources[0].Name] = struct{}{}
+	}
+	if cfg.Pipenv.InstallSearchAllSources {
+		for _, source := range cfg.Sources {
+			names[source.Name] = struct{}{}
+		}
+	}
+	effective := make([]string, 0, len(names))
+	for _, source := range cfg.Sources {
+		if _, ok := names[source.Name]; ok {
+			effective = append(effective, source.Name)
+			delete(names, source.Name)
+		}
+	}
+	if len(names) > 0 {
+		for name := range names {
+			return nil, fmt.Errorf("pipenv: package index assignment references unknown source %q", name)
+		}
+	}
+	return effective, nil
+}
+
+func readPipfileConfig(pipfilePath string) (pipfileConfig, []pipfileSourceRecord, []string, error) {
+	var cfg pipfileConfig
+	if _, err := toml.DecodeFile(pipfilePath, &cfg); err != nil {
+		return cfg, nil, nil, err
+	}
+	effective, err := effectivePipfileSourceNames(cfg)
+	if err != nil {
+		return cfg, nil, nil, err
+	}
+	effectiveSet := make(map[string]struct{}, len(effective))
+	for _, name := range effective {
+		effectiveSet[name] = struct{}{}
+	}
+	environment, err := pipfileEnvironment(pipfilePath)
+	if err != nil {
+		return cfg, nil, nil, err
+	}
+	records := make([]pipfileSourceRecord, 0, len(cfg.Sources))
+	nameCounts := make(map[string]int, len(cfg.Sources))
+	for _, source := range cfg.Sources {
+		nameCounts[source.Name]++
+	}
+	for i, source := range cfg.Sources {
+		if _, isEffective := effectiveSet[source.Name]; isEffective && nameCounts[source.Name] > 1 {
+			return cfg, nil, nil, fmt.Errorf("pipenv: Pipfile declares duplicate source name %q", source.Name)
+		}
+		if _, isEffective := effectiveSet[source.Name]; !isEffective {
+			records = append(records, pipfileSourceRecord{index: i, name: source.Name, rawURL: source.URL})
+			continue
+		}
+		record, err := parsePipfileSource(i, source, environment)
+		if err != nil {
+			return cfg, nil, nil, err
+		}
+		records = append(records, record)
+	}
+	return cfg, records, effective, nil
+}
+
+func endpointFromServer(server *config.ServerDetails, repository string) (pipenvEndpoint, error) {
+	if server == nil || server.GetArtifactoryUrl() == "" || !validPipenvRepository(repository) {
+		return pipenvEndpoint{}, errors.New("server URL and repository are required")
+	}
+	u, err := url.Parse(server.GetArtifactoryUrl())
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		(!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
+		return pipenvEndpoint{}, errors.New("invalid Artifactory URL")
+	}
+	cleanBasePath := strings.TrimSuffix(path.Clean(u.Path), "/")
+	if cleanBasePath != strings.TrimSuffix(u.Path, "/") {
+		return pipenvEndpoint{}, errors.New("invalid Artifactory URL path")
+	}
+	return pipenvEndpoint{
+		scheme:     strings.ToLower(u.Scheme),
+		host:       normalizedURLHost(u),
+		basePath:   cleanBasePath,
+		repository: repository,
+	}, nil
+}
+
+func validPipenvRepository(repository string) bool {
+	return repository != "" && repository != "." && repository != ".." &&
+		!strings.ContainsAny(repository, `/\`)
+}
+
+func endpointFromSource(record pipfileSourceRecord) (pipenvEndpoint, error) {
+	if record.server == nil || record.repository == "" {
+		return pipenvEndpoint{}, fmt.Errorf("source %q is not an Artifactory PyPI source", record.name)
+	}
+	return endpointFromServer(record.server, record.repository)
+}
+
+func normalizedURLHost(u *url.URL) string {
+	host := strings.ToLower(u.Hostname())
+	port := u.Port()
+	if port == "" {
+		switch strings.ToLower(u.Scheme) {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	return host + ":" + port
+}
+
+func samePipenvEndpoint(left, right pipenvEndpoint) bool {
+	return left.scheme == right.scheme && left.host == right.host &&
+		left.basePath == right.basePath && left.repository == right.repository
+}
+
+type credentialState int
+
+const (
+	noCredentials credentialState = iota
+	completeCredentials
+	partialCredentials
+)
+
+func serverCredentialState(server *config.ServerDetails) credentialState {
+	if server == nil {
+		return noCredentials
+	}
+	if server.GetAccessToken() != "" {
+		return completeCredentials
+	}
+	hasUser := server.GetUser() != ""
+	hasPassword := server.GetPassword() != ""
+	if hasUser != hasPassword {
+		return partialCredentials
+	}
+	if hasUser {
+		return completeCredentials
+	}
+	return noCredentials
+}
+
+func sameCredentials(left, right *config.ServerDetails) bool {
+	return left.GetUser() == right.GetUser() && left.GetPassword() == right.GetPassword() &&
+		left.GetAccessToken() == right.GetAccessToken()
+}
+
+func mergePipenvCredentials(target *config.ServerDetails, targetEndpoint pipenvEndpoint, sourceCredentials []*config.ServerDetails, fallback *config.ServerDetails) (*config.ServerDetails, error) {
+	merged := *target
+	fallbackMatches := false
+	if fallback != nil {
+		fallbackEndpoint, err := endpointFromServer(fallback, targetEndpoint.repository)
+		fallbackMatches = err == nil && samePipenvEndpoint(fallbackEndpoint, targetEndpoint)
+		if fallbackMatches {
+			merged = *fallback
+			merged.ArtifactoryUrl = target.GetArtifactoryUrl()
+		}
+	}
+	merged.User, merged.Password, merged.AccessToken = "", "", ""
+
+	var selected *config.ServerDetails
+	for _, source := range sourceCredentials {
+		switch serverCredentialState(source) {
+		case partialCredentials:
+			return nil, errors.New("pipenv: selected Pipfile source has incomplete credentials")
+		case completeCredentials:
+			if selected != nil && !sameCredentials(selected, source) {
+				return nil, errors.New("pipenv: effective Pipfile sources contain conflicting credentials")
+			}
+			selected = source
+		}
+	}
+	if selected == nil {
+		switch serverCredentialState(target) {
+		case partialCredentials:
+			return nil, errors.New("pipenv: configured resolver has incomplete credentials")
+		case completeCredentials:
+			selected = target
+		}
+	}
+	if selected == nil && fallbackMatches {
+		switch serverCredentialState(fallback) {
+		case partialCredentials:
+			return nil, errors.New("pipenv: matching JFrog server has incomplete credentials")
+		case completeCredentials:
+			selected = fallback
+		}
+	}
+	if selected != nil {
+		merged.User = selected.GetUser()
+		if selected.GetAccessToken() != "" {
+			merged.AccessToken = selected.GetAccessToken()
+		} else {
+			merged.Password = selected.GetPassword()
+		}
+	}
+	return &merged, nil
+}
+
+// ResolvePipfileArtifactorySource derives and validates Pipenv's effective sources.
+func ResolvePipfileArtifactorySource(pipfilePath string, configuredServer *config.ServerDetails, configuredRepo string, fallbackServer *config.ServerDetails) (*config.ServerDetails, string, error) {
+	_, records, effectiveNames, err := readPipfileConfig(pipfilePath)
 	if err != nil {
 		return nil, "", err
 	}
-	for _, m := range pipfileSourceURLRegex.FindAllStringSubmatch(string(data), -1) {
-		sd, repo, parseErr := parseArtifactoryPypiURL(m[1])
-		if parseErr != nil || repo == "" {
+	byName := make(map[string]pipfileSourceRecord, len(records))
+	for _, record := range records {
+		byName[record.name] = record
+	}
+
+	var target *config.ServerDetails
+	var targetEndpoint pipenvEndpoint
+	if configuredRepo != "" {
+		target = configuredServer
+		targetEndpoint, err = endpointFromServer(configuredServer, configuredRepo)
+		if err != nil {
+			return nil, "", fmt.Errorf("pipenv: invalid configured resolver: %w", err)
+		}
+	} else {
+		for _, name := range effectiveNames {
+			record := byName[name]
+			if record.repository == "" {
+				continue
+			}
+			target = record.server
+			targetEndpoint, err = endpointFromSource(record)
+			if err != nil {
+				return nil, "", err
+			}
+			configuredRepo = record.repository
+			break
+		}
+		if target == nil {
+			return nil, "", nil
+		}
+	}
+
+	var matchingSourceCredentials []*config.ServerDetails
+	for _, name := range effectiveNames {
+		record := byName[name]
+		if record.repository == "" {
+			if target != nil && record.isPyPI {
+				continue
+			}
+			return nil, "", fmt.Errorf("pipenv: source %q does not use the configured Artifactory repository", record.name)
+		}
+		sourceEndpoint, endpointErr := endpointFromSource(record)
+		if endpointErr != nil {
+			return nil, "", endpointErr
+		}
+		if !samePipenvEndpoint(sourceEndpoint, targetEndpoint) {
+			return nil, "", fmt.Errorf("pipenv: source %q uses %s instead of %s", record.name, sourceEndpoint, targetEndpoint)
+		}
+		matchingSourceCredentials = append(matchingSourceCredentials, record.server)
+	}
+	if target.GetArtifactoryUrl() == "" {
+		target = &config.ServerDetails{ArtifactoryUrl: targetEndpoint.scheme + "://" + targetEndpoint.host + targetEndpoint.basePath + "/"}
+	}
+	merged, err := mergePipenvCredentials(target, targetEndpoint, matchingSourceCredentials, fallbackServer)
+	if err != nil {
+		return nil, "", err
+	}
+	return merged, configuredRepo, nil
+}
+
+func ParsePipfileArtifactorySource(pipfilePath string) (*config.ServerDetails, string, error) {
+	return ResolvePipfileArtifactorySource(pipfilePath, nil, "", nil)
+}
+
+// ParsePipConfigIndexUrl extracts Artifactory server details and repo name from the
+// [global] index-url, merging paths in order (later overrides earlier), pip-style.
+// sourcePath is the file the winning value came from, for logging/errors.
+func ParsePipConfigIndexUrl(paths ...string) (serverDetails *config.ServerDetails, repoName string, sourcePath string, err error) {
+	var rawURL string
+	for _, path := range paths {
+		found, indexURL, fileErr := pipConfigGlobalIndexURL(path)
+		if fileErr != nil {
+			return nil, "", "", fileErr
+		}
+		if found {
+			rawURL = indexURL
+			sourcePath = path
+		}
+	}
+	if rawURL == "" {
+		return nil, "", "", nil
+	}
+	sd, repo := parseArtifactoryPypiURL(rawURL)
+	if sd == nil {
+		parsed, parseErr := url.Parse(rawURL)
+		if parseErr != nil || parsed.Scheme == "" || parsed.Host == "" || strings.Contains(rawURL, "/api/pypi/") {
+			return nil, "", "", fmt.Errorf("pip config \"%s\" [global] index-url is not a valid Artifactory PyPI URL", sourcePath)
+		}
+	}
+	return sd, repo, sourcePath, nil
+}
+
+// pipConfigGlobalIndexURL reads a single pip config file's [global] index-url.
+// found is false (with no error) when the file is missing or has no such key.
+func pipConfigGlobalIndexURL(pipConfPath string) (found bool, rawURL string, err error) {
+	data, readErr := os.ReadFile(pipConfPath) // #nosec G304 -- path is DefaultPipConfPaths() or PIP_CONFIG_FILE env var, not attacker-controlled
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			log.Debug(fmt.Sprintf("pip.conf not found at %s", pipConfPath))
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("failed to read pip config %q: %w", pipConfPath, readErr)
+	}
+	// AllowShadows/AllowNonUniqueSections surface duplicates instead of silently picking one.
+	cfg, loadErr := ini.LoadSources(ini.LoadOptions{AllowNonUniqueSections: true, AllowShadows: true}, data)
+	if loadErr != nil {
+		return false, "", fmt.Errorf("failed to parse pip config %q: %w", pipConfPath, loadErr)
+	}
+	var globalSections []*ini.Section
+	for _, section := range cfg.Sections() {
+		if strings.EqualFold(section.Name(), "global") {
+			globalSections = append(globalSections, section)
+		}
+	}
+	if len(globalSections) > 1 {
+		return false, "", fmt.Errorf("pip config %q defines [global] more than once", pipConfPath)
+	}
+	if len(globalSections) == 0 {
+		return false, "", nil
+	}
+	var indexURLKey *ini.Key
+	for _, key := range globalSections[0].Keys() {
+		if !strings.EqualFold(key.Name(), "index-url") {
 			continue
 		}
-		return sd, repo, nil
+		if indexURLKey != nil {
+			return false, "", fmt.Errorf("pip config %q defines index-url more than once in [global]", pipConfPath)
+		}
+		indexURLKey = key
 	}
-	return nil, "", nil
+	if indexURLKey == nil {
+		return false, "", nil
+	}
+	if shadows := indexURLKey.ValueWithShadows(); len(shadows) > 1 {
+		return false, "", fmt.Errorf("pip config %q defines index-url more than once in [global]", pipConfPath)
+	}
+	rawURL = strings.Trim(strings.TrimSpace(indexURLKey.Value()), `"'`)
+	return rawURL != "", rawURL, nil
 }
 
-// ParsePipConfigIndexUrl extracts Artifactory server details and repo name
-// from the [global] index-url in the pip config file. Returns (nil, "", nil)
-// when the file is missing or index-url is not an Artifactory URL.
-func ParsePipConfigIndexUrl(pipConfPath string) (serverDetails *config.ServerDetails, repoName string, err error) {
-	data, readErr := os.ReadFile(pipConfPath)
-	if readErr != nil {
-		// Missing or unreadable — not an error, just no config available.
-		return nil, "", nil
+// DefaultPipConfPaths returns pip's user-level config candidates: legacy,
+// then modern (overrides legacy), then PIP_CONFIG_FILE if set (overrides
+// both). An existing PIP_CONFIG_FILE skips legacy/modern, matching pip.
+func DefaultPipConfPaths() []string {
+	envConfigFile := os.Getenv("PIP_CONFIG_FILE")
+	if envConfigFile != "" {
+		if _, err := os.Stat(envConfigFile); err == nil { // #nosec G703 -- env-provided path, mirrors pip's own PIP_CONFIG_FILE handling
+			return []string{envConfigFile}
+		}
 	}
-	m := pipConfigIndexURLRegex.FindSubmatch(data)
-	if m == nil {
-		return nil, "", nil
+	home, _ := os.UserHomeDir()
+	basename := "pip.conf"
+	legacyDir := filepath.Join(home, ".pip")
+	if runtime.GOOS == "windows" {
+		basename = "pip.ini"
+		legacyDir = filepath.Join(home, "pip")
 	}
-	rawURL := strings.Trim(strings.TrimSpace(string(m[1])), `"'`)
-	sd, repo, parseErr := parseArtifactoryPypiURL(rawURL)
-	if parseErr != nil {
-		return nil, "", nil
+	paths := []string{filepath.Join(legacyDir, basename), filepath.Join(modernPipConfDir(home), basename)}
+	if envConfigFile != "" {
+		paths = append(paths, envConfigFile)
 	}
-	return sd, repo, nil
+	return paths
 }
 
-// DefaultPipConfPath returns the path for pip's per-user configuration file.
-// It respects the PIP_CONFIG_FILE environment variable (which pip itself
-// honours), making it overridable in tests and CI environments.
-// Falls back to ~/.pip/pip.conf on Unix/macOS and %APPDATA%\pip\pip.ini on Windows.
-func DefaultPipConfPath() string {
-	if configFile := os.Getenv("PIP_CONFIG_FILE"); configFile != "" {
-		return configFile
-	}
+// modernPipConfDir mirrors pip's platformdirs: on macOS, Application Support
+// only if it already exists, else XDG/APPDATA config dir.
+func modernPipConfDir(home string) string {
 	if runtime.GOOS == "windows" {
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
 			appData = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming")
 		}
-		return filepath.Join(appData, "pip", "pip.ini")
+		return filepath.Join(appData, "pip")
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".pip", "pip.conf")
+	if runtime.GOOS == "darwin" {
+		appSupportDir := filepath.Join(home, "Library", "Application Support", "pip")
+		if info, err := os.Stat(appSupportDir); err == nil && info.IsDir() { // #nosec G703 -- fixed home-relative path, not attacker-controlled
+			return appSupportDir
+		}
+	}
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		configHome = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configHome, "pip")
 }
 
-// rewriteCurationSourceInPipfile replaces the url of the [[source]] entry for
-// repoName with curationUrl (the audit pass-through URL). Mirrors
-// setCurationSourceInPyproject for Poetry. Returns found=false when no matching
-// [[source]] exists (e.g. repo came from pipenv.yaml / pip.conf).
+// pipfileSourceHeaderRegex matches the start of a [[source]] array-of-tables entry.
+var pipfileSourceHeaderRegex = regexp.MustCompile(`(?m)^\s*\[\[\s*source\s*\]\]\s*(?:#.*)?$`)
+
+// pipfileTableHeaderRegex matches the start of any TOML table / array-of-tables
+// header, used to find where a [[source]] block ends.
+var pipfileTableHeaderRegex = regexp.MustCompile(`(?m)^\[`)
+
+// pipfileUrlValueRegex locates a `url = ...` assignment and captures the quoted
+// value in group 1 (double-quoted) or group 2 (single-quoted), so callers can
+// replace only that value's exact byte span — leaving whitespace, other keys,
+// and comments untouched.
+var pipfileUrlValueRegex = regexp.MustCompile(`(?m)^\s*url\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+
+type pipfileURLSpan struct {
+	start int
+	end   int
+}
+
+func findPipfileSourceURLSpans(content string) []pipfileURLSpan {
+	var spans []pipfileURLSpan
+	for _, h := range pipfileSourceHeaderRegex.FindAllStringIndex(content, -1) {
+		blockStart := h[1]
+		blockEnd := len(content)
+		if next := pipfileTableHeaderRegex.FindStringIndex(content[blockStart:]); next != nil {
+			blockEnd = blockStart + next[0]
+		}
+		block := content[blockStart:blockEnd]
+		m := pipfileUrlValueRegex.FindStringSubmatchIndex(block)
+		if m == nil {
+			spans = append(spans, pipfileURLSpan{start: -1, end: -1})
+			continue
+		}
+		localStart, localEnd := m[2], m[3]
+		if localStart == -1 {
+			localStart, localEnd = m[4], m[5]
+		}
+		if localStart == -1 {
+			spans = append(spans, pipfileURLSpan{start: -1, end: -1})
+			continue
+		}
+		spans = append(spans, pipfileURLSpan{start: blockStart + localStart, end: blockStart + localEnd})
+	}
+	return spans
+}
+
 func rewriteCurationSourceInPipfile(pipfilePath, repoName, curationUrl string) (found bool, err error) {
-	data, err := os.ReadFile(pipfilePath)
+	data, err := os.ReadFile(pipfilePath) // #nosec G304 -- temp-dir copy of the project's Pipfile, not attacker-controlled
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
 		return false, errorutils.CheckError(err)
 	}
-	// Match the [[source]] url whether or not it ends with /simple or /simple/.
-	pattern := regexp.MustCompile(`(?m)^(\s*url\s*=\s*")[^"]*/api/pypi/` + regexp.QuoteMeta(repoName) + `[^"]*(")`)
-	if !pattern.MatchString(string(data)) {
+	cfg, records, effectiveNames, err := readPipfileConfig(pipfilePath)
+	if err != nil {
+		return false, err
+	}
+	content := string(data)
+	if len(cfg.Sources) == 0 {
+		source := fmt.Sprintf("[[source]]\nname = \"jfrog-curation\"\nurl = %q\nverify_ssl = true\n\n", curationUrl)
+		updated := source + content
+		if err = writePrivatePipfile(pipfilePath, []byte(updated)); err != nil {
+			return false, errorutils.CheckError(err)
+		}
+		return true, nil
+	}
+	spans := findPipfileSourceURLSpans(content)
+	if len(spans) != len(records) {
+		return false, errors.New("pipenv: could not map parsed [[source]] entries back to Pipfile")
+	}
+	effective := make(map[string]struct{}, len(effectiveNames))
+	for _, name := range effectiveNames {
+		effective[name] = struct{}{}
+	}
+	var selected []pipfileURLSpan
+	for _, record := range records {
+		if _, isEffective := effective[record.name]; !isEffective {
+			continue
+		}
+		if record.repository != "" && record.repository != repoName {
+			return false, fmt.Errorf("pipenv: source %q uses repository %q instead of %q", record.name, record.repository, repoName)
+		}
+		if record.repository == "" && !record.isPyPI {
+			return false, fmt.Errorf("pipenv: source %q cannot be redirected safely", record.name)
+		}
+		span := spans[record.index]
+		if span.start < 0 {
+			return false, fmt.Errorf("pipenv: effective source %q has no quoted URL", record.name)
+		}
+		selected = append(selected, span)
+	}
+	if len(selected) == 0 {
 		return false, nil
 	}
-	escapedUrl := strings.ReplaceAll(curationUrl, "$", "$$")
-	updated := pattern.ReplaceAllString(string(data), "${1}"+escapedUrl+"${2}")
-	if err = os.WriteFile(pipfilePath, []byte(updated), 0600); err != nil {
+	updated := content
+	for i := len(selected) - 1; i >= 0; i-- {
+		span := selected[i]
+		updated = updated[:span.start] + curationUrl + updated[span.end:]
+	}
+	if err = writePrivatePipfile(pipfilePath, []byte(updated)); err != nil {
 		return false, errorutils.CheckError(err)
 	}
 	log.Info(fmt.Sprintf("Configured Pipfile [[source]] url for repository %q to use the curation pass-through endpoint", repoName))
 	return true, nil
 }
 
+func writePrivatePipfile(pipfilePath string, content []byte) error {
+	if err := os.WriteFile(pipfilePath, content, 0600); err != nil { // #nosec G703 -- temp-dir Pipfile copy
+		return err
+	}
+	return os.Chmod(pipfilePath, 0600)
+}
+
 func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDetected bool, restoreEnv func() error, err error) {
 	// Set virtualenv path to venv dir
+	previousWorkonHome, hadWorkonHome := os.LookupEnv("WORKON_HOME")
 	err = os.Setenv("WORKON_HOME", ".jfrog")
 	if err != nil {
 		return
 	}
 	restoreEnv = func() error {
+		if hadWorkonHome {
+			return os.Setenv("WORKON_HOME", previousWorkonHome)
+		}
 		return os.Unsetenv("WORKON_HOME")
+	}
+	if params.IsCurationCmd {
+		restorePipenvEnv, protectErr := protectPipenvCurationEnvironment(pipfileFile)
+		if protectErr != nil {
+			return false, restoreEnv, protectErr
+		}
+		restoreWorkonHome := restoreEnv
+		restoreEnv = func() error {
+			return errors.Join(restorePipenvEnv(), restoreWorkonHome())
+		}
 	}
 	server := params.ServerDetails
 	repo := params.DependenciesRepository
 	if repo == "" && params.IsCurationCmd {
-		// 2. ~/.pip/pip.conf
-		pipConfPath := DefaultPipConfPath()
-		var pipConfServer *config.ServerDetails
-		pipConfServer, repo, err = ParsePipConfigIndexUrl(pipConfPath)
+		pipConfServer, pipConfRepo, _, pipConfErr := ParsePipConfigIndexUrl(DefaultPipConfPaths()...)
+		if pipConfErr != nil {
+			return false, restoreEnv, pipConfErr
+		}
+		server, repo, err = ResolvePipfileArtifactorySource(pipfileFile, pipConfServer, pipConfRepo, params.ServerDetails)
 		if err != nil {
-			log.Debug(fmt.Sprintf("pipenv native: failed to read pip.conf: %v", err))
-			err = nil
-		}
-		if pipConfServer != nil {
-			server = pipConfServer
-		}
-		// 3. Pipfile [[source]]
-		if repo == "" {
-			var nativeServer *config.ServerDetails
-			nativeServer, repo, err = ParsePipfileArtifactorySource(pipfileFile)
-			if err != nil {
-				log.Debug(fmt.Sprintf("pipenv native: failed to read Pipfile: %v", err))
-				err = nil
-			}
-			if nativeServer != nil {
-				server = nativeServer
-			}
+			return false, restoreEnv, err
 		}
 	}
 	if repo != "" {
@@ -1174,11 +1923,50 @@ func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 	if params.IsCurationCmd {
 		return false, restoreEnv, errorutils.CheckErrorf(
 			"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
-				"Either run 'jf pipenv-config', configure index-url in ~/.pip/pip.conf via " +
+				"Either run 'jf pipenv-config', configure index-url in your user pip.conf via " +
 				"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
 	}
 	_, err = executeCommand("pipenv", "install", "-d")
 	return false, restoreEnv, err
+}
+
+type environmentValue struct {
+	name    string
+	value   string
+	present bool
+}
+
+func protectPipenvCurationEnvironment(pipfilePath string) (restore func() error, err error) {
+	absolutePipfile, err := filepath.Abs(pipfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("pipenv: failed to resolve protected Pipfile path: %w", err)
+	}
+	names := []string{"PIPENV_PIPFILE", "PIPENV_SKIP_LOCK", "PIPENV_IGNORE_PIPFILE"}
+	previous := make([]environmentValue, 0, len(names))
+	for _, name := range names {
+		value, present := os.LookupEnv(name)
+		previous = append(previous, environmentValue{name: name, value: value, present: present})
+	}
+	restore = func() error {
+		var restoreErr error
+		for _, item := range previous {
+			if item.present {
+				restoreErr = errors.Join(restoreErr, os.Setenv(item.name, item.value))
+			} else {
+				restoreErr = errors.Join(restoreErr, os.Unsetenv(item.name))
+			}
+		}
+		return restoreErr
+	}
+	if err = os.Setenv("PIPENV_PIPFILE", absolutePipfile); err != nil {
+		return nil, errors.Join(err, restore())
+	}
+	for _, name := range names[1:] {
+		if err = os.Unsetenv(name); err != nil {
+			return nil, errors.Join(err, restore())
+		}
+	}
+	return restore, nil
 }
 
 func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (setupFileUsed bool, restoreEnv func() error, err error) {
@@ -1331,35 +2119,39 @@ func parseCustomArgs(remoteUrl, cacheFolder, reportFileName string, customArgs .
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string, isCurationCmd bool) (err error) {
-	if isCurationCmd {
-		if err = validateMinimumPipenvVersion(CurationPipenvMinimumVersion); err != nil {
+	if !isCurationCmd {
+		rtURL, err := artifactoryutils.GetPypiRepoUrl(server, depsRepoName, false)
+		if err != nil {
 			return err
 		}
+		_, err = executeCommand("pipenv", "install", "-d",
+			artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtURL)
+		return err
+	}
+	if err = validateMinimumPipenvVersion(); err != nil {
+		return err
 	}
 
-	rtUrl, err := artifactoryutils.GetPypiRepoUrl(server, depsRepoName, isCurationCmd)
+	rtURL, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(server, depsRepoName, true)
 	if err != nil {
 		return err
 	}
-	// Rewrite [[source]] url so pipenv's resolver hits the curation pass-through
-	// endpoint. --pypi-mirror is a no-op for explicit Artifactory sources
-	// (pipenv only applies it to the default pypi.org index).
-	if isCurationCmd {
-		found, rewriteErr := rewriteCurationSourceInPipfile(pipfileFile, depsRepoName, rtUrl)
-		if rewriteErr != nil {
-			return rewriteErr
-		}
-		if !found {
-			if exists, _ := fileutils.IsFileExists(pipfileFile, false); exists {
-				log.Warn(fmt.Sprintf(
-					"Pipfile exists but no [[source]] url matching repository %q was found — "+
-						"pipenv will resolve against the original source URL", depsRepoName))
-			}
-		}
+	safeURL := rtURL.String()
+	if password != "" {
+		rtURL.User = url.UserPassword(username, password)
 	}
-	args := []string{"install", "-d", artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtUrl}
-	output, installErr := executeCommand("pipenv", args...)
-	if installErr != nil && isCurationCmd {
+	credentialURL := rtURL.String()
+	found, rewriteErr := rewriteCurationSourceInPipfile(pipfileFile, depsRepoName, credentialURL)
+	if rewriteErr != nil {
+		return rewriteErr
+	}
+	if !found {
+		return errorutils.CheckErrorf("pipenv: no effective Pipfile source could be configured for repository %q", depsRepoName)
+	}
+
+	args := []string{"install", "-d"}
+	output, installErr := executeCommandSanitized("pipenv", args, safeURL, credentialURL, password, server.GetAccessToken())
+	if installErr != nil {
 		combined := output + " " + installErr.Error()
 		if isCvsVersionFilteredOutput(combined) {
 			return &CvsBlockedError{Packages: parseCvsFailedPackages(combined), Cause: installErr}
@@ -1371,6 +2163,66 @@ func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoNa
 		}
 	}
 	return installErr
+}
+
+func executeCommandSanitized(executable string, args []string, safeURL string, secrets ...string) (string, error) {
+	installCmd := exec.Command(executable, args...) // #nosec G204 -- internal executable and arguments
+	environment, err := pipenvCurationEnvironment(pipfileFile)
+	if err != nil {
+		return "", err
+	}
+	installCmd.Env = environment
+	maskedCmdString := coreutils.GetMaskedCommandString(installCmd)
+	log.Debug("Running", maskedCmdString)
+	output, err := installCmd.CombinedOutput()
+	sanitized := string(output)
+	if safeURL != "" {
+		for _, secretURL := range secrets {
+			if strings.Contains(secretURL, "://") {
+				sanitized = strings.ReplaceAll(sanitized, secretURL, safeURL)
+			}
+		}
+	}
+	sanitized = utils.MaskSensitiveData("url", sanitized)
+	for _, secret := range secrets {
+		if secret == "" || strings.Contains(secret, "://") {
+			continue
+		}
+		sanitized = strings.ReplaceAll(sanitized, secret, "****")
+		sanitized = strings.ReplaceAll(sanitized, url.PathEscape(secret), "****")
+		sanitized = strings.ReplaceAll(sanitized, url.QueryEscape(secret), "****")
+	}
+	if err != nil {
+		technologies.LogExecutableVersion(executable)
+		return sanitized, errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), sanitized)
+	}
+	return sanitized, nil
+}
+
+func pipenvCurationEnvironment(pipfilePath string) ([]string, error) {
+	absolutePipfile, err := filepath.Abs(pipfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("pipenv: failed to resolve protected Pipfile path: %w", err)
+	}
+	blocked := []string{"PIPENV_PIPFILE", "PIPENV_SKIP_LOCK", "PIPENV_IGNORE_PIPFILE"}
+	environment := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		remove := false
+		for _, blockedName := range blocked {
+			if strings.EqualFold(name, blockedName) {
+				remove = true
+				break
+			}
+		}
+		if !remove {
+			environment = append(environment, entry)
+		}
+	}
+	return append(environment, "PIPENV_PIPFILE="+absolutePipfile), nil
 }
 
 // Execute virtualenv command: "virtualenv venvdir" / "python3 -m venv venvdir" and set path
