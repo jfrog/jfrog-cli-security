@@ -13,7 +13,7 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260709050103-31ba10d22bf8
+	github.com/jfrog/build-info-go v1.13.1-0.20260713073853-4f3044bf0940
 	github.com/jfrog/froggit-go v1.23.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
