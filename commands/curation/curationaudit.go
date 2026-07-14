@@ -662,6 +662,12 @@ func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (
 	return
 }
 
+// pipenvBoundedRedirectManager must use zero retries: HttpClient.Send retries
+// on CheckRedirect errors, desyncing SendWithBoundedRedirects's hop counter.
+func pipenvBoundedRedirectManager(serverDetails *config.ServerDetails) (artifactory.ArtifactoryServicesManager, error) {
+	return rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+}
+
 func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
@@ -675,8 +681,18 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
+// getBuildInfoParamsByTech resolves install-time server details, preferring an already-set
+// ca.PackageManagerConfig (native detection, e.g. Pipenv) over the generic server so install
+// and the later GetAuth-based probes hit the same endpoint. Does not trigger SetRepo eagerly,
+// so techs resolving their repo later via SetResolutionRepoInParamsIfExists are unaffected.
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildInfoBomGeneratorParams, error) {
-	serverDetails, err := ca.ServerDetails()
+	var serverDetails *config.ServerDetails
+	var err error
+	if ca.PackageManagerConfig != nil {
+		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
+	} else {
+		serverDetails, err = ca.ServerDetails()
+	}
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.GetXrayVersion(),
 		ExclusionPattern: technologies.GetScaExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
@@ -721,9 +737,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
 	}
-	// When JFROG_CLI_CURATION_SUPPORT=true, checkSupportByVersionOrEnv short-circuits
-	// before calling getRtVersion→GetAuth→SetRepo, so ca.DepsRepo() is never populated
-	// for Pipenv. Call SetRepo explicitly so getBuildInfoParamsByTech sees the right repo.
+	// Resolve Pipenv's native repo/server before getBuildInfoParamsByTech so install and the
+	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
+	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
 	if tech == techutils.Pipenv && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
@@ -774,6 +790,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return err
+	}
+	if tech == techutils.Pipenv {
+		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+		if err != nil {
+			return err
+		}
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
@@ -1124,45 +1146,63 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 // setRepoFromPipfile detects the Artifactory PyPI source for pipenv curation.
 //
 // Detection priority:
-//  1. pipenv.yaml — explicit 'jf pipenv-config' (highest priority, JFrog-specific).
-//  2. ~/.pip/pip.conf index-url — customer followed the Artifactory "Set me up"
-//     guide for pip (most common real-world setup; no Pipfile changes needed).
-//  3. Pipfile [[source]] — customer explicitly added an Artifactory source URL
-//     directly in the Pipfile.
+//  1. pipenv.yaml — explicit 'jf pipenv-config'.
+//  2. User pip.conf index-url — Artifactory "Set me up" for pip.
+//  3. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
 func (ca *CurationAuditCommand) setRepoFromPipfile() error {
-	// 1. pipenv.yaml — explicit 'jf pipenv-config'.
-	resolverParams, yamlErr := ca.getRepoParams(techutils.Pipenv.GetProjectType())
-	if yamlErr == nil {
-		ca.setPackageManagerConfig(resolverParams)
-		ca.SetDepsRepo(resolverParams.TargetRepo())
+	projectType := techutils.Pipenv.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		configuredServer, err := resolverParams.ServerDetails()
+		if err != nil {
+			return err
+		}
+		fallbackServer, _ := ca.ServerDetails()
+		server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", configuredServer, resolverParams.TargetRepo(), fallbackServer)
+		if err != nil {
+			return err
+		}
+		repoConfig := (&project.RepositoryConfig{}).SetTargetRepo(repo).SetServerDetails(server)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
 		return nil
 	}
 
-	// 2. ~/.pip/pip.conf index-url (Artifactory "Set me up" path).
-	pipConfPath := python.DefaultPipConfPath()
-	sd, repo, err := python.ParsePipConfigIndexUrl(pipConfPath)
+	configuredServer, configuredRepo, pipConfPath, err := python.ParsePipConfigIndexUrl(python.DefaultPipConfPaths()...)
 	if err != nil {
-		log.Debug(fmt.Sprintf("pipenv native: failed to read pip.conf: %v", err))
+		return err
 	}
-	if repo != "" && sd != nil {
+	fallbackServer, _ := ca.ServerDetails()
+	if configuredRepo != "" && configuredServer != nil {
+		server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", configuredServer, configuredRepo, fallbackServer)
+		if err != nil {
+			return err
+		}
 		repoConfig := (&project.RepositoryConfig{}).
 			SetTargetRepo(repo).
-			SetServerDetails(sd)
+			SetServerDetails(server)
 		ca.setPackageManagerConfig(repoConfig)
 		ca.SetDepsRepo(repo)
 		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from %s", repo, pipConfPath))
 		return nil
 	}
 
-	// 3. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
-	sd, repo, err = python.ParsePipfileArtifactorySource("Pipfile")
+	server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", nil, "", fallbackServer)
 	if err != nil {
-		log.Debug(fmt.Sprintf("pipenv native: failed to read Pipfile: %v", err))
+		return err
 	}
-	if repo != "" && sd != nil {
+	if repo != "" && server != nil {
 		repoConfig := (&project.RepositoryConfig{}).
 			SetTargetRepo(repo).
-			SetServerDetails(sd)
+			SetServerDetails(server)
 		ca.setPackageManagerConfig(repoConfig)
 		ca.SetDepsRepo(repo)
 		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from Pipfile [[source]]", repo))
@@ -1171,7 +1211,7 @@ func (ca *CurationAuditCommand) setRepoFromPipfile() error {
 
 	return errorutils.CheckErrorf(
 		"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
-			"Either run 'jf pipenv-config', configure index-url in ~/.pip/pip.conf via " +
+			"Either run 'jf pipenv-config', configure index-url in your user pip.conf via " +
 			"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
 }
 
@@ -1195,6 +1235,12 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
+	}
+	if tech == techutils.Pipenv {
+		return errorutils.CheckErrorf(
+			"--run-native is not supported for 'pipenv' projects. " +
+				"Run 'jf ca' without --run-native; the repository is resolved automatically from " +
+				"'jf pipenv-config', ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile.")
 	}
 	return errorutils.CheckErrorf(
 		"--run-native is not supported for '%s' projects. "+
@@ -1435,7 +1481,13 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			return nil
 		}
 		requestDetails := nc.httpClientDetails.Clone()
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, requestDetails)
+		var resp *http.Response
+		var err error
+		if nc.tech == techutils.Pipenv {
+			resp, _, err = nc.sendPipenvRequest(http.MethodHead, packageUrl, requestDetails)
+		} else {
+			resp, _, err = nc.rtManager.Client().SendHead(packageUrl, requestDetails)
+		}
 		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
 			// Store the error silently (not returned) so errorsQueue.AddError is never
 			// called and the message is not logged here. fetchNodesStatus picks it up
@@ -1481,6 +1533,16 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
+func (nc *treeAnalyzer) sendPipenvRequest(method, requestURL string, details *httputils.HttpClientDetails) (*http.Response, []byte, error) {
+	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", strings.TrimSuffix(nc.url, "/"), nc.repo)
+	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	return utils.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
+		boundary, utils.MaxAuthenticatedRedirects)
+}
+
 // runCvsFallback is called when pip or poetry resolution failed because CVS
 // stripped a pinned version from the simple index (CvsBlockedError). It uses
 // the PyPI metadata API to recover each blocker's real download URL, probes
@@ -1490,6 +1552,12 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
+	}
+	if tech == techutils.Pipenv {
+		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+		if err != nil {
+			return fmt.Errorf("curation-blocked resolution fallback: failed to create bounded HTTP manager: %w", err)
+		}
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
@@ -1531,7 +1599,14 @@ func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
 		strings.TrimSuffix(nc.url, "/"), nc.repo, name)
 
 	requestDetails := nc.httpClientDetails.Clone()
-	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	var resp *http.Response
+	var body []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	} else {
+		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
 	}
@@ -1564,7 +1639,14 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 		strings.TrimSuffix(nc.url, "/"), nc.repo, name, ver)
 
 	requestDetails := nc.httpClientDetails.Clone()
-	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	var resp *http.Response
+	var body []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	} else {
+		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	}
 	if err != nil {
 		return "", fmt.Errorf("metadata API request failed for %s==%s: %w", name, ver, err)
 	}
@@ -1659,7 +1741,13 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 
 		// ── Step 3a: HEAD probe — detect whether the version is download-blocked
 		headDetails := nc.httpClientDetails.Clone()
-		headResp, _, headErr := nc.rtManager.Client().SendHead(dlURL, headDetails)
+		var headResp *http.Response
+		var headErr error
+		if nc.tech == techutils.Pipenv {
+			headResp, _, headErr = nc.sendPipenvRequest(http.MethodHead, dlURL, headDetails)
+		} else {
+			headResp, _, headErr = nc.rtManager.Client().SendHead(dlURL, headDetails)
+		}
 		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
 			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
 				pin.Name, resolvedVersion, headErr))
@@ -1752,7 +1840,14 @@ func effectiveParentVersion(pin python.PinnedRequirement) string {
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
 	requestDetails := nc.httpClientDetails.Clone()
 	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
+	var getResp *http.Response
+	var respBody []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		getResp, respBody, err = nc.sendPipenvRequest(http.MethodGet, packageUrl, requestDetails)
+	} else {
+		getResp, respBody, _, err = nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
+	}
 	if err != nil {
 		if getResp == nil {
 			return nil, err

@@ -15,7 +15,7 @@ When to use:
 Prerequisites:
 - A configured JFrog Platform server (jf c add) with JFrog Curation entitlement.
 - Project must use a supported package manager (npm, yarn, pnpm, pip, pipenv, poetry, maven, gradle, nuget, go) resolved through a curation-configured remote.
-- The package manager and its lockfile must be present in the working directory.
+- The package manager must be present in the working directory. Lockfiles are required where the package manager's flow depends on one (e.g. npm, yarn, pnpm, poetry); pipenv generates/refreshes Pipfile.lock as part of the audit, so a pre-existing lockfile is not required.
 
 Common patterns:
   $ jf curation-audit
