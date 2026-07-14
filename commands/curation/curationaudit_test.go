@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
@@ -22,6 +23,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -2401,6 +2403,109 @@ func TestEffectiveParentVersion(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+		})
+	}
+}
+
+func TestSetRepoFromPipfileRejectsInvalidPresentConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte("resolver: [\n"), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSendPipenvRequestRejectsRedirectOutsideRepository(t *testing.T) {
+	var outsideRequested atomic.Bool
+	var requests atomic.Int32
+	server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path == "/api/system/configuration" {
+			outsideRequested.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+	})
+	defer server.Close()
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
+		url:               rtAuth.GetUrl(),
+		repo:              "repo",
+		tech:              techutils.Pipenv,
+	}
+	requestDetails := analyzer.httpClientDetails.Clone()
+	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+	_, _, err = analyzer.sendPipenvRequest(http.MethodGet,
+		strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsafe redirect")
+	assert.False(t, outsideRequested.Load())
+	assert.Equal(t, int32(1), requests.Load())
+}
+
+func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*treeAnalyzer) error
+	}{
+		{
+			name: "all versions metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiAllVersions("urllib3")
+				return err
+			},
+		},
+		{
+			name: "version download metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiNormalDownloadURL("urllib3", "2.0.7")
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := &treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              techutils.Pipenv,
+			}
+
+			err = test.call(analyzer)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
 		})
 	}
 }
