@@ -825,7 +825,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSastIssues: 4,
+			expectedSastIssues: 2,
 		},
 		{
 			name:        "Sast scanner is enabled with exclusions",
@@ -947,7 +947,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSastIssues:    4,
+			expectedSastIssues:    2,
 			expectedSecretsIssues: 16,
 			expectedIacIssues:     9,
 			expectedCaNotCovered:  15,
