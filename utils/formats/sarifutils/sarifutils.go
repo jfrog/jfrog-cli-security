@@ -25,6 +25,7 @@ const (
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
 	TokenValidationMetadataSarifPropertyKey = "metadata"
 	CAUndeterminedReasonSarifPropertyKey    = "undetermined_reason"
+	ScanIdSarifPropertyKey                  = "scanId"
 )
 
 // Specific JFrog Sarif Utils
