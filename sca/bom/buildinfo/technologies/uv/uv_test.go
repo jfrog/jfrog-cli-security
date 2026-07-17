@@ -1,8 +1,10 @@
 package uv
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -296,24 +299,26 @@ func setupUvRegistryFixture(t *testing.T) (projectDir, uvTomlPath string) {
 }
 
 func TestGetNativeUvRegistryConfig(t *testing.T) {
-	t.Run("single unambiguous pyproject.toml entry is used directly", func(t *testing.T) {
-		projectDir, _ := setupUvRegistryFixture(t)
+	t.Run("uv.toml present — wins outright, even over a single unambiguous pyproject.toml entry", func(t *testing.T) {
+		projectDir, uvTomlPath := setupUvRegistryFixture(t)
 		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
 name = "artifactory-repo"
+url = "https://untrusted-host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+		require.NoError(t, os.WriteFile(uvTomlPath, []byte(`[[index]]
+name = "uv-test-repo"
 url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+default = true
 `), 0644))
 
 		cfg, err := GetNativeUvRegistryConfig()
 		require.NoError(t, err)
-		assert.Equal(t, "uv-test-repo", cfg.RepoName)
+		assert.Equal(t, "https://host/artifactory", cfg.ArtifactoryUrl, "uv.toml must win — pyproject.toml is never consulted when uv.toml exists")
 	})
 
-	t.Run(
-		"XRAY-146949: ambiguous pyproject.toml (multiple entries) is ignored — falls back to uv.toml, "+
-			"even when one of the project's own entries would otherwise be picked",
-		func(t *testing.T) {
-			projectDir, uvTomlPath := setupUvRegistryFixture(t)
-			require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+	t.Run("XRAY-146949: uv.toml present — wins outright over an ambiguous (multi-entry) pyproject.toml too", func(t *testing.T) {
+		projectDir, uvTomlPath := setupUvRegistryFixture(t)
+		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
 name = "public-pypi"
 url = "https://pypi.org/simple"
 
@@ -321,19 +326,18 @@ url = "https://pypi.org/simple"
 name = "maybe-wrong-host"
 url = "https://untrusted-host/artifactory/api/pypi/uv-test-repo/simple"
 `), 0644))
-			require.NoError(t, os.WriteFile(uvTomlPath, []byte(`[[index]]
+		require.NoError(t, os.WriteFile(uvTomlPath, []byte(`[[index]]
 name = "uv-test-repo"
 url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
 default = true
 `), 0644))
 
-			cfg, err := GetNativeUvRegistryConfig()
-			require.NoError(t, err)
-			assert.Equal(t, "https://host/artifactory", cfg.ArtifactoryUrl)
-		},
-	)
+		cfg, err := GetNativeUvRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "https://host/artifactory", cfg.ArtifactoryUrl)
+	})
 
-	t.Run("no pyproject.toml entries falls back to uv.toml", func(t *testing.T) {
+	t.Run("uv.toml present, no pyproject.toml entries — uv.toml still used", func(t *testing.T) {
 		projectDir, uvTomlPath := setupUvRegistryFixture(t)
 		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[project]
 name = "my-app"
@@ -349,7 +353,48 @@ default = true
 		assert.Equal(t, "uv-test-repo", cfg.RepoName)
 	})
 
-	t.Run("ambiguous pyproject.toml and no usable uv.toml — error, not a guess", func(t *testing.T) {
+	t.Run("uv.toml present but has no usable Artifactory entry — errors, does not fall back to pyproject.toml", func(t *testing.T) {
+		projectDir, uvTomlPath := setupUvRegistryFixture(t)
+		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+		require.NoError(t, os.WriteFile(uvTomlPath, []byte(`[[index]]
+name = "public-pypi"
+url = "https://pypi.org/simple"
+`), 0644))
+
+		_, err := GetNativeUvRegistryConfig()
+		require.Error(t, err, "a present but unusable uv.toml must not silently fall back to pyproject.toml")
+	})
+
+	t.Run("no uv.toml, single unambiguous pyproject.toml entry is used", func(t *testing.T) {
+		projectDir, _ := setupUvRegistryFixture(t)
+		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+		// No uv.toml written at all.
+
+		cfg, err := GetNativeUvRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "uv-test-repo", cfg.RepoName)
+	})
+
+	t.Run("no uv.toml, single pyproject.toml entry with a non-Artifactory URL — no config url found", func(t *testing.T) {
+		projectDir, _ := setupUvRegistryFixture(t)
+		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "public-pypi"
+url = "https://pypi.org/simple"
+`), 0644))
+		// No uv.toml written at all.
+
+		_, err := GetNativeUvRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no config url found")
+	})
+
+	t.Run("no uv.toml, ambiguous pyproject.toml — error, not a guess", func(t *testing.T) {
 		projectDir, _ := setupUvRegistryFixture(t)
 		require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
 name = "public-pypi"
@@ -1136,8 +1181,8 @@ func TestBuildUvCurationIndexUrlReferenceTokenNoUsername(t *testing.T) {
 // keep the credentials embedded in UV_DEFAULT_INDEX out of debug logs and error messages.
 func TestMaskPassword(t *testing.T) {
 	t.Run("password present — masked wherever it appears in s", func(t *testing.T) {
-		rawIndexUrl := "https://user:s3cr3t-token@host/artifactory/api/curation/audit/api/pypi/repo/simple"
-		out := "fetching https://user:s3cr3t-token@host/artifactory/... : 403 Forbidden (token=s3cr3t-token)"
+		rawIndexUrl := "https://user:s3cr3t-token@host/artifactory/api/curation/audit/api/pypi/repo/simple"   // #nosec G101 -- dummy test credentials only
+		out := "fetching https://user:s3cr3t-token@host/artifactory/... : 403 Forbidden (token=s3cr3t-token)" // #nosec G101 -- dummy test credentials only
 
 		masked := maskPassword(out, rawIndexUrl)
 
@@ -1156,10 +1201,27 @@ func TestMaskPassword(t *testing.T) {
 		assert.Equal(t, out, maskPassword(out, ""))
 	})
 
-	t.Run("unparseable rawIndexUrl — s returned unchanged", func(t *testing.T) {
+	t.Run("unparsable rawIndexUrl — s returned unchanged", func(t *testing.T) {
 		out := "some uv output"
 		assert.Equal(t, out, maskPassword(out, "://not a url"))
 	})
+}
+
+// TestMaskPasswordMasksPercentEncodedPassword: maskPassword must also redact the
+// percent-encoded form of the password, not just the decoded one.
+func TestMaskPasswordMasksPercentEncodedPassword(t *testing.T) {
+	u := &url.URL{
+		Scheme: "https",
+		Host:   "host.example",
+		Path:   "/artifactory/api/pypi/repo/simple",
+		User:   url.UserPassword("user", "p@ss/word"),
+	}
+	encodedSecret := "p%40ss%2Fword" // #nosec G101 -- dummy test credentials only
+	out := "uv failed while fetching " + u.String()
+
+	masked := maskPassword(out, u.String())
+
+	assert.NotContains(t, masked, encodedSecret)
 }
 
 func TestBuildUvDownloadUrlsMapSkipsNonArtifactoryUrls(t *testing.T) {
@@ -1182,10 +1244,89 @@ source = { editable = "." }
 		DependenciesRepository: "repo",
 	}
 
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
 	urls := buildUvDownloadUrlsMap(params, packages)
 
 	_, ok := urls["pypi://requests:2.19.1"]
 	assert.False(t, ok, "public PyPI URL must not be included in the curation HEAD-probe map")
+	assert.Contains(t, buf.String(), "will not be HEAD-checked",
+		"a package resolving to a non-Artifactory URL is a real coverage gap and must warn")
+}
+
+// TestBuildUvDownloadUrlsMapNoWarningOnOrdinarySkips is a regression test: root packages
+// and packages with no download URL at all were never HEAD-check candidates, so they must
+// not trigger the "will not be HEAD-checked" warning — only a package that actually
+// resolved to a non-Artifactory URL should.
+func TestBuildUvDownloadUrlsMapNoWarningOnOrdinarySkips(t *testing.T) {
+	packages := parseUvLock(sampleUvLock)
+	params := technologies.BuildInfoBomGeneratorParams{
+		ServerDetails:          &config.ServerDetails{ArtifactoryUrl: "https://host/artifactory/"},
+		DependenciesRepository: "repo",
+	}
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
+	buildUvDownloadUrlsMap(params, packages)
+
+	assert.NotContains(t, buf.String(), "will not be HEAD-checked",
+		"the root package being skipped is expected, not a coverage gap")
+}
+
+// TestAllPackagesUseRegistryDetectsDisallowedRegistryContainingVirtualSubstring is a
+// regression test: source-kind checks used to match "virtual"/"editable" as bare
+// substrings anywhere in the line, so a disallowed registry URL that happens to contain
+// one of those words (e.g. a mirror named ".../virtual-pypi/...") was misrouted into the
+// "curation doesn't apply" branch and never checked against the allowed registry set.
+func TestAllPackagesUseRegistryDetectsDisallowedRegistryContainingVirtualSubstring(t *testing.T) {
+	content := `[[package]]
+name = "requests"
+version = "2.19.1"
+source = { registry = "https://attacker.example.com/virtual-pypi/simple" }
+`
+	assert.False(t, allPackagesUseRegistry(content, "https://host/artifactory/api/pypi/repo/simple"),
+		"a disallowed registry URL containing 'virtual' as a substring must still be checked against the allow-set, not skipped")
+}
+
+// TestAllPackagesUseRegistryStillRecognizesLegitimateNonRegistrySources confirms the
+// reordering/anchoring fix above didn't break the actual virtual/editable/path/git/directory
+// sources it's meant to recognize.
+func TestAllPackagesUseRegistryStillRecognizesLegitimateNonRegistrySources(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		source string
+	}{
+		{"workspace root", `source = { virtual = "." }`},
+		{"editable install", `source = { editable = "." }`},
+		{"local path dependency", `source = { path = "../local-pkg" }`},
+		{"git dependency", `source = { git = "https://github.com/example/repo" }`},
+		{"directory dependency", `source = { directory = "./subdir" }`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "[[package]]\nname = \"pkg\"\nversion = \"0.1.0\"\n" + tt.source + "\n"
+			assert.True(t, allPackagesUseRegistry(content, "https://host/artifactory/api/pypi/repo/simple"),
+				"a %s source doesn't go through a package index, so curation shouldn't block it", tt.name)
+		})
+	}
+}
+
+// TestAllPackagesUseRegistryAllowsMatchingRegistry and rejects a non-matching one, covering
+// the ordinary registry-comparison path.
+func TestAllPackagesUseRegistryAllowsMatchingRegistry(t *testing.T) {
+	allowedBase := "https://host/artifactory/api/pypi/repo/simple"
+	content := `[[package]]
+name = "requests"
+version = "2.19.1"
+source = { registry = "` + allowedBase + `" }
+`
+	assert.True(t, allPackagesUseRegistry(content, allowedBase))
+	assert.False(t, allPackagesUseRegistry(content, "https://other.example.com/api/pypi/repo/simple"))
 }
 
 func TestBuildDependencyTreeRejectsAuditMode(t *testing.T) {
@@ -1557,4 +1698,23 @@ func TestBuildDependencyTreeForScript_ResolvesThroughGateway(t *testing.T) {
 	assert.Contains(t, uniqueDeps, sixId)
 	assert.Equal(t, artifactoryUrl+"/api/pypi/"+repoName+"/packages/six-1.16.0-py3-none-any.whl", downloadUrls[sixId],
 		"the curation pass-through prefix must be stripped from the download URL")
+}
+
+// TestScriptAuditFailsClosedWhenCurationIndexCannotBeBuilt: if the curation index URL
+// can't be built, the audit must fail instead of falling back to an unprotected index.
+func TestScriptAuditFailsClosedWhenCurationIndexCannotBeBuilt(t *testing.T) {
+	fakeBinDir := t.TempDir()
+	writeFakeUvExecutableForScriptLock(t, fakeBinDir, "https://ambient.example", "repo")
+
+	scriptPath := filepath.Join(t.TempDir(), "demo.py")
+	require.NoError(t, os.WriteFile(scriptPath, []byte(pep723ScriptContent), 0o644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		ScriptPath:             scriptPath,
+		ServerDetails:          &config.ServerDetails{ArtifactoryUrl: ":// malformed"},
+		DependenciesRepository: "repo",
+	}
+
+	_, _, _, err := buildDependencyTreeForScript(params)
+	require.Error(t, err, "curation audit must not run uv against an ambient index")
 }

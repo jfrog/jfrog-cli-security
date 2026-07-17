@@ -60,47 +60,58 @@ type uvPackage struct {
 }
 
 // GetNativeUvRegistryConfig returns the Artifactory URL and repo name for the current uv project.
+//
+// ~/.config/uv/uv.toml is a trusted, user-controlled file: whenever it exists, it is used
+// exclusively, and pyproject.toml is never even inspected. pyproject.toml ([[tool.uv.index]])
+// is project-local and travels with the source code, so it's only trusted as a fallback
+// when no uv.toml is present.
 func GetNativeUvRegistryConfig() (*UvRegistryConfig, error) {
-	// 1. Try pyproject.toml [[tool.uv.index]] first.
-	if wd, err := os.Getwd(); err == nil {
-		if data, err := os.ReadFile(filepath.Join(wd, "pyproject.toml")); err == nil {
-			candidates := parsePyprojectUvIndexUrls(string(data))
-			switch len(candidates) {
-			case 0:
-				// Nothing declared here — fall through to uv.toml.
-			case 1:
-				if cfg, ok := firstArtifactoryPypiConfig(candidates); ok {
-					log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from pyproject.toml", cfg.ArtifactoryUrl, cfg.RepoName))
-					return cfg, nil
-				}
-			default:
-				log.Warn(fmt.Sprintf(
-					"uv: pyproject.toml declares %d [[tool.uv.index]] entries — ignoring them and using ~/.config/uv/uv.toml instead, "+
-						"since picking one from a project-declared list can't be done safely", len(candidates)))
+	// 1. ~/.config/uv/uv.toml, if present, is the sole source of truth.
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil {
+		configPath := filepath.Join(home, uvTomlConfigRelPath)
+		if content, err := os.ReadFile(configPath); err == nil {
+			cfg, ok := firstArtifactoryPypiConfig(parseUvTomlIndexUrls(string(content)))
+			if !ok {
+				return nil, errorutils.CheckErrorf(
+					"uv: no Artifactory index url found in %s — "+
+						"add an [[index]] entry, or configure via the Artifactory 'Set Me Up' page for uv",
+					configPath,
+				)
 			}
+			log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", cfg.ArtifactoryUrl, cfg.RepoName))
+			return cfg, nil
 		}
 	}
 
-	// 2. Fall back to ~/.config/uv/uv.toml.
-	home, err := os.UserHomeDir()
+	// 2. No usable ~/.config/uv/uv.toml — fall back to pyproject.toml [[tool.uv.index]].
+	wd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("uv: could not determine home directory: %w", err)
+		return nil, fmt.Errorf("uv: could not determine working directory: %w", err)
 	}
-	configPath := filepath.Join(home, uvTomlConfigRelPath)
-	content, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(filepath.Join(wd, "pyproject.toml"))
 	if err != nil {
-		return nil, fmt.Errorf("uv: no Artifactory index found in pyproject.toml and could not read %s: %w", configPath, err)
-	}
-	cfg, ok := firstArtifactoryPypiConfig(parseUvTomlIndexUrls(string(content)))
-	if !ok {
 		return nil, errorutils.CheckErrorf(
-			"uv: no Artifactory index url found in pyproject.toml or %s — "+
-				"add [[tool.uv.index]] to pyproject.toml or configure via the Artifactory 'Set Me Up' page for uv",
-			configPath,
-		)
+			"uv: no config url found — add [[tool.uv.index]] to pyproject.toml or configure via the Artifactory 'Set Me Up' page for uv")
 	}
-	log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", cfg.ArtifactoryUrl, cfg.RepoName))
-	return cfg, nil
+	candidates := parsePyprojectUvIndexUrls(string(data))
+	switch len(candidates) {
+	case 1:
+		if cfg, ok := firstArtifactoryPypiConfig(candidates); ok {
+			log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from pyproject.toml", cfg.ArtifactoryUrl, cfg.RepoName))
+			return cfg, nil
+		}
+		return nil, errorutils.CheckErrorf(
+			"uv: no config url found — add [[tool.uv.index]] to pyproject.toml or configure via the Artifactory 'Set Me Up' page for uv")
+	case 0:
+		return nil, errorutils.CheckErrorf(
+			"uv: no config url found — add [[tool.uv.index]] to pyproject.toml or configure via the Artifactory 'Set Me Up' page for uv")
+	default:
+		return nil, errorutils.CheckErrorf(
+			"uv: pyproject.toml declares %d [[tool.uv.index]] entries — picking one from a project-declared "+
+				"list can't be done safely; add an unambiguous [[index]] to ~/.config/uv/uv.toml instead",
+			len(candidates))
+	}
 }
 
 // firstArtifactoryPypiConfig returns the config for the first Artifactory-shaped
@@ -227,10 +238,10 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (
 	if params.ServerDetails != nil && params.DependenciesRepository != "" {
 		artifactoryUrl = params.ServerDetails.GetArtifactoryUrl()
 		repoName = params.DependenciesRepository
-		var buildErr error
-		artiIndexUrl, buildErr = buildUvCurationIndexUrl(params.ServerDetails, params.DependenciesRepository)
-		if buildErr != nil {
-			log.Warn(fmt.Sprintf("uv: failed to build curation index URL: %v — will fall back to public PyPI", buildErr))
+		artiIndexUrl, err = buildUvCurationIndexUrl(params.ServerDetails, params.DependenciesRepository)
+		if err != nil {
+			err = fmt.Errorf("uv: failed to build curation index URL: %w", err)
+			return
 		}
 	}
 
@@ -301,10 +312,10 @@ func buildDependencyTreeForScript(params technologies.BuildInfoBomGeneratorParam
 	if params.ServerDetails != nil && params.DependenciesRepository != "" {
 		artifactoryUrl = params.ServerDetails.GetArtifactoryUrl()
 		repoName = params.DependenciesRepository
-		var buildErr error
-		artiIndexUrl, buildErr = buildUvCurationIndexUrl(params.ServerDetails, params.DependenciesRepository)
-		if buildErr != nil {
-			log.Warn(fmt.Sprintf("uv: failed to build curation index URL: %v — will fall back to public PyPI", buildErr))
+		artiIndexUrl, err = buildUvCurationIndexUrl(params.ServerDetails, params.DependenciesRepository)
+		if err != nil {
+			err = fmt.Errorf("uv: failed to build curation index URL: %w", err)
+			return
 		}
 	}
 
@@ -349,7 +360,7 @@ func generateUvScriptLockForCuration(scriptPath, artiIndexUrl string) (string, e
 		return "", errorutils.CheckErrorf("uv: could not read script %q: %s", scriptPath, readErr)
 	}
 	tempScriptPath := filepath.Join(tempDir, scriptName)
-	if writeErr := os.WriteFile(tempScriptPath, data, 0644); writeErr != nil {
+	if writeErr := os.WriteFile(tempScriptPath, data, 0644); writeErr != nil { // #nosec G703 -- tempDir is our own fileutils.CreateTempDir(), and scriptName is sanitized via filepath.Base
 		return "", errorutils.CheckErrorf("uv: could not copy script to temp dir: %s", writeErr)
 	}
 
@@ -481,14 +492,14 @@ func allPackagesUseRegistry(content string, allowedRegistries ...string) bool {
 			continue
 		}
 		switch {
-		case strings.Contains(line, "virtual"), strings.Contains(line, "editable"),
-			strings.Contains(line, "path ="), strings.Contains(line, "git ="), strings.Contains(line, "directory ="):
-			continue // not resolved from a package index — curation doesn't apply
-		case strings.Contains(line, "registry"):
+		case strings.Contains(line, "registry ="):
 			registry, found := extractQuotedField(line, "registry")
 			if !found || !allowed[registry] {
 				return false
 			}
+		case strings.Contains(line, "virtual ="), strings.Contains(line, "editable ="),
+			strings.Contains(line, "path ="), strings.Contains(line, "git ="), strings.Contains(line, "directory ="):
+			continue // not resolved from a package index — curation doesn't apply
 		default:
 			return false
 		}
@@ -567,7 +578,7 @@ func neutralizeTempPyprojectIndexes(tempDir string) error {
 	if stripped == string(data) {
 		return nil
 	}
-	if err = os.WriteFile(pyprojectPath, []byte(stripped), 0644); err != nil {
+	if err = os.WriteFile(pyprojectPath, []byte(stripped), 0644); err != nil { // #nosec G703 -- tempDir is our own fileutils.CreateTempDir(); "pyproject.toml" is a hardcoded literal
 		return errorutils.CheckErrorf("uv: could not rewrite %s: %s", pyprojectPath, err)
 	}
 	log.Debug("uv: removed non-explicit [[tool.uv.index]] entries from the temp pyproject.toml copy to force curation-gateway resolution")
@@ -670,8 +681,9 @@ func classifyUvCurationLockError(outStr string, cause error) error {
 	return cause
 }
 
-// maskPassword replaces the password from rawIndexUrl with "***" in s.
-// Prevents credentials from leaking into logs or error output.
+// maskPassword replaces the password from rawIndexUrl with "***" in s, in both its decoded
+// and percent-encoded forms (uv can echo the URL back either way). Prevents credentials
+// from leaking into logs or error output.
 func maskPassword(s, rawIndexUrl string) string {
 	u, err := url.Parse(rawIndexUrl)
 	if err != nil {
@@ -681,7 +693,11 @@ func maskPassword(s, rawIndexUrl string) string {
 	if !hasPw || pw == "" {
 		return s
 	}
-	return strings.ReplaceAll(s, pw, "***")
+	s = strings.ReplaceAll(s, pw, "***")
+	if _, encodedPw, found := strings.Cut(u.User.String(), ":"); found && encodedPw != "" {
+		s = strings.ReplaceAll(s, encodedPw, "***")
+	}
+	return s
 }
 
 // envWithoutKey returns env with all "KEY=value" entries for the given key removed.
@@ -1008,6 +1024,13 @@ func buildUvDownloadUrlsMap(params technologies.BuildInfoBomGeneratorParams, pac
 	artiBase := strings.TrimSuffix(params.ServerDetails.GetArtifactoryUrl(), "/")
 	urls := map[string]string{}
 	skipped := 0
+	// nonArtifactoryUrl is tracked separately from skipped: it's the only skip reason that
+	// represents an actual coverage gap (a package resolved to a real URL, but one HEAD-check
+	// can't use). Root packages and packages with no download URL at all were never candidates
+	// for a HEAD check to begin with, so lumping them together with skipped would make the
+	// "N package(s) will not be HEAD-checked" warning fire on every run instead of only when
+	// there's something real to investigate.
+	nonArtifactoryUrl := 0
 
 	for _, pkg := range packages {
 		if pkg.IsRoot || pkg.Name == "" || pkg.Version == "" || len(pkg.DownloadURLs) == 0 {
@@ -1026,7 +1049,7 @@ func buildUvDownloadUrlsMap(params technologies.BuildInfoBomGeneratorParams, pac
 		}
 		if !strings.HasPrefix(direct, artiBase) {
 			log.Debug(fmt.Sprintf("uv: %s:%s URL %q is not an Artifactory URL — skipping HEAD check", pkg.Name, pkg.Version, direct))
-			skipped++
+			nonArtifactoryUrl++
 			continue
 		}
 		compId := python.PythonPackageTypeIdentifier + python.NormalizePypiName(pkg.Name) + ":" + pkg.Version
@@ -1034,16 +1057,14 @@ func buildUvDownloadUrlsMap(params technologies.BuildInfoBomGeneratorParams, pac
 		log.Debug(fmt.Sprintf("uv: %s:%s -> %s", pkg.Name, pkg.Version, direct))
 	}
 
-	expected := len(packages) - skipped
-	resolved := len(urls)
-	if resolved < expected {
+	if nonArtifactoryUrl > 0 {
 		log.Warn(fmt.Sprintf(
-			"uv: resolved download URLs for %d/%d packages — %d package(s) will not be HEAD-checked. "+
+			"uv: %d package(s) resolved to a non-Artifactory download URL and will not be HEAD-checked. "+
 				"Re-run with JFROG_CLI_LOG_LEVEL=DEBUG to see per-package details.",
-			resolved, expected, expected-resolved,
+			nonArtifactoryUrl,
 		))
 	}
-	log.Debug(fmt.Sprintf("uv: resolved %d download URLs (skipped %d entries)", resolved, skipped))
+	log.Debug(fmt.Sprintf("uv: resolved %d download URLs (skipped %d entries, %d non-Artifactory)", len(urls), skipped, nonArtifactoryUrl))
 	return urls
 }
 

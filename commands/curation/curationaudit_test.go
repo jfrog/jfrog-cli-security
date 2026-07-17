@@ -2533,6 +2533,7 @@ func TestRunCvsFallbackNoMatchesFound(t *testing.T) {
 // error, so wrapping it with %w produced "...: %!w(<nil>)" — a raw Go fmt-verb artifact
 // leaking to the user instead of a clean "no server configured" message.
 func TestSetRepoFromUvTomlNoServerConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	projectDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
 name = "artifactory-repo"
@@ -2556,6 +2557,7 @@ url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
 // setRepoFromUvToml() used to run twice per uv run — once via GetAuth(Uv), again
 // unconditionally in auditTree. auditTree now skips it once PackageManagerConfig is set.
 func TestAuditTreeSkipsRedundantSetRepoFromUvTomlWhenAlreadySet(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	projectDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
 name = "artifactory-repo"
@@ -2567,7 +2569,7 @@ url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
 	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
 
 	ca := NewCurationAuditCommand()
-	ca.SetServerDetails(&config.ServerDetails{Url: "https://host/"})
+	ca.SetServerDetails(&config.ServerDetails{Url: "https://host/", ArtifactoryUrl: "https://host/artifactory/"})
 
 	var buf bytes.Buffer
 	origLogger := log.Logger
@@ -2587,6 +2589,89 @@ url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
 	logCountAfterAuditTree := strings.Count(buf.String(), "using Artifactory URL")
 	assert.Equal(t, logCountAfterGetAuth, logCountAfterAuditTree,
 		"auditTree must not re-read uv.toml when PackageManagerConfig is already set")
+}
+
+// TestSetRepoFromUvTomlRejectsHostMismatch: a pyproject.toml [[tool.uv.index]] entry
+// pointing at a different host than the configured 'jf c' server must not receive that
+// server's credentials.
+func TestSetRepoFromUvTomlRejectsHostMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://attacker.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromUvTomlAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case.
+func TestSetRepoFromUvTomlAcceptsMatchingHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+	})
+
+	require.NoError(t, ca.setRepoFromUvToml())
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromUvTomlRejectsSchemeDowngrade: a pyproject.toml
+// [[tool.uv.index]] entry pointing at the *same host* as the configured 'jf c' server, but
+// over http instead of https, must not receive that server's credentials — otherwise the
+// host-only check would let a project-local file downgrade them to cleartext.
+func TestSetRepoFromUvTomlRejectsSchemeDowngrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "http://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
 }
 
 // TestPipWinsOverStrayUvLock verifies promotePipToUv's "pip-exclusive files win over
