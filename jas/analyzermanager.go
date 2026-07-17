@@ -25,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.34.1"
+	defaultAnalyzerManagerVersion             = "1.44.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -80,11 +80,11 @@ type AnalyzerManager struct {
 	MultiScanId             string
 }
 
-func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
+func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails, envVars utils.EnvironmentVariables) (err error) {
 	return am.ExecWithOutputFile(configFile, scanCommand, workingDir, "", serverDetails, envVars)
 }
 
-func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
+func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails, envVars utils.EnvironmentVariables) (err error) {
 	var cmd *exec.Cmd
 	multiScanId := envVars[utils.JfMsiEnvVariable]
 	if len(outputFile) > 0 {
@@ -101,7 +101,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 			}
 		}
 	}()
-	cmd.Env = utils.ToCommandEnvVars(envVars)
+	cmd.Env = envVars.ToCommandEnvVars()
 	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
 	if utils.IsCI() || err != nil {
@@ -170,8 +170,8 @@ func GetAnalyzerManagerExecutableName() string {
 	return analyzerManager
 }
 
-func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
-	envVars = map[string]string{
+func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars utils.EnvironmentVariables, err error) {
+	envVars = utils.EnvironmentVariables{
 		jfUserEnvVariable:            serverDetails.User,
 		jfPasswordEnvVariable:        serverDetails.Password,
 		jfPlatformUrlEnvVariable:     serverDetails.Url,
@@ -251,7 +251,7 @@ func establishPipeFromFile(dst io.Writer, src io.ReadCloser) {
 
 // RunAnalyzerManagerWithPipes runs the analyzer manager with the given command and pipes for stdin, stdout, and stderr.
 // timeout is in seconds; if 0 or negative, the command runs until completion.
-func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+func RunAnalyzerManagerWithPipes(env utils.EnvironmentVariables, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
 	amPath, err := GetAnalyzerManagerExecutable()
 	if err != nil {
 		return err
@@ -260,7 +260,7 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 	allArgs := append([]string{cmd}, args...)
 	log.Info(fmt.Sprintf("Launching: %s; command %s; arguments %v", amPath, cmd, args))
 	command := exec.Command(amPath, allArgs...)
-	command.Env = utils.ToCommandEnvVars(env)
+	command.Env = env.ToCommandEnvVars()
 	setProcessGroupAttr(command)
 
 	stdin, pipeErr := command.StdinPipe()
@@ -330,7 +330,7 @@ func RunAnalyzerManagerWithPipes(env map[string]string, cmd string, inputPipe io
 }
 
 // RunAnalyzerManagerWithPipesAndDownload downloads the analyzer manager if needed and runs the command with pipes.
-func RunAnalyzerManagerWithPipesAndDownload(envVars map[string]string, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+func RunAnalyzerManagerWithPipesAndDownload(envVars utils.EnvironmentVariables, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
 	if err := DownloadAnalyzerManagerIfNeeded("", nil, 0); err != nil {
 		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
 	}

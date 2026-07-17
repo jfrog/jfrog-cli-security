@@ -895,7 +895,7 @@ func GetInvocationWorkingDirectory(invocation *sarif.Invocation) string {
 }
 
 func CreateNewInvocation(success bool, target string, includeDirs ...string) *sarif.Invocation {
-	wd := sarif.NewArtifactLocation().WithURI(utils.ToURI(target))
+	wd := sarif.NewArtifactLocation().WithURI(utils.ToURI(target)).WithIndex(0)
 	if len(includeDirs) > 0 {
 		// Add properties to the working directory
 		properties := sarif.NewPropertyBag()

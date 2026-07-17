@@ -1618,6 +1618,20 @@ func Test_convertResultsToSummary_SkipsWarningsOnly(t *testing.T) {
 	assert.Equal(t, "pip-project", summary.Scans[0].Target)
 }
 
+// Test_convertResultsToSummary_RecordsAllUnresolvedHFReport: an all-unresolved hfPartial
+// report must still be recorded, not dropped like the true "not attempted" placeholder.
+func Test_convertResultsToSummary_RecordsAllUnresolvedHFReport(t *testing.T) {
+	results := map[string]*CurationReport{
+		"hf-project": {totalNumberOfPackages: 0, hfPartial: true, warnings: []string{"2 model reference(s)... HTTP 404"}},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "hf-project", summary.Scans[0].Target)
+	assert.Equal(t, 0, summary.Scans[0].CuratedPackages.PackageCount)
+	assert.True(t, summary.Scans[0].CuratedPackages.IsPartial)
+	assert.Equal(t, "hf_unresolved", summary.Scans[0].CuratedPackages.PartialReason)
+}
+
 func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
 	cleanUpFlags := setCurationFlagsForTest(t)
 	defer cleanUpFlags()
@@ -1757,8 +1771,9 @@ func Test_convertResultsToSummary(t *testing.T) {
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							PackageCount: 1,
-							IsPartial:    true,
+							PackageCount:  1,
+							IsPartial:     true,
+							PartialReason: "cvs_fallback",
 							Blocked: []formats.BlockedPackages{{
 								Policy:    "p",
 								Condition: "immature",
@@ -2710,6 +2725,92 @@ func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
 	assert.NoError(t, err, "os.Getwd failure must not surface as an error")
 	assert.Len(t, results, 1, "recovered packagesStatus must be stored even when Getwd fails")
 	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
+}
+
+// TestRunCvsFallback_KeepsSeparateTableFromExistingReport verifies pip's CVS-fallback report
+// gets its own distinct key (a second table) instead of overwriting or fusing into an existing
+// report already recorded under the same directory-basename key (e.g. by HF auto-discovery).
+func TestRunCvsFallback_KeepsSeparateTableFromExistingReport(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+	blockJSON := `{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'p'","policy":"p","condition":"immature","explanation":"too new","recommendation":"use older"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	orig := osGetwd
+	osGetwd = func() (string, error) { return "/home/user/ml-project", nil }
+	t.Cleanup(func() { osGetwd = orig })
+	const key = "ml-project"
+
+	// Pre-existing report under the same key, as HF auto-discovery would leave it.
+	results := map[string]*CurationReport{
+		key: {
+			packagesStatus:    []*PackageStatus{{PackageName: "org/malicious-model", PackageVersion: "main", PkgType: "huggingfaceml"}},
+			warnings:          []string{"Hugging Face: 1 model reference(s) could not be resolved"},
+			huggingFaceReport: true,
+			hfPartial:         true,
+		},
+	}
+
+	cvsErr := &python.CvsBlockedError{
+		Packages: []python.PinnedRequirement{
+			{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+		},
+	}
+	err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+	require.NoError(t, err)
+
+	require.Len(t, results, 2, "pip's fallback must land in a new table, leaving the existing HF report untouched")
+
+	hfReport := results[key]
+	require.NotNil(t, hfReport)
+	assert.True(t, hfReport.huggingFaceReport)
+	assert.True(t, hfReport.hfPartial)
+	assert.Len(t, hfReport.packagesStatus, 1, "the pre-existing HF report must be unmodified")
+	assert.Len(t, hfReport.warnings, 1)
+
+	pipKey := uniqueReportKey(map[string]*CurationReport{key: hfReport}, key, techutils.Pip)
+	pipReport := results[pipKey]
+	require.NotNil(t, pipReport, "pip's report must be recorded under a disambiguated key, not merged into %q", key)
+	assert.Len(t, pipReport.packagesStatus, 1)
+	assert.True(t, pipReport.isPartial)
+	assert.False(t, pipReport.huggingFaceReport, "pip's own report must not carry the HF marker")
+}
+
+// TestUniqueReportKey covers the disambiguation loop, including a 3-way collision where both
+// the plain key and its first tech-suffixed candidate are already taken.
+func TestUniqueReportKey(t *testing.T) {
+	results := map[string]*CurationReport{
+		"proj":          {},
+		"proj (pip)":    {},
+		"proj (pip) #2": {},
+	}
+	assert.Equal(t, "proj", uniqueReportKey(map[string]*CurationReport{}, "proj", techutils.Pip), "no collision — key returned as-is")
+	assert.Equal(t, "proj (pip)", uniqueReportKey(map[string]*CurationReport{"proj": {}}, "proj", techutils.Pip), "single collision — first suffixed candidate")
+	assert.Equal(t, "proj (pip) #3", uniqueReportKey(results, "proj", techutils.Pip), "triple collision — must skip to the next free numbered candidate")
 }
 
 // TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.

@@ -285,11 +285,32 @@ type CurationReport struct {
 	// was produced via the metadata-API fallback. The partial-report warning
 	// is printed after the spinner stops so it is not swallowed by the spinner.
 	isPartial bool
+	// hfPartial marks unresolved (404) HF nodes excluded from totalNumberOfPackages.
+	// Kept separate from isPartial, which also triggers the CVS-specific warning
+	// and skips the waiver flow.
+	hfPartial bool
 	// warnings holds user-facing messages from tree-build (e.g. unresolved HF references).
 	warnings []string
 	// huggingFaceReport marks reports produced by the Hugging Face audit path (including
 	// warning-only unresolved-reference placeholders), for deterministic output ordering.
 	huggingFaceReport bool
+}
+
+// uniqueReportKey returns key, or a tech-suffixed variant if key is already taken by another
+// tech's report — e.g. pip's CVS-fallback and HF auto-discovery can both default to the same
+// directory-basename key. This keeps them as two separate tables instead of one clobbering
+// (or being fused into) the other.
+func uniqueReportKey(results map[string]*CurationReport, key string, tech techutils.Technology) string {
+	if _, exists := results[key]; !exists {
+		return key
+	}
+	candidate := fmt.Sprintf("%s (%s)", key, tech)
+	for i := 2; ; i++ {
+		if _, exists := results[candidate]; !exists {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s (%s) #%d", key, tech, i)
+	}
 }
 
 type WaiverResponse struct {
@@ -454,14 +475,23 @@ func (ca *CurationAuditCommand) Run() (err error) {
 func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
 	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
-		if isWarningsOnlyReport(packagesStatus) {
+		// hfPartial reports must still be recorded, not treated as "HF wasn't attempted".
+		if isWarningsOnlyReport(packagesStatus) && !packagesStatus.hfPartial {
 			continue
+		}
+		var partialReason string
+		switch {
+		case packagesStatus.isPartial:
+			partialReason = "cvs_fallback"
+		case packagesStatus.hfPartial:
+			partialReason = "hf_unresolved"
 		}
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				PackageCount: packagesStatus.totalNumberOfPackages,
-				Blocked:      getBlocked(packagesStatus.packagesStatus),
-				IsPartial:    packagesStatus.isPartial,
+				PackageCount:  packagesStatus.totalNumberOfPackages,
+				Blocked:       getBlocked(packagesStatus.packagesStatus),
+				IsPartial:     packagesStatus.isPartial || packagesStatus.hfPartial,
+				PartialReason: partialReason,
 			},
 		})
 	}
@@ -933,7 +963,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		if tech == techutils.HuggingFaceML {
 			log.Debug("Hugging Face: no model references discovered in source — skipping HF curation probe")
 			if len(depTreeResult.Warnings) > 0 {
-				results[hfUnresolvedReportKey] = &CurationReport{
+				results[uniqueReportKey(results, hfUnresolvedReportKey, tech)] = &CurationReport{
 					warnings:          depTreeResult.Warnings,
 					huggingFaceReport: true,
 				}
@@ -953,6 +983,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	rootNode := depTreeResult.FullDepTrees[0]
 	// Extract project name from the dependency tree
 	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
+	if tech == techutils.HuggingFaceML {
+		// rootNode.Id is a directory/project name, not a "repo_id:revision" model
+		// reference — getHuggingFaceNameAndVersion defaults a missing revision to
+		// "main", which would otherwise tack on a spurious ":main" here.
+		projectName, projectVersion = rootNode.Id, ""
+	}
 	// If the project name is not set, we use the current working directory name
 	if projectName == "" {
 		workPath, err := os.Getwd()
@@ -1012,10 +1048,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		warnings = append(warnings, fmt.Sprintf(
 			"Hugging Face: %d model reference(s) could not be resolved against the registry (HTTP 404) and were NOT audited:\n  %s\nVerify the repo id/revision are correct and the repo is accessible from this Artifactory instance.",
 			len(analyzer.hfUnresolvedNodes), strings.Join(analyzer.hfUnresolvedNodes, "\n  ")))
+		// Excluded from the total — unresolved nodes were never actually audited.
+		packageNodeCount -= len(analyzer.hfUnresolvedNodes)
 	}
-	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = &CurationReport{
+	key := strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")
+	results[uniqueReportKey(results, key, tech)] = &CurationReport{
 		packagesStatus:        packagesStatus,
 		totalNumberOfPackages: packageNodeCount,
+		hfPartial:             len(analyzer.hfUnresolvedNodes) > 0,
 		warnings:              warnings,
 		huggingFaceReport:     tech == techutils.HuggingFaceML,
 	}
@@ -1665,7 +1705,7 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 		log.Warn(fmt.Sprintf("curation-blocked resolution fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
 		workPath = "unknown-project"
 	}
-	results[filepath.Base(workPath)] = &CurationReport{
+	results[uniqueReportKey(results, filepath.Base(workPath), tech)] = &CurationReport{
 		packagesStatus:        packagesStatus,
 		totalNumberOfPackages: len(packagesStatus),
 		isPartial:             true,
