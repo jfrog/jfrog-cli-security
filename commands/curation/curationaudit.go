@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1391,8 +1392,8 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 }
 
 // setRepoFromUvToml resolves the Artifactory URL and repo name via GetNativeUvRegistryConfig
-// (pyproject.toml [[tool.uv.index]] first, then ~/.config/uv/uv.toml) and configures the command.
-// Auth comes from the jf c server config.
+// (~/.config/uv/uv.toml first, then pyproject.toml [[tool.uv.index]] as a fallback) and
+// configures the command.
 func (ca *CurationAuditCommand) setRepoFromUvToml() error {
 	registryConfig, err := uvtech.GetNativeUvRegistryConfig()
 	if err != nil {
@@ -1407,6 +1408,13 @@ func (ca *CurationAuditCommand) setRepoFromUvToml() error {
 	if base == nil {
 		return errorutils.CheckErrorf("uv: no 'jf c' server configured")
 	}
+	if !sameArtifactoryHost(base.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
+		return errorutils.CheckErrorf(
+			"uv: the Artifactory URL declared in pyproject.toml/uv.toml (%s) does not match the "+
+				"configured 'jf c' server (%s) — refusing to send its credentials to a different host. "+
+				"Align the two, or select the matching server with --server-id.",
+			registryConfig.ArtifactoryUrl, base.ArtifactoryUrl)
+	}
 	copied := *base
 	copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
 
@@ -1417,6 +1425,21 @@ func (ca *CurationAuditCommand) setRepoFromUvToml() error {
 	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
+}
+
+// sameArtifactoryHost reports whether configuredUrl and discoveredUrl share the same
+// scheme and host[:port], ignoring path and trailing slashes.
+func sameArtifactoryHost(configuredUrl, discoveredUrl string) bool {
+	configured, err := url.Parse(configuredUrl)
+	if err != nil || configured.Host == "" {
+		return false
+	}
+	discovered, err := url.Parse(discoveredUrl)
+	if err != nil || discovered.Host == "" {
+		return false
+	}
+	return strings.EqualFold(configured.Host, discovered.Host) &&
+		strings.EqualFold(configured.Scheme, discovered.Scheme)
 }
 
 func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (*project.RepositoryConfig, error) {

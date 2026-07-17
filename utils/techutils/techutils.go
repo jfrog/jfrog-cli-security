@@ -516,7 +516,7 @@ func hasUnauditedPep723Script(dir string) (bool, error) {
 	var found bool
 	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || path == dir {
-			return nil
+			return nil //nolint:nilerr // a single unreadable entry shouldn't abort the whole yes/no scan
 		}
 		if d.IsDir() {
 			if utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
@@ -527,9 +527,9 @@ func hasUnauditedPep723Script(dir string) (bool, error) {
 		if !strings.HasSuffix(d.Name(), ".py") || utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
 			return nil
 		}
-		data, readErr := os.ReadFile(path)
+		data, readErr := os.ReadFile(path) // #nosec G122 -- path comes from WalkDir over dir, a local project directory the CLI was already pointed at
 		if readErr != nil {
-			return nil
+			return nil //nolint:nilerr // a single unreadable file shouldn't abort the whole yes/no scan
 		}
 		if HasPep723ScriptMetadata(string(data)) {
 			found = true

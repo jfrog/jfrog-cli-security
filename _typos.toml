@@ -2,6 +2,7 @@
 testng = "testng"
 afe = "afe"
 Bouned = "Bouned"
+certifi = "certifi"
 
 [files]
 extend-exclude = ["go.mod", "go.sum", "tests/testdata"]
