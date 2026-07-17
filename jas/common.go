@@ -46,7 +46,7 @@ type JasScanner struct {
 	AnalyzerManager       AnalyzerManager
 	ServerDetails         *config.ServerDetails
 	ScannerDirCleanupFunc func() error
-	EnvVars               map[string]string
+	EnvVars               utils.EnvironmentVariables
 	DiffMode              bool
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
@@ -92,7 +92,7 @@ func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOpt
 	return
 }
 
-func WithEnvVars(diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
+func WithEnvVars(diffMode JasDiffScanEnvValue, envVars utils.EnvironmentVariables) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
 		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, diffMode, envVars)
 		return
@@ -120,7 +120,7 @@ func WithMinSeverity(minSeverity severityutils.Severity) JasScannerOption {
 	}
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, diffMode JasDiffScanEnvValue, vars map[string]string) (map[string]string, error) {
+func getJasEnvVars(serverDetails *config.ServerDetails, diffMode JasDiffScanEnvValue, vars utils.EnvironmentVariables) (utils.EnvironmentVariables, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func getJasEnvVars(serverDetails *config.ServerDetails, diffMode JasDiffScanEnvV
 	if diffMode != NotDiffScanEnvValue {
 		amBasicVars[DiffScanEnvVariable] = string(diffMode)
 	}
-	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
+	return utils.EnvironmentVariables(utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars)), nil
 }
 
 func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string, technologies ...techutils.Technology) (resultsToCompare *results.TargetResults) {
@@ -496,8 +496,8 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, xrayVersion string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
-	envVars := map[string]string{
+func GetAnalyzerManagerXscEnvVars(newFlow bool, msi string, xrayVersion string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) utils.EnvironmentVariables {
+	envVars := utils.EnvironmentVariables{
 		utils.JfMsiEnvVariable:   msi,
 		newFlowEnvVariable:       strconv.FormatBool(newFlow),
 		jfXrayVersionEnvVariable: xrayVersion,

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -137,6 +138,82 @@ func TestHuggingFaceCurationAuditAutoDiscovery_CleanModelWithWarning(t *testing.
 	}
 }
 
+// TestHuggingFaceCurationAuditAutoDiscovery_MixedResolvedAndUnresolved: an unresolved
+// (404) model must not inflate totalNumberOfPackages, and must set hfPartial, not isPartial.
+func TestHuggingFaceCurationAuditAutoDiscovery_MixedResolvedAndUnresolved(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	projectDir := t.TempDir()
+	pyContent := "from transformers import AutoModel\n" +
+		"clean = AutoModel.from_pretrained(\"org/clean-model\")\n" +
+		"missing = AutoModel.from_pretrained(\"org/missing-model\")\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.py"), []byte(pyContent), 0o644))
+
+	const hfRepo = "hf-local-repo"
+	missingProbeURL := "/api/huggingfaceml/" + hfRepo + "/api/models/org/missing-model/revision/main"
+
+	mockServer, serverConfig, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead && r.RequestURI == missingProbeURL:
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodHead:
+			// clean-model and any other HEAD probe: 200 OK (not blocked).
+		case r.RequestURI == "/api/system/version":
+			_, err := w.Write([]byte(`{"version": "7.82.0"}`))
+			require.NoError(t, err)
+		case r.RequestURI == "/api/v1/system/version":
+			_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+			require.NoError(t, err)
+		case r.RequestURI == "/api/repositories/"+hfRepo:
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", serverConfig.ArtifactoryUrl+"api/huggingfaceml/"+hfRepo)
+
+	curationCmd := NewCurationAuditCommand()
+	curationCmd.SetServerDetails(serverConfig)
+	curationCmd.SetIsCurationCmd(true)
+	curationCmd.SetInsecureTls(true)
+	curationCmd.SetWorkingDirs([]string{projectDir})
+	curationCmd.OriginPath = projectDir
+
+	results := map[string]*CurationReport{}
+	require.NoError(t, curationCmd.doCurateAudit(results))
+
+	require.Len(t, results, 1)
+	var projectKey string
+	var report *CurationReport
+	for k, r := range results {
+		projectKey, report = k, r
+	}
+	// Project key is a dir name, not repo_id:revision — must not pick up a spurious ":main".
+	assert.Equal(t, filepath.Base(projectDir), projectKey)
+	assert.Empty(t, report.packagesStatus, "the resolved model isn't blocked, so packagesStatus stays empty")
+	assert.Equal(t, 1, report.totalNumberOfPackages, "the unresolved model must be excluded from the total, not counted as audited")
+	assert.True(t, report.hfPartial, "an unresolved model must mark the report partial")
+	assert.False(t, report.isPartial, "hfPartial must not reuse isPartial (that also triggers the CVS-specific warning and skips waivers)")
+	require.NotEmpty(t, report.warnings)
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "org/missing-model")
+
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, filepath.Base(projectDir), summary.Scans[0].Target)
+	curated := summary.Scans[0].CuratedPackages
+	require.NotNil(t, curated)
+	assert.Equal(t, 1, curated.GetApprovedCount())
+	assert.Equal(t, 0, curated.GetBlockedCount())
+	assert.True(t, curated.IsPartial)
+	assert.Equal(t, "hf_unresolved", curated.PartialReason)
+}
+
 // TestHuggingFaceCurationAuditExplicitModel verifies the --hugging-face-model spot-check.
 func TestHuggingFaceCurationAuditExplicitModel(t *testing.T) {
 	cleanUpFlags := setCurationFlagsForTest(t)
@@ -187,6 +264,95 @@ func TestHuggingFaceCurationAuditExplicitModel(t *testing.T) {
 	for k, v := range expectedRequest {
 		assert.Truef(t, v, "expected HEAD probe for %s", k)
 	}
+}
+
+// TestHuggingFaceCurationAuditExplicitModel_PathTraversalRepoIDRejected verifies that
+// --hugging-face-model with a '.'/'..' path segment in the repo id fails with a clear
+// error instead of either (a) silently reporting "0 blocked packages" with no HTTP
+// request ever sent, or (b) sending a request with an unescaped traversal segment.
+func TestHuggingFaceCurationAuditExplicitModel_PathTraversalRepoIDRejected(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	projectDir := t.TempDir()
+	const hfRepo = "hf-local-repo"
+
+	// No probe URL should ever be requested for the traversal repo id, so nothing
+	// needs to be in expectedRequest/requestToFail — any HEAD request at all would be
+	// a bug this test needs to catch, not just fail to assert on.
+	mockServer, serverConfig := hfMockServer(t, map[string]bool{}, map[string]bool{}, hfRepo)
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", serverConfig.ArtifactoryUrl+"api/huggingfaceml/"+hfRepo)
+
+	curationCmd := NewCurationAuditCommand()
+	curationCmd.SetServerDetails(serverConfig)
+	curationCmd.SetIsCurationCmd(true)
+	curationCmd.SetInsecureTls(true)
+	curationCmd.SetWorkingDirs([]string{projectDir})
+	curationCmd.SetHuggingFaceModel("../../api/system/ping")
+
+	results := map[string]*CurationReport{}
+	err := curationCmd.doCurateAudit(results)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid")
+	assert.Contains(t, err.Error(), "../../api/system/ping")
+}
+
+// TestHuggingFaceCurationAuditAutoDiscovery_SoleTechConfigFailurePropagates verifies
+// that when HF auto-discovery is the ONLY tech in the run (no other package manager
+// detected in the project) and the HF repo is misconfigured/unreachable, the failure
+// is returned as an error rather than being swallowed as a warning — swallowing it
+// here would let the entire audit silently exit 0 having checked nothing at all.
+func TestHuggingFaceCurationAuditAutoDiscovery_SoleTechConfigFailurePropagates(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	projectDir := t.TempDir()
+	pyContent := "from transformers import AutoModel\n" +
+		"model = AutoModel.from_pretrained(\"org/model\")\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.py"), []byte(pyContent), 0o644))
+
+	// HF_ENDPOINT points at a repo the mock server reports as nonexistent (404),
+	// simulating a misconfigured/unreachable Hugging Face repo — no other package
+	// manager files exist in projectDir, so HF is the sole entry in techs.
+	const hfRepo = "nonexistent-hf-repo"
+	mockServer, serverConfig, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.RequestURI == "/api/system/version":
+			_, err := w.Write([]byte(`{"version": "7.82.0"}`))
+			require.NoError(t, err)
+		case r.Method == http.MethodGet && r.RequestURI == "/api/v1/system/version":
+			_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+			require.NoError(t, err)
+		case r.Method == http.MethodGet && r.RequestURI == "/api/repositories/"+hfRepo:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", serverConfig.ArtifactoryUrl+"api/huggingfaceml/"+hfRepo)
+
+	curationCmd := NewCurationAuditCommand()
+	curationCmd.SetServerDetails(serverConfig)
+	curationCmd.SetIsCurationCmd(true)
+	curationCmd.SetInsecureTls(true)
+	curationCmd.SetWorkingDirs([]string{projectDir})
+	curationCmd.OriginPath = projectDir
+
+	results := map[string]*CurationReport{}
+	err := curationCmd.doCurateAudit(results)
+	require.Error(t, err, "HF is the sole tech here — a repo-config failure must not be silently swallowed")
 }
 
 // TestHuggingFaceCurationAuditRun_MultipleRelativeWorkingDirs verifies that each

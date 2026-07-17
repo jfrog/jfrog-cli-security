@@ -128,7 +128,7 @@ func repoFromHFEndpoint() (string, error) {
 // If --hugging-face-model is set it audits only those models (spot-check, no source scan).
 // Otherwise it auto-discovers model references in Python source and notebooks.
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (trees []*xrayUtils.GraphNode, uniqueIDs []string, warnings []string, err error) {
-	workingDir := params.WorkingDirectory
+	workingDir := params.HFWorkingDirectory
 	if workingDir == "" {
 		workingDir = "."
 	}
@@ -205,7 +205,7 @@ func rootNodeName(params technologies.BuildInfoBomGeneratorParams) string {
 	if params.HFProjectName != "" {
 		return params.HFProjectName
 	}
-	dir := params.WorkingDirectory
+	dir := params.HFWorkingDirectory
 	if dir == "" || dir == "." {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd

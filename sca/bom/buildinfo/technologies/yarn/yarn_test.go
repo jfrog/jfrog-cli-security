@@ -14,8 +14,8 @@ import (
 	"github.com/jfrog/build-info-go/build"
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
-	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/gofrog/version"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -32,6 +32,7 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 		name               string
 		yarnDependencies   map[string]*bibuildutils.YarnDependency
 		rootXrayId         string
+		isCurationCmd      bool
 		expectedTree       *xrayUtils.GraphNode
 		expectedUniqueDeps []string
 		errorExpected      bool
@@ -71,13 +72,15 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			// stay in the graph (so their deps attribute to them) but be dropped from
 			// the flat uniqueDeps list curation HEAD-checks, otherwise a coincidental
 			// public package of the same name/version is reported as a false positive.
-			name: "Workspace member excluded from uniqueDeps but kept in tree",
+			// Curation-only; see the next case for the non-curation behavior.
+			name: "Workspace member excluded from uniqueDeps but kept in tree (curation)",
 			yarnDependencies: map[string]*bibuildutils.YarnDependency{
 				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
 				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
 				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
 			},
-			rootXrayId: npmId + "root:1.0.0",
+			rootXrayId:    npmId + "root:1.0.0",
+			isCurationCmd: true,
 			expectedTree: &xrayUtils.GraphNode{
 				Id: npmId + "root:1.0.0",
 				Nodes: []*xrayUtils.GraphNode{
@@ -93,6 +96,29 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			errorExpected:      false,
 		},
 		{
+			// Same shape, non-curation: workspace member must stay in uniqueDeps.
+			name: "Workspace member kept in uniqueDeps for jf audit/jf scan (non-curation)",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
+				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
+				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
+			},
+			rootXrayId:    npmId + "root:1.0.0",
+			isCurationCmd: false,
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "root:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: npmId + "ui:0.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "express:3.0.1",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			expectedUniqueDeps: []string{npmId + "root:1.0.0", npmId + "ui:0.0.0", npmId + "express:3.0.1"},
+			errorExpected:      false,
+		},
+		{
 			name: "Incorrect formatted dependency name - error expected",
 			yarnDependencies: map[string]*bibuildutils.YarnDependency{
 				"@privateDep": {Value: "", Details: bibuildutils.YarnDepDetails{Version: "privateDep"}},
@@ -104,7 +130,7 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(testcase.yarnDependencies, testcase.rootXrayId)
+			xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(testcase.yarnDependencies, testcase.rootXrayId, testcase.isCurationCmd)
 			if !testcase.errorExpected {
 				assert.NoError(t, err)
 				assert.ElementsMatch(t, uniqueDeps, testcase.expectedUniqueDeps, "First is actual, Second is Expected")
@@ -988,44 +1014,47 @@ func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
 	}
 }
 
-// TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly is the regression
-// guard for the scope contract: the workspace-member re-routing in
-// BuildDependencyTree must fire only when params.IsCurationCmd is true.
-// Generic 'jf audit' / 'jf scan' invocations must keep operating on the
-// original currentDir so this change cannot regress them. We can't drive
-// BuildDependencyTree end-to-end here (it shells out to yarn), but we can
-// pin the gate by directly reading the gated condition in the source:
-// the test fails compile-time if the IsCurationCmd guard is removed, and
-// fails at runtime if findClaimingYarnWorkspaceRoot accidentally side-
-// effects the rest of the audit. The helper itself is tested below; this
-// test asserts the call-site gate is in place.
-// TestRootResolutionAppliesToAuditAndScan pins two contracts:
+// TestRootResolutionAppliesToAuditAndScan pins three contracts:
 //
-//  1. findYarnWorkspaceRoot is NOT gated behind IsCurationCmd in BuildDependencyTree —
-//     it improves root identification for every caller (jf audit, jf scan, jf ca).
+//  1. resolveYarnRoot runs only when params.IsCurationCmd is true (regression
+//     guard for #759, which ran it unconditionally and broke 'jf audit'/
+//     'jf scan' on Yarn workspace members).
 //
-//  2. For Yarn V2+ projects the @workspace:. label is authoritative and takes
-//     precedence over build-info-go's name-based heuristic. This matters for nameless
-//     projects (no "name" in package.json) where the heuristic can fail.
+//  2. @workspace:. is authoritative over build-info-go's heuristic, for
+//     'jf ca' only.
+//
+//  3. stripWorkspaceUseLocalSuffix, unlike resolveYarnRoot, is NOT gated on
+//     IsCurationCmd — applies to all callers.
 func TestRootResolutionAppliesToAuditAndScan(t *testing.T) {
-	t.Run("source contract: findYarnWorkspaceRoot is not gated on IsCurationCmd", func(t *testing.T) {
+	t.Run("source contract: resolveYarnRoot is called only when IsCurationCmd is true", func(t *testing.T) {
 		src, err := os.ReadFile("yarn.go")
 		require.NoError(t, err)
 		txt := string(src)
-		overrideIdx := strings.Index(txt, "if workspaceRoot := findYarnWorkspaceRoot(")
-		require.NotEqual(t, -1, overrideIdx,
-			"findYarnWorkspaceRoot override must be present in BuildDependencyTree")
-		// Look at the 200 characters immediately before the call site.
-		// If IsCurationCmd appears there, the override is gated — which would
-		// mean it no longer applies to jf audit/scan and this test should fail.
-		windowStart := overrideIdx - 200
+		callIdx := strings.Index(txt, "root = resolveYarnRoot(")
+		require.NotEqual(t, -1, callIdx,
+			"resolveYarnRoot call must be present in BuildDependencyTree")
+		windowStart := callIdx - 200
 		if windowStart < 0 {
 			windowStart = 0
 		}
-		context := txt[windowStart:overrideIdx]
-		assert.NotContains(t, context, "IsCurationCmd",
-			"findYarnWorkspaceRoot must not be gated on IsCurationCmd — "+
-				"root resolution applies to jf audit/scan as well as jf ca")
+		context := txt[windowStart:callIdx]
+		assert.Contains(t, context, "if params.IsCurationCmd {",
+			"resolveYarnRoot must only run for 'jf ca', not jf audit/jf scan")
+	})
+
+	t.Run("source contract: stripWorkspaceUseLocalSuffix is called unconditionally", func(t *testing.T) {
+		// Must sit at top level (one leading tab), not nested under IsCurationCmd.
+		src, err := os.ReadFile("yarn.go")
+		require.NoError(t, err)
+		txt := string(src)
+		callStr := "stripWorkspaceUseLocalSuffix(dependenciesMap)"
+		callIdx := strings.Index(txt, callStr)
+		require.NotEqual(t, -1, callIdx,
+			"stripWorkspaceUseLocalSuffix call must be present in BuildDependencyTree")
+		lineStart := strings.LastIndex(txt[:callIdx], "\n") + 1
+		line := txt[lineStart : callIdx+len(callStr)]
+		assert.Equal(t, "\t"+callStr, line,
+			"stripWorkspaceUseLocalSuffix must run unconditionally, not nested inside an if block")
 	})
 
 	t.Run("Yarn V2 named project: @workspace:. root is found", func(t *testing.T) {
@@ -1070,6 +1099,55 @@ func TestRootResolutionAppliesToAuditAndScan(t *testing.T) {
 	})
 }
 
+// TestResolveYarnRootDoesNotOverrideWorkspaceMemberRoot unit-tests the
+// resolveYarnRoot helper (curation-only; see TestRootResolutionAppliesToAuditAndScan
+// for the IsCurationCmd gate at its call site).
+func TestResolveYarnRootDoesNotOverrideWorkspaceMemberRoot(t *testing.T) {
+	projectRoot := &bibuildutils.YarnDependency{Value: "jf-audit-yarn-ws-repro@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "0.0.0"}}
+	memberRoot := &bibuildutils.YarnDependency{
+		Value:   "@repro/app@workspace:app",
+		Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "lodash@npm:4.17.21"}}},
+	}
+	lodash := &bibuildutils.YarnDependency{Value: "lodash@npm:4.17.21", Details: bibuildutils.YarnDepDetails{Version: "4.17.21"}}
+	deps := map[string]*bibuildutils.YarnDependency{
+		"jf-audit-yarn-ws-repro@workspace:.": projectRoot,
+		"@repro/app@workspace:app":           memberRoot,
+		"lodash@npm:4.17.21":                 lodash,
+	}
+
+	t.Run("named workspace member: build-info-go's own root is kept, not clobbered by the outer project root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, memberRoot, "@repro/app")
+		assert.Same(t, memberRoot, got)
+	})
+
+	t.Run("named project root: build-info-go's own root is kept", func(t *testing.T) {
+		got := resolveYarnRoot(deps, projectRoot, "jf-audit-yarn-ws-repro")
+		assert.Same(t, projectRoot, got)
+	})
+
+	t.Run("nameless package.json: falls back to the @workspace:. root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, nil, "")
+		require.NotNil(t, got)
+		assert.Equal(t, "jf-audit-yarn-ws-repro@workspace:.", got.Value)
+	})
+
+	t.Run("nil heuristic root with a name: still falls back to the @workspace:. root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, nil, "@repro/app")
+		require.NotNil(t, got)
+		assert.Equal(t, "jf-audit-yarn-ws-repro@workspace:.", got.Value)
+	})
+
+	t.Run("Yarn V1 (no @workspace:. entries): heuristic result passes through untouched, even nil", func(t *testing.T) {
+		v1Deps := map[string]*bibuildutils.YarnDependency{
+			"lodash": {Value: "lodash", Details: bibuildutils.YarnDepDetails{Version: "4.17.23"}},
+		}
+		assert.Nil(t, resolveYarnRoot(v1Deps, nil, ""))
+	})
+}
+
+// TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly guards that the
+// workspace-member walk-up in BuildDependencyTree fires only for 'jf ca';
+// 'jf audit'/'jf scan' must keep operating on the original currentDir.
 func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 	// Synthesise a workspace structure that *would* be claimed by the
 	// walk-up helper, so any future caller that forgets to gate on
@@ -1598,10 +1676,10 @@ func TestYarnCurationRegistry(t *testing.T) {
 
 func TestShouldRouteThroughCurationEndpoint(t *testing.T) {
 	cases := []struct {
-		name         string
-		yarnVersion  string
+		name          string
+		yarnVersion   string
 		isCurationCmd bool
-		want         bool
+		want          bool
 	}{
 		{"V2 + curation cmd → route through endpoint", "2.5.0", true, true},
 		{"V2 + non-curation cmd → skip endpoint", "2.5.0", false, false},

@@ -82,11 +82,16 @@ func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path
 				return
 			}
 			// Check if the scan is completed according to the provided criteria
-			if params.Overall && !IsScanCompleted(status.Overall.Status) {
+			isScanCompleted := IsScanCompleted(status.Overall.Status)
+			if params.Overall && !isScanCompleted {
 				log.Debug(fmt.Sprintf("Current scan status: %s", status.Overall.Status))
 				return
 			} else if len(params.Steps) > 0 && !CheckStepsCompletion(status.Details, params.Steps) {
 				log.Debug(getNotCompletedStepsStatus(status.Details, params.Steps))
+				if isScanCompleted {
+					log.Warn(fmt.Sprintf("Scan completed but the requested steps are not completed. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
+					shouldStop = true
+				}
 				return
 			}
 			log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))

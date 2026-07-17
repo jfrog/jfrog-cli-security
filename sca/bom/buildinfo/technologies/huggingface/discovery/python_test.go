@@ -73,6 +73,16 @@ func Test_unquotePythonString(t *testing.T) {
 		{`"""squad"""`, "squad", true},
 		{`'''squad'''`, "squad", true},
 		{"args.model", "", false},
+		// Regression: both explicit "+"-concatenation and Python's implicit
+		// adjacent-literal concatenation start and end with the same quote char,
+		// but the unescaped quote in the middle means this is multiple literals/an
+		// expression, not one literal — must be rejected, not silently stitched
+		// into a garbage repo id.
+		{`"org/" + "model"`, "", false},
+		{`"org/" "model"`, "", false},
+		{`'org/' + 'model'`, "", false},
+		// An escaped quote inside a single literal is still one literal.
+		{`"it's \"quoted\""`, `it's \"quoted\"`, true},
 	}
 	for _, tt := range tests {
 		got, ok := unquotePythonString(tt.in)
@@ -81,6 +91,21 @@ func Test_unquotePythonString(t *testing.T) {
 			assert.Equal(t, tt.want, got, "input %q", tt.in)
 		}
 	}
+}
+
+// TestParsePythonSource_ConcatenatedLiteralRepoIDIsUnresolved guards against a
+// regression where "org/" + "model" (explicit concatenation) or "org/" "model"
+// (Python's implicit adjacent-literal concatenation) were accepted as if they were
+// a single string literal, producing a garbage repo id (e.g. org/" + "model) that
+// then got silently probed against the registry. Both forms must be reported as
+// unresolved (non-literal), not discovered.
+func TestParsePythonSource_ConcatenatedLiteralRepoIDIsUnresolved(t *testing.T) {
+	src := `from_pretrained("org/" + "model")
+snapshot_download(repo_id="org/" "model2")
+`
+	disc, unres := ParsePythonSource(src, "test.py", nil)
+	assert.Empty(t, disc, "concatenated literals must not be discovered as a repo id")
+	assert.Len(t, unres, 2)
 }
 
 func TestParsePythonSource_SnapshotDownloadWithRepoType(t *testing.T) {
@@ -266,6 +291,18 @@ model = AutoModel.from_pretrained("org/real-model")`
 	disc, _ := ParsePythonSource(src, "test.py", nil)
 	require.Len(t, disc, 1)
 	assert.Equal(t, "org/real-model", disc[0].RepoID)
+}
+
+// TestParsePythonSource_TrailingCommentIgnored guards against a regression where
+// matchLogicalLine only skipped whole-line comments (lines starting with '#') but
+// never stripped a trailing inline comment before scanning for calls — so a call
+// commented out after real code (e.g. `result = compute()  # from_pretrained(...)`)
+// was still discovered as a real model reference.
+func TestParsePythonSource_TrailingCommentIgnored(t *testing.T) {
+	src := `result = compute()  # from_pretrained("org/fake-model")`
+	disc, unres := ParsePythonSource(src, "test.py", nil)
+	assert.Empty(t, disc, "a call inside a trailing comment must not be discovered")
+	assert.Empty(t, unres)
 }
 
 func TestBuildConstTable_Reassignment(t *testing.T) {

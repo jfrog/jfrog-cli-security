@@ -246,6 +246,29 @@ func countParenDepthChange(s string) int {
 	return depth
 }
 
+// stripInlineComment returns s truncated at the first unquoted '#', so a trailing
+// comment (e.g. `result = compute()  # from_pretrained("org/fake-model")`) is not
+// scanned for calls. Mirrors countParenDepthChange's quote/escape tracking.
+func stripInlineComment(s string) string {
+	inSingle, inDouble := false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && (inSingle || inDouble) {
+			i++ // skip escaped char
+			continue
+		}
+		switch {
+		case c == '#' && !inSingle && !inDouble:
+			return s[:i]
+		case c == '\'' && !inDouble:
+			inSingle = !inSingle
+		case c == '"' && !inSingle:
+			inDouble = !inDouble
+		}
+	}
+	return s
+}
+
 // ---- call matching --------------------------------------------------------
 
 // callNameRe matches a function/method name (with optional dotted prefix) immediately
@@ -310,6 +333,7 @@ func matchLogicalLine(line string, startLine int, filename string, constTable ma
 	if strings.HasPrefix(trimmed, "#") {
 		return
 	}
+	line = stripInlineComment(line)
 
 	for _, span := range findCallSpans(line) {
 		fullName := span.name
@@ -570,8 +594,28 @@ func resolveArgValue(raw string, constTable map[string]string) argValue {
 	return argValue{isDynamic: true}
 }
 
+// hasUnescapedByte reports whether s contains an unescaped occurrence of target,
+// skipping backslash-escaped characters.
+func hasUnescapedByte(s string, target byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			i++ // skip escaped char
+			continue
+		}
+		if s[i] == target {
+			return true
+		}
+	}
+	return false
+}
+
 // unquotePythonString extracts the value from a Python string literal token,
-// including triple-quoted """...""" and ”'...”' forms.
+// including triple-quoted """...""" and '''...''' forms. Rejects tokens that only
+// look like a single literal at the boundaries but aren't — e.g. Python's implicit
+// adjacent-literal concatenation ("org/" "model") or explicit "+"-concatenation
+// ("org/" + "model") both start and end with '"', but the unescaped '"' in the
+// middle means this is multiple literals/an expression, not one literal — accepting
+// it would silently probe a garbage repo id built from the stitched fragments.
 func unquotePythonString(s string) (string, bool) {
 	if strings.HasPrefix(s, `"""`) && strings.HasSuffix(s, `"""`) && len(s) >= 6 {
 		return s[3 : len(s)-3], true
@@ -580,10 +624,18 @@ func unquotePythonString(s string) (string, bool) {
 		return s[3 : len(s)-3], true
 	}
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1], true
+		inner := s[1 : len(s)-1]
+		if hasUnescapedByte(inner, '"') {
+			return "", false
+		}
+		return inner, true
 	}
 	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
-		return s[1 : len(s)-1], true
+		inner := s[1 : len(s)-1]
+		if hasUnescapedByte(inner, '\'') {
+			return "", false
+		}
+		return inner, true
 	}
 	return "", false
 }

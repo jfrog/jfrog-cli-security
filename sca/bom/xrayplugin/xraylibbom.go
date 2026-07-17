@@ -23,9 +23,10 @@ type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
 	specificTechs    []techutils.Technology
+	ServerDetails    *config.ServerDetails
 
 	// Artifactory Repository params
-	ServerDetails          *config.ServerDetails
+	DownloadServerDetails  *config.ServerDetails
 	DependenciesRepository string
 }
 
@@ -47,7 +48,7 @@ func WithSpecificTechnologies(technologies []string) bom.SbomGeneratorOption {
 func WithCentralRemoteReleasesDetails(serverDetails *config.ServerDetails, dependenciesRepository string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
-			sbg.ServerDetails = serverDetails
+			sbg.DownloadServerDetails = serverDetails
 			sbg.DependenciesRepository = dependenciesRepository
 		}
 	}
@@ -65,6 +66,14 @@ func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.snippetDetection = snippetDetection
+		}
+	}
+}
+
+func WithServerDetails(serverDetails *config.ServerDetails) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.ServerDetails = serverDetails
 		}
 	}
 }
@@ -91,7 +100,7 @@ func (sbg *XrayLibBomGenerator) PrepareGenerator() (err error) {
 		return
 	}
 	// Download the xray-lib plugin if needed
-	return plugin.DownloadXrayLibPluginIfNeeded(sbg.DependenciesRepository, sbg.ServerDetails)
+	return plugin.DownloadXrayLibPluginIfNeeded(sbg.DependenciesRepository, sbg.DownloadServerDetails)
 }
 
 func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -110,7 +119,7 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		log.Debug(fmt.Sprintf("Plugin logs: %s", logPath))
 	}
 	if len(envVars) > 0 {
-		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
+		log.Verbose(fmt.Sprintf("Environment variables:\n%s", envVars.ToString()))
 	}
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
@@ -143,8 +152,17 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 	return scanner.Scan(target.Target, scanConfig)
 }
 
-func (sbg *XrayLibBomGenerator) getPluginEnvVars() map[string]string {
-	envVars := map[string]string{}
+func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
+	envVars := utils.EnvironmentVariables{}
+	if sbg.ServerDetails != nil {
+		envVars[plugin.XrayUrlEnvVariable] = sbg.ServerDetails.XrayUrl
+		if sbg.ServerDetails.AccessToken != "" {
+			envVars[plugin.XrayTokenEnvVariable] = sbg.ServerDetails.AccessToken
+		} else {
+			envVars[plugin.XrayUserEnvVariable] = sbg.ServerDetails.User
+			envVars[plugin.XrayPasswordEnvVariable] = sbg.ServerDetails.Password
+		}
+	}
 	if sbg.snippetDetection {
 		envVars[plugin.SnippetDetectionEnvVariable] = "true"
 	}

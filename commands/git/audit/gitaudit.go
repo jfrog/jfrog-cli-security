@@ -91,7 +91,7 @@ func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error)
 
 func verifyConfigProfile(configProfile *services.ConfigProfile) error {
 	if len(configProfile.Modules) != 1 {
-		return fmt.Errorf("more than one module was found '%s' profile. Frogbot currently supports only one module per config profile", configProfile.ProfileName)
+		return fmt.Errorf("expected exactly 1 module in '%s' profile, found %d. Frogbot currently supports only one module per config profile", configProfile.ProfileName, len(configProfile.Modules))
 	}
 	if configProfile.Modules[0].PathFromRoot != "." {
 		return fmt.Errorf("module '%s' in profile '%s' contains the following path from root: '%s'. Frogbot currently supports only a single module with a '.' path from root", configProfile.Modules[0].ModuleName, configProfile.ProfileName, configProfile.Modules[0].PathFromRoot)

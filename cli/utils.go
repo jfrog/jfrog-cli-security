@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -271,30 +270,12 @@ func getFlagValueAsString(c *components.Context, flag components.Flag) string {
 	}
 	flagName := flag.GetName()
 	if _, ok := flag.(components.StringFlag); ok {
-		return MaskSensitiveData(flagName, c.GetStringFlagValue(flagName))
+		return utils.MaskSensitiveData(flagName, c.GetStringFlagValue(flagName))
 	}
 	if _, ok := flag.(components.BoolFlag); ok {
 		return fmt.Sprintf("%t", c.GetBoolFlagValue(flagName))
 	}
 	return ""
-}
-
-func MaskSensitiveData(flagName, flagValue string) (masked string) {
-	// Mask url if required
-	if strings.Contains(strings.ToLower(flagName), "url") {
-		// Regex to match credentials in URL: http(s)://username:password@host...
-		re := regexp.MustCompile(`(https?://)([^:/\s]+):([^@/\s]+)@`)
-		masked = re.ReplaceAllString(flagValue, `${1}${2}:****@`)
-		return masked
-	}
-	// Mask password, token, key, passphrase flags
-	lowerFlagName := strings.ToLower(flagName)
-	if strings.Contains(lowerFlagName, "password") || strings.Contains(lowerFlagName, "passphrase") ||
-		strings.Contains(lowerFlagName, "token") || strings.Contains(lowerFlagName, "key") {
-		return "****"
-	}
-	// Return original input if no masking required
-	return flagValue
 }
 
 func shouldIncludeSbom(c *components.Context, format outputFormat.OutputFormat) bool {

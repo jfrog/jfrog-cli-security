@@ -78,11 +78,11 @@ type BuildInfoBomGeneratorParams struct {
 	// Hugging Face params
 	// HuggingFaceModel is the model/dataset reference to audit, e.g. "mcpotato/42-eicar-street:main".
 	// Set by the curation command's --hugging-face-model flag.
-	// When empty, BuildDependencyTree auto-discovers references from WorkingDirectory.
+	// When empty, BuildDependencyTree auto-discovers references from HFWorkingDirectory.
 	HuggingFaceModel string
-	// WorkingDirectory is the project root used for Hugging Face auto-discovery.
+	// HFWorkingDirectory is the project root used for Hugging Face auto-discovery.
 	// Defaults to "." when empty.
-	WorkingDirectory string
+	HFWorkingDirectory string
 	// HFProjectName overrides the HF root-node name (falls back to the working
 	// directory basename when empty). Set by the curation command to a collision-free
 	// name when auditing multiple --working-dirs entries that share a basename.

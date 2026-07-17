@@ -201,7 +201,7 @@ func TestBuildDependencyTree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Empty working dir so only the flag contributes (no stray discovery).
 			workDir := t.TempDir()
-			params := technologies.BuildInfoBomGeneratorParams{HuggingFaceModel: tt.modelRef, WorkingDirectory: workDir}
+			params := technologies.BuildInfoBomGeneratorParams{HuggingFaceModel: tt.modelRef, HFWorkingDirectory: workDir}
 			trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
 			require.NoError(t, err)
 			require.Len(t, trees, 1, "expected exactly one dependency tree")
@@ -227,7 +227,7 @@ func TestBuildDependencyTree_MultiValueAndAdditive(t *testing.T) {
 	params := technologies.BuildInfoBomGeneratorParams{
 		// Two explicit flag models; source file has a third model that must NOT appear.
 		HuggingFaceModel: "org/flag-model-a:main, org/flag-model-b:v2",
-		WorkingDirectory: dir,
+		HFWorkingDirectory: dir,
 	}
 	trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
 	require.NoError(t, err)
@@ -249,7 +249,7 @@ func TestBuildDependencyTree_AutoDiscovery(t *testing.T) {
 
 	params := technologies.BuildInfoBomGeneratorParams{
 		HuggingFaceModel: "",
-		WorkingDirectory: dir,
+		HFWorkingDirectory: dir,
 	}
 	trees, uniqueDeps, _, err := BuildDependencyTree(params)
 	require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestBuildDependencyTree_DatasetsReportedNotAudited(t *testing.T) {
 		"from datasets import load_dataset\n"+
 			"ds = load_dataset(\"squad\", revision=\"1.0.0\")\n"), 0644))
 
-	params := technologies.BuildInfoBomGeneratorParams{WorkingDirectory: dir}
+	params := technologies.BuildInfoBomGeneratorParams{HFWorkingDirectory: dir}
 	trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
 	require.NoError(t, err)
 	assert.Empty(t, trees, "datasets must not be audited")
@@ -285,7 +285,7 @@ func TestBuildDependencyTree_UnresolvedWarnings(t *testing.T) {
 	require.NoError(t, os.WriteFile(dir+"/dyn.py", []byte(
 		"runtime = AutoModel.from_pretrained(args.model_name)\n"), 0644))
 
-	params := technologies.BuildInfoBomGeneratorParams{WorkingDirectory: dir}
+	params := technologies.BuildInfoBomGeneratorParams{HFWorkingDirectory: dir}
 	trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
 	require.NoError(t, err)
 	assert.Empty(t, trees, "no statically-resolvable models expected")
@@ -304,7 +304,7 @@ func TestBuildDependencyTree_SkippedFileWarning(t *testing.T) {
 		dir+"/good.py", []byte(`from_pretrained("org/discovered-model", revision="v1")`), 0644))
 	require.NoError(t, os.WriteFile(dir+"/bad.ipynb", []byte(`{not valid json`), 0644))
 
-	params := technologies.BuildInfoBomGeneratorParams{WorkingDirectory: dir}
+	params := technologies.BuildInfoBomGeneratorParams{HFWorkingDirectory: dir}
 	trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
 	require.NoError(t, err)
 	require.Len(t, trees, 1, "the unparsable notebook must not block discovery of the good file")
