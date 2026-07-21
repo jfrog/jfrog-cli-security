@@ -1,0 +1,52 @@
+name: Build Gate
+# Single approval gate for fork/PR runs: a maintainer approves the `build-gate`
+# environment deployment once, releasing frogbot and the test suite.
+# Replaces the per-workflow 'safe to test' label mechanism.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [dev]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  pull-requests: write
+  contents: read
+
+jobs:
+  # The single approval point. `build-gate` carries the Required-reviewers rule.
+  # Trusted push & manual dispatch skip approval (empty environment name = no gate).
+  gate:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'pull_request_target' && 'build-gate' || '' }}
+    steps:
+      - run: echo "Approved — releasing frogbot and test suite."
+
+  tests:
+    needs: gate
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+
+  # Single, stable required status check. Point branch protection at
+  # "Build Gate / build-gate-success" instead of the matrix-expanded suite checks.
+  build-gate-success:
+    name: build-gate-success
+    if: always()
+    needs:
+      - gate
+      - tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no suite failed or was cancelled
+        run: |
+          if ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}; then
+            echo "::error::One or more suites failed or were cancelled."
+            exit 1
+          fi
+          echo "All suites succeeded (skipped suites are allowed)."

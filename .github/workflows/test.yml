@@ -6,19 +6,8 @@ permissions:
   pull-requests: write
 
 on:
-  push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
-  # Triggers the workflow on labeled PRs only.
-  pull_request_target:
-    types: [ labeled ]
-
-# Ensures that only the latest commit is running for each PR at a time.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+  workflow_dispatch:
 
 # Environment variables shared across all jobs.
 env:
@@ -33,19 +22,14 @@ env:
   
 jobs:
   Pretest:
-    if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Remove 'safe to test' label
-        uses: actions-ecosystem/action-remove-labels@v1
-        if: ${{ github.event_name != 'push' }}
-        with:
-          labels: "safe to test"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
           
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -72,9 +56,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -124,9 +110,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -154,9 +142,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -182,14 +172,18 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
+
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -208,14 +202,18 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
+
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
@@ -234,9 +232,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -262,9 +262,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -290,9 +292,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -318,9 +322,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
@@ -346,9 +352,11 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
