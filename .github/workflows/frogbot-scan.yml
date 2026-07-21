@@ -1,22 +1,34 @@
-name: "Frogbot Scan Repository"
+name: "Frogbot Scan"
 on:
+  pull_request_target:
+    types: [ opened, synchronize ]
   workflow_dispatch:
   schedule:
     # The repository will be scanned once a day at 00:00 GMT.
     - cron: "0 0 * * *"
+
 permissions:
   contents: write
   pull-requests: write
   security-events: write
+  
 jobs:
-  scan-repository:
+  frogbot-scan:
     runs-on: ubuntu-latest
+    # A pull request needs to be approved before Frogbot scans it. Any GitHub user who is associated with the
+    # "frogbot" GitHub environment can approve the pull request to be scanned.
+    environment: ${{ github.event_name == 'pull_request_target' && 'frogbot' || '' }}
     strategy:
       matrix:
         # The repository scanning will be triggered periodically on the following branches.
-        branch: [ "dev" ]
+        branch: [ "dev", "main" ]
     steps:
-      - uses: jfrog/frogbot@v2
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: jfrog/frogbot@v3
         env:
           JFROG_CLI_LOG_LEVEL: "DEBUG"
           # [Mandatory]
@@ -31,6 +43,6 @@ jobs:
           # The GitHub token is automatically generated for the job
           JF_GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # [Mandatory]
+          # [Mandatory for repository scan]
           # The name of the branch on which Frogbot will perform the scan
-          JF_GIT_BASE_BRANCH: ${{ matrix.branch }}
+          JF_GIT_BASE_BRANCH: ${{ github.event_name != 'pull_request_target' && matrix.branch || '' }}
