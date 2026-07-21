@@ -2,6 +2,9 @@ name: "Frogbot Scan"
 on:
   pull_request_target:
     types: [ opened, synchronize ]
+    branches: [ dev, main ]
+  push:
+    branches: [ dev, main ]
   workflow_dispatch:
   schedule:
     # The repository will be scanned once a day at 00:00 GMT.
@@ -11,7 +14,7 @@ permissions:
   contents: write
   pull-requests: write
   security-events: write
-  
+
 jobs:
   frogbot-scan:
     runs-on: ubuntu-latest
@@ -20,14 +23,17 @@ jobs:
     environment: ${{ github.event_name == 'pull_request_target' && 'frogbot' || '' }}
     strategy:
       matrix:
-        # The repository scanning will be triggered periodically on the following branches.
-        branch: [ "dev", "main" ]
+        # Repository scans cover these branches; job `if` collapses push/PR to a single arm.
+        branch: [ dev, main ]
+    # schedule / dispatch → both arms; push → matching branch only; PR → base branch only (one PR scan).
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && matrix.branch == github.ref_name) ||
+      (github.event_name == 'pull_request_target' && matrix.branch == github.event.pull_request.base.ref)
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
+      # No checkout: Frogbot checks out the right refs itself. Avoids checking out untrusted PR
+      # heads under pull_request_target (secrets available).
       - uses: jfrog/frogbot@v3
         env:
           JFROG_CLI_LOG_LEVEL: "DEBUG"
