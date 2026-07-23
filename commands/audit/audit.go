@@ -31,6 +31,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 
 	"golang.org/x/exp/slices"
 
@@ -984,19 +985,20 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	uploadPath := ""
 	if params.uploadCdxResults {
 		log.Debug("Finished scanning. Uploading scan results to Artifactory")
-		if params.rtResultRepository == "" {
+		if params.GetRtResultRepositoryWithProjectKey() == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
-		}
-		rtResultRepository := params.rtResultRepository
-		if params.resultsContext.ProjectKey != "" {
-			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
 		}
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
 		}
-		uploadPath, err = uploadCdxResults(params, cmdResults, rtResultRepository)
+		uploadPath, err = uploadCdxResults(params, cmdResults)
 		if err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		}
+		if uiRoute, err := getScanResultsUiRoute(params, uploadPath); err != nil {
+			log.Warn(fmt.Sprintf("failed to get scan results UI route: %s", err.Error()))
+		} else if uiRoute != "" {
+			cmdResults.SetResultsPlatformUrl(uiRoute)
 		}
 	}
 	// Violations fetching
@@ -1004,30 +1006,51 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
-		rtResultRepository := params.rtResultRepository
-		if rtResultRepository != "" && params.resultsContext.ProjectKey != "" {
-			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
-		}
-		if err = fetchViolations(uploadPath, cmdResults, params, rtResultRepository); err != nil {
+		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
 	}
 	return cmdResults
 }
 
-func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults, rtResultRepository string) (uploadPath string, err error) {
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
-	if uploadPath, err = output.UploadCommandResults(serverDetails, rtResultRepository, cmdResults); err != nil {
+	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.GetRtResultRepositoryWithProjectKey(), cmdResults); err != nil {
 		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
 	}
 	return
 }
 
-func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams, rtResultRepository string) (err error) {
+func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string, error) {
+	if auditParams.GitContext() == nil {
+		return "", nil
+	}
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		return "", fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to create Xray service manager: %s", err.Error())
+	}
+	// first in path is the repository (delimiter '/') rest is the path
+	if err = artifact.WaitForArtifactScanStatus(xrayManager, strings.Split(uploadPath, "/")[0], strings.Join(strings.Split(uploadPath, "/")[1:], "/"), artifact.ScanStarted()); err != nil {
+		return "", fmt.Errorf("failed to wait for artifact scan status: %s", err.Error())
+	}
+	return xsc.GetScanResultsUiRoute(&xsc.ScanResultsUiRouteParams{
+		XrayVersion:            auditParams.GetXrayVersion(),
+		ServerDetails:          serverDetails,
+		ProjectKey:             auditParams.resultsContext.ProjectKey,
+		GitContext:             auditParams.GitContext(),
+		ScanResultArtifactPath: uploadPath,
+	})
+}
+
+func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams) (err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return fmt.Errorf("failed to get server details: %s", err.Error())
@@ -1036,7 +1059,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		local.WithAllowedLicenses(auditParams.allowedLicenses),
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
-		enforcer.WithArtifactParams(rtResultRepository, uploadPath),
+		enforcer.WithArtifactParams(auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath),
 		enforcer.WithWatches(auditParams.resultsContext.Watches),
 		enforcer.WithResultsOutputDir(auditParams.scanResultsOutputDir),
 	)

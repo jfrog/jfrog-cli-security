@@ -33,8 +33,9 @@ func GetArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path str
 }
 
 type ScanCompleteParams struct {
-	Overall bool
-	Steps   []XrayScanStep
+	Overall            bool
+	WaitForScanStarted bool
+	Steps              []XrayScanStep
 }
 
 type ScanCompleteOption func(params *ScanCompleteParams)
@@ -42,6 +43,12 @@ type ScanCompleteOption func(params *ScanCompleteParams)
 func OverallCompletion() ScanCompleteOption {
 	return func(params *ScanCompleteParams) {
 		params.Overall = true
+	}
+}
+
+func ScanStarted() ScanCompleteOption {
+	return func(params *ScanCompleteParams) {
+		params.WaitForScanStarted = true
 	}
 }
 
@@ -94,7 +101,13 @@ func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path
 				}
 				return
 			}
-			log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
+			if !params.Overall && len(params.Steps) == 0 {
+				log.Debug(fmt.Sprintf("Artifact scan started. (%s)", status.Overall.Status))
+			} else if params.Overall {
+				log.Debug(fmt.Sprintf("Artifact scan completed. (%s)", status.Overall.Status))
+			} else {
+				log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
+			}
 			// We don't need to return any response body, as we don't use it.
 			// We just need to stop the polling executor.
 			shouldStop = true
