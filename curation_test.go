@@ -404,6 +404,126 @@ func getPoetryCurationExpectedResponse(config *config.ServerDetails, repo string
 	}
 }
 
+// TestPipenvCurationAudit drives a real 'pipenv install -d'. The mock's empty simple
+// index makes pip's resolver report the pin as not found, exercising the CVS-fallback
+// path (metadata API + HEAD/GET probe) rather than a direct install-time 403.
+func TestPipenvCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	const repo = "pypi-curation"
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-curation-project"))
+	defer cleanUp()
+
+	// Isolate from the test machine's real pip.conf so resolution falls through to Pipfile.
+	t.Setenv("PIP_CONFIG_FILE", filepath.Join(t.TempDir(), "nonexistent-pip.conf"))
+
+	blockedURL := "/api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl"
+	expectedRequest := map[string]bool{blockedURL: false}
+	requestToFail := map[string]bool{blockedURL: false}
+	serverMock, config := pipenvCurationServer(t, repo, expectedRequest, requestToFail)
+	defer serverMock.Close()
+
+	cleanUpHome := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUpHome()
+
+	config.User = "admin"
+	config.Password = "password"
+	config.ServerId = "test"
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+	assert.NoError(t, configCmd.Run())
+
+	// Native detection: Pipenv reads the repo straight from Pipfile [[source]].
+	rewritePipfileSourceURL(t, filepath.Join(tempDirPath, "Pipfile"), config.ArtifactoryUrl+"api/pypi/"+repo+"/simple")
+
+	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
+	output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)
+
+	expectedResp := getPipenvCurationExpectedResponse(config, repo)
+	var got []curation.PackageStatus
+	bracketIndex := strings.Index(output, "[")
+	require.Less(t, 0, bracketIndex, "Unexpected Curation output with missing '['")
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResp, got)
+	for k, v := range expectedRequest {
+		assert.Truef(t, v, "didn't receive expected HEAD request for package url %s", k)
+	}
+}
+
+// rewritePipfileSourceURL points the fixture's placeholder [[source]] url at the mock.
+func rewritePipfileSourceURL(t *testing.T, pipfilePath, newURL string) {
+	const placeholder = "http://replace-with-mock-server.invalid/api/pypi/pypi-curation/simple"
+	content, err := os.ReadFile(pipfilePath) // #nosec G304 -- test fixture path built from t.TempDir()
+	require.NoError(t, err)
+	updated := strings.Replace(string(content), placeholder, newURL, 1)
+	require.NotEqual(t, string(content), updated, "placeholder source URL not found in fixture Pipfile")
+	require.NoError(t, os.WriteFile(pipfilePath, []byte(updated), 0600)) // #nosec G703 -- test fixture path built from t.TempDir()
+}
+
+func getPipenvCurationExpectedResponse(config *config.ServerDetails, repo string) []curation.PackageStatus {
+	return []curation.PackageStatus{
+		{
+			Action:            "blocked",
+			PackageName:       "urllib3",
+			PackageVersion:    "1.26.20",
+			BlockedPackageUrl: config.ArtifactoryUrl + "api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl",
+			BlockingReason:    curation.BlockingReasonPolicy,
+			ParentName:        "urllib3",
+			ParentVersion:     "1.26.20",
+			DepRelation:       "direct",
+			PkgType:           "pipenv",
+			Policy: []curation.Policy{
+				{Policy: "pol1", Condition: "cond1", Explanation: "explanation", Recommendation: "recommendation"},
+				{Policy: "pol2", Condition: "cond2", Explanation: "explanation2", Recommendation: "recommendation2"},
+			},
+		},
+	}
+}
+
+// pipenvCurationServer serves version checks, an empty simple index (forces the
+// CVS-fallback path), the metadata API it uses, and HEAD/GET blocked-download probes.
+func pipenvCurationServer(t *testing.T, repo string, expectedRequest, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
+	mapLock := sync.Mutex{}
+	metadataPath := "/api/pypi/" + repo + "/pypi/urllib3/1.26.20/json"
+	serverMock, serverConfig, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			mapLock.Lock()
+			if _, exist := expectedRequest[r.RequestURI]; exist {
+				expectedRequest[r.RequestURI] = true
+			}
+			mapLock.Unlock()
+			if _, exist := requestToFail[r.RequestURI]; exist {
+				w.WriteHeader(http.StatusForbidden)
+			}
+		case http.MethodGet:
+			switch {
+			case r.RequestURI == "/api/system/version":
+				_, err := w.Write([]byte(`{"version": "7.82.0"}`))
+				require.NoError(t, err)
+			case r.RequestURI == "/api/v1/system/version":
+				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+				require.NoError(t, err)
+			case r.RequestURI == metadataPath:
+				_, err := w.Write([]byte(`{"urls": [{"packagetype": "bdist_wheel", ` +
+					`"url": "https://files.pythonhosted.org/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl"}]}`))
+				require.NoError(t, err)
+			case strings.Contains(r.URL.Path, "/simple/"):
+				// Empty index: pip's resolver reports urllib3==1.26.20 as not found.
+				_, err := w.Write([]byte(`<html><body></body></html>`))
+				require.NoError(t, err)
+			default:
+				if _, exist := requestToFail[r.RequestURI]; exist {
+					w.WriteHeader(http.StatusForbidden)
+					_, err := w.Write([]byte(curationBlockedTarballResponse))
+					require.NoError(t, err)
+				}
+			}
+		}
+	})
+	return serverMock, serverConfig
+}
+
 func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, simpleIndex ...map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	var index map[string]string

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
@@ -22,6 +23,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -2405,6 +2407,109 @@ func TestEffectiveParentVersion(t *testing.T) {
 	}
 }
 
+func TestSetRepoFromPipfileRejectsInvalidPresentConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte("resolver: [\n"), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSendPipenvRequestRejectsRedirectOutsideRepository(t *testing.T) {
+	var outsideRequested atomic.Bool
+	var requests atomic.Int32
+	server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path == "/api/system/configuration" {
+			outsideRequested.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+	})
+	defer server.Close()
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
+		url:               rtAuth.GetUrl(),
+		repo:              "repo",
+		tech:              techutils.Pipenv,
+	}
+	requestDetails := analyzer.httpClientDetails.Clone()
+	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+	_, _, err = analyzer.sendPipenvRequest(http.MethodGet,
+		strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsafe redirect")
+	assert.False(t, outsideRequested.Load())
+	assert.Equal(t, int32(1), requests.Load())
+}
+
+func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*treeAnalyzer) error
+	}{
+		{
+			name: "all versions metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiAllVersions("urllib3")
+				return err
+			},
+		},
+		{
+			name: "version download metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiNormalDownloadURL("urllib3", "2.0.7")
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := &treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              techutils.Pipenv,
+			}
+
+			err = test.call(analyzer)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
+}
+
 // TestValidateRunNativeForTech checks that --run-native is accepted for the
 // allow-listed native-config techs (npm, pnpm, yarn) and rejected for all other
 // techs with an error that names the offending tech.
@@ -2874,4 +2979,25 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 		assert.Contains(t, result, npm, "npm should be kept when the only indicator is at $HOME")
 		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
 	})
+}
+
+// =============================================================================
+// Tests for Pipenv support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsPipenv(t *testing.T) {
+	_, ok := supportedTech[techutils.Pipenv]
+	assert.True(t, ok, "techutils.Pipenv must be registered in supportedTech so that 'jf curation-audit' processes pipenv projects")
+}
+
+func TestGetUrlNameAndVersionByTechPipenv(t *testing.T) {
+	const whlUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/requests-2.31.0-py3-none-any.whl"
+	downloadUrlsMap := map[string]string{"pypi://requests:2.31.0": whlUrl}
+
+	downloadUrls, name, scope, ver := getUrlNameAndVersionByTech(techutils.Pipenv, &xrayUtils.GraphNode{Id: "pypi://requests:2.31.0"}, downloadUrlsMap, "https://test.jfrog.io", "pypi-remote")
+
+	assert.Equal(t, []string{whlUrl}, downloadUrls)
+	assert.Equal(t, "requests", name)
+	assert.Equal(t, "", scope, "python packages have no scope")
+	assert.Equal(t, "2.31.0", ver)
 }
