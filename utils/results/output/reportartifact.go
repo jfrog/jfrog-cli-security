@@ -49,12 +49,11 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 }
 
 func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults, pretty bool) string {
-	isGitContext := cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil
-	uploadMsg := upload.GetScanResultsPlatformUrlMessage(isGitContext)
+	uploadMsg := upload.GetScanResultsPlatformUrlMessage(cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil)
 	if pretty {
 		uploadMsg = coreutils.PrintTitle(uploadMsg)
 	}
-	if isGitContext {
+	if cmdResults.ResultsPlatformUrl == "" {
 		return uploadMsg
 	}
 	link := cmdResults.ResultsPlatformUrl
