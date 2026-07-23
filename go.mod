@@ -6,7 +6,7 @@ replace github.com/CycloneDX/cyclonedx-go => github.com/CycloneDX/cyclonedx-go v
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
-	github.com/beevik/etree v1.6.0
+	github.com/beevik/etree v1.7.0
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
