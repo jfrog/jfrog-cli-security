@@ -246,8 +246,8 @@ var technologiesData = map[Technology]TechData{
 	},
 	Nuget: {
 		formal:             "NuGet",
-		indicators:         []string{".sln", ".csproj"},
-		packageDescriptors: []string{".sln", ".csproj"},
+		indicators:         []string{".sln", ".slnx", ".csproj"},
+		packageDescriptors: []string{".sln", ".slnx", ".csproj"},
 		// .NET CLI is used for NuGet projects
 		execCommand:                "dotnet",
 		packageInstallationCommand: "add",
@@ -258,8 +258,8 @@ var technologiesData = map[Technology]TechData{
 	},
 	Dotnet: {
 		formal:             ".NET",
-		indicators:         []string{".sln", ".csproj"},
-		packageDescriptors: []string{".sln", ".csproj"},
+		indicators:         []string{".sln", ".slnx", ".csproj"},
+		packageDescriptors: []string{".sln", ".slnx", ".csproj"},
 		projectType:        project.Dotnet,
 		language:           CSharp,
 	},
