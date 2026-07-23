@@ -34,6 +34,7 @@ import (
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
@@ -754,6 +755,15 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
+	if c.IsFlagSet(flags.HuggingFaceModel) {
+		hfModel := c.GetStringFlagValue(flags.HuggingFaceModel)
+		if hfModel == "" {
+			return nil, errorutils.CheckErrorf(
+				"--hugging-face-model value cannot be empty; expected '<repo-id>[:<revision>]' (revision defaults to 'main'), comma-separated for multiple (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased')",
+			)
+		}
+		curationAuditCommand.SetHuggingFaceModel(hfModel)
+	}
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
 	curationAuditCommand.SetMvnIncludePluginDeps(c.GetBoolFlagValue(flags.MvnIncludePluginDeps))
 	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))

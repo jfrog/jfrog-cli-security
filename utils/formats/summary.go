@@ -63,6 +63,8 @@ type CuratedPackages struct {
 	// IsPartial is true when the dependency tree could not be fully resolved (e.g. CVS pip fallback).
 	// PackageCount reflects only recovered blocked packages, not the full tree size.
 	IsPartial bool `json:"partial,omitempty"`
+	// PartialReason explains why IsPartial is true, e.g. "cvs_fallback" or "hf_unresolved".
+	PartialReason string `json:"partial_reason,omitempty"`
 }
 
 type BlockedPackages struct {

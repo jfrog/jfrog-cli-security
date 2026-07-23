@@ -32,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
 	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/nuget"
@@ -233,6 +234,8 @@ type DependencyTreeResult struct {
 	FlatTree     *xrayUtils.GraphNode
 	FullDepTrees []*xrayUtils.GraphNode
 	DownloadUrls map[string]string
+	// Warnings holds user-facing messages from tree-build (e.g. unresolved HF references).
+	Warnings []string
 }
 
 func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
@@ -298,6 +301,8 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = swift.BuildDependencyTree(params)
 	case techutils.Docker:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = docker.BuildDependencyTree(params)
+	case techutils.HuggingFaceML:
+		depTreeResult.FullDepTrees, uniqueDepsIds, depTreeResult.Warnings, err = huggingface.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
