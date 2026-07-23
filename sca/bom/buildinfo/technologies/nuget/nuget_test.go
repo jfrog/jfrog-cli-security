@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 )
@@ -243,6 +244,11 @@ func TestSolutionFilePathParameter(t *testing.T) {
 			expectedFileName: "my-solution.sln",
 		},
 		{
+			name:             "slnx solution file path from params",
+			solutionFilePath: "/path/to/my-solution.slnx",
+			expectedFileName: "my-solution.slnx",
+		},
+		{
 			name:             "no solution file path",
 			solutionFilePath: "",
 			expectedFileName: "",
@@ -251,21 +257,7 @@ func TestSolutionFilePathParameter(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			params := technologies.BuildInfoBomGeneratorParams{
-				SolutionFilePath: test.solutionFilePath,
-			}
-
-			// Get the solution file path using the same logic as runDotnetRestore
-			var solutionFilePath string
-			if params.SolutionFilePath != "" {
-				solutionFilePath = params.SolutionFilePath
-			}
-			var solutionFileName string
-			if solutionFilePath != "" {
-				solutionFileName = filepath.Base(solutionFilePath)
-			}
-
-			assert.Equal(t, test.expectedFileName, solutionFileName)
+			assert.Equal(t, test.expectedFileName, solutionFileName(test.solutionFilePath))
 		})
 	}
 }
@@ -284,5 +276,48 @@ func TestRunDotnetRestoreWithRealSolutionFile(t *testing.T) {
 	err = runDotnetRestore(multiProjectPath, params, toolType, []string{})
 	if err != nil {
 		assert.NotContains(t, err.Error(), "this folder contains more than one project or solution file")
+	}
+}
+
+// TestBuildDependencyTreeWithSlnxSolution proves a '.slnx'-only project (no '.sln' fallback)
+// resolves real dependencies via BuildDependencyTree, the same entry point 'jf ca' uses.
+func TestBuildDependencyTreeWithSlnxSolution(t *testing.T) {
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "nuget", "slnx-single"))
+	defer cleanUp()
+
+	params := technologies.BuildInfoBomGeneratorParams{}
+	dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+	require.NoError(t, err)
+	assert.NotEmpty(t, dependencyTrees, "expected at least one dependency tree to be built from the '.slnx' solution")
+	assert.NotEmpty(t, uniqueDeps, "expected at least one dependency to be resolved from the '.slnx' solution's ClassLibrary1 project")
+}
+
+// TestSolutionFilePathDisambiguatesMultipleSlnFiles verifies --solution-path correctly picks
+// one '.sln' out of several in the same directory, instead of hitting dotnet's "more than one
+// project or solution file" ambiguity error.
+//
+// Uses its own "multi-solutions" fixture (not "multi") because TestSkipBuildDepTreeWhenInstallForbidden
+// relies on "multi" having exactly one '.sln' for its auto-discovery/no-solution-path case.
+func TestSolutionFilePathDisambiguatesMultipleSlnFiles(t *testing.T) {
+	workDir, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "nuget", "multi-solutions"))
+	defer cleanUp()
+
+	// Sanity check: the workspace must actually contain more than one '.sln' file, otherwise
+	// this test wouldn't be exercising disambiguation at all.
+	slnFiles, err := filepath.Glob(filepath.Join(workDir, "*.sln"))
+	require.NoError(t, err)
+	require.Len(t, slnFiles, 2, "expected exactly 2 '.sln' files in the fixture to test disambiguation")
+
+	toolType := bidotnet.ConvertNameToToolType("dotnet")
+	for _, slnName := range []string{"TestSolution.sln", "TestAppOnly.sln"} {
+		t.Run(slnName, func(t *testing.T) {
+			params := technologies.BuildInfoBomGeneratorParams{
+				SolutionFilePath: filepath.Join(workDir, slnName),
+			}
+			err := runDotnetRestore(workDir, params, toolType, []string{})
+			if err != nil {
+				assert.NotContains(t, err.Error(), "this folder contains more than one project or solution file")
+			}
+		})
 	}
 }
