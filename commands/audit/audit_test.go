@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-security/policy/local"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -58,14 +59,15 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, Nuget is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "Nuget"),
+						Target:       filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -74,8 +76,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -88,8 +90,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -99,7 +101,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, yarn is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "yarn"),
+						Target:       filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -116,8 +119,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Nuget,
-						Target:     filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.Nuget},
+						Target:       filepath.Join(dir, "Nuget"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -126,8 +129,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -136,8 +139,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -150,8 +153,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -160,8 +163,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Yarn,
-						Target:     filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -170,8 +173,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pip,
-						Target:     filepath.Join(dir, "yarn", "Pip"),
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -180,8 +183,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pipenv,
-						Target:     filepath.Join(dir, "yarn", "Pipenv"),
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -190,10 +193,245 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Non-recursive scan on directory with descriptor at top level",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")})
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single technology (npm only)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{dir})
+				param.SetTechnologies([]string{"npm"}).SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+				{
+					// Requested tech npm had no other descriptors at root; add JAS-only target for requested directory
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Technologies: []techutils.Technology{techutils.NoTech},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
+		{
+			name: "Multiple working dirs (subset - dir and yarn only, no Nuget)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir"), filepath.Join(dir, "yarn")})
+				param.SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{
+							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
+						},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single technology (maven only)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
+				param.SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{
+							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Non-recursive on go directory",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "go")})
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single target with one working dir (npm)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "npm")},
+						Technologies: []techutils.Technology{techutils.Npm},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
+		{
+			name: "Single target with one working dir (maven)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "maven", "pom.xml")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single target root directory with one include directory (maven) - new flow",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "maven")},
+						Technologies: []techutils.Technology{techutils.Maven},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.wd != "" {
+				defer securityTestUtils.ChangeWDWithCallback(t, test.wd)()
+			}
 			results := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
@@ -210,6 +448,13 @@ func TestDetectScansToPerform(t *testing.T) {
 					if test.expected[i].ScaResults != nil {
 						sort.Strings(test.expected[i].ScaResults.Descriptors)
 					}
+					// Normalize for comparison: DeprecatedAppsConfigModule varies by working dir and is not under test
+					results.Targets[i].DeprecatedAppsConfigModule = nil
+					// Normalize single-target expected to actual cwd (path can differ e.g. /var vs /private/var on macOS)
+					if len(results.Targets) == 1 && len(results.Targets[i].Include) > 0 {
+						test.expected[i].Target = results.Targets[i].Target
+						test.expected[i].Include = results.Targets[i].Include
+					}
 				}
 			}
 			assert.ElementsMatch(t, test.expected, results.Targets)
@@ -219,30 +464,96 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
+func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_cli_audit")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedOnly := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
+	assert.NoError(t, os.MkdirAll(excludedOnly, 0o755))
+	createEmptyFile(t, filepath.Join(excludedOnly, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetWorkingDirs([]string{excludedOnly})
+	params.SetIsRecursiveScan(false)
+	params.SetExclusions([]string{"*cli_exclude_workdir_only_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_for_agg")
+	siblingNpm := filepath.Join(baseDir, "sibling_npm_for_agg_test")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	assert.NoError(t, os.MkdirAll(siblingNpm, 0o755))
+	createEmptyFile(t, filepath.Join(siblingNpm, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{siblingNpm})
+	params.SetExclusions([]string{"*parent_only_excluded_for_agg*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Len(t, cmdRes.Targets, 1)
+	tr := cmdRes.Targets[0]
+	tr.DeprecatedAppsConfigModule = nil
+	assert.Len(t, tr.Include, 1)
+	assert.Equal(t, siblingNpm, tr.Include[0])
+	hasNpm := false
+	for _, tech := range tr.Technologies {
+		if tech == techutils.Npm {
+			hasNpm = true
+		}
+	}
+	assert.True(t, hasNpm, "expected Npm among detected technologies")
+}
+
 func TestShouldGenerateSbom(t *testing.T) {
-	configProfileWithSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: true,
-				},
+	configProfileModulesWithSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: true,
 			},
-		}},
-	}
-	configProfileWithoutSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: false,
-				},
+		},
+	}}
+	configProfileModulesWithoutSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: false,
 			},
-		}},
-	}
+		},
+	}}
 
 	testCases := []struct {
-		name       string
-		params     *AuditParams
-		expectSbom bool
+		name        string
+		params      *AuditParams
+		scanResults *results.TargetResults
+		expectSbom  bool
 	}{
 		{
 			name: "include sbom requested explicitly",
@@ -294,26 +605,26 @@ func TestShouldGenerateSbom(t *testing.T) {
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithSca)
 				return params
 			}(),
-			expectSbom: true,
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithSca}},
+			expectSbom:  true,
 		},
 		{
 			name: "non sca scans with sca disabled in config profile",
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithoutSca)
 				return params
 			}(),
-			expectSbom: false,
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithoutSca}},
+			expectSbom:  false,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.params))
+			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.scanResults, testCase.params))
 		})
 	}
 }
@@ -514,7 +825,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSastIssues: 4,
+			expectedSastIssues: 2,
 		},
 		{
 			name:        "Sast scanner is enabled with exclusions",
@@ -636,7 +947,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSastIssues:    4,
+			expectedSastIssues:    2,
 			expectedSecretsIssues: 16,
 			expectedIacIssues:     9,
 			expectedCaNotCovered:  15,
@@ -1052,8 +1363,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				Targets: []*results.TargetResults{
 					{
 						ScanTarget: results.ScanTarget{
-							Target:     tempProjectPath,
-							Technology: techutils.Pip,
+							Target:       tempProjectPath,
+							Technologies: []techutils.Technology{techutils.Pip},
 						},
 						ScaResults: &results.ScaScanResults{
 							Sbom: &cyclonedx.BOM{

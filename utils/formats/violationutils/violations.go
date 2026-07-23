@@ -206,7 +206,7 @@ type JasViolation struct {
 
 type ScaViolation struct {
 	Violation
-	ImpactedComponent cyclonedx.Component      `json:"impacted_component"`
+	ImpactedComponent *cyclonedx.Component     `json:"impacted_component,omitempty"`
 	DirectComponents  []formats.ComponentRow   `json:"direct_components,omitempty"`
 	ImpactPaths       [][]formats.ComponentRow `json:"impact_paths,omitempty"`
 }

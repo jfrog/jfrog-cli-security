@@ -11,7 +11,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -53,7 +52,13 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
-	gaCmd.gitContext = *gitInfo
+	gaCmd.SetGitContext(gitInfo)
+	// Get the config profile if applicable
+	configProfile, err := getJPDConfigProfile(gaCmd.GitAuditParams)
+	if err != nil {
+		return fmt.Errorf("failed to get config profile: %v", err)
+	}
+	gaCmd.SetConfigProfile(configProfile)
 	// Run the scan
 	auditResults := RunGitAudit(gaCmd.GitAuditParams)
 	// Process the results and output
@@ -66,6 +71,40 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 	return sourceAudit.OutputResultsAndCmdError(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
+func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error) {
+	if !params.useConfigProfile {
+		// Not using config profile, return nil
+		log.Debug("Not using config profile for git audit as requested by the user")
+		return nil, nil
+	}
+	if params.configProfile != nil {
+		// Already set, use it
+		return params.configProfile, nil
+	}
+	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s", params.gitContext.Source.GitRepoHttpsCloneUrl))
+	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey)
+	if err != nil || configProfile == nil {
+		return nil, fmt.Errorf("failed to get config profile for git audit: %v", err)
+	}
+	return configProfile, verifyConfigProfile(configProfile)
+}
+
+func verifyConfigProfile(configProfile *services.ConfigProfile) error {
+	if len(configProfile.Modules) != 1 {
+		return fmt.Errorf("expected exactly 1 module in '%s' profile, found %d. Frogbot currently supports only one module per config profile", configProfile.ProfileName, len(configProfile.Modules))
+	}
+	if configProfile.Modules[0].PathFromRoot != "." {
+		return fmt.Errorf("module '%s' in profile '%s' contains the following path from root: '%s'. Frogbot currently supports only a single module with a '.' path from root", configProfile.Modules[0].ModuleName, configProfile.ProfileName, configProfile.Modules[0].PathFromRoot)
+	}
+	if profileString, err := utils.GetAsJsonString(configProfile, false, true); err != nil {
+		log.Verbose(fmt.Sprintf("Failed to get Config Profile as JSON string: %v", err))
+		return nil
+	} else {
+		log.Verbose(fmt.Sprintf("Utilized Config Profile:\n%s", profileString))
+	}
+	return nil
+}
+
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	scmManager, err := scm.DetectScmInProject(wd)
 	if err != nil {
@@ -74,7 +113,7 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	return scmManager.GetSourceControlContext()
 }
 
-func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
+func toAuditParams(params GitAuditParams) (*sourceAudit.AuditParams, error) {
 	auditParams := sourceAudit.NewAuditParams()
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
@@ -97,6 +136,9 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetGitContext(&params.gitContext).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
+	if params.useConfigProfile {
+		auditParams.SetConfigProfile(params.configProfile)
+	}
 	// Output params
 	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
 	auditParams.SetUploadCdxResults(params.uploadResults).SetRtResultRepository(params.rtResultRepository)
@@ -104,13 +146,12 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator)
 	auditParams.SetCustomBomGenBinaryPath(params.customBomGenBinaryPath).SetCustomAnalyzerManagerBinaryPath(params.customAnalyzerManagerBinaryPath)
 	// Basic params
-	isRecursiveScan := true
-	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
-		// 'Xray lib' BOM generator supports only one working directory, no recursive scan (single target)
-		isRecursiveScan = false
+	_, includeDirs, isRecursiveScan, err := sourceAudit.GetTargetsInfo(params.workingDirs, params.bomGenerator, params.scansToPerform, params.includeSbom, params.repositoryLocalPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get targets info: %v", err)
 	}
-	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
-	return auditParams
+	auditParams.SetWorkingDirs(includeDirs).SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
+	return auditParams, nil
 }
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
@@ -128,7 +169,11 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	params.multiScanId = multiScanId
 	params.startTime = startTime
 	// Run the scan
-	scanResults = sourceAudit.RunAudit(toAuditParams(params))
+	auditParams, err := toAuditParams(params)
+	if err != nil {
+		return results.NewCommandResults(utils.SourceCode).AddGeneralError(err, false)
+	}
+	scanResults = sourceAudit.RunAudit(auditParams)
 	// Send scan ended event
 	xsc.SendScanEndedWithResults(params.serverDetails, scanResults)
 	return scanResults

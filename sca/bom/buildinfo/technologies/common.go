@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
+	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -48,7 +49,13 @@ type BuildInfoBomGeneratorParams struct {
 	Args               []string
 	InstallCommandArgs []string
 	// Curation params
-	IsCurationCmd bool
+	IsCurationCmd        bool
+	MvnIncludePluginDeps bool
+	ParallelRequests     int
+	// OutputFormat is the --format flag value forwarded from the curation command.
+	// The zero value is treated as outFormat.Table by all renderers.
+	// Set by curation commands only; generic audit/scan commands leave this unset.
+	OutputFormat outFormat.OutputFormat
 	// Java params
 	IsMavenDepTreeInstalled bool
 	UseWrapper              bool
@@ -60,6 +67,10 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	NpmRunNative            bool
 	NpmLegacyPeerDeps       bool
+	// Yarn params
+	// YarnOverwriteYarnLock refreshes yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
+	// Curation sets this to true; audit/scan leave it false to trust the existing lockfile.
+	YarnOverwriteYarnLock bool
 	// Pnpm params
 	MaxTreeDepth string
 	// Docker params
@@ -83,11 +94,10 @@ func (bbp *BuildInfoBomGeneratorParams) SetConanProfile(file string) *BuildInfoB
 	return bbp
 }
 
-func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
+func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
 	if configProfile != nil {
 		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
 	}
-
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}

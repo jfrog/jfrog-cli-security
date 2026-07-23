@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ import (
 func TestNewSecretsScanManager(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, "temoDirPath")
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, secretScanManager)
@@ -43,7 +44,7 @@ func TestNewSecretsScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -51,18 +52,48 @@ func TestNewSecretsScanManagerWithFilesToCompare(t *testing.T) {
 	assert.True(t, fileutils.IsPathExists(secretScanManager.resultsToCompareFileName, false))
 }
 
-func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+func TestSecretsScan_CreateDeprecatedConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir)
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, scannerTempDir)
 	require.NoError(t, err)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = secretScanManager.createConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
+	err = secretScanManager.deprecatedCreateConfigFile(jfrogappsconfig.Module{SourceRoot: currWd}, []string{})
+	assert.NoError(t, err)
+
+	defer func() {
+		err = os.Remove(secretScanManager.configFileName)
+		assert.NoError(t, err)
+	}()
+
+	_, fileNotExistError := os.Stat(secretScanManager.configFileName)
+	assert.NoError(t, fileNotExistError)
+	fileContent, err := os.ReadFile(secretScanManager.configFileName)
+	assert.NoError(t, err)
+	assert.True(t, len(fileContent) > 0)
+}
+
+func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
+	require.NoError(t, err)
+
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, scannerTempDir)
+	require.NoError(t, err)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = secretScanManager.createConfigFileForTarget(results.ScanTarget{Target: currWd})
 	assert.NoError(t, err)
 
 	defer func() {
@@ -85,7 +116,7 @@ func TestRunAnalyzerManager_ReturnsGeneralError(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, "temoDirPath")
 	require.NoError(t, err)
 	assert.Error(t, secretScanManager.runAnalyzerManager())
 }
@@ -96,12 +127,12 @@ func TestParseResults_EmptyResults(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, "temoDirPath")
 	require.NoError(t, err)
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "no-secrets.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, secretsDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -121,12 +152,12 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 
-	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, false, "temoDirPath")
 	require.NoError(t, err)
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "contain-secrets.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, severityutils.Medium)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, secretsDocsUrlSuffix, severityutils.Medium, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -145,7 +176,12 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
-	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 1, 0)
+	secretsScanParams := SecretsScanParams{
+		TargetCount: 1,
+		ScanType:    SecretsScannerType,
+		Target:      results.ScanTarget{Target: jfrogAppsConfigForTest.Modules[0].SourceRoot, DeprecatedAppsConfigModule: &jfrogAppsConfigForTest.Modules[0]},
+	}
+	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, secretsScanParams)
 	assert.Error(t, err)
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Secrets, err), "failed to run Secrets scan")
 	assert.Nil(t, vulnerabilitiesResults)

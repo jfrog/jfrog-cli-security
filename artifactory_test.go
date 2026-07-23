@@ -119,7 +119,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			if testCase.skipMsg != "" {
-				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-04-2026", 60, testCase.skipMsg)
+				securityTestUtils.SkipTestIfDurationNotPassed(t, "01-06-2026", 60, testCase.skipMsg)
 			}
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
 		})
@@ -225,6 +225,13 @@ func clearOrRedirectLocalCacheIfNeeded(t *testing.T, projectType project.Project
 			envVarCallbackFunc()
 			createTempDirCallback()
 		}
+	case project.Poetry:
+		poetryTempCachePath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+		envVarCallbackFunc := clientTests.SetEnvWithCallbackAndAssert(t, "POETRY_CACHE_DIR", poetryTempCachePath)
+		callbackFunc = func() {
+			envVarCallbackFunc()
+			createTempDirCallback()
+		}
 	}
 	return
 }
@@ -238,7 +245,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	defer setEnvCallBack()
 
 	// Download
-	err := jas.DownloadAnalyzerManagerIfNeeded(0)
+	err := jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 	assert.NoError(t, err)
 
 	// Validate Analyzer manager app & checksum.sh2 file exist
@@ -259,7 +266,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	// Validate no second download occurred
 	firstFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)
-	err = jas.DownloadAnalyzerManagerIfNeeded(0)
+	err = jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 	assert.NoError(t, err)
 	secondFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)

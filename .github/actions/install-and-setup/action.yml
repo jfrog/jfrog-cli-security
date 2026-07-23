@@ -6,18 +6,20 @@ inputs:
     description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
     required: false
     default: 'false'
+  go-version-file:
+    description: "Path to the Go version file."
+    required: true
+    default: 'go.mod'
 
 runs:
   using: "composite"
   steps:
-    # Install dependencies
-    - name: Setup Go
-      uses: actions/setup-go@v5
+  
+    - name: Setup Go with cache
+      uses: jfrog/.github/actions/install-go-with-cache@main
       with:
-        go-version: 1.26
-    # - name: Setup Go with cache
-    #   uses: jfrog/.github/actions/install-go-with-cache@main
-
+        go-version-file: ${{ inputs.go-version-file }}
+        
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
@@ -29,11 +31,11 @@ runs:
     - name: Install npm
       uses: actions/setup-node@v6
       with:
-        node-version: "16"
+        node-version: "18"
     - name: Setup Pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 8
+        version: 10.34.1
 
     - name: Install Java
       uses: actions/setup-java@v5
@@ -41,7 +43,7 @@ runs:
         java-version: "11"
         distribution: "corretto"
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v6
       with:
         gradle-version: 7.6
 

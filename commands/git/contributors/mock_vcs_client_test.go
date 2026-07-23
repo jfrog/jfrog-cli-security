@@ -148,6 +148,9 @@ func (m *mockVcsClient) GetPullRequestCommentSizeLimit() int                    
 func (m *mockVcsClient) GetPullRequestDetailsSizeLimit() int                     { return 0 }
 func (m *mockVcsClient) CreateBranch(_ context.Context, _, _, _, _ string) error { return nil }
 func (m *mockVcsClient) AllowWorkflows(_ context.Context, _ string) error        { return nil }
+func (m *mockVcsClient) TriggerWorkflow(_ context.Context, _, _, _ string, _ map[string]interface{}) error {
+	return nil
+}
 func (m *mockVcsClient) AddOrganizationSecret(_ context.Context, _, _, _ string) error {
 	return nil
 }

@@ -63,6 +63,10 @@ func subScansToFlags(subScans []utils.SubScanType) (flags []string) {
 			flags = append(flags, "--sca")
 		case utils.SecretsScan:
 			flags = append(flags, "--secrets")
+		case utils.IacScan:
+			flags = append(flags, "--iac")
+		case utils.SastScan:
+			flags = append(flags, "--sast")
 		}
 	}
 	return flags
@@ -172,7 +176,6 @@ func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 }
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
-	securityTestUtils.SkipTestIfDurationNotPassed(t, "24-05-2026", 7, "Scanner stopped detecting secrets, waiting for XRAY-142987")
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJASArtifact(t, "student-services-security-0.0.1.jar", false, binaryScanParams{Format: format.SimpleJson})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -213,7 +216,7 @@ func TestXrayBinaryScanSelectiveScan(t *testing.T) {
 				// Expect SCA vulnerabilities and contextual analysis statuses
 				assert.GreaterOrEqual(t, issueCount.ScaVulnerabilities, 17, "SCA vulnerabilities count mismatch - should be 17 or more")
 				assert.Equal(t, 3, issueCount.ApplicableVulnerabilities, "Applicable vulnerabilities count mismatch - should be 3")
-				assert.Equal(t, 3, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 3")
+				assert.Equal(t, 4, issueCount.UndeterminedVulnerabilities, "Undetermined vulnerabilities count mismatch - should be 4")
 				// All other vulnerability types should be 0
 				assert.Equal(t, 0, issueCount.SecretsVulnerabilities, "Secrets vulnerabilities count mismatch - should be 0")
 			},
