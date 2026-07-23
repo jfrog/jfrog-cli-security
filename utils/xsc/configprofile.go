@@ -27,7 +27,7 @@ func GetConfigProfileByName(xrayVersion string, serverDetails *config.ServerDeta
 	return configProfile, err
 }
 
-func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails, cloneRepoUrl, projectKey string) (*services.ConfigProfile, error) {
+func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails, cloneRepoUrl, projectKey, workspaceName string) (*services.ConfigProfile, error) {
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileNewSchemaMinXrayVersion); err != nil {
 		log.Info(fmt.Sprintf("Minimal Xray version required to use a configProfile is by url '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileNewSchemaMinXrayVersion))
 		return nil, err
@@ -36,7 +36,7 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 	if err != nil {
 		return nil, err
 	}
-	configProfile, err := xscService.GetConfigProfileByUrl(cloneRepoUrl)
+	configProfile, err := xscService.GetConfigProfileByUrlAndWorkspace(cloneRepoUrl, workspaceName)
 	if err != nil {
 		err = fmt.Errorf("failed to get config profile for url '%s': %q", serverDetails.Url, err)
 	}
