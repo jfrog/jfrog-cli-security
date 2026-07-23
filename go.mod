@@ -14,11 +14,11 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260615080618-42488b58c305
+	github.com/jfrog/build-info-go v1.13.1-0.20260713073853-4f3044bf0940
 	github.com/jfrog/froggit-go v1.23.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260623062654-89dd771ef4de
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260714082320-4fd5a71b4b4a
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260624085155-5ba797de2616
 	github.com/jfrog/jfrog-client-go v1.55.1-0.20260624085832-de0c68a23c43
 	github.com/magiconair/properties v1.8.10
@@ -32,7 +32,7 @@ require (
 	github.com/urfave/cli v1.22.17
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
 	golang.org/x/exp v0.0.0-20260527015227-08cc5374adb3
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.45.0
 	golang.org/x/text v0.37.0
 	gopkg.in/ini.v1 v1.67.1

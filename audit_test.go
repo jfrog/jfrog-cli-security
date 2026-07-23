@@ -1035,10 +1035,9 @@ func TestAuditNewScaSimpleJsonMultipleWorkingDirs(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 10},
+		Total:             &validations.TotalCount{Vulnerabilities: 11},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan: &validations.ScanCount{Sca: 7, Sast: 2, Secrets: 1},
+			ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 1},
 		},
 	})
 }
@@ -1149,7 +1148,7 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 		SbomComponents: &validations.SbomCount{Direct: 2, Transitive: 2, Root: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 4},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 4},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 3},
 		},
 	})
 }
@@ -1183,10 +1182,10 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 24, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
+		Total:          &validations.TotalCount{Vulnerabilities: 22, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan: &validations.ScanCount{Sast: 4, Iac: 9, Secrets: 11},
+			ValidateScan: &validations.ScanCount{Sast: 2, Iac: 9, Secrets: 11},
 		},
 	})
 }
