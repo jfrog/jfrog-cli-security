@@ -46,7 +46,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	sol, err := solution.Load(wd, "", params.ExclusionPattern, log.Logger)
+	sol, err := solution.Load(wd, solutionFileName(params.SolutionFilePath), params.ExclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
 		// This issue is resolved by executing the 'nuget restore' command followed by running solution.Load again. Therefore, in this scenario, we need to proceed with this process.
@@ -158,8 +158,19 @@ func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorPa
 	if err != nil {
 		return
 	}
-	sol, err = solution.Load(tmpWd, "", exclusionPattern, log.Logger)
+	sol, err = solution.Load(tmpWd, solutionFileName(params.SolutionFilePath), exclusionPattern, log.Logger)
 	return
+}
+
+// solutionFileName returns the base file name of the solution file explicitly provided via the
+// SolutionFilePath param (e.g. the '--solution-path' flag), or an empty string if none was
+// provided. An empty string tells solution.Load to auto-discover '.sln'/'.slnx' files under the
+// given directory, which is ambiguous when more than one solution file is present.
+func solutionFileName(solutionFilePath string) string {
+	if solutionFilePath == "" {
+		return ""
+	}
+	return filepath.Base(solutionFilePath)
 }
 
 // Detects if the project is utilizing either .NET CLI or NuGet CLI, prioritizing .NET CLI.
@@ -268,10 +279,9 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	}
 
 	// Check for solution file path from JF CA arguments for specific solution when we have more than one solution file
-	if params.SolutionFilePath != "" {
-		solutionFileName := filepath.Base(params.SolutionFilePath)
-		completeCommandArgs = append(completeCommandArgs, solutionFileName)
-		log.Info(fmt.Sprintf("Using solution file: %s", solutionFileName))
+	if slnFile := solutionFileName(params.SolutionFilePath); slnFile != "" {
+		completeCommandArgs = append(completeCommandArgs, slnFile)
+		log.Info(fmt.Sprintf("Using solution file: %s", slnFile))
 	}
 
 	// We include the flag that allows resolution from an Artifactory server, if it exists.

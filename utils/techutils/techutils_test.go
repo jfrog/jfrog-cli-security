@@ -148,6 +148,17 @@ func TestMapFilesToRelevantWorkingDirectories(t *testing.T) {
 			},
 			expectedExcluded: noExclude,
 		},
+		{
+			// A directory with only a '.slnx' file (no '.sln', no '.csproj') must still be
+			// detected as a NuGet/.NET working directory.
+			name:                 "nugetSlnxOnlyTest",
+			paths:                []string{filepath.Join("dir", "project.slnx"), filepath.Join("dir", "file")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir: map[string][]string{
+				"dir": {filepath.Join("dir", "project.slnx")},
+			},
+			expectedExcluded: noExclude,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
