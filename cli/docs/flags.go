@@ -165,6 +165,7 @@ const (
 	LegacyPeerDeps        = "legacy-peer-deps"
 	RunNative             = "run-native"
 	MvnIncludePluginDeps  = "mvn-include-plugin-deps"
+	Script                = "script"
 
 	// Unique git flags
 	gitPrefix       = "git-"
@@ -228,7 +229,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
@@ -354,6 +355,7 @@ var flagsMap = map[string]components.Flag{
 	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are resolved and included in the curation evaluation. By default only project dependencies are scanned."),
 	LegacyPeerDeps:                components.NewBoolFlag(LegacyPeerDeps, "[npm] Pass --legacy-peer-deps to npm install to bypass peer-dependency version conflicts."),
 	RunNative:                     components.NewBoolFlag(RunNative, "[npm] Use the native npm client for dependency resolution. Reads Artifactory URL and repository from the project's .npmrc registry — no 'jf npm-config' required. Respects .npmrc and Volta configuration."),
+	Script:                        components.NewStringFlag(Script, "[uv] Path to a PEP 723 inline-script .py file to audit standalone, instead of scanning the working directory for a pyproject.toml/uv.lock project."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),

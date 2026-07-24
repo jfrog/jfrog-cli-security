@@ -17,6 +17,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -2150,6 +2152,96 @@ func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
 	assert.Equal(t, blocked, s.Action)
 }
 
+// TestFetchCvsBlockedStatusPoetryTransitive verifies the CVS fallback for a transitive
+// blocker under poetry.
+func TestFetchCvsBlockedStatusPoetryTransitive(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.12"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "immature-strict"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution — must differ from the blocked package.
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+	assert.NotEqual(t, s.PackageName, s.ParentName, "transitive blocker must show a different direct-dependency name")
+
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
 // TestFetchCvsBlockedStatusNotInMetadataNotRendered verifies that a version absent from the metadata API is not rendered as a blocked row.
 func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	const (
@@ -2385,6 +2477,253 @@ func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
 	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
 }
 
+// TestRunCvsFallbackNoMatchesFound covers runCvsFallback's empty-recovery branch: when
+// fetchCvsBlockedStatus can't recover a policy for any of cvsErr's packages (e.g. the
+// metadata API has no record of the stripped version), no partial table should be
+// rendered. Instead: a generic curation-block message is joined to the original cause when
+// the tech's forbidden-output pattern matches it, or the bare cvsErr is returned unchanged
+// otherwise. Either way, results must stay untouched — no misleading empty/partial entry.
+func TestRunCvsFallbackNoMatchesFound(t *testing.T) {
+	const repo = "test-pip-repo"
+	// Metadata API 404s for every package/version — fetchCvsBlockedStatus recovers nothing.
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	unresolvedPkg := []python.PinnedRequirement{{Name: "unresolvable-pkg", Version: "9.9.9", ParentName: "unresolvable-pkg", ParentVersion: "9.9.9"}}
+
+	t.Run("forbidden-output cause — wraps cause with generic curation-block message", func(t *testing.T) {
+		cvsErr := &python.CvsBlockedError{
+			Packages: unresolvedPkg,
+			Cause:    errors.New("ERROR: HTTP error 403 while getting https://example.com/simple/unresolvable-pkg/"),
+		}
+		results := map[string]*CurationReport{}
+		err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, cvsErr.Cause, "original cause must still be reachable via errors.Is")
+		assert.Contains(t, err.Error(), fmt.Sprintf(technologies.CurationErrorMsgToUserTemplate, techutils.Pip),
+			"generic curation-block guidance must be joined in when the tech's forbidden-output pattern matches")
+		assert.Empty(t, results, "no partial/empty table entry must be recorded")
+	})
+
+	t.Run("non-forbidden cause — returns cvsErr unchanged", func(t *testing.T) {
+		cvsErr := &python.CvsBlockedError{
+			Packages: unresolvedPkg,
+			Cause:    errors.New("some unrelated resolution failure"),
+		}
+		results := map[string]*CurationReport{}
+		err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+		assert.Same(t, cvsErr, err, "with no recognizable forbidden pattern, the bare cvsErr must be returned as-is")
+		assert.Empty(t, results, "no partial/empty table entry must be recorded")
+	})
+}
+
+// TestSetRepoFromUvTomlNoServerConfigured is a regression test for a garbled error
+// message: ca.ServerDetails() (AuditBasicParams.ServerDetails) always returns a nil
+// error, so wrapping it with %w produced "...: %!w(<nil>)" — a raw Go fmt-verb artifact
+// leaking to the user instead of a clean "no server configured" message.
+func TestSetRepoFromUvTomlNoServerConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// TestAuditTreeSkipsRedundantSetRepoFromUvTomlWhenAlreadySet is a regression test:
+// setRepoFromUvToml() used to run twice per uv run — once via GetAuth(Uv), again
+// unconditionally in auditTree. auditTree now skips it once PackageManagerConfig is set.
+func TestAuditTreeSkipsRedundantSetRepoFromUvTomlWhenAlreadySet(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{Url: "https://host/", ArtifactoryUrl: "https://host/artifactory/"})
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
+	firstServerDetails, err := ca.GetAuth(techutils.Uv)
+	require.NoError(t, err)
+	require.NotNil(t, firstServerDetails)
+	require.NotNil(t, ca.PackageManagerConfig, "GetAuth must populate PackageManagerConfig via setRepoFromUvToml")
+	logCountAfterGetAuth := strings.Count(buf.String(), "using Artifactory URL")
+	assert.Equal(t, 2, logCountAfterGetAuth, "one setRepoFromUvToml() call must log exactly twice: "+
+		"once from GetNativeUvRegistryConfig, once from setRepoFromUvToml itself")
+
+	_ = ca.auditTree(techutils.Uv, map[string]*CurationReport{})
+
+	logCountAfterAuditTree := strings.Count(buf.String(), "using Artifactory URL")
+	assert.Equal(t, logCountAfterGetAuth, logCountAfterAuditTree,
+		"auditTree must not re-read uv.toml when PackageManagerConfig is already set")
+}
+
+// TestSetRepoFromUvTomlRejectsHostMismatch: a pyproject.toml [[tool.uv.index]] entry
+// pointing at a different host than the configured 'jf c' server must not receive that
+// server's credentials.
+func TestSetRepoFromUvTomlRejectsHostMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://attacker.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromUvTomlAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case.
+func TestSetRepoFromUvTomlAcceptsMatchingHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+	})
+
+	require.NoError(t, ca.setRepoFromUvToml())
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromUvTomlRejectsSchemeDowngrade: a pyproject.toml
+// [[tool.uv.index]] entry pointing at the *same host* as the configured 'jf c' server, but
+// over http instead of https, must not receive that server's credentials — otherwise the
+// host-only check would let a project-local file downgrade them to cleartext.
+func TestSetRepoFromUvTomlRejectsSchemeDowngrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "http://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+// TestPipWinsOverStrayUvLock verifies promotePipToUv's "pip-exclusive files win over
+// uv.lock" rule: requirements.txt plus a stray leftover uv.lock must still audit as pip.
+func TestPipWinsOverStrayUvLock(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "requirements.txt"), []byte("requests==2.31.0\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("# stray uv.lock\n"), 0644))
+	t.Chdir(root)
+
+	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+
+	assert.Contains(t, techs, techutils.Pip.String(), "a pip-exclusive file (requirements.txt) must win over a stray uv.lock")
+	assert.NotContains(t, techs, techutils.Uv.String(), "must not report uv when a pip-exclusive file is present")
+}
+
+// TestPureUvProjectNotReportedAsPip guards the flip side: since Pip's indicators no
+// longer exclude uv.lock, a plain uv project fires both pip (pyproject.toml) and uv
+// (uv.lock) — promotePipToUv must still collapse that to uv alone.
+func TestPureUvProjectNotReportedAsPip(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
+	t.Chdir(root)
+
+	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+
+	assert.Contains(t, techs, techutils.Uv.String(), "uv.lock present, no pip-exclusive files — must report uv")
+	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
+}
+
+// TestTechsToAuditQueuesPep723HintForDeferredLogging: the PEP 723 hint must be queued in pendingWarnings.
+func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "uv.lock"), []byte("version = 1\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "script.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+
+	techs := ca.techsToAudit()
+
+	assert.Equal(t, []string{techutils.Uv.String()}, techs)
+	require.Len(t, ca.pendingWarnings, 1, "the hint must be queued, not logged immediately")
+	assert.Contains(t, ca.pendingWarnings[0], "--script")
+}
+
 // TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
 func TestEffectiveParentVersion(t *testing.T) {
 	cases := []struct {
@@ -2406,7 +2745,7 @@ func TestEffectiveParentVersion(t *testing.T) {
 }
 
 // TestValidateRunNativeForTech checks that --run-native is accepted for the
-// allow-listed native-config techs (npm, pnpm, yarn) and rejected for all other
+// allow-listed native-config techs (npm, pnpm, yarn, uv) and rejected for all other
 // techs with an error that names the offending tech.
 func TestValidateRunNativeForTech(t *testing.T) {
 	// Sanity: npm and pnpm are allow-listed techs. Both flag states pass.
@@ -2419,6 +2758,12 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	t.Run("yarn accepts --run-native as a redundant no-op", func(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
+	})
+
+	// uv has no 'jf uv-config', so --run-native must be a no-op like pnpm/yarn
+	t.Run("uv accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Uv, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Uv, false))
 	})
 
 	// Every other supported tech follows the same contract. Catch silent
@@ -2778,6 +3123,166 @@ func TestPromotePnpmWorkspaceMember(t *testing.T) {
 	}
 }
 
+// TestFetchCvsBlockedStatusUv verifies the CVS fallback for uv: metadata fetch → HEAD probe → policy parse.
+func TestFetchCvsBlockedStatusUv(t *testing.T) {
+	const (
+		repo            = "test-uv-pypi-repo"
+		blockedPkg      = "requests"
+		blockedVer      = "2.19.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/re/qu/requests-2.19.1-py2.py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Uv,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Uv), s.PkgType, "package type must be uv")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusUvTransitive verifies the CVS fallback for a transitive
+// blocker under uv
+func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
+	const (
+		repo            = "test-uv-pypi-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.12"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "immature-strict"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Uv,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution — must differ from the blocked package.
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+	assert.NotEqual(t, s.PackageName, s.ParentName, "transitive blocker must show a different direct-dependency name")
+
+	assert.Equal(t, string(techutils.Uv), s.PkgType, "package type must be uv")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestResolveUvTech verifies that pip is promoted to uv when the right config signals are present.
 func TestPromoteYarnWorkspaceMember(t *testing.T) {
 	npm := techutils.Npm.String()
 	yarn := techutils.Yarn.String()
@@ -2874,4 +3379,144 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 		assert.Contains(t, result, npm, "npm should be kept when the only indicator is at $HOME")
 		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
 	})
+}
+
+// TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
+// [tool.uv]/[[tool.uv.index]], ~/.config/uv/uv.toml), confirms pip-exclusive files always
+// win, and confirms it collapses a tech list already containing both pip and uv into one.
+func TestPromotePipToUv(t *testing.T) {
+	pip := techutils.Pip.String()
+	uv := techutils.Uv.String()
+	other := "maven"
+
+	tests := []struct {
+		name           string
+		techs          []string
+		pyprojectTOML  string // content written to pyproject.toml; empty = don't create
+		hasPipFile     string // name of a pip-exclusive file to create (e.g. "requirements.txt")
+		hasUvLock      bool   // create uv.lock in the project dir
+		hasUvToml      bool   // create ~/.config/uv/uv.toml
+		expectedHasPip bool
+		expectedHasUv  bool
+	}{
+		{
+			name:  "no pip in techs — no change",
+			techs: []string{other},
+		},
+		{
+			name:           "pip with requirements.txt — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			expectedHasPip: true,
+		},
+		{
+			name:           "pip with setup.py — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "setup.py",
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + uv.lock — promoted to uv",
+			techs:         []string{pip},
+			hasUvLock:     true,
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file takes priority over uv.lock — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			hasUvLock:      true,
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + pyproject.toml with [tool.uv] — promoted to uv",
+			techs:         []string{pip},
+			pyprojectTOML: "[tool.uv]\npython = \"3.12\"\n",
+			expectedHasUv: true,
+		},
+		{
+			name:          "pip + pyproject.toml with [[tool.uv.index]] — promoted to uv",
+			techs:         []string{pip},
+			pyprojectTOML: "[[tool.uv.index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n",
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file takes priority over [tool.uv] in pyproject.toml — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			pyprojectTOML:  "[tool.uv]\npython = \"3.12\"\n",
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + ~/.config/uv/uv.toml — promoted to uv",
+			techs:         []string{pip},
+			hasUvToml:     true,
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file takes priority over ~/.config/uv/uv.toml — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "Pipfile",
+			hasUvToml:      true,
+			expectedHasPip: true,
+		},
+		{
+			name:           "plain pip project with bare pyproject.toml — stays pip",
+			techs:          []string{pip},
+			pyprojectTOML:  "[build-system]\nrequires = [\"setuptools\"]\n",
+			expectedHasPip: true,
+		},
+		{
+			name:          "already detected as both pip and uv, uv.lock present — collapses to uv alone",
+			techs:         []string{pip, uv},
+			hasUvLock:     true,
+			expectedHasUv: true,
+		},
+		{
+			name:           "already detected as both pip and uv, pip-exclusive file present — collapses to pip alone",
+			techs:          []string{pip, uv},
+			hasPipFile:     "requirements.txt",
+			expectedHasPip: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			fakeHome := t.TempDir()
+
+			t.Setenv("HOME", fakeHome)
+			t.Setenv("USERPROFILE", fakeHome)
+			t.Chdir(projectDir)
+
+			if tc.hasPipFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, tc.hasPipFile), []byte{}, 0o644))
+			}
+			if tc.hasUvLock {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "uv.lock"), []byte{}, 0o644))
+			}
+			if tc.pyprojectTOML != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(tc.pyprojectTOML), 0o644))
+			}
+			if tc.hasUvToml {
+				uvCfgDir := filepath.Join(fakeHome, ".config", "uv")
+				require.NoError(t, os.MkdirAll(uvCfgDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n"), 0o644))
+			}
+
+			result := promotePipToUv(tc.techs)
+
+			hasPip, hasUv := false, false
+			for _, tech := range result {
+				switch tech {
+				case pip:
+					hasPip = true
+				case uv:
+					hasUv = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasPip, hasPip, "pip presence")
+			assert.Equal(t, tc.expectedHasUv, hasUv, "uv presence")
+		})
+	}
 }

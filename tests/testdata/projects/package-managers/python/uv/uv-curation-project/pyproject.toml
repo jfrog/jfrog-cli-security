@@ -1,0 +1,9 @@
+[project]
+name = "uv-curation-project"
+version = "0.1.0"
+description = "Fixture project for the jf curation-audit (e2e) uv test."
+requires-python = ">=3.11"
+dependencies = ["pexpect==4.8.0"]
+
+[tool.uv]
+package = false

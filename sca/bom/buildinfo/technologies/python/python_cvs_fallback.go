@@ -11,7 +11,7 @@ import (
 	"github.com/jfrog/gofrog/version"
 )
 
-// PinnedRequirement is a blocker extracted from pip's failure output.
+// PinnedRequirement is a blocker extracted from pip, poetry, or uv failure output.
 type PinnedRequirement struct {
 	Name          string
 	Version       string
@@ -63,13 +63,51 @@ var pipDirectFromRequirementsRegex = regexp.MustCompile(
 
 // poetryCvsBlockedReqRegex extracts a pinned `name (version)` from poetry's
 // "X (Y) which doesn't match any versions" error lines. Both `name (X.Y.Z)`
-// and `name (==X.Y.Z)` notations are accepted; range specifiers
-// (e.g. `name (>=1.0,<2.0)`) are skipped because they represent transitive
-// constraints, not the user's direct pin.
+// and `name (==X.Y.Z)` notations are accepted.
 var poetryCvsBlockedReqRegex = regexp.MustCompile(
 	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\((?:==)?\s*([0-9][0-9A-Za-z._+\-]*)\)\s+which doesn't match any versions`)
 
-// parseCvsFailedPackages extracts blockers from pip's and poetry's failure output.
+// poetryCvsBlockedRangeRegex extracts a range-constrained blocker (e.g.
+// "langchain-core (>=1.4.0,<2.0.0) which doesn't match any versions"), the form
+// poetry uses for a transitive dependency's constraint rather than an exact pin.
+var poetryCvsBlockedRangeRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\(([~^!]?[<>=][^)]+)\)\s+which doesn't match any versions`)
+
+// poetryDependsOnParentRegex extracts "parent (parentVersion) depends on
+// name (...)" clauses from poetry's derivation chain, to recover the real
+// parent of a transitively CVS-stripped package. Keyed by child name only,
+// since poetry may restate the constraint slightly differently between clauses.
+var poetryDependsOnParentRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\(([0-9][0-9A-Za-z._+\-]*)\)\s+depends on\s+` +
+		`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\([^)]+\)`)
+
+// uvCvsBlockedReqRegex extracts a pinned name==version from uv's
+// "there is no version of name==version" error line, emitted when CVS has
+// stripped the release from Artifactory's simple index.
+var uvCvsBlockedReqRegex = regexp.MustCompile(
+	`there is no version of ([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)`)
+
+// uvNotFoundInRegistryRegex extracts the package name from uv's
+// "<name> was not found in the package registry" error line, emitted when CVS
+// has stripped all versions of a package so that the package entry itself is absent.
+var uvNotFoundInRegistryRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*) was not found in the package registry`)
+
+// uvDependsOnPinnedRegex extracts name==version from uv's "depends on name==version" clause,
+// used to recover the pinned version when paired with uvNotFoundInRegistryRegex.
+var uvDependsOnPinnedRegex = regexp.MustCompile(
+	`depends on ([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)`)
+
+// uvDependsOnParentRegex extracts "parent==parentVersion depends on name==version"
+// clauses from uv's derivation chain, to recover the real parent of a transitively
+// CVS-stripped package (e.g. "deepagents==0.6.12 depends on langchain-core==1.4.7").
+// Doesn't match "your project depends on ..." (no version), leaving direct-dependency
+// attribution to the caller.
+var uvDependsOnParentRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)\s+depends on\s+` +
+		`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)`)
+
+// parseCvsFailedPackages extracts blockers from pip, poetry, and uv failure output.
 // Only packages that caused the failure are returned, not every requirements entry.
 func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 	seen := map[string]bool{}
@@ -149,19 +187,95 @@ func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 		}
 	}
 
-	// Poetry: "name (version) which doesn't match any versions"
+	// Poetry: recover the real parent from "parent (v) depends on name (...)" clauses.
+	// Falls back to self-attribution when none found (a direct dependency).
+	poetryParentByChild := map[string]PinnedRequirement{}
+	for _, m := range poetryDependsOnParentRegex.FindAllStringSubmatch(pipOutput, -1) {
+		n := normalizePyPIName(m[3])
+		if _, already := poetryParentByChild[n]; !already {
+			poetryParentByChild[n] = PinnedRequirement{Name: normalizePyPIName(m[1]), Version: m[2]}
+		}
+	}
+
+	// Poetry: "name (version) which doesn't match any versions" — exact pin.
 	for _, m := range poetryCvsBlockedReqRegex.FindAllStringSubmatch(pipOutput, -1) {
 		name := normalizePyPIName(m[1])
 		ver := strings.TrimRight(m[2], ")")
 		key := name + "==" + ver
 		if !seen[key] {
 			seen[key] = true
-			failed = append(failed, PinnedRequirement{
-				Name:          name,
-				Version:       ver,
-				ParentName:    name,
-				ParentVersion: ver,
-			})
+			pr := PinnedRequirement{Name: name, Version: ver, ParentName: name, ParentVersion: ver}
+			if parent, ok := poetryParentByChild[name]; ok {
+				pr.ParentName, pr.ParentVersion = parent.Name, parent.Version
+			}
+			failed = append(failed, pr)
+		}
+	}
+
+	// Poetry: "name (range) which doesn't match any versions" — a transitive
+	// dependency's constraint, attributed to its real parent when recoverable.
+	for _, m := range poetryCvsBlockedRangeRegex.FindAllStringSubmatch(pipOutput, -1) {
+		name := normalizePyPIName(m[1])
+		rangeSpec := strings.TrimSpace(m[2])
+		key := name + rangeSpec
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		pr := PinnedRequirement{Name: name, VersionRange: rangeSpec, ParentName: name}
+		if parent, ok := poetryParentByChild[name]; ok {
+			pr.ParentName, pr.ParentVersion = parent.Name, parent.Version
+		}
+		failed = append(failed, pr)
+	}
+
+	// uv: recover the real parent from "parent==v depends on name==v" clauses.
+	// Order-independent — uv's derivation chain doesn't guarantee this appears
+	// before or after the "no version of" / "was not found" clause it pairs with.
+	uvParentByChild := map[string]PinnedRequirement{}
+	for _, m := range uvDependsOnParentRegex.FindAllStringSubmatch(pipOutput, -1) {
+		childKey := normalizePyPIName(m[3]) + "==" + m[4]
+		if _, already := uvParentByChild[childKey]; !already {
+			uvParentByChild[childKey] = PinnedRequirement{Name: normalizePyPIName(m[1]), Version: m[2]}
+		}
+	}
+
+	// uv: "there is no version of name==version" (CVS stripped the release from the simple index)
+	for _, m := range uvCvsBlockedReqRegex.FindAllStringSubmatch(pipOutput, -1) {
+		name := normalizePyPIName(m[1])
+		ver := m[2]
+		key := name + "==" + ver
+		if !seen[key] {
+			seen[key] = true
+			pr := PinnedRequirement{Name: name, Version: ver, ParentName: name, ParentVersion: ver}
+			if parent, ok := uvParentByChild[key]; ok {
+				pr.ParentName, pr.ParentVersion = parent.Name, parent.Version
+			}
+			failed = append(failed, pr)
+		}
+	}
+
+	// uv: "<name> was not found in the package registry" — CVS stripped all versions so the
+	// package entry itself is absent. Recover the pinned version from the adjacent
+	// "depends on <name>==<version>" clause in the same error message.
+	dependsOnByName := map[string]string{}
+	for _, m := range uvDependsOnPinnedRegex.FindAllStringSubmatch(pipOutput, -1) {
+		n := normalizePyPIName(m[1])
+		if _, already := dependsOnByName[n]; !already {
+			dependsOnByName[n] = m[2]
+		}
+	}
+	for _, m := range uvNotFoundInRegistryRegex.FindAllStringSubmatch(pipOutput, -1) {
+		name := normalizePyPIName(m[1])
+		ver := dependsOnByName[name]
+		key := name + "==" + ver
+		if !seen[key] {
+			seen[key] = true
+			pr := PinnedRequirement{Name: name, Version: ver, ParentName: name, ParentVersion: ver}
+			if parent, ok := uvParentByChild[key]; ok {
+				pr.ParentName, pr.ParentVersion = parent.Name, parent.Version
+			}
+			failed = append(failed, pr)
 		}
 	}
 
@@ -199,7 +313,26 @@ func isCvsVersionFilteredOutput(output string) bool {
 		strings.Contains(output, "doesn't match any versions") ||
 		// ResolutionImpossible: direct dep resolved but a transitive dep was stripped by CVS.
 		(strings.Contains(output, "ResolutionImpossible") &&
-			strings.Contains(output, "no matching distributions available for your environment"))
+			strings.Contains(output, "no matching distributions available for your environment")) ||
+		strings.Contains(output, "there is no version of") ||
+		strings.Contains(output, "was not found in the package registry")
+}
+
+// WrapUvCurationErr checks a failed `uv lock` run's output for a CVS-stripped
+// version, wrapping it as a *CvsBlockedError so the caller can recover policy
+// details via the metadata-API fallback. A generic download-blocked 403 (e.g. uv
+// fetching a wheel for metadata) is NOT treated as CVS-blocked, matching
+// pip/poetry — cause is returned unchanged, leaving the caller to decide how to
+// present it (see classifyUvCurationLockError, which falls through to a plain
+// "contact admin" message for that case).
+func WrapUvCurationErr(combinedOutput string, cause error) error {
+	if cause == nil {
+		return nil
+	}
+	if isCvsVersionFilteredOutput(combinedOutput) {
+		return &CvsBlockedError{Packages: parseCvsFailedPackages(combinedOutput), Cause: cause}
+	}
+	return cause
 }
 
 // ResolveVersionRange returns the newest version from candidates satisfying rangeSpec.

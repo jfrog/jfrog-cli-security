@@ -404,6 +404,153 @@ func getPoetryCurationExpectedResponse(config *config.ServerDetails, repo string
 	}
 }
 
+// TestUvCurationAudit exercises 'jf curation-audit' end-to-end for uv. With no uv.lock
+// present, 'jf ca' runs 'uv lock' against the mock's curation pass-through endpoint,
+// resolving pexpect + ptyprocess from synthetic PEP 503/658 responses (see
+// uvCurationServer). The curation HEAD-walker then probes the plain download URL
+// recorded in the generated uv.lock and reports the blocked package as PkgType "uv".
+func TestUvCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	const repo = "pypi-curation"
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "uv", "uv-curation-project"))
+	defer cleanUp()
+
+	blockedURL := "/api/pypi/" + repo + "/packages/pexpect-4.8.0-py2.py3-none-any.whl"
+	expectedRequest := map[string]bool{blockedURL: false}
+	requestToFail := map[string]bool{blockedURL: false}
+	serverMock, config := uvCurationServer(t, expectedRequest, requestToFail)
+	defer serverMock.Close()
+
+	cleanUpHome := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUpHome()
+
+	config.User = "admin"
+	config.Password = "password"
+	config.ServerId = "test"
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+	assert.NoError(t, configCmd.Run())
+
+	appendToFile(t, filepath.Join(tempDirPath, "pyproject.toml"),
+		fmt.Sprintf("\n[[tool.uv.index]]\nurl = \"%sapi/pypi/%s/simple\"\n", config.ArtifactoryUrl, repo))
+
+	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
+	output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)
+
+	expectedResp := getUvCurationExpectedResponse(config, repo)
+	var got []curation.PackageStatus
+	bracketIndex := strings.Index(output, "[")
+	require.Less(t, 0, bracketIndex, "Unexpected Curation output with missing '['")
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResp, got)
+	for k, v := range expectedRequest {
+		assert.Truef(t, v, "didn't receive expected HEAD request for package url %s", k)
+	}
+}
+
+func getUvCurationExpectedResponse(config *config.ServerDetails, repo string) []curation.PackageStatus {
+	return []curation.PackageStatus{
+		{
+			Action:            "blocked",
+			PackageName:       "pexpect",
+			PackageVersion:    "4.8.0",
+			BlockedPackageUrl: config.ArtifactoryUrl + "api/pypi/" + repo + "/packages/pexpect-4.8.0-py2.py3-none-any.whl",
+			BlockingReason:    curation.BlockingReasonPolicy,
+			ParentName:        "pexpect",
+			ParentVersion:     "4.8.0",
+			DepRelation:       "direct",
+			PkgType:           "uv",
+			Policy: []curation.Policy{
+				{Policy: "pol1", Condition: "cond1", Explanation: "explanation", Recommendation: "recommendation"},
+				{Policy: "pol2", Condition: "cond2", Explanation: "explanation2", Recommendation: "recommendation2"},
+			},
+		},
+	}
+}
+
+// uvSimplePackage holds the fixed pexpect/ptyprocess synthetic PyPI package data that
+// the uv curation test resolves against.
+type uvSimplePackage struct {
+	name, version, sha256, requiresDist string
+}
+
+var uvSimplePackages = map[string]uvSimplePackage{
+	"pexpect":    {name: "pexpect", version: "4.8.0", sha256: "0b48a55dcb3c05f3329815901ea4fc1537514d6ba867a152b581d69ae3710937", requiresDist: "Requires-Dist: ptyprocess (>=0.5)\n"},
+	"ptyprocess": {name: "ptyprocess", version: "0.7.0", sha256: "4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
+}
+
+func (p uvSimplePackage) wheelName() string {
+	return fmt.Sprintf("%s-%s-py2.py3-none-any.whl", p.name, p.version)
+}
+
+// simpleIndexHtml is a minimal PEP 503 simple-index page for p, advertising PEP 658
+// so 'uv lock' fetches the metadata sidecar below instead of the wheel itself.
+func (p uvSimplePackage) simpleIndexHtml() string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html><head><title>Simple index</title><meta name="api-version" value="2" /></head>
+<body><a href="../../packages/%s#sha256=%s" data-core-metadata="true">%s</a></body></html>`,
+		p.wheelName(), p.sha256, p.wheelName())
+}
+
+// coreMetadata is p's PEP 658 sidecar: just enough METADATA (Name/Version/Requires-Dist)
+// for uv to resolve the dependency graph.
+func (p uvSimplePackage) coreMetadata() string {
+	return fmt.Sprintf("Metadata-Version: 2.1\nName: %s\nVersion: %s\n%s", p.name, p.version, p.requiresDist)
+}
+
+// uvCurationServer mocks Artifactory's PyPI curation pass-through for a real 'uv lock'
+// subprocess to resolve against, serving synthetic PEP 503/658 responses.
+func uvCurationServer(t *testing.T, expectedRequest, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
+	mapLock := sync.Mutex{}
+	serverMock, serverConfig, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			mapLock.Lock()
+			if _, exist := expectedRequest[r.RequestURI]; exist {
+				expectedRequest[r.RequestURI] = true
+			}
+			mapLock.Unlock()
+			if _, exist := requestToFail[r.RequestURI]; exist {
+				w.WriteHeader(http.StatusForbidden)
+			}
+		case http.MethodGet:
+			switch r.RequestURI {
+			case "/api/system/version":
+				_, err := w.Write([]byte(`{"version": "7.82.0"}`))
+				require.NoError(t, err)
+				return
+			case "/api/v1/system/version":
+				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+				require.NoError(t, err)
+				return
+			}
+			if strings.Contains(r.RequestURI, "api/curation/audit") {
+				for _, pkg := range uvSimplePackages {
+					if strings.HasSuffix(r.RequestURI, "/simple/"+pkg.name+"/") {
+						_, err := w.Write([]byte(pkg.simpleIndexHtml()))
+						require.NoError(t, err)
+						return
+					}
+					if strings.HasSuffix(r.RequestURI, "/"+pkg.wheelName()+".metadata") {
+						_, err := w.Write([]byte(pkg.coreMetadata()))
+						require.NoError(t, err)
+						return
+					}
+				}
+			}
+			if _, exist := requestToFail[r.RequestURI]; exist {
+				w.WriteHeader(http.StatusForbidden)
+				_, err := w.Write([]byte(curationBlockedTarballResponse))
+				require.NoError(t, err)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	return serverMock, serverConfig
+}
+
 func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, simpleIndex ...map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	var index map[string]string

@@ -101,9 +101,61 @@ func TestParseCvsFailedPackages(t *testing.T) {
 			want:   []PinnedRequirement{{Name: "telnyx", Version: "4.87.1", ParentName: "telnyx", ParentVersion: "4.87.1"}},
 		},
 		{
-			name:   "poetry: range specifier is not captured",
+			name:   "poetry: range specifier without a real parent is self-attributed",
 			output: "Because sample-poetry-project depends on bar (>=1.0,<2.0) which doesn't match any versions, version solving failed.",
-			want:   nil,
+			want:   []PinnedRequirement{{Name: "bar", VersionRange: ">=1.0,<2.0", ParentName: "bar"}},
+		},
+		{
+			name: "poetry: transitive CVS-stripped range attributed to its real parent",
+			output: "Because deepagents (0.6.12) depends on langchain-core (>=1.4.0) which doesn't match any versions,\n" +
+				"deepagents (0.6.12) requires langchain-core (>=1.4.0).\n" +
+				"And because sample-poetry-project depends on deepagents (0.6.12), version solving failed.",
+			want: []PinnedRequirement{{Name: "langchain-core", VersionRange: ">=1.4.0", ParentName: "deepagents", ParentVersion: "0.6.12"}},
+		},
+		{
+			name: "poetry: transitive CVS-stripped exact pin attributed to its real parent",
+			output: "Because deepagents (0.6.12) depends on langchain-core (1.4.7) which doesn't match any versions,\n" +
+				"deepagents (0.6.12) requires langchain-core (1.4.7).\n" +
+				"And because sample-poetry-project depends on deepagents (0.6.12), version solving failed.",
+			want: []PinnedRequirement{{Name: "langchain-core", Version: "1.4.7", ParentName: "deepagents", ParentVersion: "0.6.12"}},
+		},
+		{
+			name: "uv: there is no version of (CVS stripped from Artifactory index)",
+			output: "× No solution found when resolving dependencies:\n" +
+				"╰─▶ Because there is no version of telnyx==4.87.1 and your project depends\n" +
+				"    on telnyx==4.87.1, we can conclude that your project's requirements\n" +
+				"    are unsatisfiable.",
+			want: []PinnedRequirement{{Name: "telnyx", Version: "4.87.1", ParentName: "telnyx", ParentVersion: "4.87.1"}},
+		},
+		{
+			name: "uv: deduplicates repeated name==version in output",
+			output: "Because there is no version of requests==2.28.0 and your project depends\n" +
+				"on requests==2.28.0, we can conclude...",
+			want: []PinnedRequirement{{Name: "requests", Version: "2.28.0", ParentName: "requests", ParentVersion: "2.28.0"}},
+		},
+		{
+			name: "uv: transitive CVS-stripped dependency attributed to its real parent",
+			output: "× No solution found when resolving dependencies:\n" +
+				"╰─▶ Because there is no version of langchain-core==1.4.7 and deepagents==0.6.12\n" +
+				"    depends on langchain-core==1.4.7, we can conclude that deepagents==0.6.12\n" +
+				"    cannot be used.\n" +
+				"    And because your project depends on deepagents==0.6.12, we can conclude\n" +
+				"    that your project's requirements are unsatisfiable.",
+			want: []PinnedRequirement{{Name: "langchain-core", Version: "1.4.7", ParentName: "deepagents", ParentVersion: "0.6.12"}},
+		},
+		{
+			name: "uv: transitive attribution is independent of clause order",
+			output: "Because deepagents==0.6.12 depends on langchain-core==1.4.7 and there is no version of langchain-core==1.4.7,\n" +
+				"we can conclude that deepagents==0.6.12\n" +
+				"cannot be used.",
+			want: []PinnedRequirement{{Name: "langchain-core", Version: "1.4.7", ParentName: "deepagents", ParentVersion: "0.6.12"}},
+		},
+		{
+			name: "uv: transitive package-not-found attributed to its real parent",
+			output: "Because deepagents==0.6.12 depends on langsmith==0.10.0 and langsmith was not found in the package registry,\n" +
+				"we can conclude that deepagents==0.6.12 cannot\n" +
+				"be used.",
+			want: []PinnedRequirement{{Name: "langsmith", Version: "0.10.0", ParentName: "deepagents", ParentVersion: "0.6.12"}},
 		},
 	}
 	for _, tc := range cases {
@@ -121,6 +173,7 @@ func TestIsCvsVersionFilteredOutput(t *testing.T) {
 		"ERROR: No matching distribution found for deepagents==0.5.5":                                                        true,
 		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                        true,
 		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.": true,
+		"× No solution found when resolving dependencies:\n╰─▶ Because there is no version of telnyx==4.87.1 and your project depends on telnyx==4.87.1, we can conclude that your project's requirements are unsatisfiable.": true,
 		resolutionImpossible:                               true,
 		"ERROR: 403 Forbidden":                             false,
 		"ERROR: ResolutionImpossible: some other conflict": false, // no "no matching distributions" line
