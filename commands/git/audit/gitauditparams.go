@@ -20,7 +20,6 @@ type GitAuditParams struct {
 	serverDetails    *config.ServerDetails
 	useConfigProfile bool
 	configProfile    *services.ConfigProfile
-	workspaceName    string
 	// Violations params
 	resultsContext results.ResultContext
 	failBuild      bool
