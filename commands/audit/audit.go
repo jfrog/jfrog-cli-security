@@ -1037,8 +1037,7 @@ func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to create Xray service manager: %s", err.Error())
 	}
-	// first in path is the repository (delimiter '/') rest is the path
-	if err = artifact.WaitForArtifactScanStatus(xrayManager, strings.Split(uploadPath, "/")[0], strings.Join(strings.Split(uploadPath, "/")[1:], "/"), artifact.ScanStarted()); err != nil {
+	if err = artifact.WaitForArtifactScanStatus(xrayManager, auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath, artifact.ScanStarted()); err != nil {
 		return "", fmt.Errorf("failed to wait for artifact scan status: %s", err.Error())
 	}
 	return xsc.GetScanResultsUiRoute(&xsc.ScanResultsUiRouteParams{

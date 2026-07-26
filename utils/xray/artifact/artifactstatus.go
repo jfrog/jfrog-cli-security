@@ -70,9 +70,13 @@ func NewScanCompleteParams(options ...ScanCompleteOption) *ScanCompleteParams {
 func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path string, options ...ScanCompleteOption) error {
 	params := NewScanCompleteParams(options...)
 	if !params.Overall && len(params.Steps) == 0 {
-		return fmt.Errorf("no scan completion criteria were provided")
+		if !params.WaitForScanStarted {
+			return fmt.Errorf("no scan completion criteria were provided")
+		}
+		log.Debug("Waiting for artifact scan to start.")
+	} else {
+		log.Debug(fmt.Sprintf("Waiting for artifact scan completion. Overall: %t, Steps: %v", params.Overall, params.Steps))
 	}
-	log.Debug(fmt.Sprintf("Waiting for artifact scan completion. Overall: %t, Steps: %v", params.Overall, params.Steps))
 	pollingExecutor := &httputils.PollingExecutor{
 		PollingInterval: ArtifactStatusFetchingIntervalNano,
 		Timeout:         ArtifactStatusFetchTimeoutNano,
