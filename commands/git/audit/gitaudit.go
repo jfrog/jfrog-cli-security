@@ -81,8 +81,8 @@ func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error)
 		// Already set, use it
 		return params.configProfile, nil
 	}
-	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s (workspace: %q)", params.gitContext.Source.GitRepoHttpsCloneUrl, params.workspaceName))
-	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey, params.workspaceName)
+	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s (workspace: %q)", params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.WorkspaceName))
+	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey, params.resultsContext.WorkspaceName)
 	if err != nil || configProfile == nil {
 		return nil, fmt.Errorf("failed to get config profile for git audit: %v", err)
 	}

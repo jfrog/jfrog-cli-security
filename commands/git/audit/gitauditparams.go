@@ -20,7 +20,6 @@ type GitAuditParams struct {
 	serverDetails    *config.ServerDetails
 	useConfigProfile bool
 	configProfile    *services.ConfigProfile
-	workspaceName    string
 	// Violations params
 	resultsContext results.ResultContext
 	failBuild      bool
@@ -227,12 +226,12 @@ func (gap *GitAuditParams) ConfigProfile() *services.ConfigProfile {
 }
 
 func (gap *GitAuditParams) SetWorkspaceName(workspaceName string) *GitAuditParams {
-	gap.workspaceName = workspaceName
+	gap.resultsContext.WorkspaceName = workspaceName
 	return gap
 }
 
 func (gap *GitAuditParams) WorkspaceName() string {
-	return gap.workspaceName
+	return gap.resultsContext.WorkspaceName
 }
 
 func (gap *GitAuditParams) SetGitContext(gitContext *services.XscGitInfoContext) *GitAuditParams {
