@@ -180,7 +180,7 @@ const (
 	GitThreads      = gitPrefix + Threads
 
 	UseConfigProfile = "use-config-profile"
-	Workspace        = "workspace, ws"
+	Workspace        = "workspace"
 )
 
 // Mapping between security commands (key) and their flags (key).
