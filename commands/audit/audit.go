@@ -757,7 +757,8 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			}
 		}
 	}
-	// If no scan targets were detected, we should still proceed with the scans.
+	// If no scan targets were detected (e.g. JAS-only with no package managers), still
+	// create a target so secrets/IaC/SAST can run.
 	if len(dirsToDetect) == 1 && len(cmdResults.Targets) == 0 {
 		if scanTarget := createScanTarget(dirsToDetect[0], exclusions); scanTarget != nil {
 			cmdResults.NewScanResults(*scanTarget)

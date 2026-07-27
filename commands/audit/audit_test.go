@@ -464,6 +464,29 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
+// Old flow with JAS-only (no SCA) leaves IsRecursiveScan false. A directory without
+// technologies must still become a scan target so secrets/IaC/SAST can run.
+func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
+	emptyDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(emptyDir))
+	}()
+	defer securityTestUtils.ChangeWDWithCallback(t, emptyDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams().SetWorkingDirs([]string{emptyDir})
+	// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
+	params.SetIsRecursiveScan(false)
+	params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+
+	detectScanTargets(cmdRes, params)
+
+	if assert.Len(t, cmdRes.Targets, 1) {
+		assert.Equal(t, emptyDir, cmdRes.Targets[0].Target)
+	}
+}
+
 func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
