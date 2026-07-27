@@ -105,11 +105,12 @@ func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path
 				}
 				return
 			}
-			if !params.Overall && len(params.Steps) == 0 {
+			switch {
+			case !params.Overall && len(params.Steps) == 0:
 				log.Debug(fmt.Sprintf("Artifact scan started. (%s)", status.Overall.Status))
-			} else if params.Overall {
+			case params.Overall:
 				log.Debug(fmt.Sprintf("Artifact scan completed. (%s)", status.Overall.Status))
-			} else {
+			default:
 				log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
 			}
 			// We don't need to return any response body, as we don't use it.
