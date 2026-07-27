@@ -464,26 +464,62 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
-// Old flow with JAS-only (no SCA) leaves IsRecursiveScan false. A directory without
-// technologies must still become a scan target so secrets/IaC/SAST can run.
+// Old flow with JAS-only (no SCA) leaves IsRecursiveScan false. Directories without
+// technologies must still become scan targets so secrets/IaC/SAST can run.
 func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
-	emptyDir, err := fileutils.CreateTempDir()
+	baseDir, err := fileutils.CreateTempDir()
 	assert.NoError(t, err)
 	defer func() {
-		assert.NoError(t, fileutils.RemoveTempDir(emptyDir))
+		assert.NoError(t, fileutils.RemoveTempDir(baseDir))
 	}()
-	defer securityTestUtils.ChangeWDWithCallback(t, emptyDir)()
+	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
 
-	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
-	params := NewAuditParams().SetWorkingDirs([]string{emptyDir})
-	// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
-	params.SetIsRecursiveScan(false)
-	params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+	emptyDir1 := filepath.Join(baseDir, "wd1")
+	emptyDir2 := filepath.Join(baseDir, "wd2")
+	npmDir := filepath.Join(baseDir, "npm-wd")
+	assert.NoError(t, os.MkdirAll(emptyDir1, 0o755))
+	assert.NoError(t, os.MkdirAll(emptyDir2, 0o755))
+	assert.NoError(t, os.MkdirAll(npmDir, 0o755))
+	createEmptyFile(t, filepath.Join(npmDir, "package.json"))
 
-	detectScanTargets(cmdRes, params)
+	tests := []struct {
+		name        string
+		workingDirs []string
+		wantTargets []string
+	}{
+		{
+			name:        "single working dir",
+			workingDirs: []string{emptyDir1},
+			wantTargets: []string{emptyDir1},
+		},
+		{
+			name:        "multiple working dirs (mono-repo)",
+			workingDirs: []string{emptyDir1, emptyDir2},
+			wantTargets: []string{emptyDir1, emptyDir2},
+		},
+		{
+			name:        "mixed tech and no-tech working dirs",
+			workingDirs: []string{npmDir, emptyDir1},
+			wantTargets: []string{npmDir, emptyDir1},
+		},
+	}
 
-	if assert.Len(t, cmdRes.Targets, 1) {
-		assert.Equal(t, emptyDir, cmdRes.Targets[0].Target)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+			params := NewAuditParams().SetWorkingDirs(tt.workingDirs)
+			// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
+			params.SetIsRecursiveScan(false)
+			params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+
+			detectScanTargets(cmdRes, params)
+
+			got := make([]string, 0, len(cmdRes.Targets))
+			for _, target := range cmdRes.Targets {
+				got = append(got, target.Target)
+			}
+			assert.ElementsMatch(t, tt.wantTargets, got)
+		})
 	}
 }
 

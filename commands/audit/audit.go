@@ -720,48 +720,49 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		dirsToDetect = append(dirsToDetect, requestedDirectory)
 	}
 	for _, requestedDirectory := range dirsToDetect {
+		targetsBefore := len(cmdResults.Targets)
 		// Detect descriptors and technologies in the requested directory.
 		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), utils.GetExcludePattern(exclusions, utils.DefaultScaExcludePatterns, params.IsRecursiveScan()))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
-			continue
-		}
-		// Create scans to perform
-		for tech, workingDirs := range techToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
-			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				scanTarget := createScanTarget(requestedDirectory, exclusions)
-				if scanTarget == nil {
+		} else {
+			// Create scans to perform
+			for tech, workingDirs := range techToWorkingDirs {
+				if tech == techutils.Dotnet {
+					// We detect Dotnet and Nuget the same way, if one detected so does the other.
+					// We don't need to scan for both and get duplicate results.
 					continue
 				}
-				scanTarget.Technologies = []techutils.Technology{tech}
+				// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
+				if len(workingDirs) == 0 {
+					// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
+					scanTarget := createScanTarget(requestedDirectory, exclusions)
+					if scanTarget == nil {
+						continue
+					}
+					scanTarget.Technologies = []techutils.Technology{tech}
+					cmdResults.NewScanResults(*scanTarget)
+				}
+				for workingDir, descriptors := range workingDirs {
+					// Add scan for each detected working directory.
+					scanTarget := createScanTarget(workingDir, exclusions)
+					if scanTarget == nil {
+						continue
+					}
+					scanTarget.Technologies = []techutils.Technology{tech}
+					targetResults := cmdResults.NewScanResults(*scanTarget)
+					if tech != techutils.NoTech {
+						targetResults.SetDescriptors(descriptors...)
+					}
+				}
+			}
+		}
+		// If this working dir produced no targets (e.g. JAS-only with no package managers),
+		// still create a target so secrets/IaC/SAST can run.
+		if len(cmdResults.Targets) == targetsBefore {
+			if scanTarget := createScanTarget(requestedDirectory, exclusions); scanTarget != nil {
 				cmdResults.NewScanResults(*scanTarget)
 			}
-			for workingDir, descriptors := range workingDirs {
-				// Add scan for each detected working directory.
-				scanTarget := createScanTarget(workingDir, exclusions)
-				if scanTarget == nil {
-					continue
-				}
-				scanTarget.Technologies = []techutils.Technology{tech}
-				targetResults := cmdResults.NewScanResults(*scanTarget)
-				if tech != techutils.NoTech {
-					targetResults.SetDescriptors(descriptors...)
-				}
-			}
-		}
-	}
-	// If no scan targets were detected (e.g. JAS-only with no package managers), still
-	// create a target so secrets/IaC/SAST can run.
-	if len(dirsToDetect) == 1 && len(cmdResults.Targets) == 0 {
-		if scanTarget := createScanTarget(dirsToDetect[0], exclusions); scanTarget != nil {
-			cmdResults.NewScanResults(*scanTarget)
 		}
 	}
 	// Load deprecated apps config information for all targets
