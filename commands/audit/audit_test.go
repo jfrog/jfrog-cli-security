@@ -472,21 +472,29 @@ func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
 	defer func() {
 		assert.NoError(t, fileutils.RemoveTempDir(baseDir))
 	}()
-	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
 
+	cwdDir := filepath.Join(baseDir, "cwd")
 	emptyDir1 := filepath.Join(baseDir, "wd1")
 	emptyDir2 := filepath.Join(baseDir, "wd2")
 	npmDir := filepath.Join(baseDir, "npm-wd")
+	assert.NoError(t, os.MkdirAll(cwdDir, 0o755))
 	assert.NoError(t, os.MkdirAll(emptyDir1, 0o755))
 	assert.NoError(t, os.MkdirAll(emptyDir2, 0o755))
 	assert.NoError(t, os.MkdirAll(npmDir, 0o755))
 	createEmptyFile(t, filepath.Join(npmDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, cwdDir)()
+	resolvedCwdDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
 
 	tests := []struct {
 		name        string
 		workingDirs []string
 		wantTargets []string
 	}{
+		{
+			name:        "current directory when no working dirs are passed",
+			wantTargets: []string{resolvedCwdDir},
+		},
 		{
 			name:        "single working dir",
 			workingDirs: []string{emptyDir1},
@@ -507,7 +515,10 @@ func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
-			params := NewAuditParams().SetWorkingDirs(tt.workingDirs)
+			params := NewAuditParams()
+			if tt.workingDirs != nil {
+				params.SetWorkingDirs(tt.workingDirs)
+			}
 			// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
 			params.SetIsRecursiveScan(false)
 			params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
