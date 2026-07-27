@@ -464,6 +464,76 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
+// Old flow with JAS-only (no SCA) leaves IsRecursiveScan false. Directories without
+// technologies must still become scan targets so secrets/IaC/SAST can run.
+func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
+	baseDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(baseDir))
+	}()
+
+	cwdDir := filepath.Join(baseDir, "cwd")
+	emptyDir1 := filepath.Join(baseDir, "wd1")
+	emptyDir2 := filepath.Join(baseDir, "wd2")
+	npmDir := filepath.Join(baseDir, "npm-wd")
+	assert.NoError(t, os.MkdirAll(cwdDir, 0o755))
+	assert.NoError(t, os.MkdirAll(emptyDir1, 0o755))
+	assert.NoError(t, os.MkdirAll(emptyDir2, 0o755))
+	assert.NoError(t, os.MkdirAll(npmDir, 0o755))
+	createEmptyFile(t, filepath.Join(npmDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, cwdDir)()
+	resolvedCwdDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		workingDirs []string
+		wantTargets []string
+	}{
+		{
+			name:        "current directory when no working dirs are passed",
+			wantTargets: []string{resolvedCwdDir},
+		},
+		{
+			name:        "single working dir",
+			workingDirs: []string{emptyDir1},
+			wantTargets: []string{emptyDir1},
+		},
+		{
+			name:        "multiple working dirs (mono-repo)",
+			workingDirs: []string{emptyDir1, emptyDir2},
+			wantTargets: []string{emptyDir1, emptyDir2},
+		},
+		{
+			name:        "mixed tech and no-tech working dirs",
+			workingDirs: []string{npmDir, emptyDir1},
+			wantTargets: []string{npmDir, emptyDir1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+			params := NewAuditParams()
+			if tt.workingDirs != nil {
+				params.SetWorkingDirs(tt.workingDirs)
+			}
+			// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
+			params.SetIsRecursiveScan(false)
+			params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+
+			detectScanTargets(cmdRes, params)
+
+			got := make([]string, 0, len(cmdRes.Targets))
+			for _, target := range cmdRes.Targets {
+				got = append(got, target.Target)
+			}
+			assert.ElementsMatch(t, tt.wantTargets, got)
+		})
+	}
+}
+
 func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
