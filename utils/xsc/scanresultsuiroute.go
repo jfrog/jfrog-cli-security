@@ -20,8 +20,8 @@ type ScanResultsUiRouteParams struct {
 }
 
 func GetScanResultsUiRoute(params *ScanResultsUiRouteParams) (string, error) {
-	if clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, xscServices.GetUIRouteAPIMinXrayVersion) != nil {
-		log.Debug(fmt.Sprintf("Minimal Xray version required for scan results UI route is '%s'. Skipping.", xscServices.GetUIRouteAPIMinXrayVersion))
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, xscServices.GetUIRouteAPIMinXrayVersion); err != nil {
+		log.Debug(fmt.Sprintf("Getting scan results UI route is not supported on your current Xray version. %s", err.Error()))
 		return "", nil
 	}
 	if params.GitContext == nil || params.ServerDetails == nil {
