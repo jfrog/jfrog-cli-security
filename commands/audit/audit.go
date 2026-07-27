@@ -758,7 +758,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		}
 	}
 	// If no scan targets were detected, we should still proceed with the scans.
-	if len(dirsToDetect) == 1 && params.IsRecursiveScan() && len(cmdResults.Targets) == 0 {
+	if len(dirsToDetect) == 1 && len(cmdResults.Targets) == 0 {
 		if scanTarget := createScanTarget(dirsToDetect[0], exclusions); scanTarget != nil {
 			cmdResults.NewScanResults(*scanTarget)
 		}

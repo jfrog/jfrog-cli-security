@@ -1035,7 +1035,7 @@ func TestAuditNewScaSimpleJsonMultipleWorkingDirs(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total:             &validations.TotalCount{Vulnerabilities: 11},
+		Total: &validations.TotalCount{Vulnerabilities: 11},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 1},
 		},
