@@ -1045,7 +1045,7 @@ func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string,
 		ServerDetails:          serverDetails,
 		ProjectKey:             auditParams.resultsContext.ProjectKey,
 		GitContext:             auditParams.GitContext(),
-		ScanResultArtifactPath: uploadPath,
+		ScanResultArtifactPath: fmt.Sprintf("%s/%s", auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath),
 	})
 }
 
