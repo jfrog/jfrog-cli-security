@@ -158,7 +158,7 @@ require (
 )
 
 // attiasas:feature/XRAY-132336-add-git-route-api
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260726073427-df350e2cf58d
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20260726133026-33d5d7623ced
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
