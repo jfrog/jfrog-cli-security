@@ -2310,12 +2310,16 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(tt.respBody))
 			})
 			defer serverMock.Close()
 
+			// Poetry (like Pip/Pipenv) routes through sendBoundedRequest, which requires a
+			// zero-retry client — mirrors the production boundedRedirectManager construction.
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
 			rtAuth := rtManager.GetConfig().GetServiceDetails()
 			httpClientDetails := rtAuth.CreateHttpClientDetails()
 			analyzer := treeAnalyzer{
@@ -2371,7 +2375,7 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	// Version-specific metadata JSON (returns the whl download URL).
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		// All-versions metadata: /api/pypi/<repo>/pypi/<name>/json
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
@@ -2398,6 +2402,10 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
@@ -2467,7 +2475,7 @@ func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
 	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -2483,6 +2491,10 @@ func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Poetry (like Pip/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
@@ -2525,7 +2537,7 @@ func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 		ver  = "4.87.1000" // not in the metadata API
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
 			w.WriteHeader(http.StatusNotFound)
@@ -2535,6 +2547,10 @@ func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2566,7 +2582,7 @@ func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -2583,6 +2599,10 @@ func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2630,7 +2650,7 @@ func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodHead:
 			w.WriteHeader(http.StatusInternalServerError)
@@ -2643,6 +2663,10 @@ func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2671,7 +2695,7 @@ func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodHead:
 			// Stale CVS cache cleared; package is now accessible.
@@ -2685,6 +2709,10 @@ func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2873,41 +2901,45 @@ url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
-func TestSendPipenvRequestRejectsRedirectOutsideRepository(t *testing.T) {
-	var outsideRequested atomic.Bool
-	var requests atomic.Int32
-	server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
-		if r.URL.Path == "/api/system/configuration" {
-			outsideRequested.Store(true)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
-	})
-	defer server.Close()
-	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
-	require.NoError(t, err)
-	rtAuth := rtManager.GetConfig().GetServiceDetails()
-	analyzer := treeAnalyzer{
-		rtManager:         rtManager,
-		httpClientDetails: rtAuth.CreateHttpClientDetails(),
-		url:               rtAuth.GetUrl(),
-		repo:              "repo",
-		tech:              techutils.Pipenv,
-	}
-	requestDetails := analyzer.httpClientDetails.Clone()
-	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+			}
+			requestDetails := analyzer.httpClientDetails.Clone()
+			requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
 
-	_, _, err = analyzer.sendPipenvRequest(http.MethodGet,
-		strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsafe redirect")
-	assert.False(t, outsideRequested.Load())
-	assert.Equal(t, int32(1), requests.Load())
+			_, _, err = analyzer.sendBoundedRequest(http.MethodGet,
+				strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
 }
 
-func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
+func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 	tests := []struct {
 		name string
 		call func(*treeAnalyzer) error
@@ -2927,8 +2959,48 @@ func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+		for _, test := range tests {
+			t.Run(tech.String()+"/"+test.name, func(t *testing.T) {
+				var outsideRequested atomic.Bool
+				var requests atomic.Int32
+				server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+					requests.Add(1)
+					if r.URL.Path == "/api/system/configuration" {
+						outsideRequested.Store(true)
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+				})
+				defer server.Close()
+				rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+				require.NoError(t, err)
+				rtAuth := rtManager.GetConfig().GetServiceDetails()
+				analyzer := &treeAnalyzer{
+					rtManager:         rtManager,
+					httpClientDetails: rtAuth.CreateHttpClientDetails(),
+					url:               rtAuth.GetUrl(),
+					repo:              "repo",
+					tech:              tech,
+				}
+
+				err = test.call(analyzer)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "unsafe redirect")
+				assert.False(t, outsideRequested.Load())
+				assert.Equal(t, int32(1), requests.Load())
+			})
+		}
+	}
+}
+
+// TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects exercises the actual
+// tech-branch in fetchNodeStatus (not sendBoundedRequest directly) to guard against a
+// regression that silently narrows the bounded-redirect condition back to Pipenv only.
+func TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+		t.Run(tech.String(), func(t *testing.T) {
 			var outsideRequested atomic.Bool
 			var requests atomic.Int32
 			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -2944,15 +3016,18 @@ func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
 			require.NoError(t, err)
 			rtAuth := rtManager.GetConfig().GetServiceDetails()
-			analyzer := &treeAnalyzer{
+			nodeId := python.PythonPackageTypeIdentifier + "pkg:1.0.0"
+			packageUrl := strings.TrimSuffix(rtAuth.GetUrl(), "/") + "/api/pypi/repo/packages/pkg.whl"
+			analyzer := treeAnalyzer{
 				rtManager:         rtManager,
 				httpClientDetails: rtAuth.CreateHttpClientDetails(),
 				url:               rtAuth.GetUrl(),
 				repo:              "repo",
-				tech:              techutils.Pipenv,
+				tech:              tech,
+				downloadUrls:      map[string]string{nodeId: packageUrl},
 			}
 
-			err = test.call(analyzer)
+			err = analyzer.fetchNodeStatus(xrayUtils.GraphNode{Id: nodeId}, &sync.Map{})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unsafe redirect")
 			assert.False(t, outsideRequested.Load())
