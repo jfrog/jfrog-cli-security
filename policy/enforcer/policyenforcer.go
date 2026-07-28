@@ -168,6 +168,10 @@ func convertToViolations(cmdResults *results.SecurityCommandResults, generatedVi
 			if secretsViolation := convertToJasViolation(cmdResults, jasutils.Secrets, violation); secretsViolation != nil {
 				convertedViolations.Secrets = append(convertedViolations.Secrets, *secretsViolation)
 			}
+		case utils.ServicesScan:
+			if servicesViolation := convertToJasViolation(cmdResults, jasutils.Services, violation); servicesViolation != nil {
+				convertedViolations.Services = append(convertedViolations.Services, *servicesViolation)
+			}
 		default:
 			log.Warn(fmt.Sprintf("Skipping violation with unknown scan type for violation ID %s", violation.Id))
 		}
@@ -183,6 +187,7 @@ func getViolationType(violation services.XrayViolation) utils.SubScanType {
 		if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
 			return utils.SecretsScan
 		}
+		// TODO: add Services support when Xray adds Services details to violations
 		// TODO: add IaC support when Xray adds IaC details to violations
 		return ""
 	}
@@ -255,6 +260,8 @@ func getJasViolationType(jasType jasutils.JasScanType) violationutils.ViolationI
 		return violationutils.SecretsViolationType
 	case jasutils.IaC:
 		return violationutils.IacViolationType
+	case jasutils.Services:
+		return violationutils.ServicesViolationType
 	default:
 		return ""
 	}
