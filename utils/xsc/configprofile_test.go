@@ -129,7 +129,8 @@ func getComparisonConfigProfile() *services.ConfigProfile {
 						ExcludePatterns: []string{"*.tfstate"},
 					},
 					ServicesScannerConfig: services.ServicesScannerConfig{
-						EnableServicesScan: false,
+						EnableServicesScan: true,
+						ExcludePatterns:    []string{"**/build/**"},
 					},
 				},
 			},

@@ -65,9 +65,8 @@ type ResultsMetaData struct {
 }
 
 type Entitlements struct {
-	Jas               bool `json:"jas"`
-	SnippetDetection  bool `json:"snippet_detection"`
-	ServicesDetection bool `json:"services_detection"`
+	Jas              bool `json:"jas"`
+	SnippetDetection bool `json:"snippet_detection"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -93,8 +92,6 @@ type ResultContext struct {
 	IncludeSbom bool `json:"include_sbom,omitempty"`
 	// If requested, the results will include snippet detection
 	IncludeSnippetDetection bool `json:"include_snippet_detection,omitempty"`
-	// If requested, the results will include services detection
-	IncludeServicesDetection bool `json:"include_services_detection,omitempty"`
 	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
@@ -280,11 +277,6 @@ func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *Securit
 
 func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnippetDetection bool) *SecurityCommandResults {
 	r.Entitlements.SnippetDetection = entitledForSnippetDetection
-	return r
-}
-
-func (r *SecurityCommandResults) SetEntitledForServicesDetection(entitledForServicesDetection bool) *SecurityCommandResults {
-	r.Entitlements.ServicesDetection = entitledForServicesDetection
 	return r
 }
 

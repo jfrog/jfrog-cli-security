@@ -68,6 +68,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseSbom(sbom *cyclonedx.BOM) error
 	ParseSbomLicenses(sbom *cyclonedx.BOM) error
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
+	// ParseSecrets(secrets ...[]*sarif.Run) error
+	// ParseServices(services ...[]*sarif.Run) error
 	// Parse JAS exposures scans that share the secrets-like output shape (secrets + services).
 	ParseExposuresScans(secrets, services []*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error

@@ -118,7 +118,7 @@ func GetAllSupportedScans() []SubScanType {
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
 func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
-	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
+	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan || subScan == ServicesScan) {
 		return false
 	}
 	if subScan == MaliciousCodeScan || subScan == ServicesScan {

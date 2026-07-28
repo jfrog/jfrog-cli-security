@@ -49,18 +49,17 @@ import (
 )
 
 type AuditCommand struct {
-	watches                  []string
-	gitRepoHttpsCloneUrl     string
-	projectKey               string
-	targetRepoPath           string
-	IncludeVulnerabilities   bool
-	IncludeLicenses          bool
-	IncludeSbom              bool
-	IncludeSnippetDetection  bool
-	IncludeServicesDetection bool
-	Fail                     bool
-	PrintExtendedTable       bool
-	Threads                  int
+	watches                 []string
+	gitRepoHttpsCloneUrl    string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	IncludeSbom             bool
+	IncludeSnippetDetection bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	Threads                 int
 	AuditParams
 }
 
@@ -112,11 +111,6 @@ func (auditCmd *AuditCommand) SetIncludeSnippetDetection(include bool) *AuditCom
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) SetIncludeServicesDetection(include bool) *AuditCommand {
-	auditCmd.IncludeServicesDetection = include
-	return auditCmd
-}
-
 func (auditCmd *AuditCommand) SetFail(fail bool) *AuditCommand {
 	auditCmd.Fail = fail
 	return auditCmd
@@ -133,16 +127,15 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom, includeSnippetDetection, includeServicesDetection bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom, includeSnippetDetection bool) (context results.ResultContext) {
 	context = results.ResultContext{
-		RepoPath:                 artifactoryRepoPath,
-		Watches:                  watches,
-		ProjectKey:               projectKey,
-		IncludeVulnerabilities:   shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
-		IncludeLicenses:          includeLicenses,
-		IncludeSbom:              includeSbom,
-		IncludeSnippetDetection:  includeSnippetDetection,
-		IncludeServicesDetection: includeServicesDetection,
+		RepoPath:                artifactoryRepoPath,
+		Watches:                 watches,
+		ProjectKey:              projectKey,
+		IncludeVulnerabilities:  shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
+		IncludeLicenses:         includeLicenses,
+		IncludeSbom:             includeSbom,
+		IncludeSnippetDetection: includeSnippetDetection,
 	}
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
@@ -192,29 +185,6 @@ func shouldIncludeSnippetDetection(params *AuditParams) bool {
 		return true
 	}
 	return strings.ToLower(os.Getenv(plugin.SnippetDetectionEnvVariable)) == "true"
-}
-
-func configProfileEnablesServicesScan(profile *xscservices.ConfigProfile) bool {
-	if profile == nil {
-		return false
-	}
-	for _, module := range profile.Modules {
-		if module.ScanConfig.ServicesScannerConfig.EnableServicesScan {
-			return true
-		}
-	}
-	return false
-}
-
-func shouldIncludeServicesDetection(params *AuditParams) bool {
-	if profile := params.GetConfigProfile(); profile != nil {
-		for _, module := range profile.Modules {
-			if module.ScanConfig.ServicesScannerConfig.EnableServicesScan {
-				return true
-			}
-		}
-	}
-	return params.resultsContext.IncludeServicesDetection
 }
 
 func logScanPaths(workingDirs []string, isRecursiveScan bool) {
@@ -293,7 +263,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
 			auditCmd.IncludeSnippetDetection,
-			auditCmd.IncludeServicesDetection,
 		)).
 		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
@@ -475,12 +444,6 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		}
 		cmdResults.SetEntitledForSnippetDetection(entitledForSnippetDetection)
 	}
-	if shouldIncludeServicesDetection(params) {
-		if !entitledForJas {
-			return cmdResults.AddGeneralError(fmt.Errorf("services detection is requested but the JFrog instance is not entitled for it"), false)
-		}
-		cmdResults.SetEntitledForServicesDetection(true)
-	}
 	return
 }
 
@@ -522,7 +485,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
 			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
 			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
-			xrayplugin.WithServicesDetection(shouldIncludeServicesDetection(params)),
 		),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
@@ -539,9 +501,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 
 func shouldGenerateSbom(params *AuditParams) bool {
 	if params.resultsContext.IncludeSbom {
-		return true
-	}
-	if shouldIncludeServicesDetection(params) {
 		return true
 	}
 	scansToPerform := params.ScansToPerform()

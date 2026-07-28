@@ -309,15 +309,15 @@ func TestShouldGenerateSbom(t *testing.T) {
 			}(),
 			expectSbom: false,
 		},
-		{
-			name: "services detection only",
-			params: func() *AuditParams {
-				params := NewAuditParams().SetResultsContext(results.ResultContext{IncludeServicesDetection: true})
-				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				return params
-			}(),
-			expectSbom: true,
-		},
+		// {
+		// 	name: "services detection only",
+		// 	params: func() *AuditParams {
+		// 		params := NewAuditParams().SetResultsContext(results.ResultContext{IncludeServicesDetection: true})
+		// 		params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
+		// 		return params
+		// 	}(),
+		// 	expectSbom: true,
+		// },
 		{
 			name: "services enabled in config profile without sca",
 			params: func() *AuditParams {
@@ -975,15 +975,14 @@ func TestCreateResultsContext(t *testing.T) {
 			includeSnippetDetection  bool
 			includeServicesDetection bool
 
-			expectedArtifactoryRepoPath      string
-			expectedHttpCloneUrl             string
-			expectedWatches                  []string
-			expectedJfrogProjectKey          string
-			expectedIncludeVulnerabilities   bool
-			expectedIncludeLicenses          bool
-			expectedIncludeSbom              bool
-			expectedIncludeSnippetDetection  bool
-			expectedIncludeServicesDetection bool
+			expectedArtifactoryRepoPath     string
+			expectedHttpCloneUrl            string
+			expectedWatches                 []string
+			expectedJfrogProjectKey         string
+			expectedIncludeVulnerabilities  bool
+			expectedIncludeLicenses         bool
+			expectedIncludeSbom             bool
+			expectedIncludeSnippetDetection bool
 		}{
 			{
 				name:            "Only Vulnerabilities",
@@ -1024,12 +1023,6 @@ func TestCreateResultsContext(t *testing.T) {
 				expectedIncludeSnippetDetection: true,
 			},
 			{
-				name:                             "Services Detection - no violation context",
-				includeServicesDetection:         true,
-				expectedIncludeVulnerabilities:   true,
-				expectedIncludeServicesDetection: true,
-			},
-			{
 				name:                    "All",
 				httpCloneUrl:            validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
 				watches:                 mockWatches,
@@ -1052,7 +1045,7 @@ func TestCreateResultsContext(t *testing.T) {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
 				mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
-				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom, testCase.includeSnippetDetection, testCase.includeServicesDetection)
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom, testCase.includeSnippetDetection)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
 				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
 				assert.Equal(t, testCase.expectedWatches, context.Watches)
@@ -1061,7 +1054,6 @@ func TestCreateResultsContext(t *testing.T) {
 				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
 				assert.Equal(t, testCase.expectedIncludeSbom, context.IncludeSbom)
 				assert.Equal(t, testCase.expectedIncludeSnippetDetection, context.IncludeSnippetDetection)
-				assert.Equal(t, testCase.expectedIncludeServicesDetection, context.IncludeServicesDetection)
 			})
 		}
 	}
