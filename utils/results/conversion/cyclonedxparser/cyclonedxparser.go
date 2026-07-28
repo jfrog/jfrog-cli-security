@@ -208,7 +208,25 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseServices(services ...[]*sarif.Run) (err error) {
-	return nil
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	source := cdc.addJasService(services)
+	return results.ForEachJasIssue(results.CollectRuns(services...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, cdc.currentTarget))
+		// Create a new JAS vulnerability, add it to the BOM and return it
+		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		// Add the location to the vulnerability
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name: fmt.Sprintf(
+				jasIssueLocationPropertyTemplate, "services", affectedComponent.BOMRef,
+				sarifutils.GetLocationStartLine(location), sarifutils.GetLocationStartColumn(location), sarifutils.GetLocationEndLine(location), sarifutils.GetLocationEndColumn(location),
+			),
+			Value: sarifutils.GetLocationSnippetText(location),
+		})
+		return
+	})
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
