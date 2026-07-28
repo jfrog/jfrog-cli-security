@@ -165,18 +165,19 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		}
 		return
 	}
-	// Yarn V2+ always emits the project root as "<name>@workspace:.". Prefer
-	// that over build-info-go's heuristic, which can misidentify the root
-	// when package.json has no name field.
-	if workspaceRoot := findYarnWorkspaceRoot(dependenciesMap); workspaceRoot != nil {
-		root = workspaceRoot
+	// Curation-only: 'jf audit'/'jf scan' keep the root GetYarnDependencies resolved.
+	if params.IsCurationCmd {
+		packageName := ""
+		if packageInfo != nil {
+			packageName = packageInfo.Name
+		}
+		root = resolveYarnRoot(dependenciesMap, root, packageName)
 	}
+	stripWorkspaceUseLocalSuffix(dependenciesMap)
 	if root == nil {
 		err = errorutils.CheckErrorf("could not identify the root workspace from yarn dependency output")
 		return
 	}
-	// Normalize workspace versions for display (drop Yarn's "-use.local").
-	stripWorkspaceUseLocalSuffix(dependenciesMap)
 	// When --working-dirs targets a workspace member, prune dependenciesMap
 	// to the subgraph reachable from that member and reset root accordingly.
 	// This keeps the dependency tree and the uniqueDeps list
@@ -212,7 +213,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	dependencyTree, uniqueDeps, err := parseYarnDependenciesMap(dependenciesMap, rootXrayId)
+	dependencyTree, uniqueDeps, err := parseYarnDependenciesMap(dependenciesMap, rootXrayId, params.IsCurationCmd)
 	if err != nil {
 		return
 	}
@@ -1405,10 +1406,8 @@ func registerYarnPluginInYarnrc(curWd string) error {
 	return os.WriteFile(yarnrcPath, updated, 0600)
 }
 
-// Parse the dependencies into a Xray dependency tree format
-// stripWorkspaceUseLocalSuffix drops Yarn's "-use.local" marker so workspace
-// versions display as declared (e.g. 0.0.0), consistent across lockfile/plugin
-// paths. Display-only; members are excluded from the HEAD-check regardless.
+// stripWorkspaceUseLocalSuffix drops Yarn's "-use.local" version marker
+// from workspace entries so they display as declared (e.g. 0.0.0).
 func stripWorkspaceUseLocalSuffix(dependencies map[string]*bibuildutils.YarnDependency) {
 	for _, dep := range dependencies {
 		if dep != nil && strings.Contains(dep.Value, "@workspace:") {
@@ -1417,7 +1416,7 @@ func stripWorkspaceUseLocalSuffix(dependencies map[string]*bibuildutils.YarnDepe
 	}
 }
 
-func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string, error) {
+func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string, isCurationCmd bool) (*xrayUtils.GraphNode, []string, error) {
 	treeMap := make(map[string]xray.DepTreeNode)
 	workspaceMemberIds := make(map[string]bool)
 	for _, dependency := range dependencies {
@@ -1425,9 +1424,9 @@ func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependen
 		if err != nil {
 			return nil, nil, err
 		}
-		// Workspace members are local packages, not registry artifacts (the root
-		// is exempt). Track them so they're skipped by the curation HEAD-check.
-		if strings.Contains(dependency.Value, "@workspace:") && xrayDepId != rootXrayId {
+		// Workspace members are local, not registry artifacts; skip them in the
+		// curation HEAD-check flat list (root exempt). Curation-only.
+		if isCurationCmd && strings.Contains(dependency.Value, "@workspace:") && xrayDepId != rootXrayId {
 			workspaceMemberIds[xrayDepId] = true
 		}
 		var subDeps []string
@@ -1444,9 +1443,11 @@ func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependen
 		}
 	}
 	graph, uniqDeps := xray.BuildXrayDependencyTree(treeMap, rootXrayId)
-	// Drop workspace members from the flat list curation HEAD-checks: a local
-	// package coincidentally matching a public one would be a false positive.
-	// They stay in the graph so their dependencies remain attributed to them.
+	if !isCurationCmd {
+		return graph, slices.Collect(maps.Keys(uniqDeps)), nil
+	}
+	// Workspace members stay in the graph (deps attribute to them) but are
+	// dropped from the flat list to avoid false positives on public packages.
 	uniqueDepsList := make([]string, 0, len(uniqDeps))
 	for id := range uniqDeps {
 		if workspaceMemberIds[id] {
@@ -1476,6 +1477,20 @@ func findYarnWorkspaceRoot(dependenciesMap map[string]*bibuildutils.YarnDependen
 		}
 	}
 	return nil
+}
+
+// resolveYarnRoot picks the dependency-tree root for 'jf ca' (curation-only;
+// see the IsCurationCmd guard in BuildDependencyTree). Trusts heuristicRoot
+// unless it's nil or packageName is empty, then falls back to the
+// "<name>@workspace:." locator.
+func resolveYarnRoot(dependenciesMap map[string]*bibuildutils.YarnDependency, heuristicRoot *bibuildutils.YarnDependency, packageName string) *bibuildutils.YarnDependency {
+	if heuristicRoot != nil && packageName != "" {
+		return heuristicRoot
+	}
+	if workspaceRoot := findYarnWorkspaceRoot(dependenciesMap); workspaceRoot != nil {
+		return workspaceRoot
+	}
+	return heuristicRoot
 }
 
 // findClaimingYarnWorkspaceRoot walks upward from targetDir to find the nearest

@@ -103,6 +103,8 @@ type ResultContext struct {
 	ProjectKey string `json:"project_key,omitempty"`
 	// (Resource) If gitRepository is provided we will fetch the watches defined on the git repository.
 	GitRepoHttpsCloneUrl string `json:"git_repo_key,omitempty"`
+	// (Resource) Optional workspace name used together with GitRepoHttpsCloneUrl when fetching the config profile from the platform.
+	WorkspaceName string `json:"workspace_name,omitempty"`
 	// If non of the above is provided or requested, the results will include vulnerabilities
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
