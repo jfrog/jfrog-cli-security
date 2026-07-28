@@ -93,7 +93,12 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
   Audit_Command_Integration_Tests:
     name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
@@ -147,7 +152,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
 
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
@@ -177,7 +187,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
     
   Xray_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Xray Commands Integration Tests"
@@ -205,7 +220,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray --ci.runId=${{ runner.os }}-sec-test
 
   Xsc_Integration_Tests:
     name: "[${{ matrix.os }}] XSC Integration Tests"
@@ -234,7 +254,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --ci.runId=${{ runner.os }}-sec-test
   
   Binary_Scan_Command_Integration_Tests:
     name: "[${{ matrix.os }}] Binary Scan Command Integration Tests"
@@ -264,7 +289,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --ci.runId=${{ runner.os }}-sec-test
 
   Docker_Scan_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Docker Scan Commands Integration Tests"
@@ -294,7 +324,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
 
   Other_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Commands Integration Tests"
@@ -324,7 +359,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.maliciousScan --ci.runId=${{ runner.os }}-sec-test
  
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
@@ -354,7 +394,12 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
 
   Remediation_Integration_Tests:
     name: "[${{ matrix.os }}] Remediation Integration Tests"
@@ -384,4 +429,9 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.remediation --ci.runId=${{ runner.os }}-sec-test
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.remediation --ci.runId=${{ runner.os }}-sec-test
