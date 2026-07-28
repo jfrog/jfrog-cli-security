@@ -207,6 +207,10 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 	})
 }
 
+func (cdc *CmdResultsCycloneDxConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	return nil
+}
+
 func (cdc *CmdResultsCycloneDxConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor

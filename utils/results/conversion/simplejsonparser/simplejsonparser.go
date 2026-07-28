@@ -370,6 +370,10 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...[]*sarif.Run) 
 	return
 }
 
+func (sjc *CmdResultsSimpleJsonConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	return nil
+}
+
 func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return

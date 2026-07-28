@@ -243,6 +243,10 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err
 	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
 }
 
+func (sc *CmdResultsSummaryConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	return nil
+}
+
 func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now

@@ -86,6 +86,10 @@ func (tc *CmdResultsTableConverter) ParseSecrets(secrets ...[]*sarif.Run) (err e
 	return tc.simpleJsonConvertor.ParseSecrets(secrets...)
 }
 
+func (tc *CmdResultsTableConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseServices(services...)
+}
+
 func (tc *CmdResultsTableConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	return tc.simpleJsonConvertor.ParseIacs(iacs...)
 }

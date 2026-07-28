@@ -436,6 +436,10 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...[]*sarif.Run) (err e
 	return
 }
 
+func (sc *CmdResultsSarifConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	return nil
+}
+
 func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
