@@ -14,7 +14,7 @@ When to use:
 
 Prerequisites:
 - A configured JFrog Platform server (jf c add) with JFrog Curation entitlement.
-- Project must use a supported package manager (npm, yarn, pnpm, pip, pipenv, poetry, maven, gradle, nuget, go) resolved through a curation-configured remote.
+- Project must use a supported package manager (npm, yarn, pnpm, pip, pipenv, poetry, maven, gradle, nuget, go) resolved through a curation-configured remote. Docker images and Hugging Face models are audited via dedicated flags.
 - The package manager must be present in the working directory. Lockfiles are required where the package manager's flow depends on one (e.g. npm, yarn, pnpm, poetry); pipenv generates/refreshes Pipfile.lock as part of the audit, so a pre-existing lockfile is not required.
 
 Common patterns:
@@ -23,6 +23,7 @@ Common patterns:
   $ jf curation-audit --format=json --threads=4
   $ jf curation-audit --requirements-file=requirements-dev.txt
   $ jf curation-audit --docker-image=my-image:tag
+  $ HF_ENDPOINT=https://my.jfrog.io/artifactory/api/huggingfaceml/my-hf-repo jf curation-audit --hugging-face-model=org/model:main
 
 Gotchas:
 - The user/token must be entitled for Curation; otherwise the command exits with an entitlement notice.
