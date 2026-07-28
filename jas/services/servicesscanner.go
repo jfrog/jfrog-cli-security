@@ -128,7 +128,7 @@ func (servicesScanManager *ServicesScanManager) deprecatedCreateConfigFile(modul
 				Output:                 servicesScanManager.resultsFileName,
 				PathToResultsToCompare: servicesScanManager.resultsToCompareFileName,
 				Type:                   servicesScannerType,
-				SkippedDirs:            jas.GetJasExcludePatterns(module, module.Scanners.Iac, centralConfigExclusions, exclusions...),
+				SkippedDirs:            jas.GetJasExcludePatterns(module, nil, centralConfigExclusions, exclusions...),
 			},
 		},
 	}
@@ -143,7 +143,7 @@ func (servicesScanManager *ServicesScanManager) createConfigFileForTarget(target
 				Output:                 servicesScanManager.resultsFileName,
 				PathToResultsToCompare: servicesScanManager.resultsToCompareFileName,
 				Type:                   servicesScannerType,
-				SkippedDirs:            jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.IacScan)),
+				SkippedDirs:            jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(utils.ServicesScan)),
 			},
 		},
 	}
