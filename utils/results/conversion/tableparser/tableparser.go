@@ -45,10 +45,12 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
 		SecretsVulnerabilitiesTable:    formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsVulnerabilities),
 		SecretsViolationsTable:         formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsViolations),
-		IacVulnerabilitiesTable:        formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsVulnerabilities),
-		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
-		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
-		SastViolationsTable:            formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastViolations),
+		IacVulnerabilitiesTable:        formats.ConvertToBasicJasTableRow(simpleJsonFormat.IacsVulnerabilities),
+		IacViolationsTable:             formats.ConvertToBasicJasTableRow(simpleJsonFormat.IacsViolations),
+		ServicesVulnerabilitiesTable:   formats.ConvertToBasicJasTableRow(simpleJsonFormat.ServicesVulnerabilities),
+		ServicesViolationsTable:        formats.ConvertToBasicJasTableRow(simpleJsonFormat.ServicesViolations),
+		SastVulnerabilitiesTable:       formats.ConvertToBasicJasTableRow(simpleJsonFormat.SastVulnerabilities),
+		SastViolationsTable:            formats.ConvertToBasicJasTableRow(simpleJsonFormat.SastViolations),
 		MaliciousVulnerabilitiesTable:  formats.ConvertToMaliciousTableRow(simpleJsonFormat.MaliciousVulnerabilities),
 	}, nil
 }
