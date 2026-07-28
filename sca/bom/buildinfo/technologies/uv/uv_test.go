@@ -294,6 +294,9 @@ func setupUvRegistryFixture(t *testing.T) (projectDir, uvTomlPath string) {
 	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, filepath.Dir(uvTomlConfigRelPath)), 0755))
 	uvTomlPath = filepath.Join(homeDir, uvTomlConfigRelPath)
 	t.Setenv("HOME", homeDir)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", homeDir)
+	}
 	t.Chdir(projectDir)
 	return projectDir, uvTomlPath
 }
