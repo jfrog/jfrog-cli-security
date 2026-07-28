@@ -218,9 +218,12 @@ jobs:
     steps:
       # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
       - name: Start FastCI Optimization
         if: env.ENABLE_FASTCI_BOOST == 'true'
         uses: jfrog/boost@v0
