@@ -427,7 +427,8 @@ func TestUvCurationAudit(t *testing.T) {
 	config.User = "admin"
 	config.Password = "password"
 	config.ServerId = "test"
-	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+	config.XrayUrl = config.Url
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false).SetMakeDefault(true)
 	assert.NoError(t, configCmd.Run())
 
 	appendToFile(t, filepath.Join(tempDirPath, "pyproject.toml"),

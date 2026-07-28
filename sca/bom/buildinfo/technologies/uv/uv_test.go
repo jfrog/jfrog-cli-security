@@ -1410,7 +1410,7 @@ exit 1
 		script = `@echo off
 echo CALL:%* >> "%FAKE_UV_LOG%"
 if "%~1"=="--version" (
-  echo uv 0.11.21 (fake)
+  echo uv 0.11.21 ^(fake^)
   exit /b 0
 )
 if "%~1"=="lock" if "%~2"=="--check" (
