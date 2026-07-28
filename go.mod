@@ -19,7 +19,7 @@ require (
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260722060859-50ee96befe5c
 	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260724083402-361ba4a2ecdb
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260722075451-613a6b6a7603
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260728084229-b4b7a5c98201
 	github.com/magiconair/properties v1.8.10
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -158,7 +158,7 @@ require (
 )
 
 // orto17:missconfiguration-service
-replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20260728132717-7306d020619b
+replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20260728142826-c098e2d936bf
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
