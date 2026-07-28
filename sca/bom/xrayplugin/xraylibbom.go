@@ -3,9 +3,9 @@ package xrayplugin
 import (
 	"fmt"
 	"os/exec"
-	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin/plugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -22,21 +22,16 @@ const SnippetDetectionFeatureId = "curation"
 type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
-	ignorePatterns   []string
 	specificTechs    []techutils.Technology
-	totalTargets     int
+	ServerDetails    *config.ServerDetails
+
+	// Artifactory Repository params
+	DownloadServerDetails  *config.ServerDetails
+	DependenciesRepository string
 }
 
 func NewXrayLibBomGenerator() *XrayLibBomGenerator {
 	return &XrayLibBomGenerator{}
-}
-
-func WithTotalTargets(totalTargets int) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) {
-		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
-			sbg.totalTargets = totalTargets
-		}
-	}
 }
 
 func WithSpecificTechnologies(technologies []string) bom.SbomGeneratorOption {
@@ -50,6 +45,15 @@ func WithSpecificTechnologies(technologies []string) bom.SbomGeneratorOption {
 	}
 }
 
+func WithCentralRemoteReleasesDetails(serverDetails *config.ServerDetails, dependenciesRepository string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.DownloadServerDetails = serverDetails
+			sbg.DependenciesRepository = dependenciesRepository
+		}
+	}
+}
+
 func WithBinaryPath(binaryPath string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
@@ -58,18 +62,18 @@ func WithBinaryPath(binaryPath string) bom.SbomGeneratorOption {
 	}
 }
 
-func WithIgnorePatterns(ignorePatterns []string) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) {
-		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
-			sbg.ignorePatterns = ignorePatterns
-		}
-	}
-}
-
 func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.snippetDetection = snippetDetection
+		}
+	}
+}
+
+func WithServerDetails(serverDetails *config.ServerDetails) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
+			sbg.ServerDetails = serverDetails
 		}
 	}
 }
@@ -96,7 +100,7 @@ func (sbg *XrayLibBomGenerator) PrepareGenerator() (err error) {
 		return
 	}
 	// Download the xray-lib plugin if needed
-	return plugin.DownloadXrayLibPluginIfNeeded()
+	return plugin.DownloadXrayLibPluginIfNeeded(sbg.DependenciesRepository, sbg.DownloadServerDetails)
 }
 
 func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -105,29 +109,22 @@ func (sbg *XrayLibBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		return nil, fmt.Errorf("failed to get local Xray-Lib executable path: %w", err)
 	}
 	log.Debug(fmt.Sprintf("Using Xray-Lib executable at: %s", binaryPath))
-	startTime := time.Now()
 	envVars := sbg.getPluginEnvVars()
 	scanner, logPath, killPlugin, err := plugin.CreateScannerPluginClient(binaryPath, envVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Xray-Lib plugin client: %w", err)
 	}
 	defer killPlugin()
-	startLog := "Generating SBOM"
-	if sbg.totalTargets > 1 {
-		startLog += fmt.Sprintf(" for target: %s", target.Target)
-	}
 	if logPath != "" {
-		startLog += fmt.Sprintf(" (plugin logs: %s)", logPath)
+		log.Debug(fmt.Sprintf("Plugin logs: %s", logPath))
 	}
-	log.Info(startLog + "...")
 	if len(envVars) > 0 {
-		log.Debug(fmt.Sprintf("Environment variables: %v", envVars))
+		log.Verbose(fmt.Sprintf("Environment variables:\n%s", envVars.ToString()))
 	}
 	// Run the xray-lib command to generate the SBOM
 	if sbom, err = sbg.executeScanner(scanner, target); err != nil {
 		return nil, fmt.Errorf("failed to execute Xray-Lib command: %w", err)
 	}
-	sbg.logScannerOutput(sbom, target.Target, startTime)
 	return
 }
 
@@ -145,7 +142,8 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		BomRef:         cdxutils.GetFileRef(target.Target),
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
-		IgnorePatterns: sbg.ignorePatterns,
+		IgnorePatterns: target.GetCentralConfigExclusions(utils.ScaScan),
+		IncludeDirs:    target.Include,
 		Ecosystems:     sbg.specificTechs,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
@@ -154,34 +152,21 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 	return scanner.Scan(target.Target, scanConfig)
 }
 
-func (sbg *XrayLibBomGenerator) getPluginEnvVars() map[string]string {
-	envVars := map[string]string{}
+func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
+	envVars := utils.EnvironmentVariables{}
+	if sbg.ServerDetails != nil {
+		envVars[plugin.XrayUrlEnvVariable] = sbg.ServerDetails.XrayUrl
+		if sbg.ServerDetails.AccessToken != "" {
+			envVars[plugin.XrayTokenEnvVariable] = sbg.ServerDetails.AccessToken
+		} else {
+			envVars[plugin.XrayUserEnvVariable] = sbg.ServerDetails.User
+			envVars[plugin.XrayPasswordEnvVariable] = sbg.ServerDetails.Password
+		}
+	}
 	if sbg.snippetDetection {
 		envVars[plugin.SnippetDetectionEnvVariable] = "true"
 	}
 	return envVars
-}
-
-func (sbg *XrayLibBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string, startTime time.Time) {
-	libComponents := []string{}
-	if output != nil && output.Components != nil {
-		for _, component := range *output.Components {
-			if component.Type == cyclonedx.ComponentTypeLibrary {
-				libComponents = append(libComponents, component.PackageURL)
-			}
-		}
-	}
-	outLog := "SBOM generated"
-	if sbg.totalTargets > 1 {
-		outLog += fmt.Sprintf(" for target '%s'", target)
-	}
-	outLog += ";"
-	if len(libComponents) == 0 {
-		outLog += " no library components were found"
-	} else {
-		outLog += fmt.Sprintf(" found %d library components", len(libComponents))
-	}
-	log.Info(fmt.Sprintf("%s (duration %s)", outLog, time.Since(startTime).String()))
 }
 
 func (sbg *XrayLibBomGenerator) CleanUp() (err error) {

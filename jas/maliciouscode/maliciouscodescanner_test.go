@@ -100,7 +100,7 @@ func TestParseResults_EmptyResults(t *testing.T) {
 	maliciousScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "malicious-scan", "no-malicious.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(maliciousScanManager.resultsFileName, currWd, malDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(maliciousScanManager.resultsFileName, malDocsUrlSuffix, scanner.MinSeverity, currWd)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
@@ -121,7 +121,7 @@ func TestParseResults_ResultsContainMalicious(t *testing.T) {
 	maliciousScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "malicious-scan", "contain-malicious.sarif")
 
 	// Act
-	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(maliciousScanManager.resultsFileName, currWd, malDocsUrlSuffix, severityutils.Medium)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(maliciousScanManager.resultsFileName, malDocsUrlSuffix, severityutils.Medium, currWd)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {

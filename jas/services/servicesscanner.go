@@ -37,8 +37,8 @@ func RunServicesScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, tar
 		return
 	}
 	startTime := time.Now()
-	log.Info(jas.GetStartJasScanLog(utils.ServicesScan, threadId, module, targetCount))
-	if vulnerabilitiesResults, violationsResults, err = servicesScanManager.scanner.Run(servicesScanManager, module); err != nil {
+	log.Info(jas.GetStartJasScanLog(utils.ServicesScan, threadId, &module, targetCount))
+	if vulnerabilitiesResults, violationsResults, err = servicesScanManager.scanner.Run(servicesScanManager, results.ScanTarget{Module: &module}); err != nil {
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.ServicesScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, threadId))

@@ -304,12 +304,13 @@ func SearchComponentByCleanPurl(components *[]cyclonedx.Component, purl string) 
 	return
 }
 
-func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
+func CreateFileOrDirComponent(filePathOrUri string, relatedProperties ...cyclonedx.Property) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
 		BOMRef: GetFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
 		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
+	component.Properties = AppendProperties(component.Properties, relatedProperties...)
 	return
 }
 
@@ -458,12 +459,21 @@ func GetTrimmedPurlByRef(dep string, components *[]cyclonedx.Component) string {
 	return techutils.PurlToXrayComponentId(component.PackageURL)
 }
 
+// ScanLicenseToCycloneDx maps an Xray license key/name to a CycloneDX license.
+// CycloneDX allows only one of ID or Name, not both.
+func ScanLicenseToCycloneDx(key, name string) *cyclonedx.License {
+	if key != "" {
+		return &cyclonedx.License{ID: key}
+	}
+	return &cyclonedx.License{Name: name}
+}
+
 func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {
 	if component.Licenses == nil {
 		component.Licenses = &cyclonedx.Licenses{}
 	}
 	// Check if the license already exists in the component
-	if hasLicense(*component, license.License.ID) {
+	if hasLicense(*component, licenseIdentifier(license.License)) {
 		// The license already exists, no need to add it again
 		return
 	}
@@ -471,12 +481,22 @@ func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.
 	*component.Licenses = append(*component.Licenses, license)
 }
 
-func hasLicense(component cyclonedx.Component, licenseName string) bool {
-	if component.Licenses == nil || len(*component.Licenses) == 0 {
+func licenseIdentifier(license *cyclonedx.License) string {
+	if license == nil {
+		return ""
+	}
+	if license.ID != "" {
+		return license.ID
+	}
+	return license.Name
+}
+
+func hasLicense(component cyclonedx.Component, licenseId string) bool {
+	if licenseId == "" || component.Licenses == nil || len(*component.Licenses) == 0 {
 		return false
 	}
 	for _, license := range *component.Licenses {
-		if license.License != nil && license.License.ID == licenseName {
+		if license.License != nil && licenseIdentifier(license.License) == licenseId {
 			return true
 		}
 	}
@@ -520,6 +540,34 @@ func HasImpactedAffects(vulnerability cyclonedx.Vulnerability, affectedComponent
 		}
 	}
 	return false
+}
+
+// CloneVulnerability returns a copy of v with slice fields deep-copied so mutations (e.g. appending affects) do not alias the source.
+func CloneVulnerability(v cyclonedx.Vulnerability) cyclonedx.Vulnerability {
+	out := v
+	if v.Affects != nil {
+		affects := make([]cyclonedx.Affects, len(*v.Affects))
+		for i, a := range *v.Affects {
+			affects[i] = a
+			if a.Range != nil {
+				rng := make([]cyclonedx.AffectedVersions, len(*a.Range))
+				copy(rng, *a.Range)
+				affects[i].Range = &rng
+			}
+		}
+		out.Affects = &affects
+	}
+	if v.Properties != nil {
+		props := make([]cyclonedx.Property, len(*v.Properties))
+		copy(props, *v.Properties)
+		out.Properties = &props
+	}
+	if v.Ratings != nil {
+		ratings := make([]cyclonedx.VulnerabilityRating, len(*v.Ratings))
+		copy(ratings, *v.Ratings)
+		out.Ratings = &ratings
+	}
+	return out
 }
 
 func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {

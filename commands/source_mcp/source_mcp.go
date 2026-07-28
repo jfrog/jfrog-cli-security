@@ -6,6 +6,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
@@ -22,7 +23,7 @@ type McpCommand struct {
 	ErrorPipe     io.Writer
 }
 
-func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
+func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars utils.EnvironmentVariables) (err error) {
 	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
 }
 

@@ -15,8 +15,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetComponentSarifLocation(t *testing.T) {
@@ -62,6 +64,26 @@ func TestGetComponentSarifLocation(t *testing.T) {
 			assert.Equal(t, tc.expectedOutput, getComponentSarifLocation(tc.cmdType, tc.component))
 		})
 	}
+}
+
+func TestParseScaToSarifFormat_componentLessIssue(t *testing.T) {
+	params := scaParseParams{
+		CmdType:                 utils.SourceCode,
+		IssueId:                 "CVE-2024-sarif-nocomp",
+		Summary:                 "test summary",
+		Severity:                severityutils.High,
+		SeverityScore:           "7.0",
+		ImpactedPackagesName:    "",
+		ImpactedPackagesVersion: "",
+		DirectComponents:        nil,
+		GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+	}
+	sarifResults, rule := parseScaToSarifFormat(params)
+	require.NotNil(t, rule)
+	require.Len(t, sarifResults, 1)
+	assert.Empty(t, sarifResults[0].Locations)
+	expectedRuleId := results.GetScaIssueId("unknown", "unknown", "CVE-2024-sarif-nocomp")
+	assert.Equal(t, expectedRuleId, *sarifResults[0].RuleID)
 }
 
 func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {

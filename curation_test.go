@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -75,6 +76,216 @@ func TestCurationAudit(t *testing.T) {
 	}
 }
 
+// TestYarnCurationAudit exercises 'jf curation-audit' end-to-end for Yarn Berry projects
+// (V3 and V4), driving the real resolution-only plugin path: with no lockfile present,
+// 'jf ca' runs 'yarn jfrog-yarn-resolve-lockfile' to build a complete yarn.lock from the
+// mock registry's npm packuments WITHOUT downloading tarballs, then the curation
+// HEAD-walker probes the same /api/npm/<repo>/<pkg>/-/<pkg>-<ver>.tgz URLs as npm and
+// reports the blocked package with PkgType "yarn" (curation rejects Yarn V1).
+//
+// V3 and V4 differ ONLY in how the resolution registry is read; everything else (the
+// resolve-only plugin and the HEAD-walker) is identical:
+//   - V3: from yarn.yaml written by the build config ('jf yarn-config' style).
+//   - V4: natively from .yarnrc.yml (npmRegistryServer), with no 'jf yarn-config'.
+func TestYarnCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	testCases := []struct {
+		name    string
+		project string
+		// configureRegistry wires the resolution registry the way each yarn version reads it.
+		configureRegistry func(t *testing.T, tempDirPath string, config *config.ServerDetails)
+	}{
+		{
+			name:    "Yarn V3 (registry from yarn.yaml)",
+			project: "yarn-v3",
+			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
+				// npm and yarn share the Artifactory npm API; resolve via the build config.
+				assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, project.Yarn,
+					commonCommands.WithResolverServerId(config.ServerId),
+					commonCommands.WithResolverRepo("npms"),
+					commonCommands.WithDeployerServerId(config.ServerId),
+					commonCommands.WithDeployerRepo("npm-local"),
+				))
+				// jf ca injects this http mock registry into the temp .yarnrc.yml; Yarn Berry
+				// only accepts a plain-http registry when its host is whitelisted.
+				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), "\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n")
+			},
+		},
+		{
+			name:    "Yarn V4 (registry from .yarnrc.yml)",
+			project: "yarn-v4",
+			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
+				// V4 native mode: the registry lives in .yarnrc.yml (the http whitelist is
+				// already committed in the yarn-v4 fixture).
+				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "yarn", tc.project))
+			defer cleanUp()
+			// Drop any committed lockfile so 'jf ca' must run the resolution-only plugin
+			// (building yarn.lock from the mock packuments rather than reading a fresh lock).
+			if err := os.Remove(filepath.Join(tempDirPath, "yarn.lock")); err != nil && !os.IsNotExist(err) {
+				require.NoError(t, err)
+			}
+
+			expectedRequest := map[string]bool{
+				"/api/npm/npms/json/-/json-9.0.6.tgz": false,
+				"/api/npm/npms/xml/-/xml-1.0.1.tgz":   false,
+			}
+			requestToFail := map[string]bool{
+				"/api/npm/npms/xml/-/xml-1.0.1.tgz": false,
+			}
+			serverMock, config := yarnCurationServer(t, expectedRequest, requestToFail)
+			defer serverMock.Close()
+
+			cleanUpJfrogHome, err := coreTests.SetJfrogHome()
+			assert.NoError(t, err)
+			defer cleanUpJfrogHome()
+
+			config.User = "admin"
+			config.Password = "password"
+			config.ServerId = "test"
+			configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+			assert.NoError(t, configCmd.Run())
+
+			tc.configureRegistry(t, tempDirPath, config)
+
+			localXrayCli := securityTests.PlatformCli.WithoutCredentials()
+			workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
+			output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)
+			expectedResp := getYarnCurationExpectedResponse(config)
+			var got []curation.PackageStatus
+			bracketIndex := strings.Index(output, "[")
+			require.Less(t, 0, bracketIndex, "Unexpected Curation output with missing '['")
+			err = json.Unmarshal([]byte(output[bracketIndex:]), &got)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedResp, got)
+			for k, v := range expectedRequest {
+				assert.Truef(t, v, "didn't receive expected probe for package url %s", k)
+			}
+		})
+	}
+}
+
+// appendToFile appends content to the file at path, creating it if it does not exist.
+func appendToFile(t *testing.T, path, content string) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, f.Close()) }()
+	_, err = f.WriteString(content)
+	require.NoError(t, err)
+}
+
+func getYarnCurationExpectedResponse(config *config.ServerDetails) []curation.PackageStatus {
+	return []curation.PackageStatus{
+		{
+			Action:            "blocked",
+			PackageName:       "xml",
+			PackageVersion:    "1.0.1",
+			BlockedPackageUrl: config.ArtifactoryUrl + "api/npm/npms/xml/-/xml-1.0.1.tgz",
+			BlockingReason:    curation.BlockingReasonPolicy,
+			ParentName:        "xml",
+			ParentVersion:     "1.0.1",
+			DepRelation:       "direct",
+			PkgType:           "yarn",
+			Policy: []curation.Policy{
+				{Policy: "pol1", Condition: "cond1", Explanation: "explanation", Recommendation: "recommendation"},
+				{Policy: "pol2", Condition: "cond2", Explanation: "explanation2", Recommendation: "recommendation2"},
+			},
+		},
+	}
+}
+
+// curationBlockedTarballResponse is the Artifactory curation 403 body returned for a
+// blocked tarball GET; the policy/condition tuples are parsed into PackageStatus.Policy.
+const curationBlockedTarballResponse = "{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
+	"\"message\": \"Package download was blocked by JFrog Packages " +
+	"Curation service due to the following policies violated {pol1, cond1, explanation, recommendation}, {pol2, cond2, explanation2, recommendation2}\"\n        }\n    ]\n}"
+
+// yarnCurationServer mocks an Artifactory npm registry for the yarn curation tests. It
+// serves npm packuments so 'yarn jfrog-yarn-resolve-lockfile' can resolve the graph from
+// metadata without downloading tarballs, the version endpoints jf ca queries, and the
+// curation HEAD/GET tarball probes (returning a policy-violation 403 for blocked tarballs).
+func yarnCurationServer(t *testing.T, expectedRequest, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
+	mapLock := sync.Mutex{}
+	// registryBase is the mock's own npm registry URL; it is set right after the
+	// server is created (before any request is served) and used to build the
+	// packument tarball URLs. Deriving it from the server URL rather than the
+	// request's Host header avoids reflecting untrusted input into the response.
+	var registryBase string
+	serverMock, serverConfig, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			mapLock.Lock()
+			if _, exist := expectedRequest[r.RequestURI]; exist {
+				expectedRequest[r.RequestURI] = true
+			}
+			mapLock.Unlock()
+			if _, exist := requestToFail[r.RequestURI]; exist {
+				w.WriteHeader(http.StatusForbidden)
+			}
+		case http.MethodGet:
+			switch r.RequestURI {
+			case "/api/system/version":
+				_, err := w.Write([]byte(`{"version": "7.82.0"}`))
+				require.NoError(t, err)
+				return
+			case "/api/v1/system/version":
+				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+				require.NoError(t, err)
+				return
+			// Yarn V2/V3 resolve the registry via GetYarnAuthDetails, which queries
+			// these two Artifactory endpoints before the resolve-only plugin runs.
+			// (Yarn V4 reads the registry natively from .yarnrc.yml and skips them.)
+			case "/api/npm/auth":
+				_, err := w.Write([]byte("_auth = YWRtaW46cGFzc3dvcmQ=\nalways-auth = true\n"))
+				require.NoError(t, err)
+				return
+			case "/api/repositories/npms":
+				_, err := w.Write([]byte(`{"key":"npms","rclass":"remote","packageType":"npm"}`))
+				require.NoError(t, err)
+				return
+			}
+			// Blocked tarball GET (issued by the HEAD-walker after the 403 HEAD): return
+			// the curation policy message so the package is reported as blocked-by-policy.
+			if _, exist := requestToFail[r.RequestURI]; exist {
+				w.WriteHeader(http.StatusForbidden)
+				_, err := w.Write([]byte(curationBlockedTarballResponse))
+				require.NoError(t, err)
+				return
+			}
+			// npm packument lookup (resolve-only plugin); tarball GETs contain "/-/".
+			if body := yarnPackument(r.URL.Path, registryBase); body != "" {
+				_, err := w.Write([]byte(body))
+				require.NoError(t, err)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	registryBase = serverConfig.ArtifactoryUrl + "api/npm/npms/"
+	return serverMock, serverConfig
+}
+
+// yarnPackument returns the npm packument JSON for the xml/json fixtures, or "" when the
+// path is not a known packument lookup. The tarball URL uses base (the mock server's own
+// registry URL) so it points at the running mock without reflecting request input.
+func yarnPackument(reqPath, base string) string {
+	if strings.Contains(reqPath, "/-/") {
+		return ""
+	}
+	switch {
+	case strings.HasSuffix(reqPath, "/api/npm/npms/xml"):
+		return fmt.Sprintf(`{"name":"xml","dist-tags":{"latest":"1.0.1"},"versions":{"1.0.1":{"name":"xml","version":"1.0.1","dist":{"shasum":"97e0d0e9603c6ffd00fbf5419b3f48a6f4e0c7d9","tarball":"%sxml/-/xml-1.0.1.tgz"}}}}`, base)
+	case strings.HasSuffix(reqPath, "/api/npm/npms/json"):
+		return fmt.Sprintf(`{"name":"json","dist-tags":{"latest":"9.0.6"},"versions":{"9.0.6":{"name":"json","version":"9.0.6","bin":{"json":"./lib/json.js"},"dist":{"shasum":"0f53b0b2f48d1c7e54f3c00c4f5b3c8f0e6d4d0a","tarball":"%sjson/-/json-9.0.6.tgz"}}}}`, base)
+	}
+	return ""
+}
+
 func getCurationExpectedResponse(config *config.ServerDetails) []curation.PackageStatus {
 	expectedResp := []curation.PackageStatus{
 		{
@@ -134,8 +345,71 @@ func TestDockerCurationAudit(t *testing.T) {
 	assert.Equal(t, "Image is not Docker Hub official", results[0].Policy[0].Condition)
 }
 
-func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func TestPoetryCurationAudit(t *testing.T) {
+	integration.InitCurationTest(t)
+	const repo = "pypi-curation"
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-curation-project"))
+	defer cleanUp()
+
+	blockedURL := "/api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl"
+	expectedRequest := map[string]bool{blockedURL: false}
+	requestToFail := map[string]bool{blockedURL: false}
+	serverMock, config := curationServer(t, expectedRequest, requestToFail, map[string]string{
+		"urllib3": `<a href="../../packages/aa/urllib3-1.26.20-py2.py3-none-any.whl">urllib3-1.26.20-py2.py3-none-any.whl</a>`,
+	})
+	defer serverMock.Close()
+
+	cleanUpHome := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUpHome()
+
+	config.User = "admin"
+	config.Password = "password"
+	config.ServerId = "test"
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+	assert.NoError(t, configCmd.Run())
+
+	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
+	output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)
+
+	expectedResp := getPoetryCurationExpectedResponse(config, repo)
+	var got []curation.PackageStatus
+	bracketIndex := strings.Index(output, "[")
+	require.Less(t, 0, bracketIndex, "Unexpected Curation output with missing '['")
+	err := json.Unmarshal([]byte(output[bracketIndex:]), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResp, got)
+	for k, v := range expectedRequest {
+		assert.Truef(t, v, "didn't receive expected HEAD request for package url %s", k)
+	}
+}
+
+func getPoetryCurationExpectedResponse(config *config.ServerDetails, repo string) []curation.PackageStatus {
+	return []curation.PackageStatus{
+		{
+			Action:            "blocked",
+			PackageName:       "urllib3",
+			PackageVersion:    "1.26.20",
+			BlockedPackageUrl: config.ArtifactoryUrl + "api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl",
+			BlockingReason:    curation.BlockingReasonPolicy,
+			ParentName:        "urllib3",
+			ParentVersion:     "1.26.20",
+			DepRelation:       "direct",
+			PkgType:           "poetry",
+			Policy: []curation.Policy{
+				{Policy: "pol1", Condition: "cond1", Explanation: "explanation", Recommendation: "recommendation"},
+				{Policy: "pol2", Condition: "cond2", Explanation: "explanation2", Recommendation: "recommendation2"},
+			},
+		},
+	}
+}
+
+func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, simpleIndex ...map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
+	var index map[string]string
+	if len(simpleIndex) > 0 {
+		index = simpleIndex[0]
+	}
 	serverMock, config, _ := commonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			mapLockReadWrite.Lock()
@@ -146,15 +420,26 @@ func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 			}
+			return
 		}
 		if r.Method == http.MethodGet {
 			if r.RequestURI == "/api/system/version" {
-				_, err := w.Write([]byte(`{"version": "7.0.0"}`))
+				_, err := w.Write([]byte(`{"version": "7.82.0"}`))
 				require.NoError(t, err)
-				w.WriteHeader(http.StatusOK)
 				return
 			}
-
+			if r.RequestURI == "/api/v1/system/version" {
+				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
+				require.NoError(t, err)
+				return
+			}
+			for name, href := range index {
+				if strings.HasSuffix(r.URL.Path, "/simple/"+name+"/") {
+					_, err := w.Write([]byte("<html><body>" + href + "</body></html>"))
+					require.NoError(t, err)
+					return
+				}
+			}
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
