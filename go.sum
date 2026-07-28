@@ -175,6 +175,8 @@ github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260724083402-361ba4a2ecdb h1:OW2W
 github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260724083402-361ba4a2ecdb/go.mod h1:9R90mhbczGXwW5EGlDs7F08ejQU/xdoDhYHMvzBiqgE=
 github.com/jfrog/jfrog-client-go v1.55.1-0.20260727112535-8cb0c8e8dc62 h1:jWeSXS9RKvouJa+SaQQLNGGmzjmgpq51J999rFxg5DE=
 github.com/jfrog/jfrog-client-go v1.55.1-0.20260727112535-8cb0c8e8dc62/go.mod h1:FHpjN1nTDoj96xd6obe27EOgGErqzU0rQgC96L3Ch9E=
+github.com/jfrog/jfrog-client-go v1.55.1-0.20260728084229-b4b7a5c98201 h1:1LdE+OGPcTJkVIJLEWjRFx8WRnfcuFwDxxEqkWI3GCY=
+github.com/jfrog/jfrog-client-go v1.55.1-0.20260728084229-b4b7a5c98201/go.mod h1:FHpjN1nTDoj96xd6obe27EOgGErqzU0rQgC96L3Ch9E=
 github.com/jhump/protoreflect v1.15.1 h1:HUMERORf3I3ZdX05WaQ6MIpd/NJ434hTp5YiKgfCL6c=
 github.com/jhump/protoreflect v1.15.1/go.mod h1:jD/2GMKKE6OqX8qTjhADU1e6DShO+gavG9e0Q693nKo=
 github.com/kevinburke/ssh_config v1.6.0 h1:J1FBfmuVosPHf5GRdltRLhPJtJpTlMdKTBjRgTaQBFY=
