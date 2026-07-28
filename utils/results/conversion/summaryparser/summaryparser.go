@@ -224,6 +224,7 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.
 		sc.parseScaViolations(violations),
 		sc.parseSecretsViolations(violations.Secrets),
 		sc.parseIacViolations(violations.Iac),
+		sc.parseServicesViolations(violations.Services),
 		sc.parseSastViolations(violations.Sast),
 	)
 }
@@ -244,7 +245,17 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err
 }
 
 func (sc *CmdResultsSummaryConverter) ParseServices(services ...[]*sarif.Run) (err error) {
-	return nil
+	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
+		// JAS results are only supported as vulnerabilities for now
+		return
+	}
+	if err = sc.validateBeforeParse(); err != nil {
+		return
+	}
+	if sc.currentScan.Vulnerabilities.ServicesResults == nil {
+		sc.currentScan.Vulnerabilities.ServicesResults = &formats.ResultSummary{}
+	}
+	return results.ForEachJasIssue(results.CollectRuns(services...), sc.entitledForJas, sc.getJasHandler(jasutils.Services))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
@@ -301,6 +312,8 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 				resultStatus = tokenStatus
 			}
 			count = sc.currentScan.Vulnerabilities.SecretsResults
+		case jasutils.Services:
+			count = sc.currentScan.Vulnerabilities.ServicesResults
 		case jasutils.IaC:
 			count = sc.currentScan.Vulnerabilities.IacResults
 		case jasutils.Sast:
@@ -353,6 +366,20 @@ func (sc *CmdResultsSummaryConverter) parseIacViolations(iacViolations []violati
 	for _, iacViolation := range iacViolations {
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, iacViolation.Watch)
 		countJasIssues(sc.currentScan.Violations.IacResults, iacViolation.Location, iacViolation.Severity, formats.NoStatus)
+	}
+	return
+}
+
+func (sc *CmdResultsSummaryConverter) parseServicesViolations(servicesViolations []violationutils.JasViolation) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
+		return
+	}
+	if sc.currentScan.Violations.ServicesResults == nil {
+		sc.currentScan.Violations.ServicesResults = &formats.ResultSummary{}
+	}
+	for _, servicesViolation := range servicesViolations {
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, servicesViolation.Watch)
+		countJasIssues(sc.currentScan.Violations.ServicesResults, servicesViolation.Location, servicesViolation.Severity, formats.NoStatus)
 	}
 	return
 }
