@@ -60,9 +60,9 @@ const (
 
 var (
 	// Exclude pattern for files.
-	DefaultJasExcludePatterns = []string{"**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
+	DefaultJasExcludePatterns = []string{"**/*.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
 	// Exclude pattern for directories.
-	DefaultScaExcludePatterns = []string{"*node_modules*", "*target*", "*venv*", "*test*", "dist"}
+	DefaultScaExcludePatterns = []string{"*.git", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
 )
 
 const (

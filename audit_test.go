@@ -993,7 +993,7 @@ func testAuditCommandNewSca(t *testing.T, params auditCommandTestParams, project
 	}
 	params.WithStaticSca = true
 	// No **/tests/** exclusion, we are scanning projects in the test resources path
-	params.CustomExclusion = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "dist"}
+	params.CustomExclusion = []string{"*.git", "*node_modules*", "*target*", "*venv*", "dist"}
 	// Configure a new server named "default"
 	cleanUpHome := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
 	if params.Threads <= 0 {

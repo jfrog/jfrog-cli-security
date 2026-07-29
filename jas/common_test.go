@@ -299,8 +299,8 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 			expectedOutput:  []string(nil),
 		},
 		{
-			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
-			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**"},
+			excludePatterns: []string{"*.git", "*node_modules*", "*target*", "*venv*", "*test*"},
+			expectedOutput:  []string{"**/*.git/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**"},
 		},
 	}
 
