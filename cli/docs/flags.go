@@ -160,6 +160,7 @@ const (
 	// Unique curation flags
 	CurationOutput        = "curation-format"
 	DockerImageName       = "image"
+	HuggingFaceModel      = "hugging-face-model"
 	SolutionPath          = "solution-path"
 	IncludeCachedPackages = "include-cached-packages"
 	LegacyPeerDeps        = "legacy-peer-deps"
@@ -180,6 +181,7 @@ const (
 	GitThreads      = gitPrefix + Threads
 
 	UseConfigProfile = "use-config-profile"
+	Workspace        = "workspace"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -220,7 +222,7 @@ var commandFlags = map[string][]string{
 		// Violations params
 		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
-		Threads, ExclusionsAudit, WorkingDirs,
+		Threads, ExclusionsAudit, WorkingDirs, Workspace,
 		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
@@ -228,7 +230,7 @@ var commandFlags = map[string][]string{
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
@@ -368,9 +370,11 @@ var flagsMap = map[string]components.Flag{
 	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
 	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to false to override config profile for the audit.", components.WithBoolDefaultValue(true), components.SetHiddenBoolFlag()),
+	Workspace:        components.NewStringFlag(Workspace, "Workspace name used together with the repository URL to fetch the applicable config profile from the platform."),
 
 	// Docker flags
-	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
+	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
+	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Hugging Face models to audit, as '<repo-id>[:<revision>]' (revision defaults to 'main'). Multiple entries are comma-separated (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased'). Datasets are not audited (curation does not currently cover datasets). Requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

@@ -225,6 +225,15 @@ func (gap *GitAuditParams) ConfigProfile() *services.ConfigProfile {
 	return gap.configProfile
 }
 
+func (gap *GitAuditParams) SetWorkspaceName(workspaceName string) *GitAuditParams {
+	gap.resultsContext.WorkspaceName = workspaceName
+	return gap
+}
+
+func (gap *GitAuditParams) WorkspaceName() string {
+	return gap.resultsContext.WorkspaceName
+}
+
 func (gap *GitAuditParams) SetGitContext(gitContext *services.XscGitInfoContext) *GitAuditParams {
 	if gitContext == nil {
 		return gap

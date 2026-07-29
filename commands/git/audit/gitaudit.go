@@ -52,6 +52,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
+	gitInfo.WorkspaceName = gaCmd.resultsContext.WorkspaceName
 	gaCmd.SetGitContext(gitInfo)
 	// Get the config profile if applicable
 	configProfile, err := getJPDConfigProfile(gaCmd.GitAuditParams)
@@ -81,8 +82,8 @@ func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error)
 		// Already set, use it
 		return params.configProfile, nil
 	}
-	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s", params.gitContext.Source.GitRepoHttpsCloneUrl))
-	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey)
+	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s (workspace: %q)", params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.WorkspaceName))
+	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey, params.resultsContext.WorkspaceName)
 	if err != nil || configProfile == nil {
 		return nil, fmt.Errorf("failed to get config profile for git audit: %v", err)
 	}
