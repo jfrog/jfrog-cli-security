@@ -52,6 +52,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
+	gitInfo.WorkspaceName = gaCmd.resultsContext.WorkspaceName
 	gaCmd.SetGitContext(gitInfo)
 	// Get the config profile if applicable
 	configProfile, err := getJPDConfigProfile(gaCmd.GitAuditParams)

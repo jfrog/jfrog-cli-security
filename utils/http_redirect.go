@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 )
 
+// This logic will be shifted to jfrog-client-go under https://jfrog-int.atlassian.net/browse/XRAY-156301
 const MaxAuthenticatedRedirects = 3
 
 type EndpointBoundary struct {
