@@ -217,7 +217,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", xrayUtils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
-		Exposures:       &xrayUtils.ExposuresFilterName{Categories: []xrayUtils.ExposureType{xrayUtils.SecretExposureType, xrayUtils.IacExposureType}},
+		Exposures:       &xrayUtils.ExposuresFilterName{Categories: []xrayUtils.ExposureType{xrayUtils.SecretExposureType, xrayUtils.IacExposureType, xrayUtils.ServicesExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
@@ -292,6 +292,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		}
 	}()
 
+	onlyScan := []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan, securityUtils.ServicesScan}
+
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
@@ -299,7 +301,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 				Format:                       format.SimpleJson,
 				Watches:                      []string{watchName},
 				DisableFailOnFailedBuildFlag: true,
-				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
+				OnlyScan:                     onlyScan,
 				ValidateSecrets:              true,
 			},
 			OverrideRepoCloneUrl: dummyCloneUrl,
@@ -308,7 +310,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 70, Sast: 5, Secrets: 2, Services: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 70, Sast: 5, Secrets: 6, Services: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
@@ -335,7 +337,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 				Watches:                      []string{skipWatchName},
 				DisableFailOnFailedBuildFlag: true,
 				ValidateSecrets:              true,
-				OnlyScan:                     []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan},
+				OnlyScan:                     onlyScan,
 			},
 			OverrideRepoCloneUrl: dummyCloneUrl,
 			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
@@ -343,7 +345,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 5, Secrets: 2, Services: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 5, Secrets: 6, Services: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,

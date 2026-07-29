@@ -159,7 +159,7 @@ require (
 )
 
 // orto17:missconfiguration-service
-replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20260728142826-c098e2d936bf
+replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20260729095022-f0072c4ddd4b
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 master
 
