@@ -610,7 +610,7 @@ func hasUnescapedByte(s string, target byte) bool {
 }
 
 // unquotePythonString extracts the value from a Python string literal token,
-// including triple-quoted """...""" and '''...''' forms. Rejects tokens that only
+// including triple-quoted """...""" and ”'...”' forms. Rejects tokens that only
 // look like a single literal at the boundaries but aren't — e.g. Python's implicit
 // adjacent-literal concatenation ("org/" "model") or explicit "+"-concatenation
 // ("org/" + "model") both start and end with '"', but the unescaped '"' in the

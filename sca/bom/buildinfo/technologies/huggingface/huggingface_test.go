@@ -226,7 +226,7 @@ func TestBuildDependencyTree_MultiValueAndAdditive(t *testing.T) {
 
 	params := technologies.BuildInfoBomGeneratorParams{
 		// Two explicit flag models; source file has a third model that must NOT appear.
-		HuggingFaceModel: "org/flag-model-a:main, org/flag-model-b:v2",
+		HuggingFaceModel:   "org/flag-model-a:main, org/flag-model-b:v2",
 		HFWorkingDirectory: dir,
 	}
 	trees, uniqueDeps, warnings, err := BuildDependencyTree(params)
@@ -248,7 +248,7 @@ func TestBuildDependencyTree_AutoDiscovery(t *testing.T) {
 		dir+"/app.py", []byte(`from_pretrained("org/discovered-model", revision="v1")`), 0644))
 
 	params := technologies.BuildInfoBomGeneratorParams{
-		HuggingFaceModel: "",
+		HuggingFaceModel:   "",
 		HFWorkingDirectory: dir,
 	}
 	trees, uniqueDeps, _, err := BuildDependencyTree(params)
