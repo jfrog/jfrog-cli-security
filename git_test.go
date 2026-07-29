@@ -169,12 +169,12 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 85, Violations: 12, Vulnerabilities: 16},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 18, Vulnerabilities: 22},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: 6},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: 6}},
 		},
 	)
 }
@@ -202,9 +202,9 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
+			Total: &validations.TotalCount{Licenses: 3, Violations: 18, Vulnerabilities: 18},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
 		},
 	)
 
@@ -260,11 +260,11 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey, WithVuln: true}},
 		xrayVersion, xscVersion, policy.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Vulnerabilities: 12, Violations: 12},
+			Total: &validations.TotalCount{Vulnerabilities: 18, Violations: 18},
 			// Validate we have vulnerabilities for each scan type (to make sure if violations are issue when fail or not related and issue from other places before)
-			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
 		},
 	)
 }
@@ -308,7 +308,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 70, Sast: 5, Secrets: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 70, Sast: 5, Secrets: 2, Services: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
@@ -343,7 +343,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 5, Secrets: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 5, Secrets: 2, Services: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
