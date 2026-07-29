@@ -58,6 +58,8 @@ type ScanCount struct {
 	Sast int
 	// Expected number of Iac issues
 	Iac int
+	// Expected number of Services issues
+	Services int
 	// Expected number of Secrets issues
 	Secrets int
 	// Expected number of Malicious Code issues
@@ -285,10 +287,10 @@ type ValidationCountActualValues struct {
 	// Total counts
 	Vulnerabilities, Violations, Licenses, SbomComponents int
 	// Vulnerabilities counts
-	SastVulnerabilities, SecretsVulnerabilities, IacVulnerabilities, ScaVulnerabilities                                                                                            int
+	SastVulnerabilities, SecretsVulnerabilities, IacVulnerabilities, ServicesVulnerabilities, ScaVulnerabilities                                                                   int
 	ApplicableVulnerabilities, UndeterminedVulnerabilities, NotCoveredVulnerabilities, NotApplicableVulnerabilities, MissingContextVulnerabilities, InactiveSecretsVulnerabilities int
 	// Violations counts
-	SastViolations, SecretsViolations, IacViolations, ScaViolations                                                                                  int
+	SastViolations, SecretsViolations, IacViolations, ServicesViolations, ScaViolations                                                              int
 	SecurityViolations, LicenseViolations, OperationalViolations                                                                                     int
 	ApplicableViolations, UndeterminedViolations, NotCoveredViolations, NotApplicableViolations, MissingContextViolations, InactiveSecretsViolations int
 	// Sbom counts
@@ -318,7 +320,7 @@ func ValidateVulnerabilitiesCount(t *testing.T, outputType string, exactMatch bo
 	if params == nil {
 		return
 	}
-	ValidateScanTypeCount(t, outputType, false, exactMatch, params.ValidateScan, actual.ScaVulnerabilities, actual.SastVulnerabilities, actual.SecretsVulnerabilities, actual.IacVulnerabilities)
+	ValidateScanTypeCount(t, outputType, false, exactMatch, params.ValidateScan, actual.ScaVulnerabilities, actual.SastVulnerabilities, actual.SecretsVulnerabilities, actual.IacVulnerabilities, actual.ServicesVulnerabilities)
 	ValidateApplicabilityStatusCount(t, outputType, false, exactMatch, params.ValidateApplicabilityStatus, actual.ApplicableVulnerabilities, actual.UndeterminedVulnerabilities, actual.NotCoveredVulnerabilities, actual.NotApplicableVulnerabilities, actual.MissingContextVulnerabilities, actual.InactiveSecretsVulnerabilities)
 }
 
@@ -326,12 +328,12 @@ func ValidateViolationCount(t *testing.T, outputType string, exactMatch bool, pa
 	if params == nil {
 		return
 	}
-	ValidateScanTypeCount(t, outputType, true, exactMatch, params.ValidateScan, actual.ScaViolations, actual.SastViolations, actual.SecretsViolations, actual.IacViolations)
+	ValidateScanTypeCount(t, outputType, true, exactMatch, params.ValidateScan, actual.ScaViolations, actual.SastViolations, actual.SecretsViolations, actual.IacViolations, actual.ServicesViolations)
 	ValidateApplicabilityStatusCount(t, outputType, true, exactMatch, params.ValidateApplicabilityStatus, actual.ApplicableViolations, actual.UndeterminedViolations, actual.NotCoveredViolations, actual.NotApplicableViolations, actual.MissingContextViolations, actual.InactiveSecretsViolations)
 	ValidateScaViolationCount(t, outputType, exactMatch, params.ValidateType, actual.SecurityViolations, actual.LicenseViolations, actual.OperationalViolations)
 }
 
-func ValidateScanTypeCount(t *testing.T, outputType string, violation, exactMatch bool, params *ScanCount, scaViolations, sastViolations, secretsViolations, iacViolations int) {
+func ValidateScanTypeCount(t *testing.T, outputType string, violation, exactMatch bool, params *ScanCount, scaViolations, sastViolations, secretsViolations, iacViolations, servicesViolations int) {
 	if params == nil {
 		return
 	}
@@ -343,6 +345,7 @@ func ValidateScanTypeCount(t *testing.T, outputType string, violation, exactMatc
 		CountValidation[int]{Expected: params.Sast, Actual: sastViolations, Msg: GetValidationCountErrMsg(fmt.Sprintf("sast %s", suffix), outputType, exactMatch, params.Sast, sastViolations)},
 		CountValidation[int]{Expected: params.Secrets, Actual: secretsViolations, Msg: GetValidationCountErrMsg(fmt.Sprintf("secrets %s", suffix), outputType, exactMatch, params.Secrets, secretsViolations)},
 		CountValidation[int]{Expected: params.Iac, Actual: iacViolations, Msg: GetValidationCountErrMsg(fmt.Sprintf("IaC %s", suffix), outputType, exactMatch, params.Iac, iacViolations)},
+		CountValidation[int]{Expected: params.Services, Actual: servicesViolations, Msg: GetValidationCountErrMsg(fmt.Sprintf("Services %s", suffix), outputType, exactMatch, params.Services, servicesViolations)},
 		CountValidation[int]{Expected: params.Sca, Actual: scaViolations, Msg: GetValidationCountErrMsg(fmt.Sprintf("Sca %s", suffix), outputType, exactMatch, params.Sca, scaViolations)},
 	)
 }

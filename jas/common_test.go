@@ -715,6 +715,7 @@ func TestShouldSkipScannerByConfigProfile(t *testing.T) {
 				ScaScannerConfig:                xscServices.ScaScannerConfig{EnableScaScan: true},
 				ContextualAnalysisScannerConfig: xscServices.CaScannerConfig{EnableCaScan: true},
 				IacScannerConfig:                xscServices.IacScannerConfig{EnableIacScan: true},
+				ServicesScannerConfig:           xscServices.ServicesScannerConfig{EnableServicesScan: true},
 				SecretsScannerConfig:            xscServices.SecretsScannerConfig{EnableSecretsScan: true},
 				SastScannerConfig:               xscServices.SastScannerConfig{EnableSastScan: true},
 			},
@@ -746,6 +747,14 @@ func TestShouldSkipScannerByConfigProfile(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "Services scan enabled - should not skip",
+			target:   results.ScanTarget{Target: "/project", CentralConfigModules: enabledProfile.Modules},
+			profile:  enabledProfile,
+			scanType: utils.ServicesScan,
+			jasType:  jasutils.Services,
+			expected: false,
+		},
+		{
 			name: "Scan disabled - should skip",
 			target: results.ScanTarget{Target: "/project", CentralConfigModules: []xscServices.Module{{
 				ScanConfig: xscServices.ScanConfig{
@@ -762,6 +771,25 @@ func TestShouldSkipScannerByConfigProfile(t *testing.T) {
 			},
 			scanType: utils.SecretsScan,
 			jasType:  jasutils.Secrets,
+			expected: true,
+		},
+		{
+			name: "Services scan disabled - should skip",
+			target: results.ScanTarget{Target: "/project", CentralConfigModules: []xscServices.Module{{
+				ScanConfig: xscServices.ScanConfig{
+					ServicesScannerConfig: xscServices.ServicesScannerConfig{EnableServicesScan: false},
+				},
+			}}},
+			profile: &xscServices.ConfigProfile{
+				ProfileName: "disabled-services-profile",
+				Modules: []xscServices.Module{{
+					ScanConfig: xscServices.ScanConfig{
+						ServicesScannerConfig: xscServices.ServicesScannerConfig{EnableServicesScan: false},
+					},
+				}},
+			},
+			scanType: utils.ServicesScan,
+			jasType:  jasutils.Services,
 			expected: true,
 		},
 	}

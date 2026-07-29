@@ -126,7 +126,7 @@ func TestScanResultSummary(t *testing.T) {
 		{
 			name:                 "Multiple filters",
 			summary:              testSummary,
-			resultTypeFilters:    []SummaryResultType{ScaSecurityResult, ScaLicenseResult, IacResult, SecretsResult, SastResult},
+			resultTypeFilters:    []SummaryResultType{ScaSecurityResult, ScaLicenseResult, IacResult, ServicesResult, SecretsResult, SastResult},
 			expectedTotal:        5,
 			expectedScanIds:      ids,
 			expectedMoreInfoUrls: urls,
@@ -227,7 +227,7 @@ func TestResultsSummary(t *testing.T) {
 		{
 			name:                         "With filters",
 			summary:                      ResultsSummary{Scans: testScans},
-			filters:                      []SummaryResultType{ScaLicenseResult, IacResult, SecretsResult},
+			filters:                      []SummaryResultType{ScaLicenseResult, IacResult, ServicesResult, SecretsResult},
 			expectedTotalVulnerabilities: 4,
 			expectedTotalViolations:      2,
 		},

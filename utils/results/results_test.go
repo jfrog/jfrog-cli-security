@@ -73,6 +73,7 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 			ScaScannerConfig:                xscServices.ScaScannerConfig{EnableScaScan: true},
 			ContextualAnalysisScannerConfig: xscServices.CaScannerConfig{EnableCaScan: true},
 			IacScannerConfig:                xscServices.IacScannerConfig{EnableIacScan: true},
+			ServicesScannerConfig:           xscServices.ServicesScannerConfig{EnableServicesScan: true},
 			SecretsScannerConfig:            xscServices.SecretsScannerConfig{EnableSecretsScan: true},
 			SastScannerConfig:               xscServices.SastScannerConfig{EnableSastScan: true},
 		},
@@ -100,6 +101,12 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 			name:     "IaC enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.IacScan,
+			expected: utils.NewBoolPtr(true),
+		},
+		{
+			name:     "Services enabled",
+			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
+			scanType: utils.ServicesScan,
 			expected: utils.NewBoolPtr(true),
 		},
 		{
@@ -286,6 +293,16 @@ func TestScanTarget_GetCentralConfigExclusions(t *testing.T) {
 			}}},
 			scanType: utils.IacScan,
 			expected: []string{"**/test-infra/**"},
+		},
+		{
+			name: "Services exclusions",
+			target: ScanTarget{CentralConfigModules: []xscServices.Module{{
+				ScanConfig: xscServices.ScanConfig{
+					ServicesScannerConfig: xscServices.ServicesScannerConfig{ExcludePatterns: []string{"**/.github/workflows/**"}},
+				},
+			}}},
+			scanType: utils.ServicesScan,
+			expected: []string{"**/.github/workflows/**"},
 		},
 		{
 			name: "SAST exclusions",

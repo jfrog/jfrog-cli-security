@@ -669,3 +669,10 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 		})
 	}
 }
+
+func TestGetScanType(t *testing.T) {
+	assert.Equal(t, utils.ServicesScan, getScanType("", "GITHUB-ACTIONS-permissions-write-all"))
+	assert.Equal(t, utils.SecretsScan, getScanType("", "EXP-SECRET-TOKEN"))
+	assert.Equal(t, utils.SastScan, getScanType("", "aws_cloudfront_tls_only"))
+	assert.Equal(t, utils.IacScan, getScanType(utils.IacScan, "GITHUB-ACTIONS-permissions-write-all"))
+}
