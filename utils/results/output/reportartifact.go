@@ -9,11 +9,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-client-go/auth"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -41,10 +39,6 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	if err != nil {
 		return "", fmt.Errorf("failed uploading the scan results: %w", err)
 	}
-	// Set the results platform URL in the command results and log it
-	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
-		cmdResults.SetResultsPlatformUrl(resultsUrl)
-	}
 	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
 }
 
@@ -61,20 +55,6 @@ func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResu
 		link = coreutils.PrintLink(link)
 	}
 	return fmt.Sprintf("%s:\n%s", uploadMsg, link)
-}
-
-func getCommandScanResultsPlatformUrl(cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
-	content, err := utils.GetAsJsonBytes(cdxResults, true, true)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to generate CycloneDX content bytes for scan results URL: %s", err.Error()))
-		return ""
-	}
-	sha256, err := utils.Sha256Hash(string(content))
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to calculate SHA256 for scan results URL: %s", err.Error()))
-		return ""
-	}
-	return upload.GetCdxScanResultsUrl(serverDetails.GetUrl(), repoPath, artifactName, sha256)
 }
 
 func getResultsArtifactPath(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails) (string, error) {
