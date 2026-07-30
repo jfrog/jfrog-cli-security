@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"fmt"
 	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -360,4 +361,11 @@ func (params *AuditParams) RtResultRepository() string {
 func (params *AuditParams) SetIncludeSbom(include bool) *AuditParams {
 	params.resultsContext.IncludeSbom = include
 	return params
+}
+
+func (params *AuditParams) GetRtResultRepositoryWithProjectKey() string {
+	if params.rtResultRepository != "" && params.resultsContext.ProjectKey != "" {
+		return fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, params.rtResultRepository)
+	}
+	return params.rtResultRepository
 }
