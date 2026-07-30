@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
+	"github.com/jfrog/jfrog-client-go/http/redirect"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
@@ -546,14 +547,14 @@ func resolvePipenvPackageURL(rtManager artifactory.ArtifactoryServicesManager, h
 func buildPipenvDownloadUrl(rtManager artifactory.ArtifactoryServicesManager, clientDetails *httputils.HttpClientDetails, artiUrl, repository string, pkg pipfileLockPackage) (string, error) {
 	normalized := NormalizePypiName(pkg.Name)
 	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", artiUrl, repository)
-	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	boundary, err := redirect.NewEndpointBoundary(repositoryURL)
 	if err != nil {
 		return "", err
 	}
 	simpleIndexUrl := repositoryURL + "simple/" + normalized + "/"
 	log.Debug(fmt.Sprintf("Pipenv: GET simple-index %s (matching against %d hashes)", simpleIndexUrl, len(pkg.Hashes)))
-	resp, body, err := utils.SendWithBoundedRedirects(rtManager.Client(), http.MethodGet, simpleIndexUrl,
-		clientDetails, boundary, utils.MaxAuthenticatedRedirects)
+	resp, body, err := redirect.SendWithBoundedRedirects(rtManager.Client(), http.MethodGet, simpleIndexUrl,
+		clientDetails, boundary, redirect.MaxAuthenticatedRedirects)
 	if err != nil {
 		return "", err
 	}

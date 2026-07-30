@@ -167,3 +167,5 @@ require (
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
+
+replace github.com/jfrog/jfrog-client-go => github.com/Phavya-jfrog/jfrog-client-go v0.0.0-20260730125004-28d1eaa0c7f1

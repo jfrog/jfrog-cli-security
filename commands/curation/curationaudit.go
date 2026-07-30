@@ -31,6 +31,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
+	"github.com/jfrog/jfrog-client-go/http/redirect"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
@@ -1806,12 +1807,12 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 func (nc *treeAnalyzer) sendBoundedRequest(method, requestURL string, details *httputils.HttpClientDetails) (*http.Response, []byte, error) {
 	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", strings.TrimSuffix(nc.url, "/"), nc.repo)
-	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	boundary, err := redirect.NewEndpointBoundary(repositoryURL)
 	if err != nil {
 		return nil, nil, err
 	}
-	return utils.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
-		boundary, utils.MaxAuthenticatedRedirects)
+	return redirect.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
+		boundary, redirect.MaxAuthenticatedRedirects)
 }
 
 // runCvsFallback is called when pip or poetry resolution failed because CVS
