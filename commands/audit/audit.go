@@ -293,14 +293,14 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.Entitlements.Jas {
-		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', 'Services', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
 	if cmdResults.Entitlements.Jas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
-		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
+		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Services (Misconfiguration)\n- Static Application Security Testing (SAST)"}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
