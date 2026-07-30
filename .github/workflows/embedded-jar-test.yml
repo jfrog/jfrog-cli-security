@@ -12,10 +12,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GOPROXY: direct
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Download JARs
         run: buildscripts/download-jars.sh

@@ -3,6 +3,7 @@ package cyclonedxparser
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -30,6 +31,8 @@ const (
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
 	// Git context property
 	gitContextProperty = "jfrog:git:context"
+	// Include directories property
+	includeDirectoriesProperty = "jfrog:include:directories"
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -92,7 +95,14 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 		return results.ErrResetConvertor
 	}
 	cdc.currentTarget = target
-	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target))
+	properties := []cyclonedx.Property{}
+	if len(target.Include) > 0 {
+		properties = append(properties, cyclonedx.Property{
+			Name:  includeDirectoriesProperty,
+			Value: strings.Join(target.Include, ","),
+		})
+	}
+	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target, properties...))
 	return
 }
 
@@ -142,9 +152,11 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, 
 	}
 	cdc.addJasService(applicableScan)
 	return results.ForEachScaBomVulnerability(cdc.currentTarget, enrichedSbom, cdc.entitledForJas, results.CollectRuns(applicableScan...),
-		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-			// Add the vulnerability related component if it is not already existing
-			cdc.getOrCreateScaComponent(compToParse)
+		func(vulnToParse cyclonedx.Vulnerability, compToParse *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			if compToParse != nil {
+				// Add the vulnerability related component if it is not already existing
+				cdc.getOrCreateScaComponent(*compToParse)
+			}
 			// Add the vulnerability to the BOM if it is not already existing
 			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
 			// Attach JAS information to the vulnerability
@@ -393,7 +405,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclone
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnToParse)
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdxutils.CloneVulnerability(vulnToParse))
 	vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 	// Ensure the source is set for the vulnerability
 	if vulnerability.Source == nil {

@@ -75,14 +75,14 @@ func newMaliciousScanManager(scanner *jas.JasScanner, scanType MaliciousScanType
 }
 
 func (mal *MaliciousScanManager) Run(sourceRoot string) (vulnerabilitiesSarifRuns []*sarif.Run, err error) {
-	if err = mal.createConfigFile(sourceRoot, append(mal.scanner.Exclusions, mal.scanner.ScannersExclusions.MaliciousCodeExcludePatterns...)...); err != nil {
+	if err = mal.createConfigFile(sourceRoot, mal.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = mal.runAnalyzerManager(); err != nil {
 		return
 	}
 	// Malicious code scans only return vulnerabilities, not violations
-	vulnerabilitiesSarifRuns, _, err = jas.ReadJasScanRunsFromFile(mal.resultsFileName, sourceRoot, malDocsUrlSuffix, mal.scanner.MinSeverity)
+	vulnerabilitiesSarifRuns, _, err = jas.ReadJasScanRunsFromFile(mal.resultsFileName, malDocsUrlSuffix, mal.scanner.MinSeverity, sourceRoot)
 	return
 }
 

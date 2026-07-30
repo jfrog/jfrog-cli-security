@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -115,7 +117,10 @@ func GetAllSupportedScans() []SubScanType {
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
-func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
+func IsScanRequested(cmdType CommandType, subScan SubScanType, centralConfigRequestedParam *bool, requestedScans ...SubScanType) bool {
+	if centralConfigRequestedParam != nil {
+		return *centralConfigRequestedParam
+	}
 	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
@@ -124,13 +129,6 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return slices.Contains(requestedScans, subScan)
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
-}
-
-func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
-	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
-		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
-		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
 func getScanFindingName(scanType SubScanType) string {
@@ -277,13 +275,40 @@ func toHash(hash crypto.Hash, values ...string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// map[string]string to []string (key=value format)
-func ToCommandEnvVars(envVarsMap map[string]string) (converted []string) {
-	converted = make([]string, 0, len(envVarsMap))
-	for key, value := range envVarsMap {
+type EnvironmentVariables map[string]string
+
+func (envVars EnvironmentVariables) ToCommandEnvVars() []string {
+	converted := make([]string, 0, len(envVars))
+	for key, value := range envVars {
 		converted = append(converted, fmt.Sprintf("%s=%s", key, value))
 	}
-	return
+	return converted
+}
+
+func (envVars EnvironmentVariables) ToString() string {
+	envVarsStr := []string{}
+	for key, value := range envVars {
+		envVarsStr = append(envVarsStr, fmt.Sprintf("%s=%s", key, MaskSensitiveData(key, value)))
+	}
+	return strings.Join(envVarsStr, "\n")
+}
+
+func MaskSensitiveData(flagName, flagValue string) (masked string) {
+	// Mask url if required
+	if strings.Contains(strings.ToLower(flagName), "url") {
+		// Regex to match credentials in URL: http(s)://username:password@host...
+		re := regexp.MustCompile(`(https?://)([^:/\s]+):([^@/\s]+)@`)
+		masked = re.ReplaceAllString(flagValue, `${1}${2}:****@`)
+		return masked
+	}
+	// Mask password, token, key, passphrase flags
+	lowerFlagName := strings.ToLower(flagName)
+	if strings.Contains(lowerFlagName, "password") || strings.Contains(lowerFlagName, "passphrase") ||
+		strings.Contains(lowerFlagName, "token") || strings.Contains(lowerFlagName, "key") {
+		return "****"
+	}
+	// Return original input if no masking required
+	return flagValue
 }
 
 // []string (key=value format) to map[string]string
@@ -390,9 +415,9 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }
 
-func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
 	// Get JPD / Releases remote details to download the resource from.
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return err
 	}
@@ -491,4 +516,21 @@ func (p *LineDecoratorWriter) Write(data []byte) (n int, err error) {
 			return 0, err
 		}
 	}
+}
+
+func ElementsEqual[T comparable](slice1 []T, slice2 []T) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	freq := make(map[T]int, len(slice1))
+	for _, v := range slice1 {
+		freq[v]++
+	}
+	for _, v := range slice2 {
+		freq[v]--
+		if freq[v] < 0 {
+			return false
+		}
+	}
+	return true
 }

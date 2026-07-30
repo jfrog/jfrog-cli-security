@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetExcludePattern(t *testing.T) {
+func TestGetScaExcludePattern(t *testing.T) {
 	tests := []struct {
 		name            string
 		exclusions      []string
@@ -69,7 +69,7 @@ func TestGetExcludePattern(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetExcludePattern(test.configProfile, test.isRecursiveScan, test.exclusions...)
+			result := GetScaExcludePattern(test.configProfile, test.isRecursiveScan, test.exclusions...)
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -142,6 +142,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	mvnOutput2 := "status code: 500, reason phrase: Server Error (500)"
 	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
 	goOutput := "Failed running Go command: 403 Forbidden"
+	poetryOutput := "because of HTTP error 403 Client Error: Forbidden for url"
 
 	tests := []struct {
 		name          string
@@ -189,6 +190,19 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 			tech:          techutils.Go,
 			output:        goOutput,
 			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go),
+		},
+		{
+			name:          "poetry 403 error (pass-through disabled)",
+			isCurationCmd: true,
+			tech:          techutils.Poetry,
+			output:        poetryOutput,
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Poetry),
+		},
+		{
+			name:          "poetry not pass through error",
+			isCurationCmd: true,
+			tech:          techutils.Poetry,
+			output:        "http error 401",
 		},
 		{
 			name:          "not a supported tech",

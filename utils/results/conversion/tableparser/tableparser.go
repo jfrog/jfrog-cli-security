@@ -20,6 +20,7 @@ import (
 type CmdResultsTableConverter struct {
 	simpleJsonConvertor *simplejsonparser.CmdResultsSimpleJsonConverter
 	sbomRows            []formats.SbomTableRow
+	currentTarget       results.ScanTarget
 	// If supported, pretty print the output in the tables
 	pretty bool
 }
@@ -57,6 +58,7 @@ func (tc *CmdResultsTableConverter) Reset(metadata results.ResultsMetaData, stat
 }
 
 func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
+	tc.currentTarget = target
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
@@ -125,7 +127,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
 			Component:   compName,
 			Version:     compVersion,
-			PackageType: results.FormalTechOrCdxCompType(compType, tc.pretty),
+			PackageType: results.FormalTechOrCdxCompType(compType, tc.pretty, tc.currentTarget.Technologies...),
 			Relation:    relationStr,
 			// For sorting
 			RelationPriority: relationPriority,

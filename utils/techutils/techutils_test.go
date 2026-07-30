@@ -59,6 +59,35 @@ func TestMapFilesToRelevantWorkingDirectories(t *testing.T) {
 			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
 		},
 		{
+			name:                 "pnpmWorkspaceTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			name:                 "pnpmfileTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			// pnpm-workspace.yaml + pnpm-lock.yaml both present: only pnpm should be detected,
+			// npm and yarn excluded.
+			name: "pnpmWorkspaceAndLockfileTest",
+			paths: []string{
+				filepath.Join("dir", "package.json"),
+				filepath.Join("dir", "pnpm-workspace.yaml"),
+				filepath.Join("dir", "pnpm-lock.yaml"),
+			},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir: map[string][]string{
+				"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml"), filepath.Join("dir", "pnpm-lock.yaml")},
+			},
+			expectedExcluded: map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
 			name:                 "yarnTest",
 			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", ".yarn")},
 			requestedDescriptors: noRequest,
@@ -873,6 +902,32 @@ func TestSplitPackageURL(t *testing.T) {
 	}
 }
 
+func TestResolveIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []Technology
+		expected Technology
+	}{
+		{"empty response npm target", "", "npm", []Technology{Npm}, Npm},
+		{"pip response poetry target", "pip", "pypi", []Technology{Poetry}, Poetry},
+		{"pypi response poetry target", "pypi", "pypi", []Technology{Poetry}, Poetry},
+		{"gav response gradle target", "gav", "gav", []Technology{Gradle}, Gradle},
+		{"npm response disambiguate", "npm", "npm", []Technology{Maven, Npm}, Npm},
+		{"maven response disambiguate", "maven", "maven", []Technology{Maven, Npm}, Maven},
+		{"generic uses target", "generic", "maven", []Technology{Maven}, Maven},
+		{"yarn npm type", "yarn", "npm", []Technology{Yarn}, Yarn},
+		{"single target fallback", "", "go", []Technology{Go}, Go},
+		{"no match", "", "pypi", []Technology{Maven, Npm}, NoTech},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ResolveIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
+}
+
 func TestCdxPackageTypeToTechnology(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1005,4 +1060,119 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 			assert.Equalf(t, tt.expected, actual, "XrayComponentIdToCdxComponentRef(%v) == %v", tt.input, tt.expected)
 		})
 	}
+}
+
+// TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers pins
+// the scoping contract for the workspace-member detector fixup: the
+// generic file-based detector that 'jf audit', 'jf scan' etc. depend on
+// must NOT promote bare-package.json members from Npm to Yarn. Only
+// curation has opted into that behaviour via DetectedTechnologiesList-
+// ForCurationAudit. Without this test a careless future change could
+// re-introduce the promotion at the generic layer and silently flip the
+// audit detection result for every yarn-workspace user.
+func TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers(t *testing.T) {
+	root := t.TempDir()
+	member := filepath.Join(root, "packages", "admin-ui")
+	assert.NoError(t, os.MkdirAll(member, 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+		[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "yarn.lock"), []byte("# yarn\n"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+		[]byte(`{"name":"admin-ui"}`), 0644))
+
+	detected, err := DetectTechnologiesDescriptors(member, false, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+	// Bare package.json is an npm indicator and only a yarn descriptor;
+	// the legacy detector therefore returns Npm. The curation-only
+	// promotion lives in DetectedTechnologiesListForCurationAudit, NOT
+	// here, so this generic call must keep returning Npm.
+	assert.Contains(t, detected, Npm, "generic detector must keep returning Npm for bare-package.json dirs — audit/scan rely on this")
+	assert.NotContains(t, detected, Yarn, "generic detector must NOT auto-route to yarn — that would silently change every 'jf audit' for yarn workspace users")
+}
+
+// TestPromoteYarnWorkspaceMembers covers the detector fixup that turns
+// 'jf ca --working-dirs=<yarn workspace member>' from an npm audit into a
+// yarn audit. Without this fixup the user's scoped audit would silently
+// resolve through npm (because package.json is an npm indicator) against
+// a yarn-managed project — wrong tool for the registry contract, wrong
+// algorithm for the curation answers.
+//
+// The three cases match the only three states a single workingDirectory
+// can be in after the main detector passes: (1) an npm dir that IS a
+// yarn workspace member → must be moved to yarn, npm bucket cleaned up;
+// (2) an npm dir that ISN'T a yarn workspace member → must be left
+// alone, no spurious yarn entries; (3) an npm-workspaces sibling (yarn
+// "workspaces" syntax exists but no yarn indicator at the root) → must
+// be left as npm, no yarn promotion.
+func TestPromoteYarnWorkspaceMembers(t *testing.T) {
+	t.Run("npm dir claimed by yarn parent is promoted to yarn", func(t *testing.T) {
+		root := t.TempDir()
+		member := filepath.Join(root, "packages", "admin-ui")
+		assert.NoError(t, os.MkdirAll(member, 0755))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+		// Yarn indicator at the root is mandatory: directoryHasYarnIndicator
+		// must accept this ancestor, otherwise the promotion is rejected as
+		// an npm-workspaces sibling (case 3 below).
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "yarn.lock"), []byte("# yarn\n"), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+			[]byte(`{"name":"admin-ui"}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {member: {filepath.Join(member, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		// Yarn must now own the member dir, with the same descriptors
+		// the npm bucket originally held. Downstream code that iterates
+		// detected[Yarn][wd] for descriptor paths must see the same shape
+		// it sees for any other yarn dir.
+		assert.Contains(t, detected, Yarn)
+		assert.Contains(t, detected[Yarn], member)
+		assert.Equal(t, []string{filepath.Join(member, "package.json")}, detected[Yarn][member])
+		// Npm bucket must be gone — a stale empty entry would still appear
+		// in 'Detected N technologies' debug logs and confuse triage.
+		assert.NotContains(t, detected, Npm, "empty Npm bucket must be deleted after the member is moved out")
+	})
+
+	t.Run("npm dir without yarn parent is untouched", func(t *testing.T) {
+		root := t.TempDir()
+		// Plain npm project: package.json + package-lock.json, no
+		// workspaces declared, no yarn artefacts anywhere.
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"plain-npm"}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {root: {filepath.Join(root, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		assert.Contains(t, detected, Npm, "ordinary npm dir must remain npm — no walking-up surprise")
+		assert.NotContains(t, detected, Yarn)
+		assert.Contains(t, detected[Npm], root)
+	})
+
+	t.Run("npm-workspaces sibling is not promoted", func(t *testing.T) {
+		root := t.TempDir()
+		member := filepath.Join(root, "packages", "admin-ui")
+		assert.NoError(t, os.MkdirAll(member, 0755))
+		// 'workspaces' field exists at root — but no yarn indicator next
+		// to it. This is an npm-workspaces project, not yarn. The
+		// directoryHasYarnIndicator guard in isYarnWorkspaceMemberDir
+		// must reject it; otherwise we'd hijack npm-workspaces users.
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+			[]byte(`{"name":"admin-ui"}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {member: {filepath.Join(member, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		assert.Contains(t, detected, Npm, "npm-workspaces member must stay in npm — no yarn hijack")
+		assert.NotContains(t, detected, Yarn)
+	})
 }

@@ -189,16 +189,62 @@ func getViolationType(violation services.XrayViolation) utils.SubScanType {
 	return utils.ScaScan
 }
 
-func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation) (affectedComponent *cyclonedx.Component, scaViolation violationutils.ScaViolation) {
+// bomResolvedComponent holds the result of a single locateBomComponentInfo call for one Xray infected-component ID.
+type bomResolvedComponent struct {
+	xrayId           string
+	impacted         *cyclonedx.Component
+	directComponents []formats.ComponentRow
+	impactPaths      [][]formats.ComponentRow
+}
+
+// resolveInfectedComponents maps violation.InfectedComponentIds to BOM components in one pass.
+// unresolvedCount is the number of non-empty IDs that did not resolve in the BOM.
+func resolveInfectedComponents(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (resolved []bomResolvedComponent, unresolvedCount int) {
+	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
+		if infectedComponentXrayId == "" {
+			log.Warn(fmt.Sprintf("Skipping violation with empty infected component ID for violation ID %s", violation.Id))
+			continue
+		}
+		impacted, directComponents, impactPaths := locateBomComponentInfo(cmdResults, infectedComponentXrayId, violation)
+		if impacted == nil {
+			log.Warn(fmt.Sprintf("Skipping violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
+			unresolvedCount++
+			continue
+		}
+		resolved = append(resolved, bomResolvedComponent{
+			xrayId:           infectedComponentXrayId,
+			impacted:         impacted,
+			directComponents: directComponents,
+			impactPaths:      impactPaths,
+		})
+	}
+	return resolved, unresolvedCount
+}
+
+func logComponentLessFallback(violation services.XrayViolation, unresolvedCount int) {
+	if len(violation.InfectedComponentIds) > 0 && unresolvedCount > 0 {
+		log.Warn(fmt.Sprintf(
+			"Falling back to component-less violation for violation ID %s: none of %d infected component ID(s) resolved in BOM",
+			violation.Id, unresolvedCount,
+		))
+	}
+}
+
+func convertToScaViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation, preResolved *bomResolvedComponent) (affectedComponent *cyclonedx.Component, scaViolation violationutils.ScaViolation) {
 	scaViolation = violationutils.ScaViolation{
 		Violation: convertToBasicViolation(getScaViolationType(violation), violation),
 	}
-	affectedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
-	if affectedComponent == nil {
-		return
+	if preResolved != nil && preResolved.xrayId == impactedComponentXrayId {
+		scaViolation.ImpactedComponent = preResolved.impacted
+		scaViolation.DirectComponents = preResolved.directComponents
+		scaViolation.ImpactPaths = preResolved.impactPaths
+		return preResolved.impacted, scaViolation
 	}
-	scaViolation.ImpactedComponent = *affectedComponent
-	return
+	if impactedComponentXrayId == "" {
+		return nil, scaViolation
+	}
+	scaViolation.ImpactedComponent, scaViolation.DirectComponents, scaViolation.ImpactPaths = locateBomComponentInfo(cmdResults, impactedComponentXrayId, violation)
+	return scaViolation.ImpactedComponent, scaViolation
 }
 
 func getJasViolationType(jasType jasutils.JasScanType) violationutils.ViolationIssueType {
@@ -251,25 +297,33 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 	return
 }
 
-func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issueId string, impactedComponent cyclonedx.Component) (relevantVulnerability *cyclonedx.Vulnerability, contextualAnalysis *formats.Applicability) {
+// locateBomVulnerabilityInfo finds a CycloneDX vulnerability in scan results by issue/CVE id.
+// When impactedComponent is nil, only vulnerabilities with empty Affects are matched.
+// If the BOM lists Affects but Xray omits InfectedComponentIds, conversion still fails (returns nil).
+func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issueId string, impactedComponent *cyclonedx.Component) (relevantVulnerability *cyclonedx.Vulnerability, contextualAnalysis *formats.Applicability) {
 	for _, target := range cmdResults.Targets {
 		if target.ScaResults == nil || target.ScaResults.Sbom == nil || target.ScaResults.Sbom.Vulnerabilities == nil {
 			continue
 		}
 		for _, vulnerability := range *target.ScaResults.Sbom.Vulnerabilities {
-			if vulnerability.ID != issueId || vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			if vulnerability.ID != issueId {
 				continue
 			}
-			for _, affected := range *vulnerability.Affects {
-				if affected.Ref == impactedComponent.BOMRef {
-					// Found the relevant component in a vulnerability
-					relevantVulnerability = &vulnerability
-					contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, target.JasResults.GetApplicabilityScanResults())
-					break
+			if impactedComponent != nil && vulnerability.Affects != nil {
+				for _, affected := range *vulnerability.Affects {
+					if affected.Ref == impactedComponent.BOMRef {
+						// Found the relevant component in a vulnerability
+						relevantVulnerability = &vulnerability
+						break
+					}
 				}
+			} else if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+				// No impacted component, use the first vulnerability that matches the issue ID
+				relevantVulnerability = &vulnerability
 			}
 			if relevantVulnerability != nil {
 				// Found the relevant vulnerability, no need to continue searching
+				contextualAnalysis = results.GetCveApplicabilityField(vulnerability.BOMRef, target.JasResults.GetApplicabilityScanResults())
 				break
 			}
 		}
@@ -397,78 +451,105 @@ func convertToBasicViolation(violationType violationutils.ViolationIssueType, vi
 }
 
 func convertToCveViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (cveViolations []violationutils.CveViolation) {
-	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
-		if infectedComponentXrayId == "" {
-			log.Warn(fmt.Sprintf("Skipping CVE violation with empty infected component ID for violation ID %s", violation.Id))
+	resolved, unresolvedCount := resolveInfectedComponents(cmdResults, violation)
+	for _, cve := range violation.Cves {
+		if cve.Id == "" {
+			log.Warn(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
 			continue
 		}
-		affectedComponent, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
-		if affectedComponent == nil {
-			log.Warn(fmt.Sprintf("Skipping CVE violation with no located affected component for violation ID %s and infected component ID %s", violation.Id, infectedComponentXrayId))
+		if len(resolved) == 0 {
+			logComponentLessFallback(violation, unresolvedCount)
+			cveViolation := createCveViolation(cmdResults, "", cve.Id, violation, nil)
+			if cveViolation == nil {
+				log.Warn(fmt.Sprintf("CVE (%s) violation with no located affected components for violation ID %s", cve.Id, violation.Id))
+				continue
+			}
+			cveViolations = append(cveViolations, *cveViolation)
 			continue
 		}
-		for _, cve := range violation.Cves {
-			if cve.Id == "" {
-				log.Warn(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
+		for i := range resolved {
+			cveViolation := createCveViolation(cmdResults, resolved[i].xrayId, cve.Id, violation, &resolved[i])
+			if cveViolation == nil {
+				log.Warn(fmt.Sprintf("CVE (%s) violation for component (%s) with no located affected components for violation ID %s", cve.Id, resolved[i].xrayId, violation.Id))
 				continue
 			}
-			vulnerability, contextualAnalysis := locateBomVulnerabilityInfo(cmdResults, cve.Id, *affectedComponent)
-			if vulnerability == nil {
-				log.Warn(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s, violation ID %s and infected component ID %s", cve.Id, violation.Id, infectedComponentXrayId))
-				continue
-			}
-			cveViolation := violationutils.CveViolation{
-				ScaViolation:             scaViolation,
-				CveVulnerability:         *vulnerability,
-				ContextualAnalysis:       contextualAnalysis,
-				FixedVersions:            cdxutils.ConvertToAffectedVersions(*affectedComponent, violation.FixVersions),
-				JfrogResearchInformation: results.ConvertJfrogResearchInformation(violation.JfrogResearchInformation),
-			}
-			cveViolations = append(cveViolations, cveViolation)
+			cveViolations = append(cveViolations, *cveViolation)
 		}
 	}
 	return cveViolations
 }
 
+func createCveViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId, cveId string, violation services.XrayViolation, preResolved *bomResolvedComponent) *violationutils.CveViolation {
+	affectedComponent, scaViolation := convertToScaViolation(cmdResults, impactedComponentXrayId, violation, preResolved)
+	vulnerability, contextualAnalysis := locateBomVulnerabilityInfo(cmdResults, cveId, affectedComponent)
+	if vulnerability == nil {
+		log.Warn(fmt.Sprintf("Skipping CVE violation with no located vulnerability for CVE ID %s, violation ID %s and infected component ID %s", cveId, violation.Id, impactedComponentXrayId))
+		return nil
+	}
+	var fixedVersions *[]cyclonedx.AffectedVersions
+	if affectedComponent != nil {
+		fixedVersions = cdxutils.ConvertToAffectedVersions(*affectedComponent, violation.FixVersions)
+	}
+	cveViolation := violationutils.CveViolation{
+		ScaViolation:             scaViolation,
+		CveVulnerability:         *vulnerability,
+		ContextualAnalysis:       contextualAnalysis,
+		FixedVersions:            fixedVersions,
+		JfrogResearchInformation: results.ConvertJfrogResearchInformation(violation.JfrogResearchInformation),
+	}
+	return &cveViolation
+}
+
 func convertToLicenseViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (licenseViolations []violationutils.LicenseViolation) {
-	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
-		if infectedComponentXrayId == "" {
-			log.Verbose(fmt.Sprintf("Skipping license violation with empty infected component ID for violation ID %s", violation.Id))
-			continue
-		}
-		_, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
-		licenseViolation := violationutils.LicenseViolation{
-			ScaViolation: scaViolation,
-			LicenseKey:   violation.IssueId,
-			LicenseName:  violation.Description,
-		}
-		licenseViolations = append(licenseViolations, licenseViolation)
+	if violation.IssueId == "" {
+		log.Warn(fmt.Sprintf("Skipping license violation with empty issue ID for violation ID %s", violation.Id))
+		return nil
+	}
+	resolved, unresolvedCount := resolveInfectedComponents(cmdResults, violation)
+	if len(resolved) == 0 {
+		logComponentLessFallback(violation, unresolvedCount)
+		return append(licenseViolations, createLicenseViolation(cmdResults, "", violation, nil))
+	}
+	for i := range resolved {
+		licenseViolations = append(licenseViolations, createLicenseViolation(cmdResults, resolved[i].xrayId, violation, &resolved[i]))
 	}
 	return licenseViolations
 }
 
-func convertToOpRiskViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (opRiskViolations []violationutils.OperationalRiskViolation) {
-	for _, infectedComponentXrayId := range violation.InfectedComponentIds {
-		if infectedComponentXrayId == "" {
-			log.Verbose(fmt.Sprintf("Skipping operational risk violation with empty infected component ID for violation ID %s", violation.Id))
-			continue
-		}
-		_, scaViolation := convertToScaViolation(cmdResults, infectedComponentXrayId, violation)
-		opRiskViolation := violationutils.OperationalRiskViolation{
-			ScaViolation: scaViolation,
-			OperationalRiskViolationReadableData: violationutils.GetOperationalRiskViolationReadableData(
-				violation.OperationalRisk.RiskReason,
-				violation.OperationalRisk.IsEol,
-				violation.OperationalRisk.EolMessage,
-				violation.OperationalRisk.Cadence,
-				violation.OperationalRisk.Commits,
-				violation.OperationalRisk.Committers,
-				violation.OperationalRisk.LatestVersion,
-				violation.OperationalRisk.NewerVersions,
-			),
-		}
-		opRiskViolations = append(opRiskViolations, opRiskViolation)
+func createLicenseViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation, preResolved *bomResolvedComponent) violationutils.LicenseViolation {
+	_, scaViolation := convertToScaViolation(cmdResults, impactedComponentXrayId, violation, preResolved)
+	return violationutils.LicenseViolation{
+		ScaViolation: scaViolation,
+		LicenseKey:   violation.IssueId,
+		LicenseName:  violation.Description,
 	}
+}
 
+func convertToOpRiskViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (opRiskViolations []violationutils.OperationalRiskViolation) {
+	resolved, unresolvedCount := resolveInfectedComponents(cmdResults, violation)
+	if len(resolved) == 0 {
+		logComponentLessFallback(violation, unresolvedCount)
+		return append(opRiskViolations, createOpRiskViolation(cmdResults, "", violation, nil))
+	}
+	for i := range resolved {
+		opRiskViolations = append(opRiskViolations, createOpRiskViolation(cmdResults, resolved[i].xrayId, violation, &resolved[i]))
+	}
 	return opRiskViolations
+}
+
+func createOpRiskViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId string, violation services.XrayViolation, preResolved *bomResolvedComponent) violationutils.OperationalRiskViolation {
+	_, scaViolation := convertToScaViolation(cmdResults, impactedComponentXrayId, violation, preResolved)
+	return violationutils.OperationalRiskViolation{
+		ScaViolation: scaViolation,
+		OperationalRiskViolationReadableData: violationutils.GetOperationalRiskViolationReadableData(
+			violation.OperationalRisk.RiskReason,
+			violation.OperationalRisk.IsEol,
+			violation.OperationalRisk.EolMessage,
+			violation.OperationalRisk.Cadence,
+			violation.OperationalRisk.Commits,
+			violation.OperationalRisk.Committers,
+			violation.OperationalRisk.LatestVersion,
+			violation.OperationalRisk.NewerVersions,
+		),
+	}
 }

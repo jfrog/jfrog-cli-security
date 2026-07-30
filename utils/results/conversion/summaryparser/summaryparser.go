@@ -198,7 +198,7 @@ func (sc *CmdResultsSummaryConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, app
 
 func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.ParseBomScaVulnerabilityFunc {
 	parsed := datastructures.MakeSet[string]()
-	return func(vulnerability cyclonedx.Vulnerability, _ cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (err error) {
+	return func(vulnerability cyclonedx.Vulnerability, _ *cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (err error) {
 		if parsed.Exists(vulnerability.BOMRef) {
 			return
 		}

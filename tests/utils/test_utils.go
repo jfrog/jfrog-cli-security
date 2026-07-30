@@ -479,7 +479,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 		}
 		return nil
 	}
-	return jas.DownloadAnalyzerManagerIfNeeded(0)
+	return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 }
 
 func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
@@ -492,5 +492,5 @@ func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
 }
 
 func PrepareXrayScanLibResource() (err error) {
-	return plugin.DownloadXrayLibPluginIfNeeded()
+	return plugin.DownloadXrayLibPluginIfNeeded("", nil)
 }

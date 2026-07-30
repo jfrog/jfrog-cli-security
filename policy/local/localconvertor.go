@@ -219,7 +219,7 @@ func getScaViolationType(violation services.Violation) violationutils.ViolationI
 	return ""
 }
 
-func convertToScaViolation(violation services.Violation, severity severityutils.Severity, affectedComponent cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) violationutils.ScaViolation {
+func convertToScaViolation(violation services.Violation, severity severityutils.Severity, affectedComponent *cyclonedx.Component, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) violationutils.ScaViolation {
 	return violationutils.ScaViolation{
 		Violation:         convertToBasicViolation(violation, severity),
 		ImpactedComponent: affectedComponent,
@@ -231,8 +231,13 @@ func convertToScaViolation(violation services.Violation, severity severityutils.
 func convertScaSecurityViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	xrayService := results.GetXrayService()
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		// Create the CycloneDX component for the impacted package
-		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+		var affectedComponent *cyclonedx.Component
+		var fixedVersions *[]cyclonedx.AffectedVersions
+		if impactedPackagesId != "" {
+			// Create the CycloneDX component for the impacted package
+			component := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+			affectedComponent = &component
+		}
 		// Extract the vulnerability CVE's information and create the SCA vulnerability for each
 		cveIds, applicability, cwes, ratings := results.ExtractIssuesInfoForCdx(violation.IssueId, cves, severity, applicabilityStatus, xrayService)
 		extendedInformation := ""
@@ -250,15 +255,18 @@ func convertScaSecurityViolationToPolicyViolation(convertedViolations *violation
 				References:  violation.References,
 				Service:     xrayService,
 			})
-			// Attach the affected impacted library component to the vulnerability
-			cdxutils.AttachComponentAffects(&vulnerability, affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-				return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
-			})
+			if affectedComponent != nil {
+				// Attach the affected impacted library component to the vulnerability
+				cdxutils.AttachComponentAffects(&vulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
+				})
+				fixedVersions = cdxutils.ConvertToAffectedVersions(*affectedComponent, fixedVersion)
+			}
 			convertedViolations.Sca = append(convertedViolations.Sca, violationutils.CveViolation{
 				ScaViolation:             convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
 				CveVulnerability:         vulnerability,
 				ContextualAnalysis:       applicability[i],
-				FixedVersions:            cdxutils.ConvertToAffectedVersions(affectedComponent, fixedVersion),
+				FixedVersions:            fixedVersions,
 				JfrogResearchInformation: results.ConvertJfrogResearchInformation(violation.ExtendedInformation),
 			})
 		}
@@ -268,8 +276,12 @@ func convertScaSecurityViolationToPolicyViolation(convertedViolations *violation
 
 func convertScaLicenseViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		// Create the CycloneDX component for the impacted package
-		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+		var affectedComponent *cyclonedx.Component
+		if impactedPackagesId != "" {
+			// Create the CycloneDX component for the impacted package
+			component := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+			affectedComponent = &component
+		}
 		// Add the license violation
 		convertedViolations.License = append(convertedViolations.License, violationutils.LicenseViolation{
 			ScaViolation: convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
@@ -282,8 +294,12 @@ func convertScaLicenseViolationToPolicyViolation(convertedViolations *violationu
 
 func convertOperationalRiskViolationToPolicyViolation(convertedViolations *violationutils.Violations) ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		// Create the CycloneDX component for the impacted package
-		affectedComponent := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+		var affectedComponent *cyclonedx.Component
+		if impactedPackagesId != "" {
+			// Create the CycloneDX component for the impacted package
+			component := results.CreateScaComponentFromXrayCompId(impactedPackagesId)
+			affectedComponent = &component
+		}
 		// Add the operational risk violation
 		convertedViolations.OpRisk = append(convertedViolations.OpRisk, violationutils.OperationalRiskViolation{
 			ScaViolation: convertToScaViolation(violation, severity, affectedComponent, directComponents, impactPaths),
@@ -331,6 +347,13 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 				// No handler was provided for security violations
 				continue
 			}
+			if len(impactedPackagesIds) == 0 {
+				// Security violation without any impacted packages, we pass an empty string as the impacted package ID
+				if e := securityHandler(violation, cves, applicabilityStatus, severity, "", []string{}, []formats.ComponentRow{}, [][]formats.ComponentRow{}); e != nil {
+					err = errors.Join(err, e)
+					continue
+				}
+			}
 			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
 				if e := securityHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
@@ -341,6 +364,13 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 			if licenseHandler == nil {
 				// No handler was provided for license violations
 				continue
+			}
+			if len(impactedPackagesIds) == 0 {
+				// License violation without any impacted packages, we pass an empty string as the impacted package ID
+				if e := licenseHandler(violation, cves, applicabilityStatus, severity, "", []string{}, []formats.ComponentRow{}, [][]formats.ComponentRow{}); e != nil {
+					err = errors.Join(err, e)
+					continue
+				}
 			}
 			for compIndex := range impactedPackagesIds {
 				if impactedPackagesName, _, _ := techutils.SplitComponentId(impactedPackagesIds[compIndex]); impactedPackagesName == "root" {
@@ -356,6 +386,13 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 			if operationalRiskHandler == nil {
 				// No handler was provided for operational risk violations
 				continue
+			}
+			if len(impactedPackagesIds) == 0 {
+				// Operational risk violation without any impacted packages, we pass an empty string as the impacted package ID
+				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, "", []string{}, []formats.ComponentRow{}, [][]formats.ComponentRow{}); e != nil {
+					err = errors.Join(err, e)
+					continue
+				}
 			}
 			for compIndex := range impactedPackagesIds {
 				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {

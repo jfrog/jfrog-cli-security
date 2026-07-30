@@ -1,0 +1,56 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      xml:
+        specifier: 1.0.1
+        version: 1.0.1
+      '@scope/pkg':
+        specifier: 2.0.0
+        version: 2.0.0(@peer/dep@1.0.0)
+    devDependencies:
+      json:
+        specifier: 9.0.6
+        version: 9.0.6
+
+packages:
+
+  '@peer/dep@1.0.0':
+    resolution: {integrity: sha512-aaa==}
+
+  '@scope/pkg@2.0.0':
+    resolution: {integrity: sha512-bbb==}
+    peerDependencies:
+      '@peer/dep': '>=1.0.0'
+
+  json@9.0.6:
+    resolution: {integrity: sha512-Nx+4WwMM1xadgqjjteOVEyjoIVq7fGH1hAlRDoxoq2tFzYsBYZDIKwYbyxolkTYwxsSOgAZD2ACLkeGjhFW2Jw==}
+    engines: {node: '>=0.10.0'}
+    hasBin: true
+
+  transitive-a@1.2.3:
+    resolution: {integrity: sha512-ccc==}
+
+  xml@1.0.1:
+    resolution: {integrity: sha512-huCv9IH9Tcf95zuYCsQraZtWnJvBtLVE0QHMOs8bWyZAFZNDcYjsPq1nEx8jKA9y+Beo9v+7OBPRisQTjinQMw==}
+
+snapshots:
+
+  '@peer/dep@1.0.0': {}
+
+  '@scope/pkg@2.0.0(@peer/dep@1.0.0)':
+    dependencies:
+      '@peer/dep': 1.0.0
+      transitive-a: 1.2.3
+
+  json@9.0.6: {}
+
+  transitive-a@1.2.3: {}
+
+  xml@1.0.1: {}

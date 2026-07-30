@@ -2,6 +2,7 @@ package bom
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
@@ -28,6 +29,7 @@ type SbomGeneratorOption func(sg SbomGenerator)
 
 type SbomGeneratorParams struct {
 	Target               *results.TargetResults
+	TotalTargets         int
 	AllowPartialResults  bool
 	ScanResultsOutputDir string
 
@@ -36,6 +38,12 @@ type SbomGeneratorParams struct {
 }
 
 func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) {
+	startLog := "Generating SBOM"
+	if params.TotalTargets > 1 {
+		startLog += fmt.Sprintf(" for target: %s", params.Target.Target)
+	}
+	log.Info(startLog + "...")
+	startTime := time.Now()
 	// Generate the SBOM for the target
 	sbom, err := generator.GenerateSbom(params.Target.ScanTarget)
 	if err != nil {
@@ -46,6 +54,9 @@ func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) 
 	if params.DiffMode {
 		// If in diff mode, get the diff SBOM compared to the previous target result
 		sbom = getDiffSbom(sbom, params)
+	}
+	if err := logLibComponents(sbom, params.TotalTargets, params.Target.Target, startTime); err != nil {
+		log.Warn(fmt.Sprintf("Failed to log library components in SBOM for %s: %s", params.Target.Target, err.Error()))
 	}
 	// Set the SBOM in the target results and update target information
 	updateTarget(params.Target, sbom)
@@ -75,9 +86,6 @@ func getDiffSbom(sbom *cyclonedx.BOM, params SbomGeneratorParams) *cyclonedx.BOM
 func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 	target.SetSbom(sbom)
 	target.ResultsStatus.UpdateStatus(results.CmdStepSbom, utils.NewIntPtr(0))
-	if err := logLibComponents(sbom.Components); err != nil {
-		log.Warn(fmt.Sprintf("Failed to log library components in SBOM for %s: %s", target.Target, err.Error()))
-	}
 	if target.Name != "" {
 		// Target name is already set, no need to update.
 		return
@@ -104,21 +112,28 @@ func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 	target.Name, _, _ = techutils.SplitPackageURL(rootComponent.PackageURL)
 }
 
-func logLibComponents(components *[]cyclonedx.Component) (err error) {
-	if log.GetLogger().GetLogLevel() != log.DEBUG {
-		// Avoid printing and marshaling if not on DEBUG mode.
-		return
-	}
+func logLibComponents(output *cyclonedx.BOM, totalTargets int, target string, startTime time.Time) (err error) {
 	libs := []string{}
-	if components != nil {
-		for _, component := range *components {
+	if output != nil && output.Components != nil {
+		for _, component := range *output.Components {
 			if component.Type == cyclonedx.ComponentTypeLibrary {
 				libs = append(libs, techutils.PurlToXrayComponentId(component.PackageURL))
 			}
 		}
 	}
+	outLog := "SBOM generated"
+	if totalTargets > 1 {
+		outLog += fmt.Sprintf(" for target '%s'", target)
+	}
+	outLog += ";"
 	if len(libs) == 0 {
-		log.Debug("No library components found.")
+		outLog += " no library components were found"
+	} else {
+		outLog += fmt.Sprintf(" found %d library components", len(libs))
+	}
+	log.Info(fmt.Sprintf("%s (duration %s)", outLog, time.Since(startTime).String()))
+	if log.GetLogger().GetLogLevel() != log.DEBUG || len(libs) == 0 {
+		// Avoid printing and marshaling if not on DEBUG mode or no library components found.
 		return
 	}
 	// Log the unique library components in the SBOM.

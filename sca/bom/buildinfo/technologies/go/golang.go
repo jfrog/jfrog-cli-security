@@ -33,7 +33,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if params.IsCurationCmd {
 		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
 		goProxyParams.Direct = false
-		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go)
+		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go.String())
 		if errCacheFolder != nil {
 			err = errCacheFolder
 			return
