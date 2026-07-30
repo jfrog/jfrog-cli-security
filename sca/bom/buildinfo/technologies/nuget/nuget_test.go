@@ -334,3 +334,43 @@ func TestSolutionFilePathDisambiguatesMultipleSlnFiles(t *testing.T) {
 		})
 	}
 }
+
+// TestSolutionFilePathValidation covers the '--solution-path' pre-flight check in
+// BuildDependencyTree. The check runs before any solution load or 'restore', so these
+// cases never invoke the dotnet CLI.
+func TestSolutionFilePathValidation(t *testing.T) {
+	testCases := []struct {
+		name             string
+		solutionFilePath string
+		setup            func(t *testing.T, dir string)
+	}{
+		{
+			name:             "base name not present in scanned directory",
+			solutionFilePath: filepath.Join("sub", "Missing.sln"),
+		},
+		{
+			name:             "path resolves to a directory, not a solution file",
+			solutionFilePath: filepath.Join("sub", "NotASolution"),
+			setup: func(t *testing.T, dir string) {
+				require.NoError(t, os.Mkdir(filepath.Join(dir, "NotASolution"), 0o750))
+			},
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if test.setup != nil {
+				test.setup(t, dir)
+			}
+			t.Chdir(dir)
+			dependencyTrees, uniqueDeps, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{
+				SolutionFilePath: test.solutionFilePath,
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "--solution-path", "the error must name the flag the user passed")
+			assert.Contains(t, err.Error(), filepath.Base(test.solutionFilePath))
+			assert.Nil(t, dependencyTrees)
+			assert.Nil(t, uniqueDeps)
+		})
+	}
+}

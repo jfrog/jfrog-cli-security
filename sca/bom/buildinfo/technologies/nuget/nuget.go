@@ -47,7 +47,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 	if p := params.SolutionFilePath; p != "" {
-		if _, statErr := os.Stat(filepath.Join(wd, filepath.Base(p))); statErr != nil {
+		if info, statErr := os.Stat(filepath.Join(wd, filepath.Base(p))); statErr != nil || info.IsDir() {
 			err = fmt.Errorf("--solution-path %q: no solution file named %q in %s "+
 				"(the flag is resolved relative to the scanned directory)", p, filepath.Base(p), wd)
 			return
