@@ -58,6 +58,7 @@ func (sjc *CmdResultsSimpleJsonConverter) Reset(metadata results.ResultsMetaData
 			SecretsStatusCode:       statusCodes.SecretsScanStatusCode,
 			IacStatusCode:           statusCodes.IacScanStatusCode,
 			SastStatusCode:          statusCodes.SastScanStatusCode,
+			ServicesStatusCode:      statusCodes.ServicesScanStatusCode,
 		},
 	}
 	sjc.entitledForJas = metadata.Entitlements.Jas
