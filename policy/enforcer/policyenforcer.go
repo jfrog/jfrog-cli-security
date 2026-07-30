@@ -394,9 +394,9 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 }
 
 func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
-	if jasType == jasutils.Secrets {
-		// Secrets Jas should relay on Scanner ID to match
-		if id != sarifutils.GetSecretScannerRuleId(rule) {
+	if jasType == jasutils.Secrets || jasType == jasutils.Services {
+		// Secrets and Services Jas should relay on Scanner ID to match
+		if id != sarifutils.GetExposureScannerRuleId(rule) {
 			return false
 		}
 	} else if sarifutils.GetRuleId(rule) != id {
