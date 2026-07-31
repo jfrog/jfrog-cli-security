@@ -62,11 +62,13 @@ import (
 
 const (
 	// The "blocked" represents the unapproved status that can be returned by the Curation Service for dependencies..
-	blocked                = "blocked"
-	BlockingReasonPolicy   = "Policy violations"
-	BlockingReasonNotFound = "Package pending update"
-	BlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
-	BlockingReasonUnknown  = "Blocked by curation (response could not be parsed)"
+	blocked                    = "blocked"
+	notEvaluated               = "not evaluated"
+	BlockingReasonPolicy       = "Policy violations"
+	BlockingReasonNotFound     = "Package pending update"
+	BlockingReasonOnDemand     = "Package pending — Curation on-demand scan in progress"
+	BlockingReasonUnknown      = "Blocked by curation (response could not be parsed)"
+	BlockingReasonNotEvaluated = "Not evaluated — non-registry dependency"
 
 	directRelation   = "direct"
 	indirectRelation = "indirect"
@@ -105,10 +107,20 @@ const (
 
 	// hfUnresolvedReportKey is used when an HF scan found only dynamic references — no table, just warnings.
 	hfUnresolvedReportKey = "huggingface (unresolved references)"
+
+	// npmLogPartialReportWarning is shown when runNpmLogFallback recovers a partial report.
+	// npmLogOriginalErr (the real underlying npm error) goes to log.Debug only, not here —
+	// npm's own error text can include its full captured stdout/stderr, far too noisy for a
+	// console warning.
+	npmLogPartialReportWarning = "npm install could not fully resolve the dependency tree because one or more packages " +
+		"are blocked by the curation policy. This report was reconstructed from npm's debug log after the installation " +
+		"failed, so it may be incomplete. Dependencies of blocked packages could not be analyzed because their metadata " +
+		"was unavailable."
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 var osGetwd = os.Getwd
+var npmGetConfigValue = npmtech.GetNpmConfigValue
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
@@ -289,6 +301,12 @@ type CurationReport struct {
 	// Kept separate from isPartial, which also triggers the CVS-specific warning
 	// and skips the waiver flow.
 	hfPartial bool
+	// npmLogPartial marks a report produced by runNpmLogFallback. Set alongside isPartial
+	// (to reuse its waiver-skip gate), but kept distinct for its own warning text and
+	// partialReason.
+	npmLogPartial bool
+	// npmLogOriginalErr is the real install error, surfaced alongside npmLogPartialReportWarning.
+	npmLogOriginalErr string
 	// warnings holds user-facing messages from tree-build (e.g. unresolved HF references).
 	warnings []string
 	// huggingFaceReport marks reports produced by the Hugging Face audit path (including
@@ -426,7 +444,12 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	}
 	for projectPath, report := range results {
 		if report.isPartial {
-			log.Warn(fmt.Sprintf("[%s] %s", projectPath, cvsPartialReportWarning))
+			warningText := cvsPartialReportWarning
+			if report.npmLogPartial {
+				warningText = npmLogPartialReportWarning
+				log.Debug(fmt.Sprintf("[%s] underlying npm error: %s", projectPath, report.npmLogOriginalErr))
+			}
+			log.Warn(fmt.Sprintf("[%s] %s", projectPath, warningText))
 		}
 	}
 
@@ -475,20 +498,31 @@ func (ca *CurationAuditCommand) Run() (err error) {
 func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
 	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
-		// hfPartial reports must still be recorded, not treated as "HF wasn't attempted".
-		if isWarningsOnlyReport(packagesStatus) && !packagesStatus.hfPartial {
+		// hfPartial/npmLogPartial reports must still be recorded, not treated as "not attempted".
+		if isWarningsOnlyReport(packagesStatus) && !packagesStatus.hfPartial && !packagesStatus.npmLogPartial {
 			continue
 		}
 		var partialReason string
 		switch {
+		// npmLogPartial is checked before isPartial: an npm-log-fallback report sets both
+		// (isPartial to reuse the existing waiver-skip gate below), so npmLogPartial must
+		// win here or it would incorrectly report "cvs_fallback".
+		case packagesStatus.npmLogPartial:
+			// jfrog-ignore: categorical tag, not hardcoded credentials
+			partialReason = "npm_log_fallback"
 		case packagesStatus.isPartial:
 			partialReason = "cvs_fallback"
 		case packagesStatus.hfPartial:
 			partialReason = "hf_unresolved"
 		}
+		// npmLogPartial's totalNumberOfPackages includes non-remediable "not evaluated" rows, so use the blocked-row count instead.
+		packageCount := packagesStatus.totalNumberOfPackages
+		if packagesStatus.npmLogPartial {
+			packageCount = countBlockedPackages(packagesStatus.packagesStatus)
+		}
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				PackageCount:  packagesStatus.totalNumberOfPackages,
+				PackageCount:  packageCount,
 				Blocked:       getBlocked(packagesStatus.packagesStatus),
 				IsPartial:     packagesStatus.isPartial || packagesStatus.hfPartial,
 				PartialReason: partialReason,
@@ -498,9 +532,23 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 	return summaryResults
 }
 
+// countBlockedPackages counts only rows with Action == blocked, excluding "not evaluated" rows.
+func countBlockedPackages(packagesStatus []*PackageStatus) int {
+	count := 0
+	for _, ps := range packagesStatus {
+		if ps.Action == blocked {
+			count++
+		}
+	}
+	return count
+}
+
 func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
 	blockedMap := map[string]formats.BlockedPackages{}
 	for _, pkg := range pkgStatus {
+		if pkg.Action != blocked {
+			continue
+		}
 		for _, policy := range pkg.Policy {
 			polAndCondKey := getPolicyAndConditionId(policy.Policy, policy.Condition)
 			if _, ok := blockedMap[polAndCondKey]; !ok {
@@ -949,6 +997,42 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return err
 	}
+	// Discovered before installing, not after: npm writes a log on every invocation, so running
+	// this after a crash would make its own log newer than the crash's. Failure isn't fatal.
+	//
+	// Uses logs-dir, not cache: <cache>/_logs is only npm's default, overridable independently.
+	// "npm config get logs-dir" prints the literal string "null" when unset, hence the fallback.
+	var npmLogsDir string
+	var npmLogsMaxWasZero bool
+	var npmLogBaselineKey int64
+	var npmConfigLookupErr error
+	if tech == techutils.Npm {
+		if workDir, wdErr := osGetwd(); wdErr != nil {
+			npmConfigLookupErr = fmt.Errorf("failed to determine working directory for npm config lookup: %w", wdErr)
+		} else if logsDirValue, logsDirErr := npmGetConfigValue(workDir, "logs-dir"); logsDirErr != nil {
+			npmConfigLookupErr = fmt.Errorf("failed to determine npm logs-dir: %w", logsDirErr)
+		} else if logsMaxValue, logsMaxErr := npmGetConfigValue(workDir, "logs-max"); logsMaxErr != nil {
+			npmConfigLookupErr = fmt.Errorf("failed to determine npm logs-max config: %w", logsMaxErr)
+		} else if logsDirValue != "" && logsDirValue != "null" {
+			npmLogsDir, npmLogsMaxWasZero = logsDirValue, logsMaxValue == "0"
+		} else if cacheDir, cacheErr := npmGetConfigValue(workDir, "cache"); cacheErr != nil {
+			npmConfigLookupErr = fmt.Errorf("failed to determine npm cache directory: %w", cacheErr)
+		} else {
+			npmLogsDir, npmLogsMaxWasZero = filepath.Join(cacheDir, "_logs"), logsMaxValue == "0"
+		}
+		if npmConfigLookupErr != nil {
+			log.Debug(fmt.Sprintf("npm curation debug-log fallback will be unavailable if the install fails: %v", npmConfigLookupErr))
+		}
+		if npmLogsMaxWasZero {
+			// Only override when the ambient config would otherwise suppress the debug log
+			// entirely — never force a value that prunes a user's own nonzero retention setting.
+			params.NpmForceLogsMax = "1"
+		}
+		if npmLogsDir != "" {
+			// Snapshotted last so the baseline includes the config-lookup calls' own logs too.
+			npmLogBaselineKey, _ = npmDebugLogNewestKey(npmLogsDir)
+		}
+	}
 	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		// When CVS strips a pinned version from the simple index, pip can't
@@ -959,7 +1043,18 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		if (tech == techutils.Pip || tech == techutils.Poetry) && errors.As(err, &cvsErr) {
 			return ca.runCvsFallback(cvsErr, tech, results)
 		}
+		// npm's install error is a plain opaque error, nothing to type-match on — trigger the
+		// debug-log fallback unconditionally, unless the config lookup above already failed.
+		if tech == techutils.Npm {
+			if npmConfigLookupErr != nil {
+				return err
+			}
+			return ca.runNpmLogFallback(npmLogsDir, tech, results, err, npmLogsMaxWasZero, npmLogBaselineKey)
+		}
 		return err
+	}
+	if tech == techutils.Npm {
+		defer cleanupForcedNpmDebugLog(npmLogsDir, npmLogsMaxWasZero, npmLogBaselineKey)
 	}
 	// Validate the graph isn't empty.
 	if len(depTreeResult.FullDepTrees) == 0 {
@@ -1212,7 +1307,7 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 	if format == "" {
 		format = outFormat.Table
 	}
-	log.Output(fmt.Sprintf("Found %v blocked packages for project %s", len(packagesStatus), projectPath))
+	log.Output(fmt.Sprintf("Found %v blocked packages for project %s", countBlockedPackages(packagesStatus), projectPath))
 	switch format {
 	case outFormat.Json:
 		if len(packagesStatus) > 0 {
@@ -1722,6 +1817,233 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 		isPartial:             true,
 	}
 	return nil
+}
+
+// cleanupForcedNpmDebugLog removes the log our forced --logs-max override caused npm to write,
+// when logs-max=0. Success-path counterpart to runNpmLogFallback's cleanup; baselineKey (see
+// npmDebugLogNewestKey) ensures a stale pre-existing log is never removed by mistake.
+func cleanupForcedNpmDebugLog(logsDir string, logsMaxWasZero bool, baselineKey int64) {
+	if !logsMaxWasZero {
+		return
+	}
+	logFilePaths, err := findNewestNpmDebugLogChunksAfter(logsDir, baselineKey)
+	if err != nil {
+		return
+	}
+	for _, logFilePath := range logFilePaths {
+		if rmErr := os.Remove(logFilePath); rmErr != nil {
+			log.Debug(fmt.Sprintf("npm curation: failed to remove forced debug log %q: %v", logFilePath, rmErr))
+		}
+	}
+}
+
+// runNpmLogFallback reconstructs a partial curation report from npm's debug log (under
+// logsDir — npm's "logs-dir" config) when the npm tree-build install crashes, since buildDeps
+// completes before reify can fail. Falls back to originalErr unchanged if nothing is recoverable.
+//
+// baselineKey (see npmDebugLogNewestKey) is the newest log's identity captured just before this
+// invocation ran — only a log newer than that is read, so a stale log from an earlier run
+// sharing the same logs-dir (e.g. a shared CI cache) is never mistaken for this crash's own.
+//
+// logsMaxWasZero means our forced --logs-max override is the only reason a debug log exists
+// for this run, so the log files read here are removed afterward; otherwise npm's own
+// rotation manages them like any other run.
+func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils.Technology, results map[string]*CurationReport, originalErr error, logsMaxWasZero bool, baselineKey int64) error {
+	entries, blockedPackages, logFilePaths, parseErr := parseNpmDebugLog(logsDir, baselineKey)
+	if logsMaxWasZero {
+		defer func() {
+			for _, logFilePath := range logFilePaths {
+				_ = os.Remove(logFilePath)
+			}
+		}()
+	}
+	if parseErr != nil {
+		log.Debug(fmt.Sprintf("npm curation debug-log fallback: failed to parse debug log (%v); original error: %s", parseErr, originalErr.Error()))
+		return originalErr
+	}
+	if len(entries) == 0 {
+		// Nothing recoverable — install likely failed before buildDeps ever started.
+		return originalErr
+	}
+
+	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
+	if err != nil {
+		return fmt.Errorf("npm curation debug-log fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, originalErr)
+	}
+	rtAuth, err := serverDetails.CreateArtAuthConfig()
+	if err != nil {
+		return fmt.Errorf("npm curation debug-log fallback: failed to create auth config (%w); %s error: %w", err, tech, originalErr)
+	}
+
+	workPath, wdErr := osGetwd()
+	if wdErr != nil {
+		log.Warn(fmt.Sprintf("npm curation debug-log fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
+		workPath = "unknown-project"
+	}
+	rootName, rootVersion, pkgErr := readNpmProjectNameVersion(workPath)
+	if pkgErr != nil {
+		// The graph walk only reaches anything if rootName/rootVersion match the log's real root.
+		if logRootName, logRootVersion, ok := rootIdentityFromLogEntries(entries); ok {
+			rootName, rootVersion = logRootName, logRootVersion
+		} else {
+			// Same convention auditTree itself uses when a project doesn't declare a name.
+			rootName = filepath.Base(workPath)
+		}
+	}
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: ca.extractPoliciesRegex,
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 ca.PackageManagerConfig.TargetRepo(),
+		tech:                 tech,
+	}
+
+	preProcessMap := &sync.Map{}
+	var advisoryWarnings []string
+	seenKeys := map[string]bool{}
+	seenRangeWarnings := map[string]bool{}
+	for _, entry := range sortedNpmLogEntries(entries) {
+		category := classifyBlankVersionEntry(entry, blockedPackages)
+
+		if category == npmEntryUnresolvableRange {
+			// Dedupe on (Name, Specifier) — never preempts a same-name entry in a probeable category.
+			rangeKey := entry.Name + "@" + entry.Specifier
+			if seenRangeWarnings[rangeKey] {
+				continue
+			}
+			seenRangeWarnings[rangeKey] = true
+			advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+				"Package '%s' (requested as '%s') could not be resolved to a specific version, so its curation status could not be checked. This is not necessarily a curation block — verify the dependency resolves correctly.",
+				entry.Name, entry.Specifier))
+			continue
+		}
+
+		// effectiveGraphVersion avoids collapsing distinct ETARGET/non-registry specifiers onto one key.
+		effectiveVersion := effectiveGraphVersion(entry, blockedPackages)
+		key, keyErr := npmPackageKey(tech, analyzer.url, analyzer.repo, entry.Name, effectiveVersion)
+		if keyErr != nil {
+			advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+				"Package '%s@%s' could not be checked against the curation policy (%v) — its status is unknown, not confirmed clean.",
+				entry.Name, effectiveVersion, keyErr))
+			continue
+		}
+		if seenKeys[key] {
+			continue
+		}
+		seenKeys[key] = true
+
+		switch category {
+		case npmEntryResolved:
+			pkgStatus, probeErr := analyzer.getBlockedPackageDetails(key, entry.Name, entry.Version)
+			if probeErr != nil {
+				advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+					"Package '%s@%s' could not be checked against the curation policy (%v) — its status is unknown, not confirmed clean.",
+					entry.Name, entry.Version, probeErr))
+				continue
+			}
+			if pkgStatus == nil {
+				continue // genuinely clean — no row needed
+			}
+			preProcessMap.Store(key, pkgStatus)
+		case npmEntryWholePackageBlocked:
+			preProcessMap.Store(key, wholePackageBlockedStatus(entry, blockedPackages[entry.Name], tech))
+		case npmEntryNonRegistrySpecifier:
+			// Advisory only, not a table/JSON row — same treatment as the other
+			// "curation never applied" categories, so it can't be mistaken for a real block.
+			advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+				"Package '%s' (%s): Not evaluated: This dependency was not evaluated because it is resolved from a source "+
+					"other than an npm registry (such as a Git URL, local path, or npm alias), bypassing Artifactory. "+
+					"As a result, curation policies do not apply.",
+				entry.Name, entry.Specifier))
+		case npmEntryETARGET:
+			pkgStatus, probeErr := analyzer.getBlockedPackageDetails(key, entry.Name, entry.Specifier)
+			if probeErr != nil {
+				advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+					"Package '%s@%s' could not be checked against the curation policy (%v) — its status is unknown, not confirmed clean.",
+					entry.Name, entry.Specifier, probeErr))
+				continue
+			}
+			if pkgStatus == nil {
+				// Plain 404, no curation signal — not curation-relevant, advisory only.
+				advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
+					"Package '%s@%s' could not be resolved (no matching version found in the registry) — this is not a curation policy block. Verify the version in package.json.",
+					entry.Name, entry.Specifier))
+				continue
+			}
+			preProcessMap.Store(key, pkgStatus)
+		}
+	}
+
+	graph := buildGraphFromLogEntries(entries, rootName, rootVersion, blockedPackages)
+	var packagesStatus []*PackageStatus
+	analyzer.GraphsRelations([]*xrayUtils.GraphNode{graph}, preProcessMap, &packagesStatus)
+
+	// DepRelation is set per-edge by GraphsRelations, so this is correct even when the same
+	// package name occurs as both a direct and a transitive dependency.
+	for _, ps := range packagesStatus {
+		if ps.PackageVersion == allVersionsBlockedText {
+			applyTransitiveAwareRecommendation(ps, ps.DepRelation == directRelation)
+		}
+	}
+
+	if len(packagesStatus) == 0 && len(advisoryWarnings) == 0 {
+		return originalErr
+	}
+
+	results[uniqueReportKey(results, filepath.Base(workPath), tech)] = &CurationReport{
+		packagesStatus:        packagesStatus,
+		totalNumberOfPackages: len(packagesStatus),
+		isPartial:             true,
+		npmLogPartial:         true,
+		npmLogOriginalErr:     originalErr.Error(),
+		warnings:              advisoryWarnings,
+	}
+	return nil
+}
+
+// allVersionsBlockedText also doubles as the marker applyTransitiveAwareRecommendation uses
+// to identify whole-package-blocked rows after the graph walk.
+const allVersionsBlockedText = "All versions blocked"
+
+// wholePackageBlockedStatus synthesizes a *PackageStatus straight from the log's notice+403
+// evidence — no HEAD-check needed. Recommendation is filled in later by
+// applyTransitiveAwareRecommendation, once the graph walk knows the parent.
+func wholePackageBlockedStatus(entry npmLogEntry, info npmBlockedInfo, tech techutils.Technology) *PackageStatus {
+	return &PackageStatus{
+		PackageName:    entry.Name,
+		PackageVersion: allVersionsBlockedText,
+		Action:         blocked,
+		BlockingReason: BlockingReasonPolicy,
+		PkgType:        string(tech),
+		Policy: []Policy{{
+			Policy:      info.Policy,
+			Condition:   info.Condition,
+			Explanation: allVersionsBlockedText,
+			// Recommendation is filled in by applyTransitiveAwareRecommendation.
+		}},
+	}
+}
+
+// applyTransitiveAwareRecommendation: "remove and replace" is only actionable when the
+// blocked package is itself a direct dependency; otherwise name the real direct dependency.
+// ps.Policy is reassigned, not mutated in place — fillGraphRelations clones *PackageStatus
+// per edge via a shallow copy, so edges sharing a preProcessMap entry share the same array.
+func applyTransitiveAwareRecommendation(ps *PackageStatus, isDirectDependency bool) {
+	policies := make([]Policy, len(ps.Policy))
+	copy(policies, ps.Policy)
+	for i := range policies {
+		if isDirectDependency {
+			policies[i].Recommendation = "Remove this package from your project and replace with an alternate package"
+		} else {
+			policies[i].Recommendation = fmt.Sprintf(
+				"%s is a transitive dependency of %s and cannot be removed directly. Apply a waiver if acceptable, or replace %s with an alternative that doesn't depend on %s.",
+				ps.PackageName, ps.ParentName, ps.ParentName, ps.PackageName)
+		}
+	}
+	ps.Policy = policies
 }
 
 // lookupPypiAllVersions calls the Artifactory PyPI metadata API for a package
