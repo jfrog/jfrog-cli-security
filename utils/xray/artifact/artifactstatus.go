@@ -33,8 +33,9 @@ func GetArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path str
 }
 
 type ScanCompleteParams struct {
-	Overall bool
-	Steps   []XrayScanStep
+	Overall            bool
+	WaitForScanStarted bool
+	Steps              []XrayScanStep
 }
 
 type ScanCompleteOption func(params *ScanCompleteParams)
@@ -42,6 +43,12 @@ type ScanCompleteOption func(params *ScanCompleteParams)
 func OverallCompletion() ScanCompleteOption {
 	return func(params *ScanCompleteParams) {
 		params.Overall = true
+	}
+}
+
+func ScanStarted() ScanCompleteOption {
+	return func(params *ScanCompleteParams) {
+		params.WaitForScanStarted = true
 	}
 }
 
@@ -63,9 +70,13 @@ func NewScanCompleteParams(options ...ScanCompleteOption) *ScanCompleteParams {
 func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path string, options ...ScanCompleteOption) error {
 	params := NewScanCompleteParams(options...)
 	if !params.Overall && len(params.Steps) == 0 {
-		return fmt.Errorf("no scan completion criteria were provided")
+		if !params.WaitForScanStarted {
+			return fmt.Errorf("no scan completion criteria were provided")
+		}
+		log.Debug("Waiting for artifact scan to start.")
+	} else {
+		log.Debug(fmt.Sprintf("Waiting for artifact scan completion. Overall: %t, Steps: %v", params.Overall, params.Steps))
 	}
-	log.Debug(fmt.Sprintf("Waiting for artifact scan completion. Overall: %t, Steps: %v", params.Overall, params.Steps))
 	pollingExecutor := &httputils.PollingExecutor{
 		PollingInterval: ArtifactStatusFetchingIntervalNano,
 		Timeout:         ArtifactStatusFetchTimeoutNano,
@@ -94,7 +105,14 @@ func WaitForArtifactScanStatus(xrayManager *xray.XrayServicesManager, repo, path
 				}
 				return
 			}
-			log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
+			switch {
+			case !params.Overall && len(params.Steps) == 0:
+				log.Debug(fmt.Sprintf("Artifact scan started. (%s)", status.Overall.Status))
+			case params.Overall:
+				log.Debug(fmt.Sprintf("Artifact scan completed. (%s)", status.Overall.Status))
+			default:
+				log.Debug(fmt.Sprintf("Artifact scan completed the requested steps. [%s]", strings.Join(statusMapToString(getStatusMap(status.Details, params.Steps, false)), ", ")))
+			}
 			// We don't need to return any response body, as we don't use it.
 			// We just need to stop the polling executor.
 			shouldStop = true
