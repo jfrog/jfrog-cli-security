@@ -119,6 +119,51 @@ func TestRewriteFromLine(t *testing.T) {
 			expected:   "RUN echo FROM nginx:1.27-alpine",
 			matched:    false,
 		},
+		{
+			name:       "docker hub bare component matches library-prefixed FROM",
+			line:       "FROM docker.io/library/nginx:1.27-alpine",
+			component:  "nginx",
+			oldVersion: "1.27-alpine",
+			newVersion: "1.27.3-alpine",
+			expected:   "FROM docker.io/library/nginx:1.27.3-alpine",
+			matched:    true,
+		},
+		{
+			name:       "docker hub library-prefixed component matches bare FROM",
+			line:       "FROM nginx:1.27-alpine",
+			component:  "docker.io/library/nginx",
+			oldVersion: "1.27-alpine",
+			newVersion: "1.27.3-alpine",
+			expected:   "FROM nginx:1.27.3-alpine",
+			matched:    true,
+		},
+		{
+			name:       "index.docker.io prefix normalized",
+			line:       "FROM index.docker.io/library/nginx:1.27-alpine",
+			component:  "nginx",
+			oldVersion: "1.27-alpine",
+			newVersion: "1.27.3-alpine",
+			expected:   "FROM index.docker.io/library/nginx:1.27.3-alpine",
+			matched:    true,
+		},
+		{
+			name:       "tag replaced when both tag and digest are pinned",
+			line:       "FROM nginx:1.27@sha256:aaaa",
+			component:  "nginx",
+			oldVersion: "1.27",
+			newVersion: "1.27.3",
+			expected:   "FROM nginx:1.27.3@sha256:aaaa",
+			matched:    true,
+		},
+		{
+			name:       "digest replaced when both tag and digest are pinned",
+			line:       "FROM nginx:1.27@sha256:aaaa",
+			component:  "nginx",
+			oldVersion: "sha256:aaaa",
+			newVersion: "sha256:bbbb",
+			expected:   "FROM nginx:1.27@sha256:bbbb",
+			matched:    true,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -198,4 +243,57 @@ func TestGetCompatiblePackageUpdater_Docker(t *testing.T) {
 	assert.True(t, supported)
 	_, ok := updater.(*DockerPackageUpdater)
 	assert.True(t, ok)
+}
+
+func TestIsDockerfilePath(t *testing.T) {
+	testcases := []struct {
+		name     string
+		patterns []string
+		path     string
+		want     bool
+	}{
+		{name: "exact Dockerfile", path: "Dockerfile", want: true},
+		{name: "nested Dockerfile", path: "services/api/Dockerfile", want: true},
+		{name: "lowercase dockerfile", path: "dockerfile", want: true},
+		{name: "Dockerfile.prod suffix", path: "Dockerfile.prod", want: true},
+		{name: "prod.dockerfile prefix", path: "prod.dockerfile", want: true},
+		{name: "unrelated file", path: "README.md", want: false},
+		{name: "Containerfile not matched", path: "Containerfile", want: false},
+		{name: "custom pattern matches", patterns: []string{"Containerfile"}, path: "Containerfile", want: true},
+		{name: "custom pattern rejects Dockerfile", patterns: []string{"Containerfile"}, path: "Dockerfile", want: false},
+		{name: "custom glob pattern", patterns: []string{"*.docker"}, path: "app.docker", want: true},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			u := &DockerPackageUpdater{DockerfilePatterns: tc.patterns}
+			assert.Equal(t, tc.want, u.isDockerfilePath(tc.path))
+		})
+	}
+}
+
+func TestDockerPackageUpdater_DiscoversDockerfileVariants(t *testing.T) {
+	tmpDir := t.TempDir()
+	prodPath := filepath.Join(tmpDir, "Dockerfile.prod")
+	assert.NoError(t, os.WriteFile(prodPath, []byte("FROM nginx:1.27-alpine\n"), 0644))
+
+	fixDetails := &FixDetails{
+		ImpactedDependencyName:    "nginx",
+		ImpactedDependencyVersion: "1.27-alpine",
+		SuggestedFixedVersion:     "1.27.3-alpine",
+		Technology:                techutils.Docker,
+		Components: []formats.ComponentRow{
+			{
+				Name:      "nginx",
+				Version:   "1.27-alpine",
+				Evidences: []formats.Location{{File: prodPath}},
+			},
+		},
+	}
+
+	updater := &DockerPackageUpdater{}
+	assert.NoError(t, updater.UpdateDependency(fixDetails))
+
+	got, err := os.ReadFile(prodPath)
+	assert.NoError(t, err)
+	assert.Equal(t, "FROM nginx:1.27.3-alpine\n", string(got))
 }

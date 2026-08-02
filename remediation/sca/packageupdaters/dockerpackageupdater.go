@@ -14,14 +14,17 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-const DockerfileName = "Dockerfile"
+var (
+	dockerFromLineRegex = regexp.MustCompile(`(?i)^(\s*FROM\s+(?:--\S+\s+)*)(\S+)(\s+AS\s+\S+)?\s*$`)
+	dockerHubPrefixes   = []string{"index.docker.io/library/", "docker.io/library/", "index.docker.io/", "docker.io/"}
+)
 
-var dockerFromLineRegex = regexp.MustCompile(`(?i)^(\s*FROM\s+(?:--\S+\s+)*)(\S+)(\s+AS\s+\S+)?\s*$`)
-
-type DockerPackageUpdater struct{}
+type DockerPackageUpdater struct {
+	DockerfilePatterns []string
+}
 
 func (d *DockerPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
-	descriptorPaths := collectDockerfilePaths(fixDetails)
+	descriptorPaths := d.collectDockerfilePaths(fixDetails)
 	if len(descriptorPaths) == 0 {
 		return fmt.Errorf("no Dockerfile evidence was found for package %s", fixDetails.ImpactedDependencyName)
 	}
@@ -36,20 +39,35 @@ func (d *DockerPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 	return joinedError
 }
 
-func collectDockerfilePaths(fixDetails *FixDetails) []string {
+func (d *DockerPackageUpdater) collectDockerfilePaths(fixDetails *FixDetails) []string {
 	pathsSet := datastructures.MakeSet[string]()
 	for _, component := range fixDetails.Components {
 		for _, evidence := range component.Evidences {
 			if evidence.File == "" {
 				continue
 			}
-			if filepath.Base(evidence.File) != DockerfileName {
+			if !d.isDockerfilePath(evidence.File) {
 				continue
 			}
 			pathsSet.Add(evidence.File)
 		}
 	}
 	return pathsSet.ToSlice()
+}
+
+func (d *DockerPackageUpdater) isDockerfilePath(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	if len(d.DockerfilePatterns) > 0 {
+		for _, pattern := range d.DockerfilePatterns {
+			if matched, _ := filepath.Match(strings.ToLower(pattern), base); matched {
+				return true
+			}
+		}
+		return false
+	}
+	return base == "dockerfile" ||
+		strings.HasPrefix(base, "dockerfile.") ||
+		strings.HasSuffix(base, ".dockerfile")
 }
 
 func (d *DockerPackageUpdater) updateDockerfile(path string, fixDetails *FixDetails) error {
@@ -109,28 +127,60 @@ func rewriteFromLine(line, name, oldVersion, newVersion string) (string, bool) {
 	}
 	prefix, imageRef, suffix := matches[1], matches[2], matches[3]
 
-	refName, refVersion := splitImageRef(imageRef)
-	if !strings.EqualFold(refName, name) || refVersion != oldVersion {
+	refName, refTag, refDigest := splitImageRef(imageRef)
+	if !imageNamesMatch(refName, name) {
 		return line, false
 	}
-	return prefix + refName + separatorFor(newVersion) + newVersion + suffix, true
+
+	var newImageRef string
+	switch {
+	case oldVersion == refTag && refTag != "":
+		newImageRef = rebuildImageRef(refName, newVersion, refDigest)
+	case oldVersion == refDigest && refDigest != "":
+		newImageRef = rebuildImageRef(refName, refTag, newVersion)
+	default:
+		return line, false
+	}
+	return prefix + newImageRef + suffix, true
 }
 
-func splitImageRef(ref string) (string, string) {
+func splitImageRef(ref string) (name, tag, digest string) {
 	if idx := strings.Index(ref, "@"); idx != -1 {
-		return ref[:idx], ref[idx+1:]
+		digest = ref[idx+1:]
+		ref = ref[:idx]
 	}
 	lastSlash := strings.LastIndex(ref, "/")
 	lastColon := strings.LastIndex(ref, ":")
 	if lastColon > lastSlash {
-		return ref[:lastColon], ref[lastColon+1:]
+		tag = ref[lastColon+1:]
+		ref = ref[:lastColon]
 	}
-	return ref, ""
+	name = ref
+	return
 }
 
-func separatorFor(version string) string {
-	if strings.HasPrefix(version, "sha256:") || strings.HasPrefix(version, "sha512:") {
-		return "@"
+func rebuildImageRef(name, tag, digest string) string {
+	result := name
+	if tag != "" {
+		result += ":" + tag
 	}
-	return ":"
+	if digest != "" {
+		result += "@" + digest
+	}
+	return result
+}
+
+// Normalizes implicit Docker Hub prefixes so bare "nginx" matches "docker.io/library/nginx".
+func imageNamesMatch(refName, componentName string) bool {
+	return normalizeImageName(refName) == normalizeImageName(componentName)
+}
+
+func normalizeImageName(name string) string {
+	name = strings.ToLower(name)
+	for _, prefix := range dockerHubPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return strings.TrimPrefix(name, prefix)
+		}
+	}
+	return name
 }
