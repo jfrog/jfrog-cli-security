@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
@@ -22,6 +23,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -1385,6 +1387,302 @@ func Test_getDockerNameAndVersion(t *testing.T) {
 		})
 	}
 }
+func Test_getHuggingFaceNameAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "model with explicit sha revision",
+			id:               "huggingfaceml://mcpotato/42-eicar-street:8fb61c4d511e9aaff0ea55396a124aa292830efc",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/mcpotato/42-eicar-street/revision/8fb61c4d511e9aaff0ea55396a124aa292830efc"},
+			wantName:         "mcpotato/42-eicar-street",
+			wantVersion:      "8fb61c4d511e9aaff0ea55396a124aa292830efc",
+		},
+		{
+			name:             "model with branch revision",
+			id:               "huggingfaceml://bert-base-uncased:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/bert-base-uncased/revision/main"},
+			wantName:         "bert-base-uncased",
+			wantVersion:      "main",
+		},
+		{
+			name:             "model id with no revision defaults to main",
+			id:               "huggingfaceml://org/model",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "empty artiUrl and repo produce no download URL",
+			id:               "huggingfaceml://org/model:main",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "empty id returns empty results",
+			id:               "",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "trailing slash stripped from artiUrl",
+			id:               "huggingfaceml://org/model:v1.0",
+			artiUrl:          "https://test.jfrogdev.org/artifactory/",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/v1.0"},
+			wantName:         "org/model",
+			wantVersion:      "v1.0",
+		},
+		{
+			name:             "trailing colon defaults to main (not empty string)",
+			id:               "huggingfaceml://org/model:",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "leading colon only (no repo id) returns empty",
+			id:               "huggingfaceml://:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			// refs/pr/3 is a valid Hugging Face revision (a PR ref) and contains '/'.
+			// It must be split off as the revision (not glued onto name) and
+			// path-escaped in the URL so it lands as a single path segment.
+			name:             "PR ref revision containing slashes is split and path-escaped",
+			id:               "huggingfaceml://org/model:refs/pr/3",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/refs%2Fpr%2F3"},
+			wantName:         "org/model",
+			wantVersion:      "refs/pr/3",
+		},
+		{
+			// repo_id (name) must be URL-escaped per segment just like revision already is —
+			// otherwise '?', '#', or a space in a model ref produces a malformed/injected URL.
+			name:             "repo_id with special characters is escaped per segment",
+			id:               "huggingfaceml://org/weird model?id#frag:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/weird%20model%3Fid%23frag/revision/main"},
+			wantName:         "org/weird model?id#frag",
+			wantVersion:      "main",
+		},
+		{
+			// url.PathEscape leaves '.'/'..' unescaped (unreserved per RFC 3986), so a
+			// repo_id segment of exactly ".." would still traverse the request path after
+			// escaping. Such a segment must be rejected outright rather than escaped.
+			name:             "repo_id with path-traversal segment produces no download URL",
+			id:               "huggingfaceml://../../api/system/ping:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "../../api/system/ping",
+			wantVersion:      "main",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getHuggingFaceNameAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+func Test_validateCurationAuditFlags_DockerAndHuggingFaceConflict(t *testing.T) {
+	ca := NewCurationAuditCommand().
+		SetDockerImageName("my.registry/image:tag").
+		SetHuggingFaceModel("org/model:main")
+	err := validateCurationAuditFlags(ca)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--docker-image and --hugging-face-model cannot be used together")
+}
+
+func Test_validateCurationAuditFlags_DockerOnly(t *testing.T) {
+	ca := NewCurationAuditCommand().SetDockerImageName("my.registry/image:tag")
+	assert.NoError(t, validateCurationAuditFlags(ca))
+}
+
+func Test_hasPythonFiles_ExcludesDist(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	require.NoError(t, os.MkdirAll(distDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "only_here.py"), []byte("x = 1\n"), 0644))
+	assert.False(t, hasPythonFiles(dir))
+}
+
+func Test_hasPythonFiles_FindsProjectSource(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app.py"), []byte("x = 1\n"), 0644))
+	assert.True(t, hasPythonFiles(dir))
+}
+
+func Test_isHuggingFaceReport(t *testing.T) {
+	hfPkg := &PackageStatus{PkgType: techutils.HuggingFaceML.String()}
+	tests := []struct {
+		name   string
+		report *CurationReport
+		want   bool
+	}{
+		{
+			name:   "empty report",
+			report: &CurationReport{},
+			want:   false,
+		},
+		{
+			name:   "warnings only without HF marker",
+			report: &CurationReport{warnings: []string{"unresolved"}},
+			want:   false,
+		},
+		{
+			name:   "HF warnings-only placeholder",
+			report: &CurationReport{warnings: []string{"unresolved"}, huggingFaceReport: true},
+			want:   true,
+		},
+		{
+			name:   "all HF packages",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg}},
+			want:   true,
+		},
+		{
+			name:   "mixed package types",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg, {PkgType: techutils.Pip.String()}}},
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isHuggingFaceReport(tt.report))
+		})
+	}
+}
+
+func Test_isWarningsOnlyReport(t *testing.T) {
+	assert.False(t, isWarningsOnlyReport(&CurationReport{}))
+	assert.True(t, isWarningsOnlyReport(&CurationReport{warnings: []string{"warn"}}))
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		packagesStatus: []*PackageStatus{{PkgType: techutils.HuggingFaceML.String()}},
+	}))
+	// packagesStatus only ever holds blocked packages (see fetchNodeStatus), so an
+	// all-clean audit of a real package also has an empty packagesStatus — same
+	// shape as the true "nothing was audited" placeholder. totalNumberOfPackages
+	// must be the signal that disambiguates them, not packagesStatus emptiness.
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		totalNumberOfPackages: 1,
+		warnings:              []string{"dynamic revision"},
+	}))
+}
+
+func Test_countPackageNodes(t *testing.T) {
+	rootNodes := func(ids ...string) map[string]struct{} {
+		m := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			m[id] = struct{}{}
+		}
+		return m
+	}
+	nodes := func(ids ...string) []*xrayUtils.GraphNode {
+		var n []*xrayUtils.GraphNode
+		for _, id := range ids {
+			n = append(n, &xrayUtils.GraphNode{Id: id})
+		}
+		return n
+	}
+
+	// Single root (e.g. npm/pip): FlatTree.Nodes includes the root's own self-entry
+	// alongside its dependencies — that self-entry must be excluded from the count.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root"), nodes("root", "dep-a", "dep-b")))
+
+	// Multiple roots (e.g. multiple --working-dirs): every root self-entry present
+	// in the flat graph must be excluded, not just the first.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root-a", "root-b"), nodes("root-a", "dep-a", "root-b", "dep-b")))
+
+	// Hugging Face: BuildDependencyTree never adds a root self-entry, so nothing
+	// should be subtracted — a single-dependency project must not undercount to 0.
+	assert.Equal(t, 1, countPackageNodes(
+		rootNodes("huggingface-project"), nodes("huggingfaceml://org/model:main")))
+
+	assert.Equal(t, 0, countPackageNodes(rootNodes("root"), nil))
+}
+
+func Test_convertResultsToSummary_SkipsWarningsOnly(t *testing.T) {
+	results := map[string]*CurationReport{
+		"pip-project":         {packagesStatus: []*PackageStatus{{PackageName: "requests"}}, totalNumberOfPackages: 1},
+		hfUnresolvedReportKey: {warnings: []string{"unresolved HF ref"}, huggingFaceReport: true},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "pip-project", summary.Scans[0].Target)
+}
+
+// Test_convertResultsToSummary_RecordsAllUnresolvedHFReport: an all-unresolved hfPartial
+// report must still be recorded, not dropped like the true "not attempted" placeholder.
+func Test_convertResultsToSummary_RecordsAllUnresolvedHFReport(t *testing.T) {
+	results := map[string]*CurationReport{
+		"hf-project": {totalNumberOfPackages: 0, hfPartial: true, warnings: []string{"2 model reference(s)... HTTP 404"}},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "hf-project", summary.Scans[0].Target)
+	assert.Equal(t, 0, summary.Scans[0].CuratedPackages.PackageCount)
+	assert.True(t, summary.Scans[0].CuratedPackages.IsPartial)
+	assert.Equal(t, "hf_unresolved", summary.Scans[0].CuratedPackages.PartialReason)
+}
+
+func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	// Use a mock server so server resolution succeeds; the HF_ENDPOINT error then
+	// fires naturally from getHuggingFaceRepositoryConfig → repoFromHFEndpoint.
+	mockServer, serverConfig := hfMockServer(t, map[string]bool{}, map[string]bool{}, "hf-repo")
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", "")
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(serverConfig)
+	ca.SetIsCurationCmd(true)
+	ca.SetInsecureTls(true)
+	ca.SetHuggingFaceModel("org/model:main")
+	results := map[string]*CurationReport{}
+	err := ca.doCurateAudit(results)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HF_ENDPOINT")
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1498,8 +1796,9 @@ func Test_convertResultsToSummary(t *testing.T) {
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							PackageCount: 1,
-							IsPartial:    true,
+							PackageCount:  1,
+							IsPartial:     true,
+							PartialReason: "cvs_fallback",
 							Blocked: []formats.BlockedPackages{{
 								Policy:    "p",
 								Condition: "immature",
@@ -1836,6 +2135,74 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 		return true
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
+}
+
+// TestFetchNodeStatus_HFExplicit404ReturnsError verifies an unresolvable explicit
+// --hugging-face-model (HTTP 404) is a hard error, not a silently-skipped node.
+func TestFetchNodeStatus_HFExplicit404ReturnsError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      true,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "org/nonexistent-model")
+	assert.Contains(t, err.Error(), "404")
+	assert.Empty(t, analyzer.hfUnresolvedNodes, "explicit mode must error, not silently record as unresolved")
+}
+
+// TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError verifies an
+// unresolvable auto-discovered reference (HTTP 404) is recorded as a warning,
+// not a hard error.
+func TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      false,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.NoError(t, err)
+	require.Len(t, analyzer.hfUnresolvedNodes, 1)
+	assert.Equal(t, "org/nonexistent-model:main", analyzer.hfUnresolvedNodes[0])
 }
 
 // =============================================================================
@@ -2385,6 +2752,92 @@ func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
 	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
 }
 
+// TestRunCvsFallback_KeepsSeparateTableFromExistingReport verifies pip's CVS-fallback report
+// gets its own distinct key (a second table) instead of overwriting or fusing into an existing
+// report already recorded under the same directory-basename key (e.g. by HF auto-discovery).
+func TestRunCvsFallback_KeepsSeparateTableFromExistingReport(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+	blockJSON := `{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'p'","policy":"p","condition":"immature","explanation":"too new","recommendation":"use older"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	orig := osGetwd
+	osGetwd = func() (string, error) { return "/home/user/ml-project", nil }
+	t.Cleanup(func() { osGetwd = orig })
+	const key = "ml-project"
+
+	// Pre-existing report under the same key, as HF auto-discovery would leave it.
+	results := map[string]*CurationReport{
+		key: {
+			packagesStatus:    []*PackageStatus{{PackageName: "org/malicious-model", PackageVersion: "main", PkgType: "huggingfaceml"}},
+			warnings:          []string{"Hugging Face: 1 model reference(s) could not be resolved"},
+			huggingFaceReport: true,
+			hfPartial:         true,
+		},
+	}
+
+	cvsErr := &python.CvsBlockedError{
+		Packages: []python.PinnedRequirement{
+			{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+		},
+	}
+	err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+	require.NoError(t, err)
+
+	require.Len(t, results, 2, "pip's fallback must land in a new table, leaving the existing HF report untouched")
+
+	hfReport := results[key]
+	require.NotNil(t, hfReport)
+	assert.True(t, hfReport.huggingFaceReport)
+	assert.True(t, hfReport.hfPartial)
+	assert.Len(t, hfReport.packagesStatus, 1, "the pre-existing HF report must be unmodified")
+	assert.Len(t, hfReport.warnings, 1)
+
+	pipKey := uniqueReportKey(map[string]*CurationReport{key: hfReport}, key, techutils.Pip)
+	pipReport := results[pipKey]
+	require.NotNil(t, pipReport, "pip's report must be recorded under a disambiguated key, not merged into %q", key)
+	assert.Len(t, pipReport.packagesStatus, 1)
+	assert.True(t, pipReport.isPartial)
+	assert.False(t, pipReport.huggingFaceReport, "pip's own report must not carry the HF marker")
+}
+
+// TestUniqueReportKey covers the disambiguation loop, including a 3-way collision where both
+// the plain key and its first tech-suffixed candidate are already taken.
+func TestUniqueReportKey(t *testing.T) {
+	results := map[string]*CurationReport{
+		"proj":          {},
+		"proj (pip)":    {},
+		"proj (pip) #2": {},
+	}
+	assert.Equal(t, "proj", uniqueReportKey(map[string]*CurationReport{}, "proj", techutils.Pip), "no collision — key returned as-is")
+	assert.Equal(t, "proj (pip)", uniqueReportKey(map[string]*CurationReport{"proj": {}}, "proj", techutils.Pip), "single collision — first suffixed candidate")
+	assert.Equal(t, "proj (pip) #3", uniqueReportKey(results, "proj", techutils.Pip), "triple collision — must skip to the next free numbered candidate")
+}
+
 // TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
 func TestEffectiveParentVersion(t *testing.T) {
 	cases := []struct {
@@ -2401,6 +2854,109 @@ func TestEffectiveParentVersion(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+		})
+	}
+}
+
+func TestSetRepoFromPipfileRejectsInvalidPresentConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte("resolver: [\n"), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSendPipenvRequestRejectsRedirectOutsideRepository(t *testing.T) {
+	var outsideRequested atomic.Bool
+	var requests atomic.Int32
+	server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path == "/api/system/configuration" {
+			outsideRequested.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+	})
+	defer server.Close()
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
+		url:               rtAuth.GetUrl(),
+		repo:              "repo",
+		tech:              techutils.Pipenv,
+	}
+	requestDetails := analyzer.httpClientDetails.Clone()
+	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+	_, _, err = analyzer.sendPipenvRequest(http.MethodGet,
+		strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsafe redirect")
+	assert.False(t, outsideRequested.Load())
+	assert.Equal(t, int32(1), requests.Load())
+}
+
+func TestPipenvCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*treeAnalyzer) error
+	}{
+		{
+			name: "all versions metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiAllVersions("urllib3")
+				return err
+			},
+		},
+		{
+			name: "version download metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiNormalDownloadURL("urllib3", "2.0.7")
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := &treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              techutils.Pipenv,
+			}
+
+			err = test.call(analyzer)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
 		})
 	}
 }
@@ -2874,4 +3430,25 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 		assert.Contains(t, result, npm, "npm should be kept when the only indicator is at $HOME")
 		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
 	})
+}
+
+// =============================================================================
+// Tests for Pipenv support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsPipenv(t *testing.T) {
+	_, ok := supportedTech[techutils.Pipenv]
+	assert.True(t, ok, "techutils.Pipenv must be registered in supportedTech so that 'jf curation-audit' processes pipenv projects")
+}
+
+func TestGetUrlNameAndVersionByTechPipenv(t *testing.T) {
+	const whlUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/requests-2.31.0-py3-none-any.whl"
+	downloadUrlsMap := map[string]string{"pypi://requests:2.31.0": whlUrl}
+
+	downloadUrls, name, scope, ver := getUrlNameAndVersionByTech(techutils.Pipenv, &xrayUtils.GraphNode{Id: "pypi://requests:2.31.0"}, downloadUrlsMap, "https://test.jfrog.io", "pypi-remote")
+
+	assert.Equal(t, []string{whlUrl}, downloadUrls)
+	assert.Equal(t, "requests", name)
+	assert.Equal(t, "", scope, "python packages have no scope")
+	assert.Equal(t, "2.31.0", ver)
 }

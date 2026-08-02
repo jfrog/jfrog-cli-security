@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +42,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
+	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
 	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
@@ -97,6 +102,9 @@ const (
 		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
 		"Dependency analysis cannot proceed until these issues are addressed.\n" +
 		"Once you switch to an approved version and re-run the audit, additional results will be available."
+
+	// hfUnresolvedReportKey is used when an HF scan found only dynamic references — no table, just warnings.
+	hfUnresolvedReportKey = "huggingface (unresolved references)"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -124,9 +132,13 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
-	techutils.Docker: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Docker:        func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.HuggingFaceML: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
+	},
+	techutils.Pipenv: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Pipenv, MinArtiPassThroughSupport)
 	},
 }
 
@@ -243,15 +255,23 @@ type treeAnalyzer struct {
 	// Stored via atomic.Value so it can be retrieved after the parallel runner finishes
 	// and returned once — avoiding double-printing via errorsQueue.AddError.
 	authErr atomic.Value
+	// hfExplicitModel is true for --hugging-face-model (vs auto-discovery).
+	hfExplicitModel bool
+	// hfUnresolvedMu guards hfUnresolvedNodes, appended concurrently.
+	hfUnresolvedMu    sync.Mutex
+	hfUnresolvedNodes []string
 }
 
 type CurationAuditCommand struct {
-	PackageManagerConfig  *project.RepositoryConfig
-	extractPoliciesRegex  *regexp.Regexp
-	workingDirs           []string
-	OriginPath            string
-	parallelRequests      int
-	dockerImageName       string
+	PackageManagerConfig *project.RepositoryConfig
+	extractPoliciesRegex *regexp.Regexp
+	workingDirs          []string
+	OriginPath           string
+	parallelRequests     int
+	dockerImageName      string
+	huggingFaceModel     string
+	// hfProjectNameHint is the collision-free HF root-node name for the current working dir.
+	hfProjectNameHint     string
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
 	// pendingWarnings collects log.Warn messages that must be emitted after the
@@ -268,6 +288,32 @@ type CurationReport struct {
 	// was produced via the metadata-API fallback. The partial-report warning
 	// is printed after the spinner stops so it is not swallowed by the spinner.
 	isPartial bool
+	// hfPartial marks unresolved (404) HF nodes excluded from totalNumberOfPackages.
+	// Kept separate from isPartial, which also triggers the CVS-specific warning
+	// and skips the waiver flow.
+	hfPartial bool
+	// warnings holds user-facing messages from tree-build (e.g. unresolved HF references).
+	warnings []string
+	// huggingFaceReport marks reports produced by the Hugging Face audit path (including
+	// warning-only unresolved-reference placeholders), for deterministic output ordering.
+	huggingFaceReport bool
+}
+
+// uniqueReportKey returns key, or a tech-suffixed variant if key is already taken by another
+// tech's report — e.g. pip's CVS-fallback and HF auto-discovery can both default to the same
+// directory-basename key. This keeps them as two separate tables instead of one clobbering
+// (or being fused into) the other.
+func uniqueReportKey(results map[string]*CurationReport, key string, tech techutils.Technology) string {
+	if _, exists := results[key]; !exists {
+		return key
+	}
+	candidate := fmt.Sprintf("%s (%s)", key, tech)
+	for i := 2; ; i++ {
+		if _, exists := results[candidate]; !exists {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s (%s) #%d", key, tech, i)
+	}
 }
 
 type WaiverResponse struct {
@@ -307,6 +353,15 @@ func (ca *CurationAuditCommand) SetDockerImageName(dockerImageName string) *Cura
 	return ca
 }
 
+func (ca *CurationAuditCommand) HuggingFaceModel() string {
+	return ca.huggingFaceModel
+}
+
+func (ca *CurationAuditCommand) SetHuggingFaceModel(huggingFaceModel string) *CurationAuditCommand {
+	ca.huggingFaceModel = huggingFaceModel
+	return ca
+}
+
 func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages bool) *CurationAuditCommand {
 	ca.includeCachedPackages = includeCachedPackages
 	return ca
@@ -331,20 +386,29 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	} else {
 		ca.workingDirs = append(ca.workingDirs, rootDir)
 	}
-	results := map[string]*CurationReport{}
-	var scanErr error
-	for _, workDir := range ca.workingDirs {
-		var absWd string
-		absWd, err = filepath.Abs(workDir)
-		if err != nil {
+	// Ensures dirs sharing a basename still get distinct HF root-node names.
+	hfProjectNames := huggingface.DisambiguateRootNodeNames(ca.workingDirs)
+	// Resolved up front, before any chdir below — each iteration chdir's into its
+	// own absWd, so resolving relative dirs one at a time inside the loop would
+	// resolve later entries against an earlier entry's cwd instead of rootDir.
+	absWorkingDirs := make([]string, len(ca.workingDirs))
+	for i, workDir := range ca.workingDirs {
+		if absWorkingDirs[i], err = filepath.Abs(workDir); err != nil {
 			return errorutils.CheckError(err)
 		}
+	}
+	results := map[string]*CurationReport{}
+	var scanErr error
+	for _, absWd := range absWorkingDirs {
 		log.Info("Running curation audit on project:", absWd)
 		if absWd != rootDir {
 			if err = os.Chdir(absWd); err != nil {
 				return errorutils.CheckError(err)
 			}
 		}
+		// OriginPath scopes hasPythonFiles and params.HFWorkingDirectory to this working directory.
+		ca.OriginPath = absWd
+		ca.hfProjectNameHint = hfProjectNames[absWd]
 		// If error returned, continue to print results(if any), and return error at the end.
 		if e := ca.doCurateAudit(results); e != nil {
 			scanErr = errors.Join(scanErr, e)
@@ -369,11 +433,29 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		}
 	}
 
-	for projectPath, packagesStatus := range results {
-		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
+	// Non-HF tables first, then HF — deterministic order regardless of map iteration.
+	var nonHFKeys, hfKeys []string
+	for k, report := range results {
+		if isHuggingFaceReport(report) {
+			hfKeys = append(hfKeys, k)
+		} else {
+			nonHFKeys = append(nonHFKeys, k)
+		}
+	}
+	sort.Strings(nonHFKeys)
+	sort.Strings(hfKeys)
+	projectPaths := slices.Concat(nonHFKeys, hfKeys)
+
+	var allWarnings []string
+	for _, projectPath := range projectPaths {
+		packagesStatus := results[projectPath]
+		if !isWarningsOnlyReport(packagesStatus) {
+			err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
+		}
+		allWarnings = append(allWarnings, packagesStatus.warnings...)
 
 		// A partial report comes from the CVS fallback: the dependency tree could
-		// not be fully resolved. Never offers a waiver when the full tree wasn't built
+		// not be fully resolved. Never offers a waiver when the full tree wasn't built.
 		if packagesStatus.isPartial {
 			continue
 		}
@@ -386,6 +468,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 			}
 		}
 	}
+	for _, w := range allWarnings {
+		log.Warn(w)
+	}
 	err = errors.Join(err, output.RecordSecurityCommandSummary(output.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
@@ -393,11 +478,23 @@ func (ca *CurationAuditCommand) Run() (err error) {
 func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
 	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
+		// hfPartial reports must still be recorded, not treated as "HF wasn't attempted".
+		if isWarningsOnlyReport(packagesStatus) && !packagesStatus.hfPartial {
+			continue
+		}
+		var partialReason string
+		switch {
+		case packagesStatus.isPartial:
+			partialReason = "cvs_fallback"
+		case packagesStatus.hfPartial:
+			partialReason = "hf_unresolved"
+		}
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				PackageCount: packagesStatus.totalNumberOfPackages,
-				Blocked:      getBlocked(packagesStatus.packagesStatus),
-				IsPartial:    packagesStatus.isPartial,
+				PackageCount:  packagesStatus.totalNumberOfPackages,
+				Blocked:       getBlocked(packagesStatus.packagesStatus),
+				IsPartial:     packagesStatus.isPartial || packagesStatus.hfPartial,
+				PartialReason: partialReason,
 			},
 		})
 	}
@@ -529,11 +626,25 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
+	if err := validateCurationAuditFlags(ca); err != nil {
+		return err
+	}
 	techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 	techs = promoteYarnWorkspaceMember(techs)
 	if ca.DockerImageName() != "" {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		techs = []string{techutils.Docker.String()}
+	}
+	// --hugging-face-model: explicit spot-check — run HF only, skip other package managers.
+	// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
+	if ca.HuggingFaceModel() != "" {
+		log.Debug(fmt.Sprintf("Hugging Face models '%s' were provided explicitly — running HF-only audit.", ca.HuggingFaceModel()))
+		techs = []string{techutils.HuggingFaceML.String()}
+	} else if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
+		hfTech := techutils.HuggingFaceML.String()
+		if !slices.Contains(techs, hfTech) {
+			techs = append(techs, hfTech)
+		}
 	}
 	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
 	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
@@ -556,6 +667,17 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		}
 
 		if err := ca.auditTree(techutils.Technology(tech), results); err != nil {
+			// If HF is the only tech being audited (no other package manager was detected
+			// in this working dir — e.g. a subdirectory with .py files but no manifest of
+			// its own), there's nothing else this leniency protects: swallowing the error
+			// would let the whole audit silently check nothing and still exit 0.
+			if techutils.Technology(tech) == techutils.HuggingFaceML && ca.HuggingFaceModel() == "" && len(techs) > 1 {
+				// HF auto-discovery is additive — config/connectivity failures must not abort other techs.
+				log.Warn(fmt.Sprintf("Hugging Face curation audit skipped: %v", err))
+				ca.setPackageManagerConfig(nil)
+				ca.AuditParamsInterface = ca.SetDepsRepo("")
+				continue
+			}
 			return err
 		}
 		// clear the package manager config to avoid using the same config for the next tech
@@ -563,6 +685,72 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		ca.AuditParamsInterface = ca.SetDepsRepo("")
 
 	}
+	return nil
+}
+
+// isWarningsOnlyReport is true for HF unresolved-reference placeholders that carry
+// warnings but no curation table rows (e.g. hfUnresolvedReportKey).
+// isWarningsOnlyReport reports whether report represents the placeholder created when
+// no packages were resolved/audited at all (e.g. every HF reference was unresolved) —
+// not merely a report where nothing happened to be blocked. packagesStatus only holds
+// blocked packages (see fetchNodeStatus), so an all-clean audit of N real packages also
+// has an empty packagesStatus; totalNumberOfPackages distinguishes that case (N) from
+// the true warnings-only placeholder (0, never set).
+func isWarningsOnlyReport(report *CurationReport) bool {
+	return report.totalNumberOfPackages == 0 && len(report.warnings) > 0
+}
+
+// isHuggingFaceReport reports whether a result belongs to the Hugging Face audit path.
+func isHuggingFaceReport(report *CurationReport) bool {
+	if report.huggingFaceReport {
+		return true
+	}
+	if len(report.packagesStatus) == 0 {
+		return false
+	}
+	for _, ps := range report.packagesStatus {
+		if ps.PkgType != techutils.HuggingFaceML.String() {
+			return false
+		}
+	}
+	return true
+}
+
+// hasPythonFiles returns true if dir contains at least one .py or .ipynb file,
+// indicating the project may have Hugging Face model references to discover.
+func hasPythonFiles(dir string) bool {
+	if dir == "" {
+		dir = "."
+	}
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			log.Debug(fmt.Sprintf("hasPythonFiles: skipping %s: %v", path, walkErr))
+			return nil
+		}
+		if d.IsDir() {
+			if hfdiscovery.IsExcludedWalkDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".py" || ext == ".ipynb" {
+			found = true
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+func validateCurationAuditFlags(ca *CurationAuditCommand) error {
+	if ca.DockerImageName() != "" && ca.HuggingFaceModel() != "" {
+		return errorutils.CheckErrorf(
+			"--docker-image and --hugging-face-model cannot be used together; run separate curation-audit commands for each",
+		)
+	}
+
 	return nil
 }
 
@@ -659,6 +847,12 @@ func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (
 	return
 }
 
+// pipenvBoundedRedirectManager must use zero retries: HttpClient.Send retries
+// on CheckRedirect errors, desyncing SendWithBoundedRedirects's hop counter.
+func pipenvBoundedRedirectManager(serverDetails *config.ServerDetails) (artifactory.ArtifactoryServicesManager, error) {
+	return rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+}
+
 func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
@@ -672,8 +866,18 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildInfoBomGeneratorParams, error) {
-	serverDetails, err := ca.ServerDetails()
+// getBuildInfoParamsByTech resolves install-time server details. For Pipenv, prefers an
+// already-set ca.PackageManagerConfig (native detection) over the generic server so install
+// and the later GetAuth-based probes hit the same endpoint. Other techs keep using the
+// generic server, matching their pre-existing behavior.
+func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
+	var serverDetails *config.ServerDetails
+	var err error
+	if tech == techutils.Pipenv && ca.PackageManagerConfig != nil {
+		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
+	} else {
+		serverDetails, err = ca.ServerDetails()
+	}
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.GetXrayVersion(),
 		ExclusionPattern: technologies.GetScaExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
@@ -708,9 +912,29 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildIn
 		PipRequirementsFile: ca.PipRequirementsFile(),
 		// Docker params
 		DockerImageName: ca.DockerImageName(),
+		// Hugging Face params
+		HuggingFaceModel:   ca.HuggingFaceModel(),
+		HFWorkingDirectory: ca.OriginPath,
+		HFProjectName:      ca.hfProjectNameHint,
 		// NuGet params
 		SolutionFilePath: ca.SolutionFilePath(),
 	}, err
+}
+
+// countPackageNodes returns the number of real dependency nodes in flatTreeNodes,
+// excluding root self-entries. FlatTree.Nodes includes each root's own self-entry
+// alongside real dependencies for most techs (its ID matches a rootNodes entry),
+// but Hugging Face's BuildDependencyTree never adds one (a scanned directory isn't
+// itself a package) — so root entries are only subtracted when actually present,
+// rather than assuming exactly one and undercounting a single-dependency HF project to 0.
+func countPackageNodes(rootNodes map[string]struct{}, flatTreeNodes []*xrayUtils.GraphNode) int {
+	count := len(flatTreeNodes)
+	for _, node := range flatTreeNodes {
+		if _, ok := rootNodes[node.Id]; ok {
+			count--
+		}
+	}
+	return count
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
@@ -718,7 +942,15 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
 	}
-	params, err := ca.getBuildInfoParamsByTech()
+	// Resolve Pipenv's native repo/server before getBuildInfoParamsByTech so install and the
+	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
+	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
+	if tech == techutils.Pipenv && ca.PackageManagerConfig == nil {
+		if err := ca.SetRepo(tech); err != nil {
+			return err
+		}
+	}
+	params, err := ca.getBuildInfoParamsByTech(tech)
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
@@ -751,18 +983,35 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// Instead of aborting with no output, run the metadata-API fallback to
 		// recover the curation policy and render a partial table.
 		var cvsErr *python.CvsBlockedError
-		if (tech == techutils.Pip || tech == techutils.Poetry) && errors.As(err, &cvsErr) {
+		if (tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv) && errors.As(err, &cvsErr) {
 			return ca.runCvsFallback(cvsErr, tech, results)
 		}
 		return err
 	}
 	// Validate the graph isn't empty.
 	if len(depTreeResult.FullDepTrees) == 0 {
+		// For HF auto-discovery, an empty tree is normal (no HF call sites found).
+		if tech == techutils.HuggingFaceML {
+			log.Debug("Hugging Face: no model references discovered in source — skipping HF curation probe")
+			if len(depTreeResult.Warnings) > 0 {
+				results[uniqueReportKey(results, hfUnresolvedReportKey, tech)] = &CurationReport{
+					warnings:          depTreeResult.Warnings,
+					huggingFaceReport: true,
+				}
+			}
+			return nil
+		}
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
 	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return err
+	}
+	if tech == techutils.Pipenv {
+		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+		if err != nil {
+			return err
+		}
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
@@ -771,6 +1020,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	rootNode := depTreeResult.FullDepTrees[0]
 	// Extract project name from the dependency tree
 	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
+	if tech == techutils.HuggingFaceML {
+		// rootNode.Id is a directory/project name, not a "repo_id:revision" model
+		// reference — getHuggingFaceNameAndVersion defaults a missing revision to
+		// "main", which would otherwise tack on a spurious ":main" here.
+		projectName, projectVersion = rootNode.Id, ""
+	}
 	// If the project name is not set, we use the current working directory name
 	if projectName == "" {
 		workPath, err := os.Getwd()
@@ -783,8 +1038,13 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if projectVersion != "" {
 		fullProjectName += ":" + projectVersion
 	}
+	rootNodes := map[string]struct{}{}
+	for _, tree := range depTreeResult.FullDepTrees {
+		rootNodes[tree.Id] = struct{}{}
+	}
+	packageNodeCount := countPackageNodes(rootNodes, depTreeResult.FlatTree.Nodes)
 	if ca.Progress() != nil {
-		ca.Progress().SetHeadlineMsg(fmt.Sprintf("Fetch curation status for %s graph with %v nodes project name: %s", tech.ToFormal(), len(depTreeResult.FlatTree.Nodes)-1, fullProjectName))
+		ca.Progress().SetHeadlineMsg(fmt.Sprintf("Fetch curation status for %s graph with %v nodes project name: %s", tech.ToFormal(), packageNodeCount, fullProjectName))
 	}
 	if projectScope != "" {
 		projectName = projectScope + "/" + projectName
@@ -804,12 +1064,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		parallelRequests:      ca.parallelRequests,
 		downloadUrls:          depTreeResult.DownloadUrls,
 		includeCachedPackages: ca.includeCachedPackages,
+		hfExplicitModel:       tech == techutils.HuggingFaceML && ca.huggingFaceModel != "",
 	}
 
-	rootNodes := map[string]struct{}{}
-	for _, tree := range depTreeResult.FullDepTrees {
-		rootNodes[tree.Id] = struct{}{}
-	}
 	// Fetch status for each node from a flatten graph which, has no duplicate nodes.
 	packagesStatusMap := sync.Map{}
 	err = analyzer.fetchNodesStatus(depTreeResult.FlatTree, &packagesStatusMap, rootNodes)
@@ -822,10 +1079,22 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	sort.Slice(packagesStatus, func(i, j int) bool {
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
-	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = &CurationReport{
-		packagesStatus: packagesStatus,
-		// We subtract 1 because the root node is not a package.
-		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
+	warnings := depTreeResult.Warnings
+	if len(analyzer.hfUnresolvedNodes) > 0 {
+		sort.Strings(analyzer.hfUnresolvedNodes)
+		warnings = append(warnings, fmt.Sprintf(
+			"Hugging Face: %d model reference(s) could not be resolved against the registry (HTTP 404) and were NOT audited:\n  %s\nVerify the repo id/revision are correct and the repo is accessible from this Artifactory instance.",
+			len(analyzer.hfUnresolvedNodes), strings.Join(analyzer.hfUnresolvedNodes, "\n  ")))
+		// Excluded from the total — unresolved nodes were never actually audited.
+		packageNodeCount -= len(analyzer.hfUnresolvedNodes)
+	}
+	key := strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")
+	results[uniqueReportKey(results, key, tech)] = &CurationReport{
+		packagesStatus:        packagesStatus,
+		totalNumberOfPackages: packageNodeCount,
+		hfPartial:             len(analyzer.hfUnresolvedNodes) > 0,
+		warnings:              warnings,
+		huggingFaceReport:     tech == techutils.HuggingFaceML,
 	}
 	return err
 }
@@ -1044,6 +1313,23 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return nil
 	}
 
+	// Hugging Face derives its repo from HF_ENDPOINT, not from a 'jf <tech>-config' file.
+	// Pass in the already-resolved (--server-id-aware) server, rather than letting
+	// GetHuggingFaceRepositoryConfig reload the CLI default and potentially probe a
+	// different Artifactory instance than the one this command was invoked against.
+	if tech == techutils.HuggingFaceML {
+		serverDetails, err := ca.ServerDetails()
+		if err != nil {
+			return err
+		}
+		repoConfig, err := huggingface.GetHuggingFaceRepositoryConfig(serverDetails)
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(repoConfig)
+		return nil
+	}
+
 	// When --run-native is set for npm, read the Artifactory URL and repo name from the
 	// project's .npmrc via native npm config — no jf npm-config/npm.yaml required.
 	if ca.RunNative() && tech == techutils.Npm {
@@ -1054,6 +1340,10 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	// pnpm shares the npm registry protocol, so the same .npmrc key/URL format applies.
 	if tech == techutils.Pnpm {
 		return ca.setRepoFromNpmrcForPnpm()
+	}
+
+	if tech == techutils.Pipenv {
+		return ca.setRepoFromPipfile()
 	}
 
 	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
@@ -1106,6 +1396,78 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	return nil
 }
 
+// setRepoFromPipfile detects the Artifactory PyPI source for pipenv curation.
+//
+// Detection priority:
+//  1. pipenv.yaml — explicit 'jf pipenv-config'.
+//  2. User pip.conf index-url — Artifactory "Set me up" for pip.
+//  3. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
+func (ca *CurationAuditCommand) setRepoFromPipfile() error {
+	projectType := techutils.Pipenv.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		configuredServer, err := resolverParams.ServerDetails()
+		if err != nil {
+			return err
+		}
+		fallbackServer, _ := ca.ServerDetails()
+		server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", configuredServer, resolverParams.TargetRepo(), fallbackServer)
+		if err != nil {
+			return err
+		}
+		repoConfig := (&project.RepositoryConfig{}).SetTargetRepo(repo).SetServerDetails(server)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
+		return nil
+	}
+
+	configuredServer, configuredRepo, pipConfPath, err := python.ParsePipConfigIndexUrl(python.DefaultPipConfPaths()...)
+	if err != nil {
+		return err
+	}
+	fallbackServer, _ := ca.ServerDetails()
+	if configuredRepo != "" && configuredServer != nil {
+		server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", configuredServer, configuredRepo, fallbackServer)
+		if err != nil {
+			return err
+		}
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(repo).
+			SetServerDetails(server)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
+		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from %s", repo, pipConfPath))
+		return nil
+	}
+
+	server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", nil, "", fallbackServer)
+	if err != nil {
+		return err
+	}
+	if repo != "" && server != nil {
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(repo).
+			SetServerDetails(server)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(repo)
+		log.Info(fmt.Sprintf("pipenv: using Artifactory repository %q from Pipfile [[source]]", repo))
+		return nil
+	}
+
+	return errorutils.CheckErrorf(
+		"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
+			"Either run 'jf pipenv-config', configure index-url in your user pip.conf via " +
+			"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
+}
+
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
 // pnpm accepts it as a no-op (it always resolves from .npmrc). Extend the
@@ -1126,6 +1488,12 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
+	}
+	if tech == techutils.Pipenv {
+		return errorutils.CheckErrorf(
+			"--run-native is not supported for 'pipenv' projects. " +
+				"Run 'jf ca' without --run-native; the repository is resolved automatically from " +
+				"'jf pipenv-config', ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile.")
 	}
 	return errorutils.CheckErrorf(
 		"--run-native is not supported for '%s' projects. "+
@@ -1356,6 +1724,13 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) error {
 	packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, &node, nc.downloadUrls, nc.url, nc.repo)
 	if len(packageUrls) == 0 {
+		// For an explicit --hugging-face-model spot-check, nc.url/nc.repo are always
+		// resolved by this point, so a non-empty name with no download URL means
+		// getHuggingFaceNameAndVersion rejected a '.'/'..' path segment in the repo id —
+		// surface that clearly instead of silently reporting "0 blocked packages".
+		if nc.tech == techutils.HuggingFaceML && nc.hfExplicitModel && name != "" {
+			return errorutils.CheckErrorf("Hugging Face: repo id %q is invalid — path segments must not be '.' or '..'", name)
+		}
 		return nil
 	}
 	if scope != "" {
@@ -1366,7 +1741,13 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			return nil
 		}
 		requestDetails := nc.httpClientDetails.Clone()
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, requestDetails)
+		var resp *http.Response
+		var err error
+		if nc.tech == techutils.Pipenv {
+			resp, _, err = nc.sendPipenvRequest(http.MethodHead, packageUrl, requestDetails)
+		} else {
+			resp, _, err = nc.rtManager.Client().SendHead(packageUrl, requestDetails)
+		}
 		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
 			// Store the error silently (not returned) so errorsQueue.AddError is never
 			// called and the message is not logged here. fetchNodesStatus picks it up
@@ -1377,6 +1758,17 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 					"Run 'jf c' to update your server configuration, or verify that the correct server-id is configured", packageUrl, name, version))
 			}
 			return nil
+		}
+		// HF 404: hard error for an explicit spot-check, warning for auto-discovery.
+		if resp != nil && resp.StatusCode == http.StatusNotFound && nc.tech == techutils.HuggingFaceML {
+			if nc.hfExplicitModel {
+				return errorutils.CheckErrorf("Hugging Face: %s:%s could not be resolved at %s (HTTP 404) — verify the repo id and revision are correct", name, version, packageUrl)
+			}
+			log.Debug(fmt.Sprintf("Hugging Face: %s:%s not resolvable at %s (HTTP 404) — recording as unaudited", name, version, packageUrl))
+			nc.hfUnresolvedMu.Lock()
+			nc.hfUnresolvedNodes = append(nc.hfUnresolvedNodes, fmt.Sprintf("%s:%s", name, version))
+			nc.hfUnresolvedMu.Unlock()
+			continue
 		}
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
@@ -1412,6 +1804,16 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
+func (nc *treeAnalyzer) sendPipenvRequest(method, requestURL string, details *httputils.HttpClientDetails) (*http.Response, []byte, error) {
+	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", strings.TrimSuffix(nc.url, "/"), nc.repo)
+	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	return utils.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
+		boundary, utils.MaxAuthenticatedRedirects)
+}
+
 // runCvsFallback is called when pip or poetry resolution failed because CVS
 // stripped a pinned version from the simple index (CvsBlockedError). It uses
 // the PyPI metadata API to recover each blocker's real download URL, probes
@@ -1421,6 +1823,12 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
+	}
+	if tech == techutils.Pipenv {
+		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+		if err != nil {
+			return fmt.Errorf("curation-blocked resolution fallback: failed to create bounded HTTP manager: %w", err)
+		}
 	}
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
@@ -1445,7 +1853,7 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 		log.Warn(fmt.Sprintf("curation-blocked resolution fallback: could not determine working directory (%v) — reporting under fallback key", wdErr))
 		workPath = "unknown-project"
 	}
-	results[filepath.Base(workPath)] = &CurationReport{
+	results[uniqueReportKey(results, filepath.Base(workPath), tech)] = &CurationReport{
 		packagesStatus:        packagesStatus,
 		totalNumberOfPackages: len(packagesStatus),
 		isPartial:             true,
@@ -1462,7 +1870,14 @@ func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
 		strings.TrimSuffix(nc.url, "/"), nc.repo, name)
 
 	requestDetails := nc.httpClientDetails.Clone()
-	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	var resp *http.Response
+	var body []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	} else {
+		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
 	}
@@ -1495,7 +1910,14 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 		strings.TrimSuffix(nc.url, "/"), nc.repo, name, ver)
 
 	requestDetails := nc.httpClientDetails.Clone()
-	resp, body, _, err := nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	var resp *http.Response
+	var body []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	} else {
+		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
+	}
 	if err != nil {
 		return "", fmt.Errorf("metadata API request failed for %s==%s: %w", name, ver, err)
 	}
@@ -1590,7 +2012,13 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 
 		// ── Step 3a: HEAD probe — detect whether the version is download-blocked
 		headDetails := nc.httpClientDetails.Clone()
-		headResp, _, headErr := nc.rtManager.Client().SendHead(dlURL, headDetails)
+		var headResp *http.Response
+		var headErr error
+		if nc.tech == techutils.Pipenv {
+			headResp, _, headErr = nc.sendPipenvRequest(http.MethodHead, dlURL, headDetails)
+		} else {
+			headResp, _, headErr = nc.rtManager.Client().SendHead(dlURL, headDetails)
+		}
 		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
 			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
 				pin.Name, resolvedVersion, headErr))
@@ -1683,7 +2111,14 @@ func effectiveParentVersion(pin python.PinnedRequirement) string {
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
 	requestDetails := nc.httpClientDetails.Clone()
 	requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
+	var getResp *http.Response
+	var respBody []byte
+	var err error
+	if nc.tech == techutils.Pipenv {
+		getResp, respBody, err = nc.sendPipenvRequest(http.MethodGet, packageUrl, requestDetails)
+	} else {
+		getResp, respBody, _, err = nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
+	}
 	if err != nil {
 		if getResp == nil {
 			return nil, err
@@ -1801,7 +2236,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip, techutils.Poetry:
+	case techutils.Pip, techutils.Poetry, techutils.Pipenv:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:
@@ -1811,6 +2246,9 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return
 	case techutils.Docker:
 		downloadUrls, name, version = getDockerNameAndVersion(node.Id, artiUrl, repo)
+		return
+	case techutils.HuggingFaceML:
+		downloadUrls, name, version = getHuggingFaceNameAndVersion(node.Id, artiUrl, repo)
 		return
 	}
 	return
@@ -2054,6 +2492,56 @@ func getDockerNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, n
 			strings.TrimSuffix(artiUrl, "/"), repo, name, version)}
 	}
 
+	return
+}
+
+// getHuggingFaceNameAndVersion extracts the model id and revision from a node id of the
+// form "huggingfaceml://<repo_id>:<revision>" and builds the model-info probe URL.
+//
+// The probe targets the model metadata endpoint, which the curation service blocks
+// (HEAD returns 403) for a malicious revision — independent of any specific file:
+//
+//	{artiUrl}/api/huggingfaceml/{repo}/api/models/{repo_id}/revision/{revision}
+func getHuggingFaceNameAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	if id == "" {
+		return
+	}
+	id = strings.TrimPrefix(id, huggingface.HuggingFacePackagePrefix)
+
+	// Shared with ParseModelReference (flag parsing) — see SplitRepoIDAndRevision's
+	// doc comment for why this must not be guarded on the revision being slash-free
+	// (e.g. "refs/pr/3", a PR ref). The revision is path-escaped below since it may
+	// contain '/'. A leading colon (e.g. ":main") yields name == ""; the early-return
+	// below fires (defensive — ParseModelReference already rejects this at the
+	// flag-parsing stage).
+	name, version = huggingface.SplitRepoIDAndRevision(id)
+	if version == "" {
+		version = huggingface.DefaultRevision
+	}
+
+	if name == "" {
+		return nil, "", ""
+	}
+
+	if artiUrl != "" && repo != "" {
+		// name (repo_id) is namespace/repo — escape each segment individually so a
+		// literal '/' still splits into two URL path segments, but any other special
+		// character (?, #, space) within a segment can't inject the request. '.'/'..'
+		// segments are rejected outright: url.PathEscape leaves them unescaped (they're
+		// unreserved per RFC 3986), so a repo id like "../../api/system/ping" would
+		// otherwise still traverse the request path after escaping.
+		// version may contain '/' (e.g. "refs/pr/3"); path-escape it so it lands in the
+		// URL as a single path segment instead of introducing extra, unintended ones.
+		nameParts := strings.Split(name, "/")
+		for i, part := range nameParts {
+			if part == "." || part == ".." {
+				return nil, name, version
+			}
+			nameParts[i] = url.PathEscape(part)
+		}
+		downloadUrls = []string{fmt.Sprintf("%s/api/huggingfaceml/%s/api/models/%s/revision/%s",
+			strings.TrimSuffix(artiUrl, "/"), repo, strings.Join(nameParts, "/"), url.PathEscape(version))}
+	}
 	return
 }
 
