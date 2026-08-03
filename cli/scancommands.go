@@ -735,6 +735,9 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 	if scriptPath != "" && c.GetStringFlagValue(flags.DockerImageName) != "" {
 		return nil, errorutils.CheckErrorf("--script and --docker-image cannot be used together; run separate curation-audit commands for each")
 	}
+	if scriptPath != "" && c.IsFlagSet(flags.HuggingFaceModel) {
+		return nil, errorutils.CheckErrorf("--script and --hugging-face-model cannot be used together; run separate curation-audit commands for each")
+	}
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return nil, err

@@ -195,15 +195,23 @@ func parseIndexSectionUrls(content, sectionHeader string) []string {
 }
 
 // parseArtifactoryPypiUrl splits an Artifactory PyPI URL into its base URL and repo name.
+// Uses url.Parse so any embedded userinfo (e.g. a "Set Me Up" token) is stripped from the
+// returned artiUrl instead of leaking into logs and breaking buildUvDownloadUrlsMap's
+// prefix match against uv.lock download URLs (which never carry userinfo).
 func parseArtifactoryPypiUrl(rawUrl string) (artiUrl, repoName string, err error) {
+	u, parseErr := url.Parse(strings.TrimSpace(rawUrl))
+	if parseErr != nil || u.Host == "" {
+		err = fmt.Errorf("URL %q is not a valid absolute URL", rawUrl)
+		return
+	}
 	const marker = "/api/pypi/"
-	idx := strings.Index(rawUrl, marker)
+	idx := strings.Index(u.Path, marker)
 	if idx < 0 {
 		err = fmt.Errorf("URL %q does not match Artifactory PyPI format (.../api/pypi/<repo>/...)", rawUrl)
 		return
 	}
-	artiUrl = rawUrl[:idx]
-	rest := rawUrl[idx+len(marker):]
+	artiUrl = fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path[:idx])
+	rest := strings.TrimPrefix(u.Path[idx:], marker)
 	repoName = strings.SplitN(rest, "/", 2)[0]
 	if repoName == "" {
 		err = fmt.Errorf("could not extract repo name from URL %q", rawUrl)
@@ -439,6 +447,17 @@ func generateUvLockInTempDir(projectDir, artifactoryUrl, repoName, artiIndexUrl 
 	if err = generateUvLock(tempDir, artiIndexUrl, ""); err != nil {
 		return "", err
 	}
+	if artifactoryUrl != "" && repoName != "" {
+		verified, verifyErr := lockAlreadyResolvedFromArtifactory(lockPath, artifactoryUrl, repoName)
+		if verifyErr != nil {
+			return "", verifyErr
+		}
+		if !verified {
+			return "", errorutils.CheckErrorf(
+				"uv: the freshly generated uv.lock contains packages not sourced from Artifactory repository %q — "+
+					"curation may have been bypassed via a secondary uv index; aborting", repoName)
+		}
+	}
 
 	content, err := os.ReadFile(lockPath)
 	if err != nil {
@@ -498,7 +517,8 @@ func allPackagesUseRegistry(content string, allowedRegistries ...string) bool {
 				return false
 			}
 		case strings.Contains(line, "virtual ="), strings.Contains(line, "editable ="),
-			strings.Contains(line, "path ="), strings.Contains(line, "git ="), strings.Contains(line, "directory ="):
+			strings.Contains(line, "path ="), strings.Contains(line, "git ="), strings.Contains(line, "directory ="),
+			strings.Contains(line, "url ="):
 			continue // not resolved from a package index — curation doesn't apply
 		default:
 			return false
@@ -640,6 +660,11 @@ func generateUvLock(workDir, artiIndexUrl, scriptName string) error {
 			return envErr
 		}
 		env = append(envWithoutKey(env, "UV_DEFAULT_INDEX"), "UV_DEFAULT_INDEX="+artiIndexUrl)
+		env, cleanup, envErr := isolateUvUserConfig(env)
+		if envErr != nil {
+			return envErr
+		}
+		defer cleanup()
 		cmd.Env = env
 		log.Debug("Running uv lock (against Artifactory curation pass-through endpoint)")
 		out, err := cmd.CombinedOutput()
@@ -700,6 +725,29 @@ func maskPassword(s, rawIndexUrl string) string {
 	return s
 }
 
+// isolateUvUserConfig points UV_CONFIG_FILE at an empty temp file so `uv lock` cannot
+// discover the developer's real ~/.config/uv/uv.toml — any secondary/public index
+// declared there could otherwise satisfy a package Artifactory's CVS blocked, bypassing
+// curation during lock generation (same class of risk as an unneutralized project index).
+func isolateUvUserConfig(env []string) (augmented []string, cleanup func(), err error) {
+	emptyConfig, createErr := os.CreateTemp("", "uv-empty-config-*.toml")
+	if createErr != nil {
+		return nil, func() {}, errorutils.CheckErrorf("uv: could not create isolated config file: %s", createErr)
+	}
+	path := emptyConfig.Name()
+	cleanup = func() {
+		if rmErr := os.Remove(path); rmErr != nil {
+			log.Warn(fmt.Sprintf("uv: could not remove temp config file %s: %v", path, rmErr))
+		}
+	}
+	if closeErr := emptyConfig.Close(); closeErr != nil {
+		cleanup()
+		return nil, func() {}, errorutils.CheckErrorf("uv: could not create isolated config file: %s", closeErr)
+	}
+	augmented = append(envWithoutKey(env, "UV_CONFIG_FILE"), "UV_CONFIG_FILE="+path)
+	return augmented, cleanup, nil
+}
+
 // envWithoutKey returns env with all "KEY=value" entries for the given key removed.
 func envWithoutKey(env []string, key string) []string {
 	prefix := key + "="
@@ -735,8 +783,8 @@ func verifyUvVersionSupportedForCuration() error {
 	raw := strings.TrimSpace(string(out))
 	versionStr := parseUvVersionFromOutput(raw)
 	if versionStr == "" {
-		log.Debug(fmt.Sprintf("uv: could not parse version from %q — skipping minimum version check", raw))
-		return nil
+		log.Debug(fmt.Sprintf("uv: could not parse version from %q", raw))
+		return errorutils.CheckErrorf("JFrog CLI uv curation requires uv %s or higher to be installed.", CurationUvMinimumVersion)
 	}
 	if !version.NewVersion(versionStr).AtLeast(CurationUvMinimumVersion) {
 		return errorutils.CheckErrorf("JFrog CLI uv curation requires uv %s or higher. The current version is: %s", CurationUvMinimumVersion, versionStr)

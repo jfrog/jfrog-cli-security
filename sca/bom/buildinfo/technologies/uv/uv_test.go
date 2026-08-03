@@ -488,6 +488,12 @@ func TestParseArtifactoryPypiUrl(t *testing.T) {
 			rawUrl:      "https://host/artifactory/api/pypi/",
 			wantErrSubs: "could not extract repo name",
 		},
+		{
+			name:     "embedded userinfo credentials are stripped from the base URL",
+			rawUrl:   "https://user:s3cr3t-token@host/artifactory/api/pypi/my-repo/simple", // #nosec G101 -- dummy test credentials only
+			wantArti: "https://host/artifactory",
+			wantRepo: "my-repo",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -597,7 +603,7 @@ version = "2.19.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
   { name = "urllib3" },
-  { name = "certifi" },
+  { name = "packaging" },
 ]
 sdist = { url = "https://host/artifactory/api/pypi/repo/packages/requests-2.19.1.tar.gz", hash = "sha256:abc", size = 131068 }
 wheels = [
@@ -614,11 +620,11 @@ wheels = [
 ]
 
 [[package]]
-name = "certifi"
+name = "packaging"
 version = "2024.1.1"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-  { url = "https://host/artifactory/api/pypi/repo/packages/certifi-2024.1.1-py3-none-any.whl", hash = "sha256:mno", size = 100 },
+  { url = "https://host/artifactory/api/pypi/repo/packages/packaging-2024.1.1-py3-none-any.whl", hash = "sha256:mno", size = 100 },
 ]
 
 [[package]]
@@ -669,7 +675,7 @@ func TestParseUvLock(t *testing.T) {
 	t.Run("dependencies parsed", func(t *testing.T) {
 		pkg := byName["requests"]
 		assert.Contains(t, depNames(pkg.Dependencies), "urllib3")
-		assert.Contains(t, depNames(pkg.Dependencies), "certifi")
+		assert.Contains(t, depNames(pkg.Dependencies), "packaging")
 	})
 
 	t.Run("empty lock returns empty slice", func(t *testing.T) {
@@ -697,7 +703,7 @@ func TestBuildUvDepTree(t *testing.T) {
 	t.Run("uniqueDeps contains all transitive packages", func(t *testing.T) {
 		assert.Contains(t, uniqueDeps, "pypi://requests:2.19.1")
 		assert.Contains(t, uniqueDeps, "pypi://urllib3:1.23")
-		assert.Contains(t, uniqueDeps, "pypi://certifi:2024.1.1")
+		assert.Contains(t, uniqueDeps, "pypi://packaging:2024.1.1")
 	})
 }
 
@@ -710,7 +716,7 @@ version = "2.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
   { name = "urllib3" },
-  { name = "certifi" },
+  { name = "packaging" },
 ]
 wheels = [{ url = "https://host/packages/requests-2.28.0-py3-none-any.whl", hash = "sha256:x" }]
 
@@ -721,10 +727,10 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [{ url = "https://host/packages/urllib3-2.0.0-py3-none-any.whl", hash = "sha256:y" }]
 
 [[package]]
-name = "certifi"
+name = "packaging"
 version = "2024.1.1"
 source = { registry = "https://pypi.org/simple" }
-wheels = [{ url = "https://host/packages/certifi-2024.1.1-py3-none-any.whl", hash = "sha256:z" }]
+wheels = [{ url = "https://host/packages/packaging-2024.1.1-py3-none-any.whl", hash = "sha256:z" }]
 
 [[package]]
 name = "standalone-tool"
@@ -754,7 +760,7 @@ source = { registry = "https://pypi.org/simple" }
 	t.Run("every versioned package is included, none dropped", func(t *testing.T) {
 		assert.Contains(t, uniqueDeps, "pypi://requests:2.28.0")
 		assert.Contains(t, uniqueDeps, "pypi://urllib3:2.0.0")
-		assert.Contains(t, uniqueDeps, "pypi://certifi:2024.1.1")
+		assert.Contains(t, uniqueDeps, "pypi://packaging:2024.1.1")
 		assert.Contains(t, uniqueDeps, "pypi://standalone-tool:1.0.0")
 		assert.Len(t, uniqueDeps, 4, "the version-less package must be skipped, not counted")
 	})
@@ -768,7 +774,7 @@ source = { registry = "https://pypi.org/simple" }
 			childIds = append(childIds, n.Id)
 		}
 		assert.Contains(t, childIds, "pypi://urllib3:2.0.0")
-		assert.Contains(t, childIds, "pypi://certifi:2024.1.1")
+		assert.Contains(t, childIds, "pypi://packaging:2024.1.1")
 	})
 
 	t.Run("unrelated standalone package is still a direct child", func(t *testing.T) {
@@ -1135,7 +1141,7 @@ func TestBuildUvDownloadUrlsMap(t *testing.T) {
 	t.Run("all non-root packages resolved", func(t *testing.T) {
 		assert.Contains(t, urls, "pypi://requests:2.19.1")
 		assert.Contains(t, urls, "pypi://urllib3:1.23")
-		assert.Contains(t, urls, "pypi://certifi:2024.1.1")
+		assert.Contains(t, urls, "pypi://packaging:2024.1.1")
 	})
 }
 
@@ -1227,6 +1233,33 @@ func TestMaskPasswordMasksPercentEncodedPassword(t *testing.T) {
 	assert.NotContains(t, masked, encodedSecret)
 }
 
+// TestIsolateUvUserConfig verifies isolateUvUserConfig creates a fresh, empty temp file,
+// points UV_CONFIG_FILE at it (replacing any prior value), and that cleanup removes it.
+func TestIsolateUvUserConfig(t *testing.T) {
+	env := []string{"UV_CONFIG_FILE=/some/real/uv.toml", "OTHER=1"}
+
+	augmented, cleanup, err := isolateUvUserConfig(env)
+	require.NoError(t, err)
+
+	var configPath string
+	for _, e := range augmented {
+		if strings.HasPrefix(e, "UV_CONFIG_FILE=") {
+			configPath = strings.TrimPrefix(e, "UV_CONFIG_FILE=")
+		}
+		assert.NotEqual(t, "UV_CONFIG_FILE=/some/real/uv.toml", e, "the real uv.toml path must not survive in the augmented env")
+	}
+	require.NotEmpty(t, configPath, "UV_CONFIG_FILE must be set in the augmented env")
+	assert.Contains(t, augmented, "OTHER=1")
+
+	content, readErr := os.ReadFile(configPath)
+	require.NoError(t, readErr)
+	assert.Empty(t, content, "the isolated config file must be empty")
+
+	cleanup()
+	_, statErr := os.Stat(configPath)
+	assert.True(t, os.IsNotExist(statErr), "cleanup must remove the temp config file")
+}
+
 func TestBuildUvDownloadUrlsMapSkipsNonArtifactoryUrls(t *testing.T) {
 	lockContent := `version = 1
 
@@ -1310,6 +1343,7 @@ func TestAllPackagesUseRegistryStillRecognizesLegitimateNonRegistrySources(t *te
 		{"local path dependency", `source = { path = "../local-pkg" }`},
 		{"git dependency", `source = { git = "https://github.com/example/repo" }`},
 		{"directory dependency", `source = { directory = "./subdir" }`},
+		{"direct URL dependency", `source = { url = "https://example.com/pkg-0.1.0-py3-none-any.whl" }`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			content := "[[package]]\nname = \"pkg\"\nversion = \"0.1.0\"\n" + tt.source + "\n"
@@ -1527,7 +1561,7 @@ version = "2.34.2"
 source = { registry = %q }
 
 [[package]]
-name = "certifi"
+name = "packaging"
 version = "2026.5.20"
 source = { registry = %q }
 `, plainBase, passThroughBase)
