@@ -14,7 +14,7 @@ When to use:
 
 Prerequisites:
 - A configured JFrog Platform server (jf c add) with JFrog Curation entitlement.
-- Project must use a supported package manager (npm, yarn, pnpm, pip, pipenv, poetry, maven, gradle, nuget, go) resolved through a curation-configured remote. Docker images and Hugging Face models are audited via dedicated flags.
+- Project must use a supported package manager (e.g. npm, yarn, pnpm, pip, pipenv, poetry, maven, gradle, nuget, go) resolved through a curation-configured remote. Docker images and Hugging Face models are audited via dedicated flags.
 - The package manager and its lockfile(if applicable) must be present in the working directory.
 
 Common patterns:
@@ -30,6 +30,7 @@ Gotchas:
 - Requires the project's package manager binary on PATH (npm, mvn, etc.).
 - Run from the project root or pass --working-dirs.
 - For Maven multi-module: --use-wrapper if mvnw is used.
+- --hugging-face-model requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL. Datasets are not audited (curation does not currently cover datasets).
 
 Related: jf audit, jf rt npm-install, jf rt mvn`
 }
