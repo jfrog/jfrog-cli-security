@@ -52,7 +52,7 @@ func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int,
 			t.Skipf("Skipping test (%d/%d days have passed since %s, but %d days are required.) Reason: %s", daysSinceDate, durationDays, dateStr, durationDays, msg)
 		}
 	} else if daysSinceDate > durationDays {
-		t.Log("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call.")
+		t.Logf("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call. (%s)", msg)
 	}
 }
 
