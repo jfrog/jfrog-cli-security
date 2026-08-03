@@ -352,7 +352,7 @@ var flagsMap = map[string]components.Flag{
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	UploadRtRepoPath:              components.NewStringFlag(UploadRtRepoPath, fmt.Sprintf("Artifactory repository name or path to upload the scan results to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray. only relevant when using --%s", StaticSca), components.WithStrDefaultValue("cli-scan-results"), components.SetHiddenStrFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
-	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
+	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln or .slnx) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
 	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are resolved and included in the curation evaluation. By default only project dependencies are scanned."),
 	LegacyPeerDeps:                components.NewBoolFlag(LegacyPeerDeps, "[npm] Pass --legacy-peer-deps to npm install to bypass peer-dependency version conflicts."),
@@ -376,7 +376,7 @@ var flagsMap = map[string]components.Flag{
 
 	// Docker flags
 	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
-	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Hugging Face models to audit, as '<repo-id>[:<revision>]' (revision defaults to 'main'). Multiple entries are comma-separated (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased'). Datasets are not audited (curation does not currently cover datasets). Requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL."),
+	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Hugging Face model(s) to audit, in '<repo-id>[:revision]' format. Multiple models can be comma-separated."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
