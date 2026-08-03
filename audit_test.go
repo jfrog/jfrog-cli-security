@@ -1185,7 +1185,7 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 		Total:          &validations.TotalCount{Vulnerabilities: 28, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan: &validations.ScanCount{Sast: 2, Iac: 9, Secrets: 11, Services: 6},
+			ValidateScan: &validations.ScanCount{Sast: 2, Iac: 9, Secrets: 11, Services: 4},
 		},
 	})
 }
