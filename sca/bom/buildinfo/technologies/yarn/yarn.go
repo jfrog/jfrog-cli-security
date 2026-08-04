@@ -7,14 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -22,10 +19,8 @@ import (
 
 	"github.com/jfrog/build-info-go/build"
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
-	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/yarn"
-	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
@@ -33,7 +28,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -316,7 +310,7 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, cu
 	tableRendered := false
 	tableNote := ""
 	if len(probed) > 0 {
-		if tableErr := printBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat); tableErr != nil {
+		if tableErr := npm.PrintBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat, techutils.Yarn); tableErr != nil {
 			log.Debug(fmt.Sprintf("yarn curation probe: failed to render blocked deps table: %s", tableErr.Error()))
 		} else {
 			tableRendered = true
@@ -333,7 +327,7 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, cu
 		if tableRendered {
 			return tableNote + fmt.Sprintf(" Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, %s completes and the audit enumerates the full graph.", outputRef, completionVerb)
 		}
-		return " Probing the declared direct dependencies did not surface the blocked package, so it is likely a transitive dependency that cannot be enumerated without a 'yarn.lock'. Identify the blocked package from the 'yarn install' output above (or pre-generate 'yarn.lock' against a non-curation registry), then remove/replace it or request a waiver and re-run 'jf ca'."
+		return " Probing the declared direct dependencies did not surface the blocked package, so it is likely a transitive dependency that cannot be enumerated without a 'yarn.lock'. Check the debug log for the underlying 'yarn install' output to identify the blocked package (or pre-generate 'yarn.lock' against a non-curation registry), then remove/replace it or request a waiver and re-run 'jf ca'."
 	}
 	yarnVersionStr, versionErr := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if versionErr == nil {
@@ -356,7 +350,7 @@ func enumerateAfterCurationInstallError(params technologies.BuildInfoBomGenerato
 	probed, totalProbed := probeBlockedDirectDeps(params, curWd, workspaceMemberRel)
 	tablePointer := ""
 	if len(probed) > 0 {
-		if tableErr := printBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat); tableErr != nil {
+		if tableErr := npm.PrintBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat, techutils.Yarn); tableErr != nil {
 			log.Debug(fmt.Sprintf("yarn curation probe: failed to render blocked deps table: %s", tableErr.Error()))
 		} else {
 			if params.OutputFormat == outFormat.Json {
@@ -373,216 +367,37 @@ func enumerateAfterCurationInstallError(params technologies.BuildInfoBomGenerato
 		params.DependenciesRepository, tablePointer, installErr.Error(), enumerationErr.Error())
 }
 
-// blockedDirectDep captures the diagnostic info we recovered for a single
-// direct package.json dependency rejected by the curation repo with 403.
-// Multiple curation policies can violate the same package, so policies is a
-// slice — each entry produces one row in the rendered table.
-type blockedDirectDep struct {
-	name            string
-	declaredVersion string
-	probedVersion   string
-	reason          string // "blocked_policy" | "not_found" | "unknown_403"
-	policies        []probedPolicy
-}
-
-// probedPolicy is one (policy, condition, explanation, recommendation)
-// quartet extracted from a curation 403 response message. Mirrors curation's
-// Policy type, but duplicated here to avoid an import cycle (the yarn package
-// cannot import commands/curation because curation transitively imports yarn
-// through the buildinfo dependency-tree builders).
-type probedPolicy struct {
-	policy         string
-	condition      string
-	explanation    string
-	recommendation string
-}
-
-// blockedDepJSONRow mirrors commands/curation.PackageStatus JSON tags so that
-// --format=json output from the V2 no-lockfile probe path uses the same schema
-// as normal curation audit output. Duplicated here (not imported) to avoid the
-// commands/curation ↔ yarn import cycle. Keep these tags in sync with
-// PackageStatus when that struct changes.
-type blockedDepJSONRow struct {
-	Action         string                 `json:"action"`
-	ParentName     string                 `json:"direct_dependency_package_name"`
-	ParentVersion  string                 `json:"direct_dependency_package_version"`
-	PackageName    string                 `json:"blocked_package_name"`
-	PackageVersion string                 `json:"blocked_package_version"`
-	BlockingReason string                 `json:"blocking_reason"`
-	DepRelation    string                 `json:"dependency_relation"`
-	PkgType        string                 `json:"type"`
-	WaiverAllowed  bool                   `json:"waiver_allowed"`
-	Policy         []blockedDepPolicyJSON `json:"policies,omitempty"`
-}
-
-// blockedDepPolicyJSON mirrors commands/curation.Policy JSON tags.
-type blockedDepPolicyJSON struct {
-	Policy         string `json:"policy"`
-	Condition      string `json:"condition"`
-	Explanation    string `json:"explanation"`
-	Recommendation string `json:"recommendation"`
-}
-
-// probeBlockedDirectDeps walks the direct dependencies declared in package.json
-// (deps + devDeps + optionalDeps + peerDeps) and probes each one's npm tarball
-// URL against the curation-enabled Artifactory repository. Returns the deps
-// that responded with HTTP 403, parsed for policy details when the body is a
-// recognizable JFrog Curation error. All errors are logged at debug level and
-// swallowed — this is a best-effort diagnostic invoked from an existing fatal
-// error path; partial information is better than no information.
-//
-// probeBlockedDirectDeps HEAD-checks each declared direct dependency against
-// the curation registry. workspaceMemberRel, when non-empty, scopes the probe
-// to a single workspace member's package.json (used with --working-dirs).
-func probeBlockedDirectDeps(params technologies.BuildInfoBomGeneratorParams, curWd, workspaceMemberRel string) ([]blockedDirectDep, int) {
-	if params.ServerDetails == nil || params.DependenciesRepository == "" {
-		return nil, 0
-	}
+// probeBlockedDirectDeps HEAD/GET-probes each declared direct dependency's npm tarball URL directly, delegating to the shared npm.ProbeBlockedDirectDeps (also used by pnpm's fallback); workspaceMemberRel, when non-empty, scopes it to one workspace member (--working-dirs).
+func probeBlockedDirectDeps(params technologies.BuildInfoBomGeneratorParams, curWd, workspaceMemberRel string) ([]npm.BlockedDirectDep, int) {
 	declared := collectDeclaredDirectDepsForMember(curWd, workspaceMemberRel)
 	if len(declared) == 0 {
 		return nil, 0
 	}
-	rtManager, err := rtUtils.CreateServiceManager(params.ServerDetails, 2, 0, false)
-	if err != nil {
-		log.Debug(fmt.Sprintf("yarn curation probe: failed to create Artifactory service manager: %s", err.Error()))
-		return nil, 0
-	}
-	rtAuth, err := params.ServerDetails.CreateArtAuthConfig()
-	if err != nil {
-		log.Debug(fmt.Sprintf("yarn curation probe: failed to create Artifactory auth config: %s", err.Error()))
-		return nil, 0
-	}
-	artiURL := strings.TrimSuffix(rtAuth.GetUrl(), "/")
-	repo := params.DependenciesRepository
-
-	names := slices.Sorted(maps.Keys(declared))
-
-	httpDetails := rtAuth.CreateHttpClientDetails()
-	if httpDetails.Headers == nil {
-		httpDetails.Headers = map[string]string{}
-	}
-	// Mirror the curation walker: this header asks Artifactory to include the
-	// curation policy details in the 403 response body so we can show them.
-	httpDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
-
-	parallelRequests := params.ParallelRequests
-	if parallelRequests == 0 {
-		parallelRequests = 3
-	}
-	var (
-		mu          sync.Mutex
-		blocked     []blockedDirectDep
-		totalProbed int
-	)
-	errorsQueue := clientutils.NewErrorsQueue(1)
-	runner := parallel.NewBounedRunner(parallelRequests, false)
-	go func() {
-		defer runner.Done()
-		for _, name := range names {
-			name := name
-			probedVersion, ok := normalizeNpmVersion(declared[name])
-			if !ok {
-				continue
-			}
-			task := func(_ int) error {
-				url := buildNpmTarballURL(artiURL, repo, name, probedVersion)
-				headResp, _, headErr := rtManager.Client().SendHead(url, &httpDetails)
-				if headResp == nil {
-					if headErr != nil {
-						log.Debug(fmt.Sprintf("yarn curation probe: HEAD %s failed without response: %s", url, headErr.Error()))
-					}
-					return nil
-				}
-				mu.Lock()
-				totalProbed++
-				mu.Unlock()
-				if headResp.StatusCode != http.StatusForbidden {
-					return nil
-				}
-				getResp, body, _, getErr := rtManager.Client().SendGet(url, true, &httpDetails)
-				if getResp == nil || getResp.StatusCode != http.StatusForbidden {
-					log.Debug(fmt.Sprintf("yarn curation probe: GET %s after HEAD 403 did not return 403: err=%v", url, getErr))
-					return nil
-				}
-				dep := blockedDirectDep{
-					name:            name,
-					declaredVersion: declared[name],
-					probedVersion:   probedVersion,
-				}
-				parseProbe403Body(body, &dep)
-				if len(dep.policies) == 0 {
-					log.Debug(fmt.Sprintf("yarn curation probe: could not extract policy details for %s:%s — reason=%q, raw 403 body=%s",
-						name, probedVersion, dep.reason, string(body)))
-				}
-				mu.Lock()
-				blocked = append(blocked, dep)
-				mu.Unlock()
-				return nil
-			}
-			if _, err := runner.AddTaskWithError(task, errorsQueue.AddError); err != nil {
-				errorsQueue.AddError(err)
-			}
-		}
-	}()
-	runner.Run()
-	if err := errorsQueue.GetError(); err != nil {
-		log.Debug(fmt.Sprintf("yarn curation probe: parallel runner error: %s", err.Error()))
-	}
-	// Distinguish "probe ran and found no blockers" from "probe never reached
-	// Artifactory" — both leave the table empty, so without this Warn a support
-	// engineer reading default-level logs cannot tell the two apart.
-	if len(declared) > 0 && totalProbed == 0 {
-		log.Warn(fmt.Sprintf(
-			"yarn curation probe: attempted to check %d direct dependencies but received no HTTP responses from Artifactory; the blocked-package table will be empty. Re-run with 'JFROG_CLI_LOG_LEVEL=DEBUG' to see the underlying HEAD failures.",
-			len(declared)))
-	}
-	return blocked, totalProbed
+	return npm.ProbeBlockedDirectDeps(params, declared, "yarn")
 }
 
-// collectDeclaredDirectDeps returns direct deps from the root package.json only.
-// Child workspace members are excluded; use --working-dirs to audit them.
+// collectDeclaredDirectDeps merges the root package.json's direct deps with every workspace member's, so a member-only dependency isn't invisible to the curation probe.
 func collectDeclaredDirectDeps(curWd string) map[string]string {
-	declared := map[string]string{}
-	if rootPI, err := bibuildutils.ReadPackageInfoFromPackageJsonIfExists(curWd, nil); err == nil && rootPI != nil {
-		for n, v := range mergeDirectDeps(rootPI) {
-			declared[n] = v
-		}
-	}
-	return declared
+	return npm.CollectDeclaredDirectDeps(curWd, expandYarnWorkspaceDirs(curWd))
 }
 
-// collectDeclaredDirectDepsForMember returns direct deps for the whole
-// workspace (memberRel == "") or for a single member's package.json.
-// Missing/empty member package.json returns an empty map — no fallback.
+// collectDeclaredDirectDepsForMember returns direct deps for the whole workspace (memberRel == "") or a single member's package.json; missing/empty member returns an empty map, no fallback.
 func collectDeclaredDirectDepsForMember(curWd, memberRel string) map[string]string {
 	if memberRel == "" {
 		return collectDeclaredDirectDeps(curWd)
 	}
 	memberDir := filepath.Join(curWd, filepath.FromSlash(memberRel))
-	declared := map[string]string{}
 	pi, err := bibuildutils.ReadPackageInfoFromPackageJsonIfExists(memberDir, nil)
 	if err != nil || pi == nil {
-		return declared
+		return map[string]string{}
 	}
-	for n, v := range mergeDirectDeps(pi) {
-		declared[n] = v
-	}
-	return declared
+	return npm.MergeDirectDeps(pi)
 }
 
-// expandYarnWorkspaceDirs reads the "workspaces" field from the root
-// package.json and returns the absolute paths of every directory that
-// matches at least one workspace pattern. Yarn V2+ accepts two shapes:
+// expandYarnWorkspaceDirs reads package.json's "workspaces" field (either shape below) and expands it via the shared npm.ExpandWorkspaceDirs.
 //
 //	"workspaces": ["packages/*", "tools/*"]
 //	"workspaces": {"packages": ["packages/*"]}
-//
-// Both are handled. Patterns are resolved relative to curWd via
-// filepath.Glob. Returned entries are deduplicated; non-directory matches
-// (a stray file matching a glob) are filtered out. Any I/O or parse error
-// is downgraded to a debug log and the function returns whatever it has so
-// far — this is invoked from error paths and must never itself fail the
-// audit.
 func expandYarnWorkspaceDirs(curWd string) []string {
 	data, err := os.ReadFile(filepath.Join(curWd, "package.json"))
 	if err != nil {
@@ -595,138 +410,7 @@ func expandYarnWorkspaceDirs(curWd string) []string {
 		return nil
 	}
 	patterns := techutils.DecodeYarnWorkspacesField(raw.Workspaces)
-	if len(patterns) == 0 {
-		return nil
-	}
-	// The "workspaces" patterns come from package.json (untrusted, stored input),
-	// so a crafted manifest could use '../' segments to escape the project. Resolve
-	// the root once and reject any match that lands outside it before touching the
-	// filesystem, preventing stored path traversal.
-	rootAbs, rootErr := filepath.Abs(curWd)
-	if rootErr != nil {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	var dirs []string
-	for _, pattern := range patterns {
-		matches, globErr := filepath.Glob(filepath.Join(curWd, pattern))
-		if globErr != nil {
-			log.Debug(fmt.Sprintf("yarn curation probe: failed to expand workspace pattern '%s': %s", pattern, globErr.Error()))
-			continue
-		}
-		for _, m := range matches {
-			absMatch, absErr := filepath.Abs(m)
-			if absErr != nil {
-				continue
-			}
-			rel, relErr := filepath.Rel(rootAbs, absMatch)
-			if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-				log.Debug(fmt.Sprintf("yarn curation probe: ignoring workspace match outside project root: %s", m))
-				continue
-			}
-			info, statErr := os.Stat(absMatch)
-			if statErr != nil || !info.IsDir() {
-				continue
-			}
-			if _, dup := seen[absMatch]; dup {
-				continue
-			}
-			seen[absMatch] = struct{}{}
-			dirs = append(dirs, absMatch)
-		}
-	}
-	return dirs
-}
-
-// mergeDirectDeps flattens the four package.json dependency sections into one
-// map. Sections later in the chain don't override earlier ones; duplicates are
-// rare in practice and the first declared spec is usually authoritative.
-func mergeDirectDeps(pi *bibuildutils.PackageInfo) map[string]string {
-	out := map[string]string{}
-	for n, v := range pi.Dependencies {
-		out[n] = v
-	}
-	for n, v := range pi.DevDependencies {
-		if _, exists := out[n]; !exists {
-			out[n] = v
-		}
-	}
-	for n, v := range pi.OptionalDependencies {
-		if _, exists := out[n]; !exists {
-			out[n] = v
-		}
-	}
-	for n, v := range pi.PeerDependencies {
-		if _, exists := out[n]; !exists {
-			out[n] = v
-		}
-	}
-	return out
-}
-
-// normalizeNpmVersion strips common semver-range operator prefixes from a
-// package.json version specifier and returns a bare, fetchable version string.
-// Returns ok=false for specifiers we cannot probe meaningfully (file:, link:,
-// workspace:, git+/http(s)/npm: aliases, dist-tags like "latest", wildcard
-// ranges like "1.x" / "*", and OR-ranges).
-func normalizeNpmVersion(spec string) (string, bool) {
-	v, probeable, _ := classifyNpmVersionSpec(spec)
-	if !probeable {
-		return "", false
-	}
-	return v, true
-}
-
-// classifyNpmVersionSpec inspects a package.json version specifier and tells
-// the caller what kind of value it sees. It returns:
-//
-//   - probeable=true when the spec resolves to a single concrete semver after
-//     stripping the standard range operators (^, ~, =, >, >=, <, <=). The
-//     returned version is the bare semver and can be used to construct a
-//     tarball URL; rangeOrTag is irrelevant.
-//   - probeable=false, rangeOrTag=true when the spec is a semver range
-//     (e.g. "1.x", "*", "1 || 2") or a dist-tag (e.g. "latest", "next") that
-//     needs npm-side resolution we cannot perform. The reconciliation pass
-//     uses this to emit a warning that names the dep and the recovery flow.
-//   - probeable=false, rangeOrTag=false when the spec uses a non-registry
-//     protocol (file:, link:, workspace:, patch:, portal:, git+, git:,
-//     http(s):, npm:). These are out of scope for the curation HEAD-check
-//     entirely and the reconciliation pass silently skips them.
-//
-// Kept separate from normalizeNpmVersion so the existing probe path
-// (curationNoLockfileError) retains its quiet "silently skip everything
-// we can't fetch" behaviour while the reconciliation pass can react
-// differently to ranges vs. non-registry protocols.
-func classifyNpmVersionSpec(spec string) (resolvedVer string, probeable, rangeOrTag bool) {
-	s := strings.TrimSpace(spec)
-	if s == "" {
-		return "", false, false
-	}
-	lc := strings.ToLower(s)
-	for _, p := range []string{"file:", "link:", "workspace:", "patch:", "portal:", "git+", "git:", "http://", "https://", "npm:"} {
-		if strings.HasPrefix(lc, p) {
-			return "", false, false
-		}
-	}
-	for len(s) > 0 {
-		switch s[0] {
-		case '^', '~', '=':
-			s = s[1:]
-			continue
-		case '>', '<':
-			s = s[1:]
-			if len(s) > 0 && s[0] == '=' {
-				s = s[1:]
-			}
-			continue
-		}
-		break
-	}
-	s = strings.TrimSpace(s)
-	if npmConcreteVersionRegex.MatchString(s) {
-		return s, true, false
-	}
-	return "", false, true
+	return npm.ExpandWorkspaceDirs(curWd, patterns, "yarn")
 }
 
 // reconcileDeclaredDirectDepsAgainstTree injects synthetic dep-tree entries
@@ -759,7 +443,7 @@ func reconcileDeclaredDirectDepsAgainstTree(
 		if _, present := resolvedNames[name]; present {
 			continue
 		}
-		resolvedVer, probeable, isRangeOrTag := classifyNpmVersionSpec(spec)
+		resolvedVer, probeable, isRangeOrTag := npm.ClassifyNpmVersionSpec(spec)
 		if probeable {
 			locator := name + "@npm:" + resolvedVer
 			if _, dup := dependenciesMap[locator]; dup {
@@ -791,256 +475,8 @@ func reconcileDeclaredDirectDepsAgainstTree(
 	}
 }
 
-// buildNpmTarballURL constructs the Artifactory npm tarball download URL for a
-// given (name, version), handling scoped package names like @scope/name. This
-// must match the format used by the curation walker in commands/curation so
-// the 403 responses we parse here match those the walker would parse.
-func buildNpmTarballURL(artiURL, repo, name, ver string) string {
-	if scope, base := splitNpmScope(name); scope != "" {
-		return fmt.Sprintf("%s/api/npm/%s/%s/%s/-/%s-%s.tgz", artiURL, repo, scope, base, base, ver)
-	}
-	return fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", artiURL, repo, name, name, ver)
-}
-
-func splitNpmScope(name string) (scope, base string) {
-	if !strings.HasPrefix(name, "@") {
-		return "", name
-	}
-	idx := strings.Index(name, "/")
-	if idx < 0 {
-		return "", name
-	}
-	return name[:idx], name[idx+1:]
-}
-
-var probeCurationPolicyRegex = regexp.MustCompile(`\{[^{}]*\}`)
-
-// npmConcreteVersionRegex matches a single concrete semver (no ranges, no
-// wildcards, no dist-tags). MAJOR.MINOR.PATCH with optional prerelease and/or
-// build-metadata suffix. Rejects "1.x", "1.0.x", "1.0", "latest", etc.
-var npmConcreteVersionRegex = regexp.MustCompile(`^\d+\.\d+\.\d+([-+][0-9A-Za-z.\-]+)*$`)
-
-// parseProbe403Body fills `dep` with policy details extracted from a curation
-// 403 response body. The body format is the same one parsed by curation's
-// extractPoliciesFromMsg: a JSON envelope { errors: [{ status, message }] }
-// where message is "Package %s:%s download was blocked by JFrog Packages
-// Curation service due to the following policies violated {p,c,e,r},{...}.".
-// Falls back gracefully when the body is not a recognizable curation message.
-// All quartets are captured — a single package can violate multiple policies
-// and we render one table row per (package, policy) pair to match the layout
-// the curation walker produces on the V3 success path.
-func parseProbe403Body(body []byte, dep *blockedDirectDep) {
-	dep.reason = "unknown_403"
-	if len(body) == 0 {
-		return
-	}
-	var resp struct {
-		Errors []struct {
-			Status  int    `json:"status"`
-			Message string `json:"message"`
-		} `json:"errors"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil || len(resp.Errors) == 0 {
-		return
-	}
-	msg := resp.Errors[0].Message
-	lower := strings.ToLower(msg)
-	if !strings.Contains(lower, "jfrog packages curation") {
-		return
-	}
-	if strings.Contains(lower, "not being found") {
-		dep.reason = "not_found"
-		return
-	}
-	dep.reason = "blocked_policy"
-	for _, match := range probeCurationPolicyRegex.FindAllString(msg, -1) {
-		raw := strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
-		parts := strings.Split(raw, ",")
-		if len(parts) < 2 {
-			continue
-		}
-		p := probedPolicy{
-			policy:    strings.TrimSpace(parts[0]),
-			condition: strings.TrimSpace(parts[1]),
-		}
-		if len(parts) >= 4 {
-			// curation's extractPoliciesFromMsg also normalises ": " → ":\n"
-			// and " | " → "\n" in explanation/recommendation for readability;
-			// mirror that here so the V2 table matches the V3 layout byte-for-byte.
-			p.explanation = makeLegibleProbePolicyDetail(strings.TrimSpace(parts[2]))
-			p.recommendation = makeLegibleProbePolicyDetail(strings.TrimSpace(parts[3]))
-		}
-		dep.policies = append(dep.policies, p)
-	}
-}
-
-// makeLegibleProbePolicyDetail mirrors curation.makeLegiblePolicyDetails: the
-// first ": " becomes ":\n" (so the header sits on its own line) and every
-// " | " becomes a newline (so multi-CVE explanations stack). Duplicated here
-// rather than imported to avoid the curation → yarn cycle.
-func makeLegibleProbePolicyDetail(s string) string {
-	return strings.ReplaceAll(strings.Replace(s, ": ", ":\n", 1), " | ", "\n")
-}
-
-// yarnV2BlockedDepTableRow mirrors commands/curation.PackageStatusTable so the
-// V2 fallback renders the SAME tabular layout developers already see for V3 +
-// other ecosystems' `jf ca` reports. The column tags drive coreutils.PrintTable
-// (go-pretty under the hood); auto-merge collapses adjacent rows that share a
-// column value, so multiple policy violations on one package render as one
-// visually-merged package block.
-type yarnV2BlockedDepTableRow struct {
-	ID             string `col-name:"ID" auto-merge:"true"`
-	ParentName     string `col-name:"Direct\nDependency\nPackage\nName" auto-merge:"true"`
-	ParentVersion  string `col-name:"Direct\nDependency\nPackage\nVersion" auto-merge:"true"`
-	PackageName    string `col-name:"Blocked\nPackage\nName" auto-merge:"true"`
-	PackageVersion string `col-name:"Blocked\nPackage\nVersion" auto-merge:"true"`
-	PkgType        string `col-name:"Package\nType" auto-merge:"true"`
-	Policy         string `col-name:"Violated\nPolicy\nName"`
-	Condition      string `col-name:"Violated Condition\nName"`
-	Explanation    string `col-name:"Explanation"`
-	Recommendation string `col-name:"Recommendation"`
-}
-
-// convertBlockedDepsToJSON converts the probe results to a slice of
-// blockedDepJSONRow — the JSON schema that matches commands/curation.PackageStatus
-// so that --format=json output from the V2 no-lockfile path is consistent with
-// the normal curation audit JSON output.
-func convertBlockedDepsToJSON(blocked []blockedDirectDep) []blockedDepJSONRow {
-	rows := make([]blockedDepJSONRow, 0, len(blocked))
-	for _, dep := range blocked {
-		row := blockedDepJSONRow{
-			Action:         "blocked",
-			ParentName:     dep.name,
-			ParentVersion:  dep.probedVersion,
-			PackageName:    dep.name,
-			PackageVersion: dep.probedVersion,
-			DepRelation:    "direct",
-			PkgType:        string(techutils.Yarn),
-		}
-		if len(dep.policies) == 0 {
-			if dep.reason == "not_found" {
-				row.BlockingReason = "Package not found in curation repository"
-			} else {
-				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
-				row.BlockingReason = "Blocked by curation (response could not be parsed)"
-			}
-		} else {
-			row.BlockingReason = "Policy violations"
-			for _, p := range dep.policies {
-				row.Policy = append(row.Policy, blockedDepPolicyJSON{
-					Policy:         p.policy,
-					Condition:      p.condition,
-					Explanation:    p.explanation,
-					Recommendation: p.recommendation,
-				})
-			}
-		}
-		rows = append(rows, row)
-	}
-	return rows
-}
-
-// buildBlockedDirectDepsTableRows turns the probe results into the row slice
-// that coreutils.PrintTable renders. The "Direct Dependency" and "Blocked
-// Package" columns are intentionally the same name/version because we only
-// probe direct deps — in a V2 fallback report, the direct dep IS the blocked
-// package. Keeping the column shape identical to the V3 success path means
-// downstream tooling and visual muscle memory don't change.
-//
-// For deps with multiple violated policies, one row is emitted per policy and
-// auto-merge stitches the package columns visually. The classic alternating-
-// space trick (mirroring commands/curation.convertToPackageStatusTable) keeps
-// adjacent packages from accidentally merging when they happen to share a
-// column value.
-func buildBlockedDirectDepsTableRows(blocked []blockedDirectDep) []yarnV2BlockedDepTableRow {
-	if len(blocked) == 0 {
-		return nil
-	}
-	rows := make([]yarnV2BlockedDepTableRow, 0, len(blocked))
-	for index, dep := range blocked {
-		uniqLineSep := ""
-		if index%2 == 0 {
-			uniqLineSep = " "
-		}
-		baseRow := yarnV2BlockedDepTableRow{
-			ID:             fmt.Sprintf("%d%s", index+1, uniqLineSep),
-			ParentName:     dep.name + uniqLineSep,
-			ParentVersion:  dep.probedVersion + uniqLineSep,
-			PackageName:    dep.name + uniqLineSep,
-			PackageVersion: dep.probedVersion + uniqLineSep,
-			PkgType:        string(techutils.Yarn) + uniqLineSep,
-		}
-		if len(dep.policies) == 0 {
-			row := baseRow
-			switch dep.reason {
-			case "not_found":
-				row.Explanation = "Package not found in curation repository"
-			default:
-				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
-				row.Explanation = "Blocked by curation (response could not be parsed)"
-			}
-			rows = append(rows, row)
-			continue
-		}
-		for _, p := range dep.policies {
-			row := baseRow
-			row.Policy = p.policy
-			row.Condition = p.condition
-			row.Explanation = p.explanation
-			row.Recommendation = p.recommendation
-			rows = append(rows, row)
-		}
-	}
-	return rows
-}
-
-// printBlockedDirectDepsTable renders the probe results as the same kind of
-// table users see after a successful V3 `jf ca` run, then returns. Called for
-// its side effect before the V2 install-error is surfaced; the error message
-// referenced afterwards points the user back at this table.
-//
-// coreutils.PrintTable writes the table to STDOUT via a bufio writer and
-// flushes on return; everything else in 'jf ca' — log.Output title, [Warn]
-// from temp-dir cleanup, [Error] surfaced by the caller — writes to STDERR.
-// Both streams land on the same TTY but there's no ordering guarantee
-// between a freshly-flushed stdout buffer and a stderr line emitted in the
-// same instant, so the table's bottom border can visually collide with the
-// next stderr line if we don't leave a blank separator. The trailing
-// fmt.Fprintln below writes a blank line to STDOUT (same stream as the
-// table), guaranteeing a visible gap between the closing border and
-// whatever the caller prints next.
-func printBlockedDirectDepsTable(blocked []blockedDirectDep, totalProbed int, format outFormat.OutputFormat) error {
-	if len(blocked) == 0 {
-		return nil
-	}
-	if format == outFormat.Json {
-		jsonRows := convertBlockedDepsToJSON(blocked)
-		jsonBytes, err := json.MarshalIndent(jsonRows, "", "  ")
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(os.Stdout, string(jsonBytes))
-		// Flush stdout so the complete JSON (including the closing ']') is
-		// visible before the progress-spinner can tick and overwrite the last
-		// line via a carriage-return escape sequence.
-		_ = os.Stdout.Sync()
-		return err
-	}
-	rows := buildBlockedDirectDepsTableRows(blocked)
-	if len(rows) == 0 {
-		return nil
-	}
-	log.Output(fmt.Sprintf("Probed %d direct dependencies; %d rejected by curation with HTTP 403", totalProbed, len(blocked)))
-	err := coreutils.PrintTable(rows, "Curation", "Found 0 blocked packages", true)
-	_, _ = fmt.Fprintln(os.Stdout)
-	return err
-}
-
 // runYarnCommandQuiet runs yarn with stdout and stderr captured internally.
-// On failure the captured output is emitted as a Debug log and appended to the
-// returned error so the caller (handleCurationInstallError / curationNoLockfileError)
-// can surface it to the user. On success the output is discarded so machine-readable
-// JSON written to the process's own stdout stays unpolluted.
+// Failure output goes to Debug only (raw internals, not user-actionable); success output is discarded to keep stdout JSON clean.
 func runYarnCommandQuiet(executablePath, srcPath string, args ...string) error {
 	command := exec.Command(executablePath, args...)
 	command.Dir = srcPath
@@ -1050,7 +486,6 @@ func runYarnCommandQuiet(executablePath, srcPath string, args ...string) error {
 	if err := command.Run(); err != nil {
 		if msg := strings.TrimSpace(combined.String()); msg != "" {
 			log.Debug("yarn install output:\n" + msg)
-			return fmt.Errorf("%w\n%s", err, msg)
 		}
 		return err
 	}
@@ -1121,16 +556,6 @@ func resolveCurationLockfileDir(
 	return tmpDir, cleanup, deferredInstallErr, nil
 }
 
-// shouldRouteThroughCurationEndpoint reports whether 'yarn install' should hit
-// the api/curation/audit endpoint instead of the plain Artifactory npm repo.
-// Only Yarn V2 needs this: it has no lockfile-only mode, so blocked packages
-// must 403 at the curation endpoint. V3/V4 resolve from the plain repo (the
-// curation endpoint returns 403 HTML the plugin can't parse) and enforce
-// curation afterwards via the HEAD-walker.
-func shouldRouteThroughCurationEndpoint(yarnVersion *version.Version, isCurationCmd bool) bool {
-	return isCurationCmd && yarnVersion.Compare(yarnV3Version) > 0
-}
-
 // Sets up Artifactory server configurations for dependency resolution, if such were provided by the user.
 // Executes the user's 'install' command or a default 'install' command if none was specified.
 func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
@@ -1165,9 +590,8 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		return errors.Join(err, restoreYarnrcFunc())
 	}
 
-	if shouldRouteThroughCurationEndpoint(yarnVersion, params.IsCurationCmd) {
-		registry = yarnCurationRegistry(registry)
-	}
+	// api/curation/audit's redirect is broken (missing /api/npm/ segment, breaks yarn's JSON.parse);
+	// the direct-dep probe + post-resolution HEAD-walker enforce curation instead.
 	log.Debug(fmt.Sprintf("Yarn npmRegistryServer set to: %s", registry))
 
 	backupEnvMap, err := yarn.ModifyYarnConfigurations(yarnExecPath, registry, repoAuthIdent, npmAuthToken)
@@ -1633,16 +1057,6 @@ func filterYarnDepMapToWorkspaceMember(
 		}
 	}
 	return filtered, memberRoot, nil
-}
-
-// yarnCurationRegistry rewrites a standard Artifactory npm registry URL to
-// the curation audit endpoint, matching what Maven, Gradle, NuGet, and Python
-// do for their own native tools.
-//
-//	https://<host>/artifactory/api/npm/<repo>
-//	  → https://<host>/artifactory/api/curation/audit/<repo>
-func yarnCurationRegistry(registry string) string {
-	return strings.Replace(registry, "/api/npm/", "/api/curation/audit/", 1)
 }
 
 // GetNativeYarnV4RegistryConfig reads the Artifactory registry URL and auth

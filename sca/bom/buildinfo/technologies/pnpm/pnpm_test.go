@@ -340,9 +340,10 @@ func TestValidateSupportedPnpmVersion(t *testing.T) {
 	}{
 		{name: "v10 accepted", version: "10.0.0", expectError: false},
 		{name: "v10 minor accepted", version: "10.27.0", expectError: false},
+		{name: "v11 accepted", version: "11.0.0", expectError: false},
+		{name: "v12 accepted (open-ended floor)", version: "12.0.0", expectError: false},
 		{name: "v9 rejected", version: "9.15.0", expectError: true},
 		{name: "v8 rejected", version: "8.15.9", expectError: true},
-		{name: "v11 rejected", version: "11.0.0", expectError: true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -443,13 +444,16 @@ func TestWrapLockfileRegenError(t *testing.T) {
 		assert.Contains(t, err.Error(), "Affected package(s):")
 	})
 
-	t.Run("unrelated failure returns raw output", func(t *testing.T) {
+	t.Run("unrelated failure wraps runErr only, raw output excluded", func(t *testing.T) {
+		// Raw output is already log.Debug'd by the caller; embedding it here too would print it twice.
 		out := []byte("some unrelated pnpm failure")
 		err := wrapLockfileRegenError(out, runErr)
 		require.Error(t, err)
 		assert.False(t, strings.HasPrefix(err.Error(), curationPrefix),
 			"unexpected curation prefix for unrelated error")
-		assert.Contains(t, err.Error(), "some unrelated pnpm failure")
+		assert.NotContains(t, err.Error(), "some unrelated pnpm failure",
+			"raw output must not be embedded in the returned error — it's already in the debug log")
+		assert.Contains(t, err.Error(), runErr.Error())
 	})
 
 	t.Run("ERR_PNPM_NO_MATCHING_VERSION without package line still shows curation header", func(t *testing.T) {
@@ -458,5 +462,143 @@ func TestWrapLockfileRegenError(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, strings.HasPrefix(err.Error(), curationPrefix),
 			"expected curation prefix even without extracted package name")
+	})
+}
+
+// Pins the fix: the marker alone isn't enough to conclude a package was named — the probe must still run without it.
+func TestCurationNoLockfileErrorProbesWhenNoPackageNamed(t *testing.T) {
+	// Repository set and ServerDetails nil keep this test fully offline (no pnpm subprocess, no network).
+	params := technologies.BuildInfoBomGeneratorParams{DependenciesRepository: "dummy-repo"}
+	workspaceRoot := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte(`{"name":"root"}`), 0o644))
+
+	t.Run("marker without affected-packages list still runs the probe", func(t *testing.T) {
+		resolveErr := errors.New(formatPnpmCvsBlockedMessage(nil))
+		err := curationNoLockfileError(params, workspaceRoot, ".", resolveErr)
+		require.Error(t, err)
+		assert.NotEqual(t, resolveErr.Error(), err.Error(),
+			"must not short-circuit to the generic CVS message when no package was actually named — the probe should run instead")
+		assert.Contains(t, err.Error(), "Probing the declared direct dependencies did not surface the blocked package")
+	})
+
+	t.Run("marker with affected-packages list still short-circuits", func(t *testing.T) {
+		resolveErr := errors.New(formatPnpmCvsBlockedMessage([]string{"lodash@4.99.0"}))
+		err := curationNoLockfileError(params, workspaceRoot, ".", resolveErr)
+		require.Error(t, err)
+		assert.Equal(t, resolveErr.Error(), err.Error(),
+			"a genuine CVS-blocked-version message must still short-circuit — the probe would only add noise")
+	})
+}
+
+func TestExpandPnpmWorkspaceDirs(t *testing.T) {
+	root := t.TempDir()
+
+	mkDir := func(rel string) {
+		assert.NoError(t, os.MkdirAll(filepath.Join(root, rel), 0755))
+	}
+	mkPkgJson := func(rel, contents string) {
+		path := filepath.Join(root, rel, "package.json")
+		mkDir(rel)
+		assert.NoError(t, os.WriteFile(path, []byte(contents), 0644))
+	}
+
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pnpm-workspace.yaml"),
+		[]byte("packages:\n  - \"packages/*\"\n  - \"tools/*\"\n"), 0644))
+	mkPkgJson("packages/admin-ui", `{"name": "admin-ui", "dependencies": {"express": "^3.0.1"}}`)
+	mkPkgJson("packages/web", `{"name": "web"}`)
+	mkPkgJson("tools/builder", `{"name": "builder"}`)
+	// A glob-matching file that is NOT a directory must be filtered out:
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "packages", "stray.txt"), []byte("x"), 0644))
+	// A non-matching folder must not leak in:
+	mkPkgJson("vendor/third-party", `{"name": "third-party"}`)
+
+	dirs := expandPnpmWorkspaceDirs(root)
+
+	got := map[string]bool{}
+	for _, d := range dirs {
+		got[d] = true
+	}
+	assert.True(t, got[filepath.Join(root, "packages", "admin-ui")], "packages/admin-ui must be expanded")
+	assert.True(t, got[filepath.Join(root, "packages", "web")], "packages/web must be expanded")
+	assert.True(t, got[filepath.Join(root, "tools", "builder")], "tools/builder must be expanded")
+	assert.False(t, got[filepath.Join(root, "vendor", "third-party")], "non-matching folder must not be expanded")
+	assert.False(t, got[filepath.Join(root, "packages", "stray.txt")], "non-directory glob match must be filtered out")
+	assert.Equal(t, 3, len(dirs), "expected exactly 3 workspace dirs, got: %v", dirs)
+}
+
+func TestExpandPnpmWorkspaceDirsNoWorkspaces(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+	}{
+		{name: "missing pnpm-workspace.yaml", yaml: ""},
+		{name: "empty packages list", yaml: "packages: []\n"},
+		{name: "missing packages key", yaml: "foo: bar\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.yaml != "" {
+				assert.NoError(t, os.WriteFile(filepath.Join(root, "pnpm-workspace.yaml"), []byte(tc.yaml), 0644))
+			}
+			dirs := expandPnpmWorkspaceDirs(root)
+			assert.Nil(t, dirs)
+		})
+	}
+}
+
+func TestCollectDeclaredPnpmDirectDepsAcrossWorkspaces(t *testing.T) {
+	root := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(root, "packages", "admin-ui"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pnpm-workspace.yaml"),
+		[]byte("packages:\n  - \"packages/*\"\n"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{
+		"name": "root",
+		"dependencies": {"express": "^5.2.1", "lodash": "4.17.23"}
+	}`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "packages", "admin-ui", "package.json"), []byte(`{
+		"name": "admin-ui",
+		"dependencies": {"express": "^3.0.1"},
+		"devDependencies": {"jsdom": "^26.0.0"}
+	}`), 0644))
+
+	declared := collectDeclaredPnpmDirectDeps(root, "")
+
+	assert.Equal(t, "^3.0.1", declared["express"], "workspace member's spec wins over root's for the same package name")
+	assert.Equal(t, "4.17.23", declared["lodash"], "root-only dep must be present")
+	assert.Equal(t, "^26.0.0", declared["jsdom"], "workspace member's dep must be merged into the root scope")
+	assert.Len(t, declared, 3, "got: %v", declared)
+}
+
+func TestCollectDeclaredPnpmDirectDepsForMember(t *testing.T) {
+	root := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(root, "packages", "admin-ui"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pnpm-workspace.yaml"),
+		[]byte("packages:\n  - \"packages/*\"\n"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{
+		"name": "root",
+		"dependencies": {"lodash": "4.17.23"}
+	}`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "packages", "admin-ui", "package.json"), []byte(`{
+		"name": "admin-ui",
+		"dependencies": {"express": "^3.0.1"}
+	}`), 0644))
+
+	t.Run("empty memberRel merges deps across the whole workspace", func(t *testing.T) {
+		declared := collectDeclaredPnpmDirectDeps(root, "")
+		assert.Equal(t, "4.17.23", declared["lodash"])
+		assert.Equal(t, "^3.0.1", declared["express"])
+	})
+
+	t.Run("memberRel scopes to that member only", func(t *testing.T) {
+		declared := collectDeclaredPnpmDirectDeps(root, filepath.Join("packages", "admin-ui"))
+		assert.Equal(t, "^3.0.1", declared["express"])
+		_, hasRootDep := declared["lodash"]
+		assert.False(t, hasRootDep, "root-only dep must not leak into a member-scoped result")
+	})
+
+	t.Run("missing member package.json yields empty map", func(t *testing.T) {
+		declared := collectDeclaredPnpmDirectDeps(root, filepath.Join("packages", "does-not-exist"))
+		assert.Empty(t, declared)
 	})
 }

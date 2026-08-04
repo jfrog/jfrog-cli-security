@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -344,5 +345,341 @@ func TestParseArtifactoryNpmRegistryUrl(t *testing.T) {
 			assert.Equal(t, tc.expectedRtUrl, rtUrl)
 			assert.Equal(t, tc.expectedRepo, repo)
 		})
+	}
+}
+
+// Tests below cover curationprobe.go, moved here from yarn_test.go when the probe was shared with pnpm.
+
+func TestNormalizeNpmVersion(t *testing.T) {
+	cases := []struct {
+		in       string
+		wantVer  string
+		wantOK   bool
+		describe string
+	}{
+		{"1.0.0", "1.0.0", true, "exact pinned version"},
+		{"  1.2.3  ", "1.2.3", true, "trims whitespace"},
+		{"^1.2.3", "1.2.3", true, "strips caret"},
+		{"~4.5.6", "4.5.6", true, "strips tilde"},
+		{">=2.0.0", "2.0.0", true, "strips >="},
+		{"<=2.0.0", "2.0.0", true, "strips <="},
+		{">3.0.0", "3.0.0", true, "strips >"},
+		{"<3.0.0", "3.0.0", true, "strips <"},
+		{"=4.0.0", "4.0.0", true, "strips ="},
+		{"^^1.0.0", "1.0.0", true, "strips multiple leading operators"},
+		{"4.0.0-beta.1", "4.0.0-beta.1", true, "preserves prerelease"},
+		{"", "", false, "empty"},
+		{"   ", "", false, "whitespace only"},
+		{"latest", "", false, "dist-tag rejected"},
+		{"next", "", false, "dist-tag rejected"},
+		{"1.x", "", false, "wildcard rejected"},
+		{"*", "", false, "star rejected"},
+		{">=1.0.0 <2.0.0", "", false, "compound range rejected"},
+		{"1.0.0 || 2.0.0", "", false, "OR-range rejected"},
+		{"file:./local-pkg", "", false, "file: spec rejected"},
+		{"link:../sibling", "", false, "link: spec rejected"},
+		{"workspace:^1.0.0", "", false, "workspace: spec rejected"},
+		{"git+https://github.com/foo/bar.git", "", false, "git+ spec rejected"},
+		{"https://example.com/pkg.tgz", "", false, "https url rejected"},
+		{"npm:other-pkg@1.0.0", "", false, "npm: alias rejected"},
+		{"patch:left-pad@1.3.0#./left-pad.patch", "", false, "patch: spec rejected"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.describe, func(t *testing.T) {
+			got, ok := normalizeNpmVersion(tc.in)
+			assert.Equal(t, tc.wantOK, ok, "ok mismatch for input %q", tc.in)
+			if tc.wantOK {
+				assert.Equal(t, tc.wantVer, got, "version mismatch for input %q", tc.in)
+			}
+		})
+	}
+}
+
+// Pins the three-way classification (fixed/range/non-registry) that reconcileDeclaredDirectDepsAgainstTree branches on.
+func TestClassifyNpmVersionSpec(t *testing.T) {
+	cases := []struct {
+		spec        string
+		wantVer     string
+		wantProbe   bool
+		wantIsRange bool
+	}{
+		{"3.0.1", "3.0.1", true, false},
+		{"^3.0.1", "3.0.1", true, false},
+		{"~1.2.3", "1.2.3", true, false},
+		{"=1.0.0", "1.0.0", true, false},
+		{">=2.0.0", "2.0.0", true, false},
+		{"1.2.3-beta.1", "1.2.3-beta.1", true, false},
+		{"1.x", "", false, true},
+		{"1.0.x", "", false, true},
+		{"*", "", false, true},
+		{"latest", "", false, true},
+		{"next", "", false, true},
+		{"1.0.0 || 2.0.0", "", false, true},
+		{"file:./local-pkg", "", false, false},
+		{"link:../sibling", "", false, false},
+		{"workspace:*", "", false, false},
+		{"workspace:^", "", false, false},
+		{"patch:react@npm%3A18.0.0", "", false, false},
+		{"git+https://github.com/foo/bar.git", "", false, false},
+		{"https://example.com/pkg.tgz", "", false, false},
+		{"npm:other-name@1.0.0", "", false, false},
+		{"", "", false, false},
+		{"   ", "", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.spec, func(t *testing.T) {
+			ver, probe, isRange := ClassifyNpmVersionSpec(tc.spec)
+			assert.Equal(t, tc.wantVer, ver, "version after stripping operators")
+			assert.Equal(t, tc.wantProbe, probe, "probeable flag")
+			assert.Equal(t, tc.wantIsRange, isRange, "range/tag flag")
+		})
+	}
+}
+
+func TestBuildNpmTarballURL(t *testing.T) {
+	cases := []struct {
+		name, version, want string
+	}{
+		{"lodash", "4.17.21", "https://arti.example.com/api/npm/tst-yarn-repo/lodash/-/lodash-4.17.21.tgz"},
+		{"@scope/pkg", "1.0.0", "https://arti.example.com/api/npm/tst-yarn-repo/@scope/pkg/-/pkg-1.0.0.tgz"},
+		{"@jfrog/dummy", "0.0.1-beta", "https://arti.example.com/api/npm/tst-yarn-repo/@jfrog/dummy/-/dummy-0.0.1-beta.tgz"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, buildNpmTarballURL("https://arti.example.com", "tst-yarn-repo", tc.name, tc.version))
+		})
+	}
+}
+
+func TestParseProbe403Body(t *testing.T) {
+	t.Run("empty body falls back to unknown_403", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		ParseProbe403Body(nil, &dep)
+		assert.Equal(t, "unknown_403", dep.Reason)
+	})
+	t.Run("non-json body falls back to unknown_403", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		ParseProbe403Body([]byte("<html>503 bad gateway</html>"), &dep)
+		assert.Equal(t, "unknown_403", dep.Reason)
+	})
+	t.Run("non-curation 403 falls back to unknown_403", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		ParseProbe403Body([]byte(`{"errors":[{"status":403,"message":"some other reason"}]}`), &dep)
+		assert.Equal(t, "unknown_403", dep.Reason)
+	})
+	t.Run("not-being-found marks as not_found", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to it not being found in the index"}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "not_found", dep.Reason)
+	})
+	t.Run("policy quartet is parsed", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package and replace with an alternate}."}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		if assert.Len(t, dep.Policies, 1) {
+			assert.Equal(t, "mal-policy", dep.Policies[0].Policy)
+			assert.Equal(t, "Malicious package", dep.Policies[0].Condition)
+			// makeLegibleProbePolicyDetail rewrites the first ": " into ":\n" — mirror curation's
+			// success-path layout. Our fixtures here have no ": " so the strings pass through unchanged.
+			assert.Equal(t, "Package version is malicious", dep.Policies[0].Explanation)
+			assert.Equal(t, "Remove the malicious package and replace with an alternate", dep.Policies[0].Recommendation)
+		}
+	})
+	t.Run("partial policy info parses what it can", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"Package foo:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {short-policy, short-condition}."}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		if assert.Len(t, dep.Policies, 1) {
+			assert.Equal(t, "short-policy", dep.Policies[0].Policy)
+			assert.Equal(t, "short-condition", dep.Policies[0].Condition)
+			assert.Empty(t, dep.Policies[0].Explanation)
+			assert.Empty(t, dep.Policies[0].Recommendation)
+		}
+	})
+	t.Run("multiple policy quartets are all captured", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package},{cvss-policy, CVE with CVSS score of 9 or above, Package version contains the following vulnerability(s), Upgrade to the following version(s): 4.18.0}."}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		if assert.Len(t, dep.Policies, 2) {
+			assert.Equal(t, "mal-policy", dep.Policies[0].Policy)
+			assert.Equal(t, "cvss-policy", dep.Policies[1].Policy)
+			assert.Equal(t, "CVE with CVSS score of 9 or above", dep.Policies[1].Condition)
+		}
+	})
+	t.Run("legible-detail normalisation matches curation success-path layout", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {cvss-policy, CVSS score above 9, Vulnerability: CVE-2026-4800 | CVE-2026-9999, Upgrade to: 4.18.0 | 5.0.0}."}]}`)
+		ParseProbe403Body(body, &dep)
+		if assert.Len(t, dep.Policies, 1) {
+			assert.Equal(t, "Vulnerability:\nCVE-2026-4800\nCVE-2026-9999", dep.Policies[0].Explanation)
+			assert.Equal(t, "Upgrade to:\n4.18.0\n5.0.0", dep.Policies[0].Recommendation)
+		}
+	})
+	// Real body from production where Policy/Condition/Recommendation parsed as empty for Express@3.0.1.
+	t.Run("real-world Express EOL body parses to full quartet", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{
+  "errors" : [ {
+    "status" : 403,
+    "message" : "package Express:3.0.1 download was blocked by jfrog packages curation service due to the following policies violated {End of Life,Blocking Express as it is EOL,This package version is part of a pre-defined banned list. The following versions are banned:<br/> - 3.0.1,Replace the package with an alternative one or try to find a version of the current one that is not on the banned list.}. For details and alternatives, visit: https://example.jfrogdev.org/ui/catalog/packages/details/npm/Express/3.0.1?showVersions=true"
+  } ]
+}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		if assert.Len(t, dep.Policies, 1, "expected exactly one parsed policy from the canonical curation envelope") {
+			assert.Equal(t, "End of Life", dep.Policies[0].Policy)
+			assert.Equal(t, "Blocking Express as it is EOL", dep.Policies[0].Condition)
+			assert.Contains(t, dep.Policies[0].Explanation, "pre-defined banned list",
+				"explanation must be populated, not collapsed into the 'response could not be parsed' fallback")
+			assert.Contains(t, dep.Policies[0].Recommendation, "Replace the package",
+				"recommendation must be populated, not collapsed into the 'response could not be parsed' fallback")
+		}
+	})
+}
+
+func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
+	t.Run("empty input yields no rows", func(t *testing.T) {
+		assert.Nil(t, buildBlockedDirectDepsTableRows(nil, techutils.Yarn))
+		assert.Nil(t, buildBlockedDirectDepsTableRows([]BlockedDirectDep{}, techutils.Yarn))
+	})
+	t.Run("single dep with one policy renders one row mirroring curation columns", func(t *testing.T) {
+		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{{
+			Name: "jfrog-curation-malicious-dummy", DeclaredVersion: "^1.0.0", ProbedVersion: "1.0.0",
+			Reason: "blocked_policy",
+			Policies: []ProbedPolicy{{Policy: "mal-policy", Condition: "Malicious package",
+				Explanation: "Package version is malicious", Recommendation: "Remove the malicious package"}},
+		}}, techutils.Yarn)
+		if assert.Len(t, rows, 1) {
+			r := rows[0]
+			assert.Equal(t, "1 ", r.ID)
+			assert.Equal(t, "jfrog-curation-malicious-dummy ", r.ParentName)
+			assert.Equal(t, "1.0.0 ", r.ParentVersion)
+			assert.Equal(t, "jfrog-curation-malicious-dummy ", r.PackageName)
+			assert.Equal(t, "1.0.0 ", r.PackageVersion)
+			assert.Equal(t, string(techutils.Yarn)+" ", r.PkgType)
+			assert.Equal(t, "mal-policy", r.Policy)
+			assert.Equal(t, "Malicious package", r.Condition)
+			assert.Equal(t, "Package version is malicious", r.Explanation)
+			assert.Equal(t, "Remove the malicious package", r.Recommendation)
+		}
+	})
+	t.Run("dep with multiple policies renders one row per policy with shared package columns", func(t *testing.T) {
+		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{{
+			Name: "lodash", DeclaredVersion: "^4.17.21", ProbedVersion: "4.17.21",
+			Reason: "blocked_policy",
+			Policies: []ProbedPolicy{
+				{Policy: "mal-policy", Condition: "Malicious package"},
+				{Policy: "cvss-policy", Condition: "CVE with CVSS score of 9 or above"},
+			},
+		}}, techutils.Yarn)
+		if assert.Len(t, rows, 2) {
+			assert.Equal(t, rows[0].ParentName, rows[1].ParentName, "both rows must share the package columns so auto-merge can collapse them")
+			assert.Equal(t, rows[0].ID, rows[1].ID)
+			assert.Equal(t, "mal-policy", rows[0].Policy)
+			assert.Equal(t, "cvss-policy", rows[1].Policy)
+		}
+	})
+	t.Run("alternating space separator prevents accidental merge across packages", func(t *testing.T) {
+		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{
+			{Name: "a", ProbedVersion: "1.0.0", Reason: "blocked_policy", Policies: []ProbedPolicy{{Policy: "p1", Condition: "c1"}}},
+			{Name: "b", ProbedVersion: "2.0.0", Reason: "blocked_policy", Policies: []ProbedPolicy{{Policy: "p2", Condition: "c2"}}},
+		}, techutils.Yarn)
+		if assert.Len(t, rows, 2) {
+			// Index 0 (uniqLineSep=" ") and index 1 (uniqLineSep="") must produce IDs that differ
+			// even with the same row count, so adjacent packages do not auto-merge by accident.
+			assert.Equal(t, "1 ", rows[0].ID)
+			assert.Equal(t, "2", rows[1].ID)
+		}
+	})
+	t.Run("not_found and unknown_403 produce explanation-only rows when policies slice is empty", func(t *testing.T) {
+		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{
+			{Name: "missing-pkg", ProbedVersion: "1.0.0", Reason: "not_found"},
+			{Name: "weird-pkg", ProbedVersion: "2.0.0", Reason: "unknown_403"},
+		}, techutils.Yarn)
+		if assert.Len(t, rows, 2) {
+			assert.Equal(t, "Package not found in curation repository", rows[0].Explanation)
+			assert.Equal(t, "Blocked by curation (response could not be parsed)", rows[1].Explanation)
+			assert.Empty(t, rows[0].Policy)
+			assert.Empty(t, rows[1].Policy)
+		}
+	})
+	t.Run("direct-row: name and version match in both Direct and Blocked columns", func(t *testing.T) {
+		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{{
+			Name: "lodash", DeclaredVersion: "^4.17.21", ProbedVersion: "4.17.21",
+			Reason:   "blocked_policy",
+			Policies: []ProbedPolicy{{Policy: "cvss-policy", Condition: "CVE with CVSS score of 9 or above"}},
+		}}, techutils.Yarn)
+		if assert.Len(t, rows, 1) {
+			assert.Equal(t, "lodash ", rows[0].ParentName)
+			assert.Equal(t, rows[0].ParentName, rows[0].PackageName)
+			assert.Equal(t, rows[0].ParentVersion, rows[0].PackageVersion)
+		}
+	})
+}
+
+func TestMergeDirectDeps(t *testing.T) {
+	pi := &bibuildutils.PackageInfo{
+		Dependencies:         map[string]string{"lodash": "^4.17.21", "shared": "1.0.0"},
+		DevDependencies:      map[string]string{"jest": "29.0.0", "shared": "2.0.0"},
+		OptionalDependencies: map[string]string{"fsevents": "2.3.0"},
+		PeerDependencies:     map[string]string{"react": "18.0.0", "lodash": "9.9.9"},
+	}
+	merged := MergeDirectDeps(pi)
+	assert.Equal(t, "^4.17.21", merged["lodash"], "deps wins over peerDeps")
+	assert.Equal(t, "1.0.0", merged["shared"], "deps wins over devDeps")
+	assert.Equal(t, "29.0.0", merged["jest"])
+	assert.Equal(t, "2.3.0", merged["fsevents"])
+	assert.Equal(t, "18.0.0", merged["react"])
+}
+
+// Import cycle prevents referencing PackageStatus/Policy directly, so their JSON tags are pinned by value here.
+func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
+	expectedRowTags := map[string]string{
+		"Action":         "action",
+		"ParentName":     "direct_dependency_package_name",
+		"ParentVersion":  "direct_dependency_package_version",
+		"PackageName":    "blocked_package_name",
+		"PackageVersion": "blocked_package_version",
+		"BlockingReason": "blocking_reason",
+		"DepRelation":    "dependency_relation",
+		"PkgType":        "type",
+		"WaiverAllowed":  "waiver_allowed",
+		"Policy":         "policies,omitempty",
+	}
+	expectedPolicyTags := map[string]string{
+		"Policy":         "policy",
+		"Condition":      "condition",
+		"Explanation":    "explanation",
+		"Recommendation": "recommendation",
+	}
+
+	rowType := reflect.TypeOf(BlockedDepJSONRow{})
+	assert.Len(t, expectedRowTags, rowType.NumField(),
+		"BlockedDepJSONRow field count changed — update expectedRowTags and sync with commands/curation.PackageStatus")
+	for i := range rowType.NumField() {
+		field := rowType.Field(i)
+		expected, ok := expectedRowTags[field.Name]
+		assert.True(t, ok, "unexpected field %s in BlockedDepJSONRow — update expectedRowTags and sync with PackageStatus", field.Name)
+		if ok {
+			assert.Equal(t, expected, field.Tag.Get("json"),
+				"BlockedDepJSONRow.%s json tag mismatch — keep in sync with commands/curation.PackageStatus", field.Name)
+		}
+	}
+
+	policyType := reflect.TypeOf(BlockedDepPolicyJSON{})
+	assert.Len(t, expectedPolicyTags, policyType.NumField(),
+		"BlockedDepPolicyJSON field count changed — update expectedPolicyTags and sync with commands/curation.Policy")
+	for i := range policyType.NumField() {
+		field := policyType.Field(i)
+		expected, ok := expectedPolicyTags[field.Name]
+		assert.True(t, ok, "unexpected field %s in BlockedDepPolicyJSON — update expectedPolicyTags and sync with Policy", field.Name)
+		if ok {
+			assert.Equal(t, expected, field.Tag.Get("json"),
+				"BlockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
+		}
 	}
 }
