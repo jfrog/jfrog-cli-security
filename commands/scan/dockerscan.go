@@ -100,7 +100,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		if scanResults == nil {
 			return
 		}
-		xsc.SendScanEndedWithResults(dsc.serverDetails, scanResults)
+		xsc.SendScanEndedEvent(dsc.serverDetails, scanResults)
 		return dsc.recordResults(scanResults)
 	})
 }

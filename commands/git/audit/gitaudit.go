@@ -176,7 +176,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	}
 	scanResults = sourceAudit.RunAudit(auditParams)
 	// Send scan ended event
-	xsc.SendScanEndedWithResults(params.serverDetails, scanResults)
+	xsc.SendScanEndedEvent(params.serverDetails, scanResults)
 	return scanResults
 }
 

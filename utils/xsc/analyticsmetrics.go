@@ -65,44 +65,31 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	return
 }
 
-func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanError error) {
-	if !shouldReportEvents(xscVersion) {
+func SendScanEndedEvent(serviceDetails *config.ServerDetails, cmdResults *results.SecurityCommandResults) {
+	if cmdResults == nil || serviceDetails == nil {
 		return
 	}
-	if multiScanId == "" {
+	if !shouldReportEvents(cmdResults.XscVersion) {
+		return
+	}
+	if cmdResults.MultiScanId == "" {
 		log.Debug("MultiScanId is empty, skip sending command finalize event.")
 		return
 	}
 	// Generate the finalize event.
-	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serviceDetails, xray.WithScopedProjectKey(resultsContext.ProjectKey))
+	xscService, err := CreateXscServiceBackwardCompatible(cmdResults.XrayVersion, serviceDetails, xray.WithScopedProjectKey(cmdResults.ResultContext.ProjectKey))
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, skip sending command finalize event, error: %s ", err.Error()))
 		return
 	}
 
-	event := CreateFinalizedEvent(xrayVersion, multiScanId, startTime, totalFindings, resultsContext, scanError)
+	event := CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
 
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
-		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
+		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", cmdResults.MultiScanId, err.Error()))
 		return
 	}
 	log.Debug(fmt.Sprintf("Command event:\n%v", event))
-}
-
-func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *results.SecurityCommandResults) {
-	if cmdResults == nil || serviceDetails == nil {
-		return
-	}
-	SendScanEndedEvent(
-		cmdResults.XrayVersion,
-		cmdResults.XscVersion,
-		serviceDetails,
-		cmdResults.MultiScanId,
-		cmdResults.StartTime,
-		getTotalFindings(cmdResults),
-		&cmdResults.ResultContext,
-		cmdResults.GetErrors(),
-	)
 }
 
 func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, err error) xscservices.XscAnalyticsGeneralEventFinalize {

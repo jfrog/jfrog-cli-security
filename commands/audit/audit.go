@@ -279,7 +279,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditResults := RunAudit(auditParams)
 
-	xsc.SendScanEndedWithResults(serverDetails, auditResults)
+	xsc.SendScanEndedEvent(serverDetails, auditResults)
 
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
