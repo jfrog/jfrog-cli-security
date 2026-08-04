@@ -236,6 +236,18 @@ func TestLocateBomComponentInfo_matchesQualifiedAndCaseDriftedRefs(t *testing.T)
 			expectHit: true,
 		},
 		{
+			name:      "subpath qualified ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13#lib/net8.0",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "case drifted ref of a package type Xray does not lower case",
+			bomRef:    "pkg:maven/org.thymeleaf.extras/thymeleaf-extras-springsecurity6@3.1.3.RELEASE?hash=5058f1af",
+			xrayId:    "gav://org.thymeleaf.extras:thymeleaf-extras-springsecurity6:3.1.3.release",
+			expectHit: true,
+		},
+		{
 			name:      "version is a prefix of another version",
 			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.131?hash=5058f1af",
 			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
