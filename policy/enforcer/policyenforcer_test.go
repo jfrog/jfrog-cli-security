@@ -4,10 +4,14 @@ import (
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -202,4 +206,106 @@ func TestConvertToLicenseViolations_withResolvedComponent(t *testing.T) {
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].ImpactedComponent)
 	assert.Equal(t, testGoComponentRef, got[0].ImpactedComponent.BOMRef)
+}
+
+func TestIsMatchingExposureScannerId(t *testing.T) {
+	rule := sarifutils.CreateDummyRuleWithProperties("secret-rule", sarif.Properties{
+		sarifutils.JasScannerIdSarifPropertyKey: "REQ.SECRET.KEYS",
+	})
+	assert.True(t, isMatchingExposureScannerId("EXP-REQ.SECRET.KEYS", rule))
+	assert.True(t, isMatchingExposureScannerId("EXP-REQ.SECRET.KEYS-unique123", rule))
+	assert.False(t, isMatchingExposureScannerId("EXP-OTHER-unique123", rule))
+	assert.False(t, isMatchingExposureScannerId("EXP-REQ.SECRET.KEYS", sarifutils.CreateDummyRuleWithProperties("no-scanner", sarif.Properties{})))
+}
+
+func TestConvertToViolations_exposureTypesFromLocalVulns(t *testing.T) {
+	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	target := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
+
+	secretsRule := sarifutils.CreateDummyRuleWithProperties("secret-rule", sarif.Properties{
+		sarifutils.JasScannerIdSarifPropertyKey: "REQ.SECRET.KEYS",
+	})
+	servicesRule := sarifutils.CreateDummyRuleWithProperties("services-rule", sarif.Properties{
+		sarifutils.JasScannerIdSarifPropertyKey: "GITHUB-ACTIONS-permissions-write-all",
+	})
+	iacRule := sarifutils.CreateDummyRuleWithProperties("iac-rule", sarif.Properties{
+		sarifutils.JasScannerIdSarifPropertyKey: "aws_s3_bucket_public",
+	})
+
+	target.AddJasScanResults(jasutils.Secrets, []*sarif.Run{{
+		Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver("secrets", secretsRule)},
+		Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/repo"))},
+		Results: []*sarif.Result{
+			sarifutils.CreateResultWithOneLocation("secrets.txt", 10, 1, 10, 5, "token", "secret-rule", "error"),
+		},
+	}}, nil, 0)
+	target.AddJasScanResults(jasutils.Services, []*sarif.Run{{
+		Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver("services", servicesRule)},
+		Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/repo"))},
+		Results: []*sarif.Result{
+			sarifutils.CreateResultWithOneLocation(".github/workflows/ci.yml", 4, 1, 4, 5, "write-all", "services-rule", "error"),
+		},
+	}}, nil, 0)
+	target.AddJasScanResults(jasutils.IaC, []*sarif.Run{{
+		Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver("iac", iacRule)},
+		Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/repo"))},
+		Results: []*sarif.Result{
+			sarifutils.CreateResultWithOneLocation("infra/s3.tf", 7, 1, 7, 5, "public", "iac-rule", "error"),
+		},
+	}}, nil, 0)
+
+	got, err := convertToViolations(cmdResults, []services.XrayViolation{
+		{
+			Id:                "sec-vio",
+			Severity:          "High",
+			InfectedFilePaths: []string{"secrets.txt"},
+			LineNumber:        10,
+			ExposureDetails:   &services.ExposureDetails{BaseJasDetails: services.BaseJasDetails{Id: "EXP-REQ.SECRET.KEYS-abc"}},
+		},
+		{
+			Id:                "svc-vio",
+			Severity:          "High",
+			InfectedFilePaths: []string{".github/workflows/ci.yml"},
+			LineNumber:        4,
+			ExposureDetails:   &services.ExposureDetails{BaseJasDetails: services.BaseJasDetails{Id: "EXP-GITHUB-ACTIONS-permissions-write-all-def"}},
+		},
+		{
+			Id:                "iac-vio",
+			Severity:          "Medium",
+			InfectedFilePaths: []string{"infra/s3.tf"},
+			LineNumber:        7,
+			ExposureDetails:   &services.ExposureDetails{BaseJasDetails: services.BaseJasDetails{Id: "EXP-aws_s3_bucket_public-ghi"}},
+		},
+		{
+			Id:                "unmatched-vio",
+			Severity:          "Low",
+			InfectedFilePaths: []string{"missing.txt"},
+			LineNumber:        1,
+			ExposureDetails:   &services.ExposureDetails{BaseJasDetails: services.BaseJasDetails{Id: "EXP-UNKNOWN-xyz"}},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, got.Secrets, 1)
+	require.Len(t, got.Services, 1)
+	require.Len(t, got.Iac, 1)
+	assert.Equal(t, violationutils.SecretsViolationType, got.Secrets[0].ViolationType)
+	assert.Equal(t, violationutils.ServicesViolationType, got.Services[0].ViolationType)
+	assert.Equal(t, violationutils.IacViolationType, got.Iac[0].ViolationType)
+	assert.Equal(t, "sec-vio", got.Secrets[0].ViolationId)
+	assert.Equal(t, "svc-vio", got.Services[0].ViolationId)
+	assert.Equal(t, "iac-vio", got.Iac[0].ViolationId)
+}
+
+func TestConvertToExposureJasViolation_skipsWhenNoMatch(t *testing.T) {
+	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
+
+	got, jasType := convertToExposureJasViolation(cmdResults, services.XrayViolation{
+		Id:                "missing",
+		InfectedFilePaths: []string{"file.txt"},
+		LineNumber:        1,
+		ExposureDetails:   &services.ExposureDetails{BaseJasDetails: services.BaseJasDetails{Id: "EXP-REQ.SECRET.KEYS-abc"}},
+	})
+	assert.Nil(t, got)
+	assert.Empty(t, jasType)
 }

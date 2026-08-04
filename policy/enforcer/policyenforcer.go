@@ -145,53 +145,54 @@ func dumpViolationsResponseToFileIfNeeded(generatedViolations *services.Violatio
 	return utils.DumpJsonContentToFile(fileContent, resultsOutputDir, "violations", -1)
 }
 
+// exposureJasScanTypes are JAS categories that Xray reports via ExposureDetails (EXP-*).
+// Search order for type detection; extend by appending.
+var exposureJasScanTypes = []jasutils.JasScanType{jasutils.Secrets, jasutils.Services, jasutils.IaC}
+
 func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {
 	convertedViolations = violationutils.Violations{}
 	for _, violation := range generatedViolations {
-		switch getViolationType(violation) {
-		case utils.ScaScan:
-			switch violation.Type {
-			case xrayUtils.SecurityViolation:
-				convertedViolations.Sca = append(convertedViolations.Sca, convertToCveViolations(cmdResults, violation)...)
-			case xrayUtils.LicenseViolation:
-				convertedViolations.License = append(convertedViolations.License, convertToLicenseViolations(cmdResults, violation)...)
-			case xrayUtils.OperationalRiskViolation:
-				convertedViolations.OpRisk = append(convertedViolations.OpRisk, convertToOpRiskViolations(cmdResults, violation)...)
-			default:
-				err = errors.Join(err, fmt.Errorf("unknown violation type %s for violation id %s", violation.Type, violation.Id))
-			}
-		case utils.SastScan:
+		if violation.SastDetails != nil {
 			if sastViolation := convertToJasViolation(cmdResults, jasutils.Sast, violation); sastViolation != nil {
 				convertedViolations.Sast = append(convertedViolations.Sast, *sastViolation)
 			}
-		case utils.SecretsScan:
-			if secretsViolation := convertToJasViolation(cmdResults, jasutils.Secrets, violation); secretsViolation != nil {
-				convertedViolations.Secrets = append(convertedViolations.Secrets, *secretsViolation)
+			continue
+		}
+		if isExposureViolation(violation) {
+			if exposureViolation, jasType := convertToExposureJasViolation(cmdResults, violation); exposureViolation != nil {
+				switch jasType {
+				case jasutils.Secrets:
+					convertedViolations.Secrets = append(convertedViolations.Secrets, *exposureViolation)
+				case jasutils.Services:
+					convertedViolations.Services = append(convertedViolations.Services, *exposureViolation)
+				case jasutils.IaC:
+					convertedViolations.Iac = append(convertedViolations.Iac, *exposureViolation)
+				default:
+					log.Warn(fmt.Sprintf("Skipping exposure violation with unsupported JAS type %s for violation ID %s", jasType, violation.Id))
+				}
 			}
-		case utils.ServicesScan:
-			if servicesViolation := convertToJasViolation(cmdResults, jasutils.Services, violation); servicesViolation != nil {
-				convertedViolations.Services = append(convertedViolations.Services, *servicesViolation)
-			}
+			continue
+		}
+		switch violation.Type {
+		case xrayUtils.SecurityViolation:
+			convertedViolations.Sca = append(convertedViolations.Sca, convertToCveViolations(cmdResults, violation)...)
+		case xrayUtils.LicenseViolation:
+			convertedViolations.License = append(convertedViolations.License, convertToLicenseViolations(cmdResults, violation)...)
+		case xrayUtils.OperationalRiskViolation:
+			convertedViolations.OpRisk = append(convertedViolations.OpRisk, convertToOpRiskViolations(cmdResults, violation)...)
 		default:
-			log.Warn(fmt.Sprintf("Skipping violation with unknown scan type for violation ID %s", violation.Id))
+			err = errors.Join(err, fmt.Errorf("unknown violation type %s for violation id %s", violation.Type, violation.Id))
 		}
 	}
 	return
 }
 
-func getViolationType(violation services.XrayViolation) utils.SubScanType {
-	if violation.SastDetails != nil {
-		return utils.SastScan
-	}
-	if violation.ExposureDetails != nil {
-		if strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
-			return utils.SecretsScan
-		}
-		// TODO: add Services support when Xray adds Services details to violations
-		// TODO: add IaC support when Xray adds IaC details to violations
-		return ""
-	}
-	return utils.ScaScan
+func isExposureViolation(violation services.XrayViolation) bool {
+	return violation.ExposureDetails != nil && strings.HasPrefix(violation.ExposureDetails.Id, "EXP")
+}
+
+func isExposureJasScanType(jasType jasutils.JasScanType) bool {
+	return slices.Contains(exposureJasScanTypes, jasType)
 }
 
 // bomResolvedComponent holds the result of a single locateBomComponentInfo call for one Xray infected-component ID.
@@ -342,9 +343,40 @@ func locateBomVulnerabilityInfo(cmdResults *results.SecurityCommandResults, issu
 }
 
 func convertToJasViolation(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (jasViolations *violationutils.JasViolation) {
-	match := locateJasVulnerabilityInfo(cmdResults, jasType, violation)
-	if match.rule == nil || match.result == nil || match.location == nil {
+	matchId := getJasVulnerabilityId(violation, jasType)
+	if matchId == "" {
+		log.Debug(fmt.Sprintf("Skipping Jas violation with empty ID for issue ID %s violation ID %s", violation.IssueId, violation.Id))
+		return nil
+	}
+	match := locateJasVulnerabilityInfo(cmdResults, jasType, matchId, violation)
+	jasViolations = jasViolationFromMatch(jasType, violation, match)
+	if jasViolations == nil {
 		log.Debug(fmt.Sprintf("Could not locate all required information for %s violation ID %s (%s#%d)", jasType, violation.Id, strings.Join(violation.InfectedFilePaths, ","), violation.LineNumber))
+	}
+	return
+}
+
+// convertToExposureJasViolation finds the matching local vulnerability across exposure scan types once,
+// and returns both the converted violation and the detected JAS category.
+func convertToExposureJasViolation(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (*violationutils.JasViolation, jasutils.JasScanType) {
+	if violation.ExposureDetails == nil || !strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
+		log.Debug(fmt.Sprintf("Skipping exposure violation with mismatched or missing Exposure details for ID %s", violation.IssueId))
+		return nil, ""
+	}
+	// Full exposure id (EXP-<scanner_id>-<unique_id>) — matched by scanner-id prefix against local rules.
+	exposureId := violation.ExposureDetails.Id
+	for _, jasType := range exposureJasScanTypes {
+		match := locateJasVulnerabilityInfo(cmdResults, jasType, exposureId, violation)
+		if jasViolation := jasViolationFromMatch(jasType, violation, match); jasViolation != nil {
+			return jasViolation, jasType
+		}
+	}
+	log.Debug(fmt.Sprintf("Could not locate all required information for exposure violation ID %s (%s#%d)", violation.Id, strings.Join(violation.InfectedFilePaths, ","), violation.LineNumber))
+	return nil, ""
+}
+
+func jasViolationFromMatch(jasType jasutils.JasScanType, violation services.XrayViolation, match matchedJsaVulnerability) *violationutils.JasViolation {
+	if match.rule == nil || match.result == nil || match.location == nil {
 		return nil
 	}
 	return &violationutils.JasViolation{
@@ -361,10 +393,8 @@ type matchedJsaVulnerability struct {
 	location *sarif.Location
 }
 
-func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, violation services.XrayViolation) (match matchedJsaVulnerability) {
-	id := getJasVulnerabilityId(violation, jasType)
-	if id == "" {
-		log.Debug(fmt.Sprintf("Skipping Jas violation with empty ID for issue ID %s violation ID %s", violation.IssueId, violation.Id))
+func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, matchId string, violation services.XrayViolation) (match matchedJsaVulnerability) {
+	if matchId == "" {
 		return
 	}
 	found := false
@@ -375,7 +405,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		}
 		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.Entitlements.Jas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-				if !found && isMatchingJasViolation(id, jasType, rule, location, run.Invocations, violation) {
+				if !found && isMatchingJasViolation(matchId, jasType, rule, location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)
 					match = matchedJsaVulnerability{
 						rule:     rule,
@@ -389,21 +419,32 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 		); err != nil {
 			log.Verbose(fmt.Sprintf("Failed to search for %s issue %s in the scan results: %s", jasType, violation.IssueId, err.Error()))
 		}
+		if found {
+			return
+		}
 	}
 	return
 }
 
 func isMatchingJasViolation(id string, jasType jasutils.JasScanType, rule *sarif.ReportingDescriptor, location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
-	if jasType == jasutils.Secrets || jasType == jasutils.Services {
-		// Secrets and Services Jas should relay on Scanner ID to match
-		if id != sarifutils.GetExposureScannerRuleId(rule) {
+	if isExposureJasScanType(jasType) {
+		if !isMatchingExposureScannerId(id, rule) {
 			return false
 		}
 	} else if sarifutils.GetRuleId(rule) != id {
-		// Other Jas should relay on rule ID to match
+		// Non-exposure JAS (e.g. SAST) should rely on rule ID to match
 		return false
 	}
 	return isLocationMatchingJasViolation(location, invocations, violation)
+}
+
+// isMatchingExposureScannerId matches Xray exposure ids (EXP-<scanner_id>[-<unique>]) to the rule scanner_id.
+func isMatchingExposureScannerId(exposureId string, rule *sarif.ReportingDescriptor) bool {
+	scannerRuleId := sarifutils.GetExposureScannerRuleId(rule)
+	if scannerRuleId == "" {
+		return false
+	}
+	return exposureId == scannerRuleId || strings.HasPrefix(exposureId, scannerRuleId+"-")
 }
 
 func isLocationMatchingJasViolation(location *sarif.Location, invocations []*sarif.Invocation, violation services.XrayViolation) bool {
@@ -422,18 +463,14 @@ func getJasVulnerabilityId(violation services.XrayViolation, jasType jasutils.Ja
 			return ""
 		}
 		return violation.SastDetails.Abbreviation
-	case jasutils.Secrets:
-		if violation.ExposureDetails == nil || !strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
-			log.Debug(fmt.Sprintf("Skipping Secrets violation with mismatched or missing Exposure details for ID %s", violation.IssueId))
-			return ""
+	default:
+		if isExposureJasScanType(jasType) {
+			if violation.ExposureDetails == nil || !strings.HasPrefix(violation.ExposureDetails.Id, "EXP") {
+				log.Debug(fmt.Sprintf("Skipping %s violation with mismatched or missing Exposure details for ID %s", jasType, violation.IssueId))
+				return ""
+			}
+			return violation.ExposureDetails.Id
 		}
-		// ID format: 'EXP-<rule_id>-<unique_id>' --> return 'EXP-<rule_id>'
-		split := strings.Split(violation.ExposureDetails.Id, "-")
-		if len(split) < 2 {
-			log.Warn(fmt.Sprintf("Skipping Secrets violation with invalid ID format for ID %s", violation.IssueId))
-			return ""
-		}
-		return fmt.Sprintf("EXP-%s", split[1])
 	}
 	return ""
 }
