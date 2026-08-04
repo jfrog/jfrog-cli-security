@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -906,17 +904,6 @@ func writeFakeExecutable(t *testing.T, dir, executableName, shContent, batConten
 	}
 	require.NoError(t, os.WriteFile(name, []byte(content), 0755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := exec.LookPath(executableName); err == nil {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("fake executable %q did not become resolvable via PATH within 5s", executableName)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
 }
 
 func TestValidateMinimumPoetryVersionUnparsableMajorErrors(t *testing.T) {

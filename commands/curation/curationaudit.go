@@ -31,6 +31,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
+	"github.com/jfrog/jfrog-client-go/http/redirect"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
@@ -940,9 +941,9 @@ func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (
 	return
 }
 
-// pipenvBoundedRedirectManager must use zero retries: HttpClient.Send retries
+// boundedRedirectManager must use zero retries: HttpClient.Send retries
 // on CheckRedirect errors, desyncing SendWithBoundedRedirects's hop counter.
-func pipenvBoundedRedirectManager(serverDetails *config.ServerDetails) (artifactory.ArtifactoryServicesManager, error) {
+func boundedRedirectManager(serverDetails *config.ServerDetails) (artifactory.ArtifactoryServicesManager, error) {
 	return rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
 }
 
@@ -1126,8 +1127,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return err
 	}
-	if tech == techutils.Pipenv {
-		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return err
 		}
@@ -1926,8 +1927,8 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		requestDetails := nc.httpClientDetails.Clone()
 		var resp *http.Response
 		var err error
-		if nc.tech == techutils.Pipenv {
-			resp, _, err = nc.sendPipenvRequest(http.MethodHead, packageUrl, requestDetails)
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+			resp, _, err = nc.sendBoundedRequest(http.MethodHead, packageUrl, requestDetails)
 		} else {
 			resp, _, err = nc.rtManager.Client().SendHead(packageUrl, requestDetails)
 		}
@@ -1987,14 +1988,14 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	return nil
 }
 
-func (nc *treeAnalyzer) sendPipenvRequest(method, requestURL string, details *httputils.HttpClientDetails) (*http.Response, []byte, error) {
+func (nc *treeAnalyzer) sendBoundedRequest(method, requestURL string, details *httputils.HttpClientDetails) (*http.Response, []byte, error) {
 	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", strings.TrimSuffix(nc.url, "/"), nc.repo)
-	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	boundary, err := redirect.NewEndpointBoundary(repositoryURL)
 	if err != nil {
 		return nil, nil, err
 	}
-	return utils.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
-		boundary, utils.MaxAuthenticatedRedirects)
+	return redirect.SendWithBoundedRedirects(nc.rtManager.Client(), method, requestURL, details,
+		boundary, redirect.MaxAuthenticatedRedirects)
 }
 
 // runCvsFallback is called when pip, poetry, or uv resolution failed because CVS
@@ -2007,8 +2008,8 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	if err != nil {
 		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
 	}
-	if tech == techutils.Pipenv {
-		rtManager, err = pipenvBoundedRedirectManager(serverDetails)
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return fmt.Errorf("curation-blocked resolution fallback: failed to create bounded HTTP manager: %w", err)
 		}
@@ -2060,8 +2061,8 @@ func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pipenv {
-		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
 	}
@@ -2100,8 +2101,8 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pipenv {
-		resp, body, err = nc.sendPipenvRequest(http.MethodGet, metadataURL, requestDetails)
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
 	}
@@ -2201,8 +2202,8 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		headDetails := nc.httpClientDetails.Clone()
 		var headResp *http.Response
 		var headErr error
-		if nc.tech == techutils.Pipenv {
-			headResp, _, headErr = nc.sendPipenvRequest(http.MethodHead, dlURL, headDetails)
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+			headResp, _, headErr = nc.sendBoundedRequest(http.MethodHead, dlURL, headDetails)
 		} else {
 			headResp, _, headErr = nc.rtManager.Client().SendHead(dlURL, headDetails)
 		}
@@ -2301,8 +2302,8 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	var getResp *http.Response
 	var respBody []byte
 	var err error
-	if nc.tech == techutils.Pipenv {
-		getResp, respBody, err = nc.sendPipenvRequest(http.MethodGet, packageUrl, requestDetails)
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		getResp, respBody, err = nc.sendBoundedRequest(http.MethodGet, packageUrl, requestDetails)
 	} else {
 		getResp, respBody, _, err = nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
 	}

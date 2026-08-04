@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
+	"github.com/jfrog/jfrog-client-go/http/redirect"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
@@ -546,14 +547,14 @@ func resolvePipenvPackageURL(rtManager artifactory.ArtifactoryServicesManager, h
 func buildPipenvDownloadUrl(rtManager artifactory.ArtifactoryServicesManager, clientDetails *httputils.HttpClientDetails, artiUrl, repository string, pkg pipfileLockPackage) (string, error) {
 	normalized := NormalizePypiName(pkg.Name)
 	repositoryURL := fmt.Sprintf("%s/api/pypi/%s/", artiUrl, repository)
-	boundary, err := utils.NewEndpointBoundary(repositoryURL)
+	boundary, err := redirect.NewEndpointBoundary(repositoryURL)
 	if err != nil {
 		return "", err
 	}
 	simpleIndexUrl := repositoryURL + "simple/" + normalized + "/"
 	log.Debug(fmt.Sprintf("Pipenv: GET simple-index %s (matching against %d hashes)", simpleIndexUrl, len(pkg.Hashes)))
-	resp, body, err := utils.SendWithBoundedRedirects(rtManager.Client(), http.MethodGet, simpleIndexUrl,
-		clientDetails, boundary, utils.MaxAuthenticatedRedirects)
+	resp, body, err := redirect.SendWithBoundedRedirects(rtManager.Client(), http.MethodGet, simpleIndexUrl,
+		clientDetails, boundary, redirect.MaxAuthenticatedRedirects)
 	if err != nil {
 		return "", err
 	}
@@ -1109,10 +1110,30 @@ func parsePipenvVersion(out string) string {
 	return m[1]
 }
 
+// executePipenvVersionCheck runs "pipenv --version" with cmd.Dir explicitly pinned to a
+// stable, always-present directory (os.TempDir()) rather than inheriting the caller's
+// current working directory. The version check has no reason to depend on which project
+// directory happens to be current, and pinning it removes any chance that a caller-side
+// os.Chdir into a directory that isn't fully settled yet on the filesystem (a plausible
+// source of the executable becoming transiently unresolvable via PATH on some platforms)
+// affects this specific, otherwise directory-independent probe.
+func executePipenvVersionCheck() (string, error) {
+	cmd := exec.Command("pipenv", "--version")
+	cmd.Dir = os.TempDir()
+	maskedCmdString := coreutils.GetMaskedCommandString(cmd)
+	log.Debug("Running", maskedCmdString)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		technologies.LogExecutableVersion("pipenv")
+		return string(output), errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
+	}
+	return string(output), nil
+}
+
 // validateMinimumPipenvVersion checks that the pipenv CLI on PATH meets CurationPipenvMinimumVersion.
 func validateMinimumPipenvVersion() error {
 	minVersion := CurationPipenvMinimumVersion
-	out, err := executeCommand("pipenv", "--version")
+	out, err := executePipenvVersionCheck()
 	if err != nil {
 		log.Debug(fmt.Sprintf("pipenv is not installed or not on PATH: %v", err))
 		return errorutils.CheckErrorf("JFrog CLI pipenv curation requires pipenv %s or higher to be installed.", minVersion)
