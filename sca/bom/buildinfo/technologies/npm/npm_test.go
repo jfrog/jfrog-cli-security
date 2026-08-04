@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseNpmDependenciesList(t *testing.T) {
@@ -247,6 +248,60 @@ func TestBuildNpmAuthTokenKey(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedKey, authKey)
+		})
+	}
+}
+
+// NpmForceLogsMax, when set, must be appended last so an earlier user-supplied flag can't
+// shadow it — but it must never be forced just because IsCurationCmd is true, since that
+// would override (and prune) a user's own already-nonzero logs-max retention setting.
+func TestCreateTreeDepsParam_ForceLogsMaxOnlyWhenExplicitlySet(t *testing.T) {
+	tests := []struct {
+		name         string
+		params       *technologies.BuildInfoBomGeneratorParams
+		wantLogsMax  string
+		wantArgsTail []string
+	}{
+		{
+			name:        "forced with no other install args",
+			params:      &technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true, NpmForceLogsMax: "1"},
+			wantLogsMax: "1",
+		},
+		{
+			name: "forced with pre-existing install args",
+			params: &technologies.BuildInfoBomGeneratorParams{
+				IsCurationCmd:      true,
+				NpmForceLogsMax:    "1",
+				InstallCommandArgs: []string{"--registry", "https://example.com"},
+			},
+			wantLogsMax:  "1",
+			wantArgsTail: []string{"--registry", "https://example.com"},
+		},
+		{
+			name:        "curation without NpmForceLogsMax does not force logs-max",
+			params:      &technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true},
+			wantLogsMax: "",
+		},
+		{
+			name:        "non-curation does not force logs-max",
+			params:      &technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false},
+			wantLogsMax: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := createTreeDepsParam(tt.params)
+			if tt.wantLogsMax != "" {
+				require.GreaterOrEqual(t, len(got.InstallCommandArgs), 2)
+				last := got.InstallCommandArgs[len(got.InstallCommandArgs)-2:]
+				assert.Equal(t, []string{"--logs-max", tt.wantLogsMax}, last)
+				for i, arg := range tt.wantArgsTail {
+					assert.Equal(t, arg, got.InstallCommandArgs[i])
+				}
+			} else {
+				assert.NotContains(t, got.InstallCommandArgs, "--logs-max")
+			}
 		})
 	}
 }
