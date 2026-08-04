@@ -1,0 +1,31 @@
+0 verbose cli node npm
+1 info using npm@10.5.0
+2 info using node@v20.12.2
+37 timing idealTree:init Completed in 5ms
+38 silly idealTree buildDeps
+39 silly fetch manifest express@^5.2.1
+40 http fetch GET 200 https://z0test.jfrogdev.org/artifactory/api/npm/my-pnpm-remote/express 700ms (cache revalidated)
+41 silly fetch manifest lodash@99.99.99
+42 http fetch GET 200 https://z0test.jfrogdev.org/artifactory/api/npm/my-pnpm-remote/lodash 201ms (cache revalidated)
+43 silly fetch manifest typescript@5.3.3
+44 http fetch GET 200 https://z0test.jfrogdev.org/artifactory/api/npm/my-pnpm-remote/typescript 216ms (cache revalidated)
+45 silly fetch manifest is-thirteen@github:jonschlinkert/is-thirteen
+46 silly placeDep ROOT express@5.2.1 OK for: mypnpmproject-v11@1.0.0 want: ^5.2.1
+47 silly placeDep ROOT lodash@ OK for: mypnpmproject-v11@1.0.0 want: 99.99.99
+48 silly placeDep ROOT typescript@5.3.3 OK for: mypnpmproject-v11@1.0.0 want: 5.3.3
+49 silly placeDep ROOT is-thirteen@ OK for: mypnpmproject-v11@1.0.0 want: github:jonschlinkert/is-thirteen
+50 silly fetch manifest accepts@^2.0.0
+51 http fetch GET 200 https://z0test.jfrogdev.org/artifactory/api/npm/my-pnpm-remote/accepts 190ms (cache revalidated)
+52 silly fetch manifest depd@^2.0.0
+53 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}
+54 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-pnpm-remote/depd 196ms (cache skip)
+55 silly placeDep ROOT accepts@2.0.0 OK for: express@5.2.1 want: ^2.0.0
+56 silly placeDep node_modules/express depd@ OK for: express@5.2.1 want: ^2.0.0
+59 silly placeDep node_modules/express some-range-pkg@ OK for: express@5.2.1 want: ^3.0.0
+57 error command git --no-replace-objects ls-remote ssh://git@github.com/jonschlinkert/is-thirteen.git
+58 error git@github.com: Permission denied (publickey).
+293 timing idealTree:buildDeps Completed in 2959ms
+296 timing command:install Completed in 2966ms
+297 verbose stack lodash: No matching version found for lodash@99.99.99.
+303 error code ETARGET
+304 error notarget No matching version found for lodash@99.99.99.
