@@ -126,6 +126,21 @@ func GetNativeNpmRegistryConfig() (*NpmrcRegistryConfig, error) {
 	}, nil
 }
 
+// GetNpmConfigValue runs 'npm config get <key>' from workingDir, respecting the same
+// .npmrc/env resolution a real npm command from that directory would see.
+func GetNpmConfigValue(workingDir, key string) (string, error) {
+	npmVersion, npmExecPath, err := biutils.GetNpmVersionAndExecPath(log.Logger)
+	if err != nil {
+		return "", fmt.Errorf("failed to locate npm executable: %w", err)
+	}
+	disableWorkspaces := npmVersion.AtLeast("7.0.0")
+	data, _, err := biutils.RunNpmCmd(npmExecPath, workingDir, npmConfigGetArgs(key, disableWorkspaces), log.Logger)
+	if err != nil {
+		return "", fmt.Errorf("failed to run 'npm config get %s': %w", key, err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
 func npmConfigGetArgs(key string, disableWorkspaces bool) []string {
 	args := []string{"config", "get", key}
 	if disableWorkspaces {
@@ -188,6 +203,10 @@ func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biuti
 	installCommandArgs := params.InstallCommandArgs
 	if params.NpmLegacyPeerDeps {
 		installCommandArgs = appendUniqueFlag(installCommandArgs, LegacyPeerDepsFlag)
+	}
+	if params.NpmForceLogsMax != "" {
+		// Appended last so this flag can't be shadowed by an earlier one.
+		installCommandArgs = append(installCommandArgs, "--logs-max", params.NpmForceLogsMax)
 	}
 	npmTreeDepParam := biutils.NpmTreeDepListParam{
 		Args:                 addIgnoreScriptsFlag(params.Args),

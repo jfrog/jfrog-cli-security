@@ -1659,6 +1659,43 @@ func Test_convertResultsToSummary_RecordsAllUnresolvedHFReport(t *testing.T) {
 	assert.Equal(t, "hf_unresolved", summary.Scans[0].CuratedPackages.PartialReason)
 }
 
+// PackageCount must reflect remediation-needed rows, not the raw row count including "not evaluated" ones.
+func Test_convertResultsToSummary_NpmLogPartialPackageCountExcludesNotEvaluated(t *testing.T) {
+	results := map[string]*CurationReport{
+		"npm-project": {
+			packagesStatus: []*PackageStatus{
+				{PackageName: "blocked-a", Action: blocked},
+				{PackageName: "blocked-b", Action: blocked},
+				{PackageName: "git-dep", Action: notEvaluated},
+			},
+			totalNumberOfPackages: 3,
+			isPartial:             true,
+			npmLogPartial:         true,
+		},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, 2, summary.Scans[0].CuratedPackages.PackageCount,
+		"PackageCount must count only rows needing remediation, not the not-evaluated row")
+}
+
+// An advisory-only npm-log-fallback report must still be recorded in the summary, like hfPartial already is.
+func Test_convertResultsToSummary_RecordsAdvisoryOnlyNpmLogPartialReport(t *testing.T) {
+	results := map[string]*CurationReport{
+		"npm-project": {
+			totalNumberOfPackages: 0,
+			isPartial:             true,
+			npmLogPartial:         true,
+			warnings:              []string{"lodash@99.99.99 could not be resolved"},
+		},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "npm-project", summary.Scans[0].Target)
+	assert.True(t, summary.Scans[0].CuratedPackages.IsPartial)
+	assert.Equal(t, "npm_log_fallback", summary.Scans[0].CuratedPackages.PartialReason)
+}
+
 func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
 	cleanUpFlags := setCurationFlagsForTest(t)
 	defer cleanUpFlags()
@@ -2947,6 +2984,827 @@ func TestRunCvsFallback_KeepsSeparateTableFromExistingReport(t *testing.T) {
 	assert.Len(t, pipReport.packagesStatus, 1)
 	assert.True(t, pipReport.isPartial)
 	assert.False(t, pipReport.huggingFaceReport, "pip's own report must not carry the HF marker")
+}
+
+// Feeds the mixed-crash.log fixture through the full runNpmLogFallback end to end.
+func TestRunNpmLogFallback(t *testing.T) {
+	const repo = "my-pnpm-remote"
+	acceptsBlockMsg := "Package accepts:2.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	acceptsBlockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, acceptsBlockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/accepts-2.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(acceptsBlockJSON))
+		case strings.Contains(r.URL.Path, "/lodash-99.99.99.tgz"):
+			// Genuine ETARGET: plain 404, no curation signal.
+			w.WriteHeader(http.StatusNotFound)
+		case strings.Contains(r.URL.Path, "/express-5.2.1.tgz"), strings.Contains(r.URL.Path, "/typescript-5.3.3.tgz"):
+			w.WriteHeader(http.StatusOK)
+		case strings.Contains(r.URL.Path, "/depd-"), strings.Contains(r.URL.Path, "/is-thirteen-"), strings.Contains(r.URL.Path, "/some-range-pkg-"):
+			t.Errorf("unexpected HEAD-check for a whole-package-blocked/non-registry/unresolvable-range entry: %s", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"mypnpmproject-v11","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+	logsDir := filepath.Join(TestDataDir, "curation", "npmlogs", "mixed-crash", "_logs")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotNil(t, report)
+	assert.True(t, report.isPartial)
+	assert.True(t, report.npmLogPartial)
+	assert.Equal(t, originalErr.Error(), report.npmLogOriginalErr,
+		"the real underlying npm error must be preserved, not just a generic curation-blamed message")
+
+	byName := map[string]*PackageStatus{}
+	for _, ps := range report.packagesStatus {
+		byName[ps.PackageName] = ps
+	}
+
+	// Whole-package-blocked, transitive via express: "All versions blocked" and the
+	// transitive-aware recommendation naming both packages.
+	depd := byName["depd"]
+	require.NotNil(t, depd, "depd should be reported as a whole-package block")
+	assert.Equal(t, allVersionsBlockedText, depd.PackageVersion)
+	assert.Equal(t, "express", depd.ParentName, "depd's direct-dependency attribution must walk to express, not stop at an intermediate parent")
+	require.Len(t, depd.Policy, 1)
+	assert.Contains(t, depd.Policy[0].Recommendation, "transitive dependency of express")
+
+	// Resolved and blocked via the normal HEAD-check path (getBlockedPackageDetails,
+	// unmodified) — full policy detail recovered from the 403 body.
+	accepts := byName["accepts"]
+	require.NotNil(t, accepts, "accepts should be reported as blocked via the standard HEAD-check")
+	assert.Equal(t, "2.0.0", accepts.PackageVersion)
+	require.Len(t, accepts.Policy, 1)
+	assert.Equal(t, "cve-high", accepts.Policy[0].Policy)
+
+	// Clean packages never appear as rows.
+	assert.NotContains(t, byName, "express")
+	assert.NotContains(t, byName, "typescript")
+
+	// Git-URL, genuine ETARGET, and unresolvable range: never probed, never a row — advisory
+	// warnings only, so none can be mistaken for a real block in the table/JSON output.
+	assert.NotContains(t, byName, "is-thirteen")
+	assert.NotContains(t, byName, "lodash")
+	assert.NotContains(t, byName, "some-range-pkg")
+	require.Len(t, report.warnings, 3)
+	warningsText := strings.Join(report.warnings, "\n")
+	assert.Contains(t, warningsText, "is-thirteen")
+	assert.Contains(t, warningsText, "github:jonschlinkert/is-thirteen")
+	assert.Contains(t, warningsText, "lodash@99.99.99")
+	assert.Contains(t, warningsText, "not a curation policy block")
+	assert.Contains(t, warningsText, "some-range-pkg")
+	assert.Contains(t, warningsText, "^3.0.0")
+}
+
+// An ETARGET-confirmed-blocked package must not be stored under a key the graph lookup never finds.
+func TestRunNpmLogFallback_ETARGETConfirmedBlockAppearsInReport(t *testing.T) {
+	blockMsg := "Package pinned-blocked:9.9.9 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/pinned-blocked-9.9.9.tgz") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"46 silly placeDep ROOT pinned-blocked@ OK for: myproj@1.0.0 want: 9.9.9\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.Len(t, report.packagesStatus, 1, "the confirmed-blocked ETARGET package must appear as a row")
+	assert.Equal(t, "pinned-blocked", report.packagesStatus[0].PackageName)
+	assert.Equal(t, "9.9.9", report.packagesStatus[0].PackageVersion)
+}
+
+// An advisory-only entry must not claim the shared dedup key and skip a same-name probeable entry.
+func TestRunNpmLogFallback_SeenKeysDoesNotSkipCrossCategoryEntry(t *testing.T) {
+	blockMsg := "Package widget:2.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	var widgetTarballHits int
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/widget-2.0.0.tgz") {
+			widgetTarballHits++
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget" appears twice: once via an unresolvable range (advisory-only, no probe),
+	// once via a bare, exact, genuinely blocked version (ETARGET, must be probed).
+	logContent := "0 verbose cli node npm\n" +
+		"44 silly placeDep ROOT dep-a@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"45 silly placeDep ROOT dep-b@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"46 silly placeDep node_modules/dep-a widget@ OK for: dep-a@1.0.0 want: ^1.0.0\n" +
+		"47 silly placeDep node_modules/dep-b widget@ OK for: dep-b@1.0.0 want: 2.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	assert.Equal(t, 1, widgetTarballHits, "the ETARGET occurrence's own HTTP probe must run exactly once, not be skipped by the unresolvable-range occurrence's dedup entry")
+	require.NotEmpty(t, report.packagesStatus, "widget's confirmed block must surface as a row (once per parent edge that pulls it in)")
+	for _, ps := range report.packagesStatus {
+		assert.Equal(t, "widget", ps.PackageName)
+		assert.Equal(t, "2.0.0", ps.PackageVersion)
+	}
+}
+
+// Two ETARGET entries for the same name but different pinned specifiers must both surface, not collide.
+func TestRunNpmLogFallback_SameNameDifferentSpecifierETARGETEntriesDoNotCollide(t *testing.T) {
+	blockJSON := func(name, version string) string {
+		msg := fmt.Sprintf("Package %s:%s download was blocked by jfrog packages curation service due to the following policies violated "+
+			"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}.", name, version)
+		return fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, msg)
+	}
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/widget-2.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("widget", "2.0.0")))
+		case strings.Contains(r.URL.Path, "/widget-3.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("widget", "3.0.0")))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget" pinned at two different blocked versions by two different parents.
+	logContent := "0 verbose cli node npm\n" +
+		"44 silly placeDep ROOT dep-a@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"45 silly placeDep ROOT dep-b@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"46 silly placeDep node_modules/dep-a widget@ OK for: dep-a@1.0.0 want: 2.0.0\n" +
+		"47 silly placeDep node_modules/dep-b widget@ OK for: dep-b@1.0.0 want: 3.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	versionsSeen := map[string]bool{}
+	for _, ps := range report.packagesStatus {
+		assert.Equal(t, "widget", ps.PackageName)
+		versionsSeen[ps.PackageVersion] = true
+	}
+	assert.True(t, versionsSeen["2.0.0"], "dep-a's genuinely blocked 2.0.0 must appear, not be overwritten by 3.0.0")
+	assert.True(t, versionsSeen["3.0.0"], "dep-b's genuinely blocked 3.0.0 must appear, not be lost to the shared blank-version key")
+}
+
+// When package.json can't be read, the root identity must be recovered from the log itself.
+func TestRunNpmLogFallback_MissingPackageJsonStillRecoversReport(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected HEAD-check for a whole-package-blocked entry: %s", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// Root-level entry carries the real project identity ("realproj@9.9.9"); the working
+	// directory's basename below is deliberately something else.
+	logContent := "0 verbose cli node npm\n" +
+		"43 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}\n" +
+		"44 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/blockedpkg 100ms (cache skip)\n" +
+		"45 silly placeDep ROOT blockedpkg@ OK for: realproj@9.9.9 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	// No package.json written — readNpmProjectNameVersion fails.
+	projectDir := filepath.Join(t.TempDir(), "unrelated-dir-name")
+	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotEmpty(t, report.packagesStatus, "blockedpkg must still surface as a row even when package.json can't be read")
+	assert.Equal(t, "blockedpkg", report.packagesStatus[0].PackageName)
+	assert.True(t, directDepNamesContains(report, "blockedpkg"), "blockedpkg is a direct dependency of the real (log-recovered) root, so its recommendation must say so, not treat it as transitive")
+}
+
+// directDepNamesContains checks pkgName's recommendation uses the direct, not transitive, wording.
+func directDepNamesContains(report *CurationReport, pkgName string) bool {
+	for _, ps := range report.packagesStatus {
+		if ps.PackageName != pkgName {
+			continue
+		}
+		for _, p := range ps.Policy {
+			if strings.Contains(p.Recommendation, "Remove this package from your project and replace with an alternate package") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// A key-construction failure must not silently vanish the package from the report the same way
+// as ordinary dedup — it must surface as a warning, same as a probe failure.
+func TestRunNpmLogFallback_KeyErrSurfacesAsWarningNotSilentDrop(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget-abc123"@0.0.0 matches isYarnBerryWorkspaceMember's pattern (name ends in
+	// "-" + 6 hex chars, version "0.0.0"), so getNpmNameScopeAndVersion returns zero URLs
+	// and npmPackageKey genuinely fails to derive a key — a real trigger, not a mock.
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT widget-abc123@0.0.0 OK for: myproj@1.0.0 want: ^0.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	for _, ps := range report.packagesStatus {
+		assert.NotEqual(t, "widget-abc123", ps.PackageName, "a package whose key couldn't be derived must not be reported as confirmed clean or blocked")
+	}
+	require.NotEmpty(t, report.warnings, "a key-construction failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "widget-abc123")
+}
+
+// A probe failure (network/5xx) for a resolved entry must not be silently treated as "clean" — it must surface as a warning.
+func TestRunNpmLogFallback_ProbeErrorSurfacesAsWarningNotClean(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/flaky-pkg-1.0.0.tgz") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT flaky-pkg@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	for _, ps := range report.packagesStatus {
+		assert.NotEqual(t, "flaky-pkg", ps.PackageName, "a package whose probe failed must not be reported as confirmed clean or blocked")
+	}
+	require.NotEmpty(t, report.warnings, "a probe failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "flaky-pkg")
+}
+
+// A blocked name shared by a direct edge and a transitive edge must get the recommendation for each edge, not one shared answer.
+func TestRunNpmLogFallback_RecommendationIsPerEdgeNotPerName(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "blocked-name" is both a direct dep of myproj and a transitive dep of "otherdirect".
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT blocked-name@ OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"11 silly placeDep ROOT otherdirect@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"12 silly placeDep node_modules/otherdirect blocked-name@ OK for: otherdirect@1.0.0 want: ^2.0.0\n" +
+		"40 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}\n" +
+		"41 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/blocked-name 50ms (cache skip)\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	var directRow, transitiveRow *PackageStatus
+	for _, ps := range report.packagesStatus {
+		if ps.PackageName != "blocked-name" {
+			continue
+		}
+		switch {
+		case ps.DepRelation == directRelation:
+			directRow = ps
+		case ps.DepRelation == indirectRelation && ps.ParentName == "otherdirect":
+			transitiveRow = ps
+		}
+	}
+	require.NotNil(t, directRow, "blocked-name must appear as a direct edge")
+	require.NotNil(t, transitiveRow, "blocked-name must appear as a transitive edge under otherdirect")
+
+	require.Len(t, directRow.Policy, 1)
+	assert.Equal(t, "Remove this package from your project and replace with an alternate package", directRow.Policy[0].Recommendation)
+
+	require.Len(t, transitiveRow.Policy, 1)
+	assert.Contains(t, transitiveRow.Policy[0].Recommendation, "transitive dependency of otherdirect",
+		"the transitive edge must not get the direct-removal recommendation just because the same name is also a direct dependency elsewhere")
+}
+
+// The ETARGET probe path has the same probe-error-swallowing bug the npmEntryResolved case
+// had (Fix #1) — a transient probe failure must surface as a warning, and must not make the
+// whole report vanish (return originalErr) when it's the only recoverable entry.
+func TestRunNpmLogFallback_ETARGETProbeErrorSurfacesAsWarningNotDiscarded(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT flaky-etarget@ OK for: myproj@1.0.0 want: 9.9.9\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err, "a probe failure must not make the whole recovered report vanish")
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotEmpty(t, report.warnings, "a probe failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "flaky-etarget")
+}
+
+// If the log has no placeDep lines at all, the original error is returned unchanged.
+func TestRunNpmLogFallback_NoRecoverableEntries(t *testing.T) {
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	err := ca.runNpmLogFallback(t.TempDir(), techutils.Npm, results, originalErr, false, 0)
+	assert.Equal(t, originalErr, err)
+	assert.Empty(t, results)
+}
+
+// A stale log left over from an earlier, unrelated run (e.g. a shared CI cache) must never be
+// mistaken for this crash's own log — if npm never wrote a NEW log for this invocation (e.g. it
+// failed before writing anything at all, missing binary, bad package.json), the fallback must
+// return originalErr unchanged rather than fabricate a report from someone else's old log.
+func TestRunNpmLogFallback_StaleLogPredatingBaselineIsIgnored(t *testing.T) {
+	logsDir := t.TempDir()
+	staleLogContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT stale-pkg@1.0.0 OK for: otherproj@1.0.0 want: ^1.0.0\n"
+	staleLogPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(staleLogPath, []byte(staleLogContent), 0644))
+
+	// The baseline is captured AFTER the stale log already exists — exactly like the real
+	// eager-lookup snapshot taken right before an install that then fails without logging.
+	baselineKey, err := npmDebugLogNewestKey(logsDir)
+	require.NoError(t, err)
+	require.NotZero(t, baselineKey)
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm: command not found")
+
+	gotErr := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, baselineKey)
+	assert.Equal(t, originalErr, gotErr, "no log newer than the baseline exists, so the original error must pass through unchanged")
+	assert.Empty(t, results, "must not fabricate a report from a stale pre-existing log")
+
+	// The stale log itself must survive untouched — it's not ours to touch.
+	_, statErr := os.Stat(staleLogPath)
+	assert.NoError(t, statErr)
+}
+
+// When logs-max was 0, only the specific log file read is removed — not the whole directory.
+func TestRunNpmLogFallback_CleansUpLogWhenLogsMaxWasZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+	otherPath := filepath.Join(logsDir, "unrelated-file.txt")
+	require.NoError(t, os.WriteFile(otherPath, []byte("leave me alone\n"), 0644))
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	// No placeDep lines in this fixture, so this hits the "nothing recoverable" early
+	// return — cleanup must still fire on that path, not only on a fully successful one.
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, true, 0)
+	assert.Equal(t, originalErr, err)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the log file itself should have been removed")
+	_, otherStatErr := os.Stat(otherPath)
+	assert.NoError(t, otherStatErr, "an unrelated file in the same directory must not be touched")
+}
+
+// The install-succeeded path forces the same --logs-max=10 override as the failure path, so it
+// must clean up the resulting debug log the same way when the user had configured logs-max=0.
+func TestCleanupForcedNpmDebugLog_RemovesLogWhenLogsMaxWasZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+
+	cleanupForcedNpmDebugLog(logsDir, true, 0)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the forced debug log must be removed when logs-max was actually 0")
+}
+
+// When the user hadn't set logs-max=0 themselves, npm's own rotation already manages the log —
+// nothing forced it into existence, so nothing should be removed here.
+func TestCleanupForcedNpmDebugLog_LeavesLogWhenLogsMaxWasNotZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+
+	cleanupForcedNpmDebugLog(logsDir, false, 0)
+
+	_, statErr := os.Stat(logPath)
+	assert.NoError(t, statErr, "must not remove a log npm would have written anyway")
+}
+
+// A transient npm-config-lookup failure must not abort an install that would've succeeded.
+func TestDoCurationAudit_NpmConfigLookupFailureDoesNotAbortSuccessfulInstall(t *testing.T) {
+	var fixture testCase
+	for _, tt := range getTestCasesForDoCurationAudit() {
+		if tt.name == "npm tree - two blocked package " {
+			fixture = tt
+			break
+		}
+	}
+	require.NotEmpty(t, fixture.name, "expected fixture not found")
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	runFixture := func(t *testing.T) (map[string]*CurationReport, error) {
+		mockServer, config := curationServer(t, fixture.expectedBuildRequest, fixture.expectedRequest, fixture.requestToFail, fixture.requestToError, fixture.serveResources)
+		defer mockServer.Close()
+		cleanUp := createCurationTestEnv(t, basePathToTests, fixture, config)
+		defer cleanUp()
+		return createCurationCmdAndRun(fixture)
+	}
+
+	t.Run("baseline_succeeds_unmodified", func(t *testing.T) {
+		t.Setenv("NPM_CONFIG_CACHE", t.TempDir())
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		assert.NotEmpty(t, results)
+	})
+
+	t.Run("forced_config_lookup_failure_must_not_abort", func(t *testing.T) {
+		t.Setenv("NPM_CONFIG_CACHE", t.TempDir())
+		orig := npmGetConfigValue
+		npmGetConfigValue = func(string, string) (string, error) {
+			return "", errors.New("simulated: npm config get failed")
+		}
+		t.Cleanup(func() { npmGetConfigValue = orig })
+
+		results, err := runFixture(t)
+		assert.NoError(t, err, "a transient npm-config-lookup failure must not abort an audit whose install would otherwise have succeeded")
+		assert.NotEmpty(t, results, "the real, successful install result must still be reported")
+	})
+
+	// End-to-end with real ambient npm config (NPM_CONFIG_CACHE/LOGS_MAX), not just the Go-level mock.
+	t.Run("logs_max_zero_leaves_no_stray_log_after_real_success", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "0")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		entries, readErr := os.ReadDir(filepath.Join(isolatedCache, "_logs"))
+		if readErr != nil {
+			require.True(t, os.IsNotExist(readErr), "unexpected error reading _logs dir: %v", readErr)
+			return
+		}
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		assert.Empty(t, names, "no stray debug log should remain in a fresh, isolated cache after a successful install when logs-max was 0")
+	})
+
+	// A user's own, already-nonzero logs-max retention setting must never be forced down —
+	// only logs-max=0 (which would suppress npm's debug log entirely) justifies an override.
+	t.Run("nonzero_logs_max_is_never_overridden", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		logsDir := filepath.Join(isolatedCache, "_logs")
+		require.NoError(t, os.MkdirAll(logsDir, 0755))
+		// Seed more pre-existing logs than the old forced value (10) ever allowed, in npm's
+		// real filename shape, so npm's own rotation would recognize and count them.
+		for i := 0; i < 20; i++ {
+			name := fmt.Sprintf("2025-01-01T00_00_%02d_000Z-debug-0.log", i)
+			require.NoError(t, os.WriteFile(filepath.Join(logsDir, name), []byte("0 verbose cli npm\n"), 0644))
+		}
+
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "50")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		entries, readErr := os.ReadDir(logsDir)
+		require.NoError(t, readErr)
+		assert.GreaterOrEqual(t, len(entries), 20,
+			"a user's own logs-max=50 must not be overridden/pruned by a smaller forced value")
+	})
+
+	// An independently-configured logs-dir (not <cache>/_logs, npm's own default) must still be
+	// found — assuming the default would silently defeat the whole fallback for anyone who sets it.
+	t.Run("independent_logs_dir_is_respected_not_assumed_from_cache", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		isolatedLogsDir := t.TempDir()
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_DIR", isolatedLogsDir)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "0")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		// The forced-then-cleaned log must have gone to the configured logs-dir, not <cache>/_logs.
+		_, cacheLogsErr := os.ReadDir(filepath.Join(isolatedCache, "_logs"))
+		assert.True(t, os.IsNotExist(cacheLogsErr), "no log should ever land under <cache>/_logs when logs-dir is set independently")
+
+		entries, readErr := os.ReadDir(isolatedLogsDir)
+		require.NoError(t, readErr)
+		assert.Empty(t, entries, "the log written to the independently-configured logs-dir must still be cleaned up when logs-max was 0")
+	})
+}
+
+// A never-contacted dependency must not report the same BlockingReason/Action as a real block.
+// The console warning must not embed npm's own error text (which can include its full
+// captured stdout/stderr) — that goes to log.Debug only, so the console stays a clean one-liner.
+func TestNpmLogPartialReportWarning_DoesNotEmbedRawNpmOutput(t *testing.T) {
+	assert.NotContains(t, npmLogPartialReportWarning, "%s",
+		"must be a fixed string, not a template that could embed npm's raw (potentially huge) error output")
+}
+
+// The "Found N blocked packages" count must not count non-registry "not evaluated" rows as blocked.
+func TestCountBlockedPackages_ExcludesNotEvaluatedRows(t *testing.T) {
+	rows := []*PackageStatus{
+		{PackageName: "real-block", Action: blocked},
+		{PackageName: "is-thirteen", Action: notEvaluated},
+		{PackageName: "another-block", Action: blocked},
+	}
+	assert.Equal(t, 2, countBlockedPackages(rows))
+}
+
+// A not-evaluated row's placeholder Policy{"—","—"} must not leak into the Blocked list.
+func TestGetBlocked_ExcludesNotEvaluatedRows(t *testing.T) {
+	rows := []*PackageStatus{
+		{PackageName: "real-block", PackageVersion: "1.0.0", Action: blocked,
+			Policy: []Policy{{Policy: "cve-high", Condition: "cond1"}}},
+		{PackageName: "git-dep", PackageVersion: "github:foo/bar (not evaluated)", Action: notEvaluated,
+			Policy: []Policy{{Policy: "—", Condition: "—"}}},
+	}
+	blockedList := getBlocked(rows)
+	require.Len(t, blockedList, 1)
+	assert.Equal(t, "cve-high", blockedList[0].Policy)
+	for _, bp := range blockedList {
+		assert.NotContains(t, bp.Packages, getPackageId("git-dep", "github:foo/bar (not evaluated)"))
+	}
+}
+
+// Cleanup must still fire when parsing itself fails partway through (e.g. an oversized line).
+func TestRunNpmLogFallback_CleansUpLogEvenOnScanError(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	oversizedLine := strings.Repeat("a", 9*1024*1024) // exceeds scanner.Buffer's 8MB max token size
+	require.NoError(t, os.WriteFile(logPath, []byte(oversizedLine+"\n"), 0644))
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, true, 0)
+	assert.Equal(t, originalErr, err)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the log file should be removed even though parsing hit a scan error, since logsMaxWasZero means it only exists because of our own --logs-max override")
 }
 
 // TestUniqueReportKey covers the disambiguation loop, including a 3-way collision where both
