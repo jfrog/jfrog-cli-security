@@ -460,31 +460,43 @@ func convertToBasicViolation(violationType violationutils.ViolationIssueType, vi
 
 func convertToCveViolations(cmdResults *results.SecurityCommandResults, violation services.XrayViolation) (cveViolations []violationutils.CveViolation) {
 	resolved, unresolvedCount := resolveInfectedComponents(cmdResults, violation)
-	for _, cve := range violation.Cves {
-		if cve.Id == "" {
-			log.Warn(fmt.Sprintf("Skipping CVE violation with empty CVE ID for violation ID %s", violation.Id))
-			continue
-		}
+	for _, cveId := range getCveIds(violation) {
 		if len(resolved) == 0 {
 			logComponentLessFallback(violation, unresolvedCount)
-			cveViolation := createCveViolation(cmdResults, "", cve.Id, violation, nil)
+			cveViolation := createCveViolation(cmdResults, "", cveId, violation, nil)
 			if cveViolation == nil {
-				log.Warn(fmt.Sprintf("CVE (%s) violation with no located affected components for violation ID %s", cve.Id, violation.Id))
+				log.Warn(fmt.Sprintf("CVE (%s) violation with no located affected components for violation ID %s", cveId, violation.Id))
 				continue
 			}
 			cveViolations = append(cveViolations, *cveViolation)
 			continue
 		}
 		for i := range resolved {
-			cveViolation := createCveViolation(cmdResults, resolved[i].xrayId, cve.Id, violation, &resolved[i])
+			cveViolation := createCveViolation(cmdResults, resolved[i].xrayId, cveId, violation, &resolved[i])
 			if cveViolation == nil {
-				log.Warn(fmt.Sprintf("CVE (%s) violation for component (%s) with no located affected components for violation ID %s", cve.Id, resolved[i].xrayId, violation.Id))
+				log.Warn(fmt.Sprintf("CVE (%s) violation for component (%s) with no located affected components for violation ID %s", cveId, resolved[i].xrayId, violation.Id))
 				continue
 			}
 			cveViolations = append(cveViolations, *cveViolation)
 		}
 	}
 	return cveViolations
+}
+
+// getCveIds returns the identifiers to convert for a Security violation. Xray-native vulnerabilities
+// with no assigned CVE (e.g. XRAY-XXXXX) still report through the CVE-keyed Security violation type,
+// with a CveDetails entry whose Id is empty. Fall back to the violation's own issue ID for those,
+// mirroring the fallback already used when building the SBOM (see ExtractIssuesInfoForCdx).
+func getCveIds(violation services.XrayViolation) (cveIds []string) {
+	for _, cve := range violation.Cves {
+		if cve.Id != "" {
+			cveIds = append(cveIds, cve.Id)
+		}
+	}
+	if len(cveIds) == 0 && violation.IssueId != "" {
+		cveIds = append(cveIds, violation.IssueId)
+	}
+	return
 }
 
 func createCveViolation(cmdResults *results.SecurityCommandResults, impactedComponentXrayId, cveId string, violation services.XrayViolation, preResolved *bomResolvedComponent) *violationutils.CveViolation {
