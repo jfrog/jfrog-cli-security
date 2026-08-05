@@ -148,7 +148,7 @@ type scanConfiguration struct {
 	PathToResultsToCompare string         `yaml:"target-result-file,omitempty"`
 	Language               string         `yaml:"language,omitempty"`
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
+	ExcludedRules          []string       `yaml:"excluded_rules,omitempty"`
 	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
 	UserRules              string         `yaml:"user_rules,omitempty"`
 }
