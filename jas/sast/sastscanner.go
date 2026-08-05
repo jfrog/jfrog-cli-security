@@ -104,7 +104,7 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 }
 
 func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module, centralConfigExclusions []string) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.deprecatedCreateConfigFile(module, ssm.signedDescriptions, ssm.sastChangedFiles, centralConfigExclusions, ssm.scanner.Exclusions...); err != nil {
+	if err = ssm.deprecatedCreateConfigFile(module, ssm.signedDescriptions, centralConfigExclusions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -155,7 +155,7 @@ type sastParameters struct {
 	SignedDescriptions bool `yaml:"signed_descriptions,omitempty"`
 }
 
-func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, sastChangedFiles []string, centralConfigExclusions []string, exclusions ...string) error {
+func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, centralConfigExclusions []string, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -164,15 +164,11 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 	if err != nil {
 		return err
 	}
-	if ssm.changedFilesMode {
-		log.Debug(fmt.Sprintf("SAST changed files mode: using %d paths as scan roots", len(sastChangedFiles)))
-		roots = sastChangedFiles
-	}
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
 				Type:                   sastScannerType,
-				Roots:                  roots,
+				Roots:                  ssm.getScanRoots(roots),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				Language:               sastScanner.Language,
@@ -188,12 +184,21 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, jasutils.Sast)
 }
 
+// In changed files mode only the files affected by the diff are analyzed, instead of the entire scanned tree.
+func (ssm *SastScanManager) getScanRoots(defaultRoots []string) []string {
+	if !ssm.changedFilesMode {
+		return defaultRoots
+	}
+	log.Debug(fmt.Sprintf("SAST changed files mode: using %d paths as scan roots", len(ssm.sastChangedFiles)))
+	return ssm.sastChangedFiles
+}
+
 func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
 				Type:                   sastScannerType,
-				Roots:                  jas.GetRootsFromTarget(target),
+				Roots:                  ssm.getScanRoots(jas.GetRootsFromTarget(target)),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				SastParameters: sastParameters{

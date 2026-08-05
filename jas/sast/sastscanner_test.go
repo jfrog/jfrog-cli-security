@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
 func TestNewSastScanManager(t *testing.T) {
@@ -369,13 +370,62 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ssm.changedFilesMode = tc.changedFilesMode
-			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, tc.sastForCall, nil))
+			ssm.sastChangedFiles = tc.sastForCall
+			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, nil))
 			got := readConfigRoots(t)
 			if tc.emptyRoots {
 				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")
 			} else {
 				assert.ElementsMatch(t, tc.want, got)
 			}
+		})
+	}
+}
+
+func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+	require.NoError(t, err)
+
+	target := results.ScanTarget{Target: filepath.Join("root", "repository")}
+	changed := []string{filepath.Join("root", "repository", "src", "a.go")}
+
+	for _, tc := range []struct {
+		name             string
+		changedFilesMode bool
+		changedFiles     []string
+		want             []string
+	}{
+		{
+			name:             "changed_files_mode_uses_changed_files_as_roots",
+			changedFilesMode: true,
+			changedFiles:     changed,
+			want:             changed,
+		},
+		{
+			name:         "mode_off_uses_target_roots",
+			changedFiles: changed,
+			want:         []string{target.Target},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles)
+			require.NoError(t, err)
+			require.NoError(t, ssm.createConfigFileForTarget(target))
+			data, err := os.ReadFile(ssm.configFileName)
+			require.NoError(t, err)
+			var cfg struct {
+				Scans []struct {
+					Roots []string `yaml:"roots,omitempty"`
+				} `yaml:"scans,omitempty"`
+			}
+			require.NoError(t, yaml.Unmarshal(data, &cfg))
+			require.Len(t, cfg.Scans, 1)
+			assert.ElementsMatch(t, tc.want, cfg.Scans[0].Roots)
 		})
 	}
 }
