@@ -11,6 +11,57 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func intPtr(i int) *int {
+	return &i
+}
+
+func TestResultsStatus_GetExecutedScanTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   ResultsStatus
+		expected []string
+	}{
+		{
+			name:     "no scans ran",
+			status:   ResultsStatus{},
+			expected: nil,
+		},
+		{
+			name: "all five scan types ran",
+			status: ResultsStatus{
+				ScaScanStatusCode:            intPtr(0),
+				ContextualAnalysisStatusCode: intPtr(0),
+				SecretsScanStatusCode:        intPtr(0),
+				IacScanStatusCode:            intPtr(0),
+				SastScanStatusCode:           intPtr(0),
+			},
+			expected: []string{"sca", "contextual_analysis", "secrets", "iac", "sast"},
+		},
+		{
+			name: "only sca and secrets ran",
+			status: ResultsStatus{
+				ScaScanStatusCode:     intPtr(0),
+				SecretsScanStatusCode: intPtr(1),
+			},
+			expected: []string{"sca", "secrets"},
+		},
+		{
+			name: "sbom, malicious, violations never reported as their own action",
+			status: ResultsStatus{
+				SbomScanStatusCode:      intPtr(0),
+				MaliciousScanStatusCode: intPtr(0),
+				ViolationsStatusCode:    intPtr(0),
+			},
+			expected: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.GetExecutedScanTypes())
+		})
+	}
+}
+
 func TestScanTarget_String(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -373,4 +424,9 @@ func TestScanTarget_GetDeprecatedAppsConfigModuleExclusions(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, tt.target.GetDeprecatedAppsConfigModuleExclusions(tt.scanType))
 		})
 	}
+}
+
+func TestSecurityCommandResults_SetUploadedArtifactPath(t *testing.T) {
+	cmdResults := NewCommandResults(utils.SourceCode).SetUploadedArtifactPath("myproject-frogbot/git.com/org/repo/commits/results.cdx.json")
+	assert.Equal(t, "myproject-frogbot/git.com/org/repo/commits/results.cdx.json", cmdResults.UploadedArtifactPath)
 }
