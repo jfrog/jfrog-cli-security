@@ -342,26 +342,20 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 		emptyRoots  bool
 	}{
 		{
-			name:             "env_true_uses_changed_files_as_roots",
+			name:             "changed_files_mode_uses_changed_files_as_roots",
 			changedFilesMode: true,
 			sastForCall:      changed,
 			want:             changed,
 		},
 		{
-			name:             "env_1_uses_changed_files_as_roots",
-			changedFilesMode: true,
-			sastForCall:      changed,
-			want:             changed,
-		},
-		{
-			name:             "env_false_ignores_changed_files",
+			name:             "changed_files_mode_off_ignores_changed_files",
 			changedFilesMode: false,
 			sastForCall:      changed,
 			want:             expectedDefaultRoots,
 		},
 		{
 			// In changed-files mode, do not use full module roots; RunSastScan skips the analyzer with no diff baseline.
-			name:             "env_true_no_changed_file_list_uses_no_module_roots",
+			name:             "changed_files_mode_no_changed_file_list_uses_no_module_roots",
 			changedFilesMode: true,
 			sastForCall:      nil,
 			emptyRoots:       true,
