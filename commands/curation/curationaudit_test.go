@@ -4102,6 +4102,124 @@ url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
+func TestSetRepoFromPipConfFallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte(`version: 1
+type: pip
+resolver:
+    repo: pip-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pip-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_PipConfOnly_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://user:token@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pypi-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPipConf_RejectsMalformedYaml(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte("resolver: [\n"), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf pip-config")
+	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_RejectsUnparsablePipConfUrl(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://admin:<token>@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a valid Artifactory PyPI URL")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://pypi.org/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf pip-config")
+	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
 func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
 	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
 		t.Run(tech.String(), func(t *testing.T) {
@@ -4259,6 +4377,18 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Uv, false))
 	})
 
+	// pip/pipenv already resolve automatically (yaml, then pip.conf, then — for pipenv —
+	// the Pipfile [[source]]); --run-native has nothing to switch between, so it's
+	// accepted as a no-op, same as pnpm/yarn — a warning is emitted in auditTree.
+	t.Run("pip accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, false))
+	})
+	t.Run("pipenv accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, false))
+	})
+
 	// Every other supported tech follows the same contract. Catch silent
 	// acceptance for any tech that's in the doc-table-of-supported but
 	// hasn't implemented a native flow — same UX as yarn.
@@ -4266,7 +4396,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		techutils.Gradle,
 		techutils.Maven,
 		techutils.Gem,
-		techutils.Pip,
 		techutils.Go,
 		techutils.Nuget,
 		techutils.Dotnet,
@@ -4285,6 +4414,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 			assert.NoError(t, validateRunNativeForTech(tech, false))
 		})
 	}
+
 }
 
 // TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
