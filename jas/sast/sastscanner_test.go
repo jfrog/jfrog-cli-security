@@ -28,7 +28,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil, nil)
 	assert.NoError(t, err)
 
 	// Assert
@@ -52,7 +52,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -67,7 +67,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil, nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -90,7 +90,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil, nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -203,7 +203,7 @@ func TestSastRules(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
 	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
@@ -330,7 +330,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	require.NoError(t, err)
 
 	changed := []string{"src/a.go", "src/b.go"}
-	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil)
+	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, nil)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -413,7 +413,7 @@ func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles)
+			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles, nil)
 			require.NoError(t, err)
 			require.NoError(t, ssm.createConfigFileForTarget(target))
 			got := readConfigRoots(t, ssm.configFileName)
@@ -424,4 +424,67 @@ func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExcludedRulesFromCentralConfig(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+
+	profileRules := []string{"java-stored-command-injection"}
+	appsConfigRules := []string{"java-sql-injection"}
+	target := results.ScanTarget{Target: filepath.Join("root", "repository")}
+
+	readExcludedRules := func(t *testing.T, configFileName string) []string {
+		t.Helper()
+		data, err := os.ReadFile(configFileName)
+		require.NoError(t, err)
+		var cfg struct {
+			Scans []struct {
+				ExcludedRules []string `yaml:"excluded_rules,omitempty"`
+			} `yaml:"scans,omitempty"`
+		}
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		return cfg.Scans[0].ExcludedRules
+	}
+	newManager := func(t *testing.T, centralConfigExcludeRules []string) *SastScanManager {
+		t.Helper()
+		scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+		require.NoError(t, err)
+		ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, centralConfigExcludeRules)
+		require.NoError(t, err)
+		return ssm
+	}
+
+	appsConfig, err := jas.CreateJFrogAppsConfig([]string{})
+	require.NoError(t, err)
+	appsModule := appsConfig.Modules[0]
+	appsModule.Scanners.Sast = &jfrogappsconfig.SastScanner{ExcludedRules: appsConfigRules}
+
+	t.Run("target flow uses the central config rules", func(t *testing.T) {
+		ssm := newManager(t, profileRules)
+		require.NoError(t, ssm.createConfigFileForTarget(target))
+		assert.ElementsMatch(t, profileRules, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("target flow without central config rules excludes nothing", func(t *testing.T) {
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.createConfigFileForTarget(target))
+		assert.Empty(t, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("central config rules take precedence over jfrog-apps-config", func(t *testing.T) {
+		ssm := newManager(t, profileRules)
+		require.NoError(t, ssm.deprecatedCreateConfigFile(appsModule, false, nil))
+		assert.ElementsMatch(t, profileRules, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("jfrog-apps-config rules are kept when the central config has none", func(t *testing.T) {
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.deprecatedCreateConfigFile(appsModule, false, nil))
+		assert.ElementsMatch(t, appsConfigRules, readExcludedRules(t, ssm.configFileName))
+	})
 }

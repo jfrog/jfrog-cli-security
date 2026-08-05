@@ -379,6 +379,14 @@ func (st ScanTarget) ShouldValidateSecrets(cliRequested bool) bool {
 	return cliRequested
 }
 
+func (st ScanTarget) GetCentralConfigSastExcludeRules() []string {
+	excludeRules := datastructures.MakeSet[string]()
+	for _, module := range st.CentralConfigModules {
+		excludeRules.AddElements(module.ScanConfig.SastScannerConfig.ExcludeRules...)
+	}
+	return excludeRules.ToSlice()
+}
+
 func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
 	exclusions := datastructures.MakeSet[string]()
 	for _, module := range st.CentralConfigModules {
