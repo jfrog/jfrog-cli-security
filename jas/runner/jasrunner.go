@@ -172,6 +172,15 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 	}
 }
 
+// The config profile enables changed files mode through the SAST differential scanning option.
+func (params JasRunnerParams) sastChangedFilesMode() bool {
+	if params.SastChangedFilesMode {
+		return true
+	}
+	return params.ConfigProfile != nil && len(params.ConfigProfile.Modules) > 0 &&
+		params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableFastDiffMode
+}
+
 func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
@@ -185,7 +194,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 				TargetCount:        params.TargetCount,
 				ThreadId:           threadId,
 				SastChangedFiles:   params.ChangedFiles,
-				ChangedFilesMode:   params.SastChangedFilesMode || (params.ConfigProfile != nil && params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableFastDiffMode),
+				ChangedFilesMode:   params.sastChangedFilesMode(),
 				ResultsToCompare:   getSourceRunsToCompare(params, jasutils.Sast),
 			},
 			params.Scanner,
