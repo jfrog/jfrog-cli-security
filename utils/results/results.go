@@ -134,22 +134,22 @@ type ResultsStatus struct {
 	ViolationsStatusCode         *int `json:"violations,omitempty"`
 }
 
-func (r ResultsStatus) GetExecutedScanTypes() []string {
-	var scanTypes []string
+func (r ResultsStatus) GetExecutedScanTypes() []utils.SubScanType {
+	var scanTypes []utils.SubScanType
 	if r.ScaScanStatusCode != nil {
-		scanTypes = append(scanTypes, "sca")
+		scanTypes = append(scanTypes, utils.ScaScan)
 	}
 	if r.ContextualAnalysisStatusCode != nil {
-		scanTypes = append(scanTypes, "contextual_analysis")
+		scanTypes = append(scanTypes, utils.ContextualAnalysisScan)
 	}
 	if r.SecretsScanStatusCode != nil {
-		scanTypes = append(scanTypes, "secrets")
+		scanTypes = append(scanTypes, utils.SecretsScan)
 	}
 	if r.IacScanStatusCode != nil {
-		scanTypes = append(scanTypes, "iac")
+		scanTypes = append(scanTypes, utils.IacScan)
 	}
 	if r.SastScanStatusCode != nil {
-		scanTypes = append(scanTypes, "sast")
+		scanTypes = append(scanTypes, utils.SastScan)
 	}
 	return scanTypes
 }

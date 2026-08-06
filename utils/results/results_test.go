@@ -19,7 +19,7 @@ func TestResultsStatus_GetExecutedScanTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		status   ResultsStatus
-		expected []string
+		expected []utils.SubScanType
 	}{
 		{
 			name:     "no scans ran",
@@ -35,7 +35,7 @@ func TestResultsStatus_GetExecutedScanTypes(t *testing.T) {
 				IacScanStatusCode:            intPtr(0),
 				SastScanStatusCode:           intPtr(0),
 			},
-			expected: []string{"sca", "contextual_analysis", "secrets", "iac", "sast"},
+			expected: []utils.SubScanType{utils.ScaScan, utils.ContextualAnalysisScan, utils.SecretsScan, utils.IacScan, utils.SastScan},
 		},
 		{
 			name: "only sca and secrets ran",
@@ -43,7 +43,7 @@ func TestResultsStatus_GetExecutedScanTypes(t *testing.T) {
 				ScaScanStatusCode:     intPtr(0),
 				SecretsScanStatusCode: intPtr(1),
 			},
-			expected: []string{"sca", "secrets"},
+			expected: []utils.SubScanType{utils.ScaScan, utils.SecretsScan},
 		},
 		{
 			name: "sbom, malicious, violations never reported as their own action",
