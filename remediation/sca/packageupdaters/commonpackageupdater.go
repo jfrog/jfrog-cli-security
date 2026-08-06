@@ -46,6 +46,7 @@ var SupportedFixTechnologies = []techutils.Technology{
 	techutils.Pipenv,
 	techutils.Go,
 	techutils.Pnpm,
+	techutils.Docker,
 }
 
 func GetCompatiblePackageUpdater(fixDetails *FixDetails) (PackageUpdater, bool) {
@@ -60,6 +61,8 @@ func GetCompatiblePackageUpdater(fixDetails *FixDetails) (PackageUpdater, bool) 
 		return &MavenPackageUpdater{}, true
 	case techutils.Pnpm:
 		return &PnpmPackageUpdater{}, true
+	case techutils.Docker:
+		return &DockerPackageUpdater{}, true
 	default:
 		return nil, false
 	}
