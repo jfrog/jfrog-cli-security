@@ -58,6 +58,7 @@ import (
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	"github.com/jfrog/gofrog/version"
+	uvtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/uv"
 	yarntech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
 
@@ -149,6 +150,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.HuggingFaceML: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Poetry: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Poetry, MinArtiPassThroughSupport)
+	},
+	techutils.Uv: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Uv, MinArtiPassThroughSupport)
 	},
 	techutils.Pipenv: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pipenv, MinArtiPassThroughSupport)
@@ -287,6 +291,7 @@ type CurationAuditCommand struct {
 	hfProjectNameHint     string
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
+	scriptPath            string
 	// pendingWarnings collects log.Warn messages that must be emitted after the
 	// progress spinner stops; otherwise the spinner's ANSI clear codes overwrite them.
 	pendingWarnings []string
@@ -388,6 +393,11 @@ func (ca *CurationAuditCommand) SetIncludeCachedPackages(includeCachedPackages b
 
 func (ca *CurationAuditCommand) SetMvnIncludePluginDeps(mvnIncludePluginDeps bool) *CurationAuditCommand {
 	ca.mvnIncludePluginDeps = mvnIncludePluginDeps
+	return ca
+}
+
+func (ca *CurationAuditCommand) SetScriptPath(scriptPath string) *CurationAuditCommand {
+	ca.scriptPath = scriptPath
 	return ca
 }
 
@@ -674,32 +684,115 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	}
 }
 
+// Rule, in order:
+//  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
+//     poetry.lock) → Pip wins, Uv is dropped.
+//  2. Otherwise, any uv signal (uv.lock, pyproject.toml [tool.uv]/[[tool.uv.index]], or
+//     ~/.config/uv/uv.toml) → Uv wins, Pip is dropped.
+func promotePipToUv(techs []string) []string {
+	if !slices.Contains(techs, techutils.Pip.String()) {
+		return techs
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return techs
+	}
+	for _, pipOnlyFile := range []string{"requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"} {
+		if _, statErr := os.Stat(filepath.Join(dir, pipOnlyFile)); statErr == nil {
+			return removeTech(techs, techutils.Uv.String())
+		}
+	}
+
+	uvSignal := ""
+	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
+		uvSignal = "uv.lock detected"
+	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
+		(strings.Contains(string(data), "[tool.uv]") || strings.Contains(string(data), "[[tool.uv.index]]")) {
+		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.index]])"
+	} else if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
+			uvSignal = "~/.config/uv/uv.toml detected"
+		}
+	}
+	if uvSignal == "" {
+		return techs
+	}
+	log.Info(uvSignal + " — treating project as uv.")
+	techs = removeTech(techs, techutils.Pip.String())
+	if !slices.Contains(techs, techutils.Uv.String()) {
+		techs = append(techs, techutils.Uv.String())
+	}
+	return techs
+}
+
+// removeTech returns techs without any entry equal to tech.
+func removeTech(techs []string, tech string) []string {
+	filtered := make([]string, 0, len(techs))
+	for _, t := range techs {
+		if t != tech {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
+
+// techsToAudit picks doCurateAudit's technologies, in priority order: --script, then
+// --hugging-face-model, then --docker-image, then file-based detection (with npm→yarn,
+// pip→uv, and Hugging Face auto-discovery promotion).
+func (ca *CurationAuditCommand) techsToAudit() []string {
+	switch {
+	case ca.scriptPath != "":
+		log.Debug(fmt.Sprintf("--script %q was provided, auditing it directly as a uv PEP 723 script — skipping project detection.", ca.scriptPath))
+		return []string{techutils.Uv.String()}
+	case ca.HuggingFaceModel() != "":
+		log.Debug(fmt.Sprintf("Hugging Face models '%s' were provided explicitly — running HF-only audit.", ca.HuggingFaceModel()))
+		return []string{techutils.HuggingFaceML.String()}
+	case ca.DockerImageName() != "":
+		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
+		return []string{techutils.Docker.String()}
+	default:
+		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
+		techs = promoteYarnWorkspaceMember(techs)
+		techs = promotePipToUv(techs)
+		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
+		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
+			hfTech := techutils.HuggingFaceML.String()
+			if !slices.Contains(techs, hfTech) {
+				techs = append(techs, hfTech)
+			}
+		}
+		for i, tech := range techs {
+			techs[i] = resolveNpmYarnTech(tech)
+		}
+		// Logged here, after all promotions, so it reflects what's actually audited —
+		// logging right after file-based detection could show a technology (e.g. "pip")
+		// that a promotion below immediately supersedes (e.g. "...treating project as uv.").
+		if len(techs) > 0 {
+			log.Info(fmt.Sprintf("Detected: %s.", strings.Join(techs, ", ")))
+		}
+		ca.queuePep723HintIfUv(techs)
+		return techs
+	}
+}
+
+func (ca *CurationAuditCommand) queuePep723HintIfUv(techs []string) {
+	if !slices.Contains(techs, techutils.Uv.String()) {
+		return
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	if hint := techutils.Pep723ScriptUnauditedHint(wd); hint != "" {
+		ca.pendingWarnings = append(ca.pendingWarnings, hint)
+	}
+}
+
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	if err := validateCurationAuditFlags(ca); err != nil {
 		return err
 	}
-	techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
-	techs = promoteYarnWorkspaceMember(techs)
-	if ca.DockerImageName() != "" {
-		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
-		techs = []string{techutils.Docker.String()}
-	}
-	// --hugging-face-model: explicit spot-check — run HF only, skip other package managers.
-	// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
-	if ca.HuggingFaceModel() != "" {
-		log.Debug(fmt.Sprintf("Hugging Face models '%s' were provided explicitly — running HF-only audit.", ca.HuggingFaceModel()))
-		techs = []string{techutils.HuggingFaceML.String()}
-	} else if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
-		hfTech := techutils.HuggingFaceML.String()
-		if !slices.Contains(techs, hfTech) {
-			techs = append(techs, hfTech)
-		}
-	}
-	// Resolve npm→yarn when the project was configured with 'jf yarn-config' (yarn.yaml exists)
-	// but has no yarn.lock/.yarnrc.yml so the file-based detector picked npm instead.
-	for i, tech := range techs {
-		techs[i] = resolveNpmYarnTech(tech)
-	}
+	techs := ca.techsToAudit()
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {
@@ -967,6 +1060,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		HFProjectName:      ca.hfProjectNameHint,
 		// NuGet params
 		SolutionFilePath: ca.SolutionFilePath(),
+		// Uv params
+		ScriptPath: ca.scriptPath,
 	}, err
 }
 
@@ -987,9 +1082,18 @@ func countPackageNodes(rootNodes map[string]struct{}, flatTreeNodes []*xrayUtils
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	// --run-native is only meaningful for npm/pnpm (.npmrc-based); reject it early for other techs.
+	// --run-native is meaningful for npm; pnpm/yarn/uv accept it as a no-op; reject it
+	// early for every other tech.
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
+	}
+	// Must run before getBuildInfoParamsByTech so params carry the correct repo and server details.
+	// Usually already set by checkSupportByVersionOrEnv's GetAuth(Uv) call before auditTree;
+	// only re-read here if that didn't happen (e.g. CurationSupportFlag skips GetAuth).
+	if tech == techutils.Uv && ca.PackageManagerConfig == nil {
+		if err := ca.setRepoFromUvToml(); err != nil {
+			return err
+		}
 	}
 	// Resolve Pipenv's native repo/server before getBuildInfoParamsByTech so install and the
 	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
@@ -1008,6 +1112,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
 		params.IgnoreConfigFile = true
 	}
+	// uv has no jf uv-config yaml; skip config file lookup and use server details
+	// from uv.toml so BuildDependencyTree builds correct Artifactory download URLs.
+	if tech == techutils.Uv {
+		params.IgnoreConfigFile = true
+		if ca.PackageManagerConfig != nil {
+			if uvSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && uvSD != nil {
+				params.ServerDetails = uvSD
+			}
+		}
+	}
 	// Pnpm always resolves natively from .npmrc — --run-native is redundant and has no effect.
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Pnpm {
@@ -1018,6 +1132,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Yarn {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn")
+	}
+	// --run-native has no effect for uv; it always resolves natively (there is no
+	// 'jf uv-config' to opt out of).
+	if ca.RunNative() && tech == techutils.Uv {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for uv; uv always resolves natively from uv.toml/pyproject.toml")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1063,12 +1182,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
-		// When CVS strips a pinned version from the simple index, pip can't
-		// resolve the project and GetTechDependencyTree returns a CvsBlockedError.
+		// When CVS strips a pinned version from the simple index, pip/poetry/uv
+		// can't resolve the project and GetTechDependencyTree returns a CvsBlockedError.
 		// Instead of aborting with no output, run the metadata-API fallback to
 		// recover the curation policy and render a partial table.
 		var cvsErr *python.CvsBlockedError
-		if (tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv) && errors.As(err, &cvsErr) {
+		if (tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Uv || tech == techutils.Pipenv) && errors.As(err, &cvsErr) {
 			return ca.runCvsFallback(cvsErr, tech, results)
 		}
 		// npm's install error is a plain opaque error, nothing to type-match on — trigger the
@@ -1122,13 +1241,18 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// "main", which would otherwise tack on a spurious ":main" here.
 		projectName, projectVersion = rootNode.Id, ""
 	}
-	// If the project name is not set, we use the current working directory name
+	// If the project name is not set, fall back to the script name (--script) or the
+	// current working directory name.
 	if projectName == "" {
-		workPath, err := os.Getwd()
-		if err != nil {
-			return err
+		if params.ScriptPath != "" {
+			projectName = filepath.Base(params.ScriptPath)
+		} else {
+			workPath, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			projectName = filepath.Base(workPath)
 		}
-		projectName = filepath.Base(workPath)
 	}
 	fullProjectName := projectName
 	if projectVersion != "" {
@@ -1438,6 +1562,11 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrcForPnpm()
 	}
 
+	// uv reads Artifactory repo details from ~/.config/uv/uv.toml — no 'jf uv-config' required.
+	if tech == techutils.Uv {
+		return ca.setRepoFromUvToml()
+	}
+
 	if tech == techutils.Pipenv {
 		return ca.setRepoFromPipfile()
 	}
@@ -1566,7 +1695,7 @@ func (ca *CurationAuditCommand) setRepoFromPipfile() error {
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
-// pnpm accepts it as a no-op (it always resolves from .npmrc). Extend the
+// pnpm/yarn/uv accept it as a no-op (they always resolve natively). Extend the
 // allow-list below when a new tech adds the matching native-config flow.
 func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	if !runNative {
@@ -1581,6 +1710,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		techutils.Pnpm: {},
 		// --run-native has no effect for yarn regardless of version; a warning is emitted in auditTree.
 		techutils.Yarn: {},
+		// uv always resolves natively; no 'jf uv-config' exists,
+		// so --run-native is a redundant no-op.
+		techutils.Uv: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
@@ -1720,6 +1852,57 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
+}
+
+// setRepoFromUvToml resolves the Artifactory URL and repo name via GetNativeUvRegistryConfig
+// (~/.config/uv/uv.toml first, then pyproject.toml [[tool.uv.index]] as a fallback) and
+// configures the command.
+func (ca *CurationAuditCommand) setRepoFromUvToml() error {
+	registryConfig, err := uvtech.GetNativeUvRegistryConfig()
+	if err != nil {
+		log.Warn("Ensure an [[index]] entry with an Artifactory PyPI URL is set in ~/.config/uv/uv.toml")
+		return fmt.Errorf("uv: failed to read Artifactory details from uv.toml: %w", err)
+	}
+
+	base, sdErr := ca.ServerDetails()
+	if sdErr != nil {
+		return fmt.Errorf("uv: failed to read 'jf c' server configuration: %w", sdErr)
+	}
+	if base == nil {
+		return errorutils.CheckErrorf("uv: no 'jf c' server configured")
+	}
+	if !sameArtifactoryHost(base.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
+		return errorutils.CheckErrorf(
+			"uv: the Artifactory URL declared in pyproject.toml/uv.toml (%s) does not match the "+
+				"configured 'jf c' server (%s) — refusing to send its credentials to a different host. "+
+				"Align the two, or select the matching server with --server-id.",
+			registryConfig.ArtifactoryUrl, base.ArtifactoryUrl)
+	}
+	copied := *base
+	copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(&copied)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// sameArtifactoryHost reports whether configuredUrl and discoveredUrl share the same
+// scheme and host[:port], ignoring path and trailing slashes.
+func sameArtifactoryHost(configuredUrl, discoveredUrl string) bool {
+	configured, err := url.Parse(configuredUrl)
+	if err != nil || configured.Host == "" {
+		return false
+	}
+	discovered, err := url.Parse(discoveredUrl)
+	if err != nil || discovered.Host == "" {
+		return false
+	}
+	return strings.EqualFold(configured.Host, discovered.Host) &&
+		strings.EqualFold(configured.Scheme, discovered.Scheme)
 }
 
 func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (*project.RepositoryConfig, error) {
@@ -1910,7 +2093,7 @@ func (nc *treeAnalyzer) sendBoundedRequest(method, requestURL string, details *h
 		boundary, redirect.MaxAuthenticatedRedirects)
 }
 
-// runCvsFallback is called when pip or poetry resolution failed because CVS
+// runCvsFallback is called when pip, poetry, or uv resolution failed because CVS
 // stripped a pinned version from the simple index (CvsBlockedError). It uses
 // the PyPI metadata API to recover each blocker's real download URL, probes
 // the normal (non-audit) download path, and renders the policy in a partial
@@ -1941,7 +2124,11 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	}
 	packagesStatus := analyzer.fetchCvsBlockedStatus(cvsErr.Packages)
 	if len(packagesStatus) == 0 {
-		// Fallback produced nothing — surface the original error (current behaviour).
+		// No policy match found for the stripped version(s) — surface the
+		// generic curation-block guidance instead of the bare error.
+		if msgToUser := technologies.GetMsgToUserForCurationBlock(true, tech, cvsErr.Cause.Error()); msgToUser != "" {
+			return errors.Join(cvsErr.Cause, errors.New(msgToUser))
+		}
 		return cvsErr
 	}
 	workPath, wdErr := osGetwd()
@@ -2559,7 +2746,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Gem:
 		return getGemNameScopeAndVersion(node.Id, artiUrl, repo)
-	case techutils.Pip, techutils.Poetry, techutils.Pipenv:
+	case techutils.Pip, techutils.Poetry, techutils.Uv, techutils.Pipenv:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 	case techutils.Go:

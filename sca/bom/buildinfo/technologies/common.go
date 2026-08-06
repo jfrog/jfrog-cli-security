@@ -92,6 +92,8 @@ type BuildInfoBomGeneratorParams struct {
 	HFProjectName string
 	// NuGet params
 	SolutionFilePath string
+	// Uv params
+	ScriptPath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {

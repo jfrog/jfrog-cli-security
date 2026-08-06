@@ -728,6 +728,16 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 }
 
 func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, error) {
+	scriptPath := c.GetStringFlagValue(flags.Script)
+	if scriptPath != "" && c.GetStringFlagValue(flags.WorkingDirs) != "" {
+		return nil, errorutils.CheckErrorf("--script and --working-dirs cannot be used together; run separate curation-audit commands for each")
+	}
+	if scriptPath != "" && c.GetStringFlagValue(flags.DockerImageName) != "" {
+		return nil, errorutils.CheckErrorf("--script and --docker-image cannot be used together; run separate curation-audit commands for each")
+	}
+	if scriptPath != "" && c.IsFlagSet(flags.HuggingFaceModel) {
+		return nil, errorutils.CheckErrorf("--script and --hugging-face-model cannot be used together; run separate curation-audit commands for each")
+	}
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return nil, err
@@ -768,6 +778,7 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 	curationAuditCommand.SetMvnIncludePluginDeps(c.GetBoolFlagValue(flags.MvnIncludePluginDeps))
 	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))
 	curationAuditCommand.SetRunNative(c.GetBoolFlagValue(flags.RunNative))
+	curationAuditCommand.SetScriptPath(scriptPath)
 	return curationAuditCommand, nil
 }
 
