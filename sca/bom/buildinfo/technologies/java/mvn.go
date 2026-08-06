@@ -155,7 +155,7 @@ func (mdt *MavenDepTreeManager) installMavenDepTreePlugin(depTreeExecDir string)
 		return nil
 	}
 	mavenDepTreeJarPath := filepath.Join(depTreeExecDir, mavenDepTreeJarFile)
-	if err := errorutils.CheckError(os.WriteFile(mavenDepTreeJarPath, mavenDepTreeJar, 0666)); err != nil {
+	if err := errorutils.CheckError(os.WriteFile(mavenDepTreeJarPath, mavenDepTreeJar, 0644)); err != nil {
 		return err
 	}
 	goals := GetMavenPluginInstallationGoals(mavenDepTreeJarPath)

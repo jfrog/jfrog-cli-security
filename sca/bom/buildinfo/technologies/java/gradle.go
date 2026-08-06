@@ -118,7 +118,7 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 	gradleDepTreeJarPath = ioutils.DoubleWinPathSeparator(gradleDepTreeJarPath)
 
 	depTreeInitScript := fmt.Sprintf(gradleDepTreeInitScript, releasesRepo, gradleDepTreeJarPath, gdt.depsRepo)
-	return tmpDir, errorutils.CheckError(os.WriteFile(filepath.Join(tmpDir, gradleDepTreeInitFile), []byte(depTreeInitScript), 0666))
+	return tmpDir, errorutils.CheckError(os.WriteFile(filepath.Join(tmpDir, gradleDepTreeInitFile), []byte(depTreeInitScript), 0644))
 }
 
 // getRemoteRepos constructs the sections of Artifactory's remote repositories in the gradle-dep-tree init script.
