@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
 func TestNewSastScanManager(t *testing.T) {
@@ -295,6 +296,20 @@ func TestSastChangedFilesForTarget(t *testing.T) {
 	}
 }
 
+func readConfigRoots(t *testing.T, configFileName string) []string {
+	t.Helper()
+	data, err := os.ReadFile(configFileName)
+	require.NoError(t, err)
+	var cfg struct {
+		Scans []struct {
+			Roots []string `yaml:"roots,omitempty"`
+		} `yaml:"scans,omitempty"`
+	}
+	require.NoError(t, yaml.Unmarshal(data, &cfg))
+	require.Len(t, cfg.Scans, 1)
+	return cfg.Scans[0].Roots
+}
+
 func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
@@ -318,21 +333,6 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil)
 	require.NoError(t, err)
 
-	type yamlCfg struct {
-		Scans []struct {
-			Roots []string `yaml:"roots,omitempty"`
-		} `yaml:"scans,omitempty"`
-	}
-	readConfigRoots := func(t *testing.T) []string {
-		t.Helper()
-		data, err := os.ReadFile(ssm.configFileName)
-		require.NoError(t, err)
-		var cfg yamlCfg
-		require.NoError(t, yaml.Unmarshal(data, &cfg))
-		require.Len(t, cfg.Scans, 1)
-		return cfg.Scans[0].Roots
-	}
-
 	for _, tc := range []struct {
 		name             string
 		changedFilesMode bool
@@ -342,26 +342,20 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 		emptyRoots  bool
 	}{
 		{
-			name:             "env_true_uses_changed_files_as_roots",
+			name:             "changed_files_mode_uses_changed_files_as_roots",
 			changedFilesMode: true,
 			sastForCall:      changed,
 			want:             changed,
 		},
 		{
-			name:             "env_1_uses_changed_files_as_roots",
-			changedFilesMode: true,
-			sastForCall:      changed,
-			want:             changed,
-		},
-		{
-			name:             "env_false_ignores_changed_files",
+			name:             "changed_files_mode_off_ignores_changed_files",
 			changedFilesMode: false,
 			sastForCall:      changed,
 			want:             expectedDefaultRoots,
 		},
 		{
 			// In changed-files mode, do not use full module roots; RunSastScan skips the analyzer with no diff baseline.
-			name:             "env_true_no_changed_file_list_uses_no_module_roots",
+			name:             "changed_files_mode_no_changed_file_list_uses_no_module_roots",
 			changedFilesMode: true,
 			sastForCall:      nil,
 			emptyRoots:       true,
@@ -369,10 +363,62 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ssm.changedFilesMode = tc.changedFilesMode
-			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, tc.sastForCall, nil))
-			got := readConfigRoots(t)
+			ssm.sastChangedFiles = tc.sastForCall
+			require.NoError(t, ssm.deprecatedCreateConfigFile(module, false, nil))
+			got := readConfigRoots(t, ssm.configFileName)
 			if tc.emptyRoots {
 				assert.Empty(t, got, "with changed-files mode on and no per-target list, roots should be nil/empty in YAML, not the default module source roots")
+			} else {
+				assert.ElementsMatch(t, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+	require.NoError(t, err)
+
+	target := results.ScanTarget{Target: filepath.Join("root", "repository")}
+	changed := []string{filepath.Join("root", "repository", "src", "a.go")}
+
+	for _, tc := range []struct {
+		name             string
+		changedFilesMode bool
+		changedFiles     []string
+		want             []string
+		emptyRoots       bool
+	}{
+		{
+			name:             "changed_files_mode_uses_changed_files_as_roots",
+			changedFilesMode: true,
+			changedFiles:     changed,
+			want:             changed,
+		},
+		{
+			name:         "mode_off_uses_target_roots",
+			changedFiles: changed,
+			want:         []string{target.Target},
+		},
+		{
+			// RunSastScan skips the analyzer in this case, so the target must not fall back to the whole tree.
+			name:             "changed_files_mode_without_changed_files_uses_no_roots",
+			changedFilesMode: true,
+			emptyRoots:       true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles)
+			require.NoError(t, err)
+			require.NoError(t, ssm.createConfigFileForTarget(target))
+			got := readConfigRoots(t, ssm.configFileName)
+			if tc.emptyRoots {
+				assert.Empty(t, got, "with changed-files mode on and no changed files, roots should be empty, not the scan target")
 			} else {
 				assert.ElementsMatch(t, tc.want, got)
 			}

@@ -281,8 +281,7 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 		}
 		bomIndex := cdxutils.NewBOMIndex(target.ScaResults.Sbom, true)
 		for _, component := range *target.ScaResults.Sbom.Components {
-			// XRAY-135509, CTLG-1290 Bug in Xray: the BOMRef is not always in the same case as the ref, so we need to check both
-			if strings.HasPrefix(component.BOMRef, ref) || strings.EqualFold(component.BOMRef, ref) {
+			if matchesComponentRef(component.BOMRef, ref) {
 				// Found the relevant component
 				impactedComponent = &component
 				impactPaths = results.BuildImpactPath(component, bomIndex)
@@ -295,6 +294,15 @@ func locateBomComponentInfo(cmdResults *results.SecurityCommandResults, impacted
 		log.Debug(fmt.Sprintf("Could not locate component %s in the scan results for (%s) violation ID %s", impactedComponentXrayId, violation.Type, violation.Id))
 	}
 	return
+}
+
+// XRAY-135509, CTLG-1290, XRAY-156485 Xray lowercases component ids of case-insensitive package types such as NuGet,
+// while the generated BOMRef keeps the original case and appends purl qualifiers (pkg:nuget/Name@1.0.0?hash=abcd1234).
+func matchesComponentRef(bomRef, ref string) bool {
+	if qualifiersIndex := strings.IndexAny(bomRef, "?#"); qualifiersIndex != -1 {
+		bomRef = bomRef[:qualifiersIndex]
+	}
+	return strings.EqualFold(bomRef, ref)
 }
 
 // locateBomVulnerabilityInfo finds a CycloneDX vulnerability in scan results by issue/CVE id.
