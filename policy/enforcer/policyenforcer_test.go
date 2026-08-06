@@ -208,6 +208,85 @@ func TestConvertToLicenseViolations_withResolvedComponent(t *testing.T) {
 	assert.Equal(t, testGoComponentRef, got[0].ImpactedComponent.BOMRef)
 }
 
+func TestLocateBomComponentInfo_matchesQualifiedAndCaseDriftedRefs(t *testing.T) {
+	testCases := []struct {
+		name      string
+		bomRef    string
+		xrayId    string
+		expectHit bool
+	}{
+		{
+			name:      "exact ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13",
+			xrayId:    "nuget://System.Security.Cryptography.Xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "qualified ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13?hash=5058f1af",
+			xrayId:    "nuget://System.Security.Cryptography.Xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "case drifted ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "qualified and case drifted ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13?hash=5058f1af",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "subpath qualified ref",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.13#lib/net8.0",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: true,
+		},
+		{
+			name:      "case drifted ref of a package type Xray does not lower case",
+			bomRef:    "pkg:maven/org.thymeleaf.extras/thymeleaf-extras-springsecurity6@3.1.3.RELEASE?hash=5058f1af",
+			xrayId:    "gav://org.thymeleaf.extras:thymeleaf-extras-springsecurity6:3.1.3.release",
+			expectHit: true,
+		},
+		{
+			name:      "version is a prefix of another version",
+			bomRef:    "pkg:nuget/System.Security.Cryptography.Xml@9.0.131?hash=5058f1af",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: false,
+		},
+		{
+			name:      "different component",
+			bomRef:    "pkg:nuget/Newtonsoft.Json@13.0.1?hash=5058f1af",
+			xrayId:    "nuget://system.security.cryptography.xml:9.0.13",
+			expectHit: false,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cmdResults := results.NewCommandResults(utils.SourceCode)
+			cmdResults.NewScanResults(results.ScanTarget{Target: "target"}).SetSbom(&cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{{
+					BOMRef:     testCase.bomRef,
+					PackageURL: testCase.bomRef,
+					Type:       cyclonedx.ComponentTypeLibrary,
+				}},
+			})
+
+			impacted, _, _ := locateBomComponentInfo(cmdResults, testCase.xrayId, services.XrayViolation{Id: "vio"})
+
+			if !testCase.expectHit {
+				assert.Nil(t, impacted)
+				return
+			}
+			require.NotNil(t, impacted)
+			assert.Equal(t, testCase.bomRef, impacted.BOMRef)
+		})
+	}
+}
+
 func TestIsMatchingExposureScannerId(t *testing.T) {
 	rule := sarifutils.CreateDummyRuleWithProperties("secret-rule", sarif.Properties{
 		sarifutils.JasScannerIdSarifPropertyKey: "REQ.SECRET.KEYS",
