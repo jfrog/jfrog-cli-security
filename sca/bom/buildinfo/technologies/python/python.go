@@ -1110,10 +1110,43 @@ func parsePipenvVersion(out string) string {
 	return m[1]
 }
 
+// resolveExecutablePath resolves name to an absolute path via a single PATH lookup, so callers
+// can reuse the same resolved path across multiple exec.Command invocations instead of passing
+// the bare name repeatedly. Passing a bare name to exec.Command re-triggers Go's own PATH lookup
+// on every call, which on Windows is resolved relative to the process's current working
+// directory at the moment of that specific call (see the os/exec package docs on ErrDot); this
+// makes bare-name lookups unreliable across callers that change the working directory between
+// invocations (e.g. tests). Resolving once to an absolute path removes that dependency entirely,
+// since an absolute path is never re-resolved via PATH.
+func resolveExecutablePath(name string) (string, error) {
+	path, err := exec.LookPath(name)
+	if err != nil && !errors.Is(err, exec.ErrDot) {
+		return "", err
+	}
+	return path, nil
+}
+
+// executePipenvVersionCheck runs "pipenv --version" and returns its combined output.
+func executePipenvVersionCheck() (string, error) {
+	pipenvPath, lookupErr := resolveExecutablePath("pipenv")
+	if lookupErr != nil {
+		return "", errorutils.CheckErrorf("could not resolve %q on PATH: %s", "pipenv", lookupErr.Error())
+	}
+	cmd := exec.Command(pipenvPath, "--version")
+	maskedCmdString := coreutils.GetMaskedCommandString(cmd)
+	log.Debug("Running", maskedCmdString)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		technologies.LogExecutableVersion("pipenv")
+		return string(output), errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
+	}
+	return string(output), nil
+}
+
 // validateMinimumPipenvVersion checks that the pipenv CLI on PATH meets CurationPipenvMinimumVersion.
 func validateMinimumPipenvVersion() error {
 	minVersion := CurationPipenvMinimumVersion
-	out, err := executeCommand("pipenv", "--version")
+	out, err := executePipenvVersionCheck()
 	if err != nil {
 		log.Debug(fmt.Sprintf("pipenv is not installed or not on PATH: %v", err))
 		return errorutils.CheckErrorf("JFrog CLI pipenv curation requires pipenv %s or higher to be installed.", minVersion)
@@ -2125,12 +2158,22 @@ func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoNa
 		if err != nil {
 			return err
 		}
-		_, err = executeCommand("pipenv", "install", "-d",
+		pipenvPath, lookupErr := resolveExecutablePath("pipenv")
+		if lookupErr != nil {
+			return errorutils.CheckErrorf("could not resolve %q on PATH: %s", "pipenv", lookupErr.Error())
+		}
+		_, err = executeCommand(pipenvPath, "install", "-d",
 			artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtURL)
 		return err
 	}
 	if err = validateMinimumPipenvVersion(); err != nil {
 		return err
+	}
+	// pipenv is confirmed installed by the check above; resolve it once to an absolute path and
+	// reuse that path below rather than letting exec.Command re-resolve the bare name "pipenv".
+	pipenvPath, lookupErr := resolveExecutablePath("pipenv")
+	if lookupErr != nil {
+		return errorutils.CheckErrorf("could not resolve %q on PATH: %s", "pipenv", lookupErr.Error())
 	}
 
 	rtURL, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(server, depsRepoName, true)
@@ -2151,7 +2194,7 @@ func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoNa
 	}
 
 	args := []string{"install", "-d"}
-	output, installErr := executeCommandSanitized("pipenv", args, safeURL, credentialURL, password, server.GetAccessToken())
+	output, installErr := executeCommandSanitized(pipenvPath, args, safeURL, credentialURL, password, server.GetAccessToken())
 	if installErr != nil {
 		combined := output + " " + installErr.Error()
 		if isCvsVersionFilteredOutput(combined) {
