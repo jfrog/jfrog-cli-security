@@ -4220,6 +4220,95 @@ func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
+func TestSetRepoFromPyproject_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "poetry.yaml"), []byte(`version: 1
+type: poetry
+resolver:
+    repo: poetry-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "poetry-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPyproject_SourcePresent_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "poetry-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_SourcePresent_FallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf poetry-config")
+	assert.Contains(t, err.Error(), "pyproject.toml")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPyproject_NonArtifactorySourceFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf poetry-config")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
 func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
 	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
 		t.Run(tech.String(), func(t *testing.T) {
@@ -4387,6 +4476,10 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	t.Run("pipenv accepts --run-native as a redundant no-op", func(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, false))
+	})
+	t.Run("poetry accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
 	})
 
 	// Every other supported tech follows the same contract. Catch silent

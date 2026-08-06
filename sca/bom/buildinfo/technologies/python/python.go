@@ -1073,6 +1073,45 @@ func extractPoetrySourceNames(v any) []string {
 	return names
 }
 
+// ParsePyprojectArtifactorySource scans the current directory's pyproject.toml for a
+// [[tool.poetry.source]] entry whose url points at an Artifactory PyPI repository
+// (e.g. https://<host>/artifactory/api/pypi/<repo>/simple), returning its server + repo
+// name. Entries are checked in declaration order; the first Artifactory match wins.
+// Returns (nil, "", nil) when pyproject.toml is missing or has no such entry.
+func ParsePyprojectArtifactorySource() (serverDetails *config.ServerDetails, repoName string, err error) {
+	exists, existErr := fileutils.IsFileExists(pyprojectToml, false)
+	if existErr != nil {
+		return nil, "", errorutils.CheckError(existErr)
+	}
+	if !exists {
+		return nil, "", nil
+	}
+	v := viper.New()
+	v.SetConfigType("toml")
+	v.SetConfigFile(pyprojectToml)
+	if readErr := v.ReadInConfig(); readErr != nil {
+		return nil, "", errorutils.CheckErrorf("failed to read %s: %s", pyprojectToml, readErr)
+	}
+	arr, ok := v.Get("tool.poetry.source").([]any)
+	if !ok {
+		return nil, "", nil
+	}
+	for _, e := range arr {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		rawURL, _ := m["url"].(string)
+		if strings.TrimSpace(rawURL) == "" {
+			continue
+		}
+		if sd, repo := parseArtifactoryPypiURL(rawURL); sd != nil {
+			return sd, repo, nil
+		}
+	}
+	return nil, "", nil
+}
+
 func validateMinimumPoetryVersion(minVersion string) (int, error) {
 	out, err := executeCommand("poetry", "--version")
 	if err != nil {

@@ -1008,14 +1008,14 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip, prefers an
+// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry, prefers an
 // already-set ca.PackageManagerConfig (native detection) over the generic server so install
 // and the later GetAuth-based probes hit the same endpoint. Other techs keep using the
 // generic server, matching their pre-existing behavior.
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if (tech == techutils.Pipenv || tech == techutils.Pip) && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1083,7 +1083,7 @@ func countPackageNodes(rootNodes map[string]struct{}, flatTreeNodes []*xrayUtils
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	// --run-native only changes behavior for npm; pnpm/yarn/uv accept it as a no-op,
-	// pip/pipenv resolve automatically without needing the flag — reject it early only
+	// pip/pipenv/poetry resolve automatically without needing the flag — reject it early only
 	// for techs with no native flow at all.
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
@@ -1096,10 +1096,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv/Pip's native repo/server before getBuildInfoParamsByTech so install and the
+	// Resolve Pipenv/Pip/Poetry's native repo/server before getBuildInfoParamsByTech so install and the
 	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
 	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
-	if (tech == techutils.Pipenv || tech == techutils.Pip) && ca.PackageManagerConfig == nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
@@ -1139,14 +1139,17 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Uv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for uv; uv always resolves natively from uv.toml/pyproject.toml")
 	}
-	// pip/pipenv already resolve automatically (yaml, then pip.conf, then — for pipenv —
-	// the Pipfile [[source]]); --run-native has nothing to switch between here.
+	// pip/pipenv/poetry already resolve automatically (yaml, then pip.conf/pyproject.toml,
+	// then — for pipenv — the Pipfile [[source]]); --run-native has nothing to switch between here.
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Pip {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pip; the repository is resolved automatically from 'jf pip-config' or ~/.pip/pip.conf")
 	}
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from 'jf pipenv-config', ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
+	}
+	if ca.RunNative() && tech == techutils.Poetry {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for poetry; the repository is resolved automatically from 'jf poetry-config' or the Artifactory [[tool.poetry.source]] entry in your pyproject.toml")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1585,6 +1588,10 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromPipfile()
 	}
 
+	if tech == techutils.Poetry {
+		return ca.setRepoFromPyproject()
+	}
+
 	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
 	// Detect the running yarn version and route to the appropriate path.
 	// Version detection failures are fatal — silently falling through to the
@@ -1757,9 +1764,59 @@ func (ca *CurationAuditCommand) setRepoFromPipConf() error {
 			"Either run 'jf pip-config' or configure index-url in your user pip.conf via Artifactory 'Set me up'.")
 }
 
+// setRepoFromPyproject detects the Artifactory PyPI source for native poetry curation.
+//
+// Detection priority:
+//  1. poetry.yaml — explicit 'jf poetry-config'.
+//  2. pyproject.toml [[tool.poetry.source]] — Artifactory URL declared directly in the project.
+func (ca *CurationAuditCommand) setRepoFromPyproject() error {
+	projectType := techutils.Poetry.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("poetry: using Artifactory repository %q from poetry.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
+	configuredServer, configuredRepo, err := python.ParsePyprojectArtifactorySource()
+	if err != nil {
+		return err
+	}
+	if configuredRepo != "" && configuredServer != nil {
+		serverDetails := configuredServer
+		if configuredServer.User == "" && configuredServer.Password == "" && configuredServer.AccessToken == "" {
+			if base, sdErr := ca.ServerDetails(); sdErr == nil && base != nil {
+				copied := *base
+				copied.ArtifactoryUrl = configuredServer.ArtifactoryUrl
+				serverDetails = &copied
+			}
+		}
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(configuredRepo).
+			SetServerDetails(serverDetails)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(configuredRepo)
+		log.Info(fmt.Sprintf("poetry: using Artifactory repository %q from pyproject.toml [[tool.poetry.source]]", configuredRepo))
+		return nil
+	}
+
+	return errorutils.CheckErrorf(
+		"curation-audit for poetry requires an Artifactory PyPI resolver. " +
+			"Either run 'jf poetry-config' or add an Artifactory [[tool.poetry.source]] entry to your pyproject.toml.")
+}
+
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
-// pnpm/yarn/uv/pip/pipenv accept it as a no-op (a warning is emitted in auditTree)
+// pnpm/yarn/uv/pip/pipenv/poetry accept it as a no-op (a warning is emitted in auditTree)
 // since their resolution is already automatic and has nothing for the flag to
 // switch between. Extend the allow-list below when a new tech adds the
 // matching native-config flow.
@@ -1779,11 +1836,12 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// uv always resolves natively; no 'jf uv-config' exists,
 		// so --run-native is a redundant no-op.
 		techutils.Uv: {},
-		// pip/pipenv already resolve automatically (yaml, then pip.conf, then — for
+		// pip/pipenv/poetry already resolve automatically (yaml, then pip.conf/pyproject.toml, then — for
 		// pipenv — the Pipfile [[source]]), so --run-native has nothing to switch
 		// between; a warning is emitted in auditTree rather than an error.
 		techutils.Pip:    {},
 		techutils.Pipenv: {},
+		techutils.Poetry: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
