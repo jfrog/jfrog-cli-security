@@ -31,10 +31,10 @@ const (
 type SastScanManager struct {
 	scanner *jas.JasScanner
 
-	sastChangedFiles          []string
-	signedDescriptions        bool
-	sastRules                 string
-	centralConfigExcludeRules []string
+	sastChangedFiles   []string
+	signedDescriptions bool
+	sastRules          string
+	excludeRules       []string
 
 	changedFilesMode bool
 
@@ -83,16 +83,16 @@ func (sastScanManager *SastScanManager) runSastScan(params SastScanParams) (vuln
 	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SastScan))
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles, centralConfigExcludeRules []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles, excludeRules []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
-		scanner:                   scanner,
-		signedDescriptions:        signedDescriptions,
-		sastRules:                 sastRules,
-		changedFilesMode:          changedFilesMode,
-		sastChangedFiles:          sastChangedFiles,
-		centralConfigExcludeRules: centralConfigExcludeRules,
-		configFileName:            filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:           filepath.Join(scannerTempDir, "results.sarif"),
+		scanner:            scanner,
+		signedDescriptions: signedDescriptions,
+		sastRules:          sastRules,
+		changedFilesMode:   changedFilesMode,
+		sastChangedFiles:   sastChangedFiles,
+		excludeRules:       excludeRules,
+		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
 	}
 	if len(resultsToCompare) == 0 {
 		// No scan results to compare
@@ -197,8 +197,8 @@ func (ssm *SastScanManager) getScanRoots(defaultRoots []string) []string {
 
 // Rules excluded in the centralized config take precedence over the jfrog-apps-config module, as exclude patterns do.
 func (ssm *SastScanManager) getExcludedRules(moduleExcludedRules []string) []string {
-	if len(ssm.centralConfigExcludeRules) > 0 {
-		return ssm.centralConfigExcludeRules
+	if len(ssm.excludeRules) > 0 {
+		return ssm.excludeRules
 	}
 	return moduleExcludedRules
 }

@@ -456,11 +456,11 @@ func TestExcludedRulesFromCentralConfig(t *testing.T) {
 		require.Len(t, cfg.Scans, 1)
 		return cfg.Scans[0].ExcludedRules
 	}
-	newManager := func(t *testing.T, centralConfigExcludeRules []string) *SastScanManager {
+	newManager := func(t *testing.T, excludeRules []string) *SastScanManager {
 		t.Helper()
 		scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 		require.NoError(t, err)
-		ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, centralConfigExcludeRules)
+		ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, excludeRules)
 		require.NoError(t, err)
 		return ssm
 	}
