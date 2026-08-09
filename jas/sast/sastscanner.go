@@ -195,7 +195,6 @@ func (ssm *SastScanManager) getScanRoots(defaultRoots []string) []string {
 	return ssm.sastChangedFiles
 }
 
-// Rules excluded in the centralized config take precedence over the jfrog-apps-config module, as exclude patterns do.
 func (ssm *SastScanManager) getExcludedRules(moduleExcludedRules []string) []string {
 	if len(ssm.excludeRules) > 0 {
 		return ssm.excludeRules
