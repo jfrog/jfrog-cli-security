@@ -436,6 +436,12 @@ func TestExcludedRulesFromCentralConfig(t *testing.T) {
 	profileRules := []string{"java-stored-command-injection"}
 	appsConfigRules := []string{"java-sql-injection"}
 	target := results.ScanTarget{Target: filepath.Join("root", "repository")}
+	targetWithProfileRules := results.ScanTarget{
+		Target: target.Target,
+		CentralConfigModules: []xscservices.Module{{
+			ScanConfig: xscservices.ScanConfig{SastScannerConfig: xscservices.SastScannerConfig{ExcludeRules: profileRules}},
+		}},
+	}
 
 	readExcludedRules := func(t *testing.T, configFileName string) []string {
 		t.Helper()
@@ -465,8 +471,8 @@ func TestExcludedRulesFromCentralConfig(t *testing.T) {
 	appsModule.Scanners.Sast = &jfrogappsconfig.SastScanner{ExcludedRules: appsConfigRules}
 
 	t.Run("target flow uses the central config rules", func(t *testing.T) {
-		ssm := newManager(t, profileRules)
-		require.NoError(t, ssm.createConfigFileForTarget(target))
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.createConfigFileForTarget(targetWithProfileRules))
 		assert.ElementsMatch(t, profileRules, readExcludedRules(t, ssm.configFileName))
 	})
 

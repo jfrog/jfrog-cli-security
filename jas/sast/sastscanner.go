@@ -211,7 +211,7 @@ func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget)
 				Roots:                  ssm.getScanRoots(jas.GetRootsFromTarget(target)),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
-				ExcludedRules:          ssm.centralConfigExcludeRules,
+				ExcludedRules:          target.GetCentralConfigSastExcludeRules(),
 				SastParameters: sastParameters{
 					SignedDescriptions: ssm.signedDescriptions,
 				},
