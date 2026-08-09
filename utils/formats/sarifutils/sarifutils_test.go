@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAggregateMultipleRunsIntoSingle(t *testing.T) {
@@ -618,5 +619,92 @@ func TestGetResultFingerprint(t *testing.T) {
 	}
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetResultFingerprint(test.result))
+	}
+}
+
+func TestGroupResultsByLocation(t *testing.T) {
+	tests := []struct {
+		run            *sarif.Run
+		expectedOutput *sarif.Run
+	}{
+		{
+			run:            CreateRunWithDummyResults(),
+			expectedOutput: CreateRunWithDummyResults(),
+		},
+		{
+			// No similar groups at all
+			run: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+			),
+			expectedOutput: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+			),
+		},
+		{
+			// With similar groups
+			run: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+			),
+			expectedOutput: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+			),
+		},
+	}
+
+	for _, test := range tests {
+		grouped := GroupResultsByLocation([]*sarif.Run{test.run})
+		require.Len(t, grouped, 1)
+		assert.ElementsMatch(t, test.expectedOutput.Results, grouped[0].Results)
 	}
 }
