@@ -262,14 +262,15 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
 		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(java.DepTreeParams{
-			Server:                  artifactoryServerDetails,
-			DepsRepo:                params.DependenciesRepository,
-			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled,
-			UseWrapper:              params.UseWrapper,
-			IsCurationCmd:           params.IsCurationCmd,
-			MvnIncludePluginDeps:    params.MvnIncludePluginDeps,
-			CurationCacheFolder:     curationCacheFolder,
-			UseIncludedBuilds:       params.UseIncludedBuilds,
+			Server:                        artifactoryServerDetails,
+			DepsRepo:                      params.DependenciesRepository,
+			IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled,
+			UseWrapper:                    params.UseWrapper,
+			IsCurationCmd:                 params.IsCurationCmd,
+			MvnIncludePluginDeps:          params.MvnIncludePluginDeps,
+			CurationCacheFolder:           curationCacheFolder,
+			UseIncludedBuilds:             params.UseIncludedBuilds,
+			GradleExcludeTestDependencies: params.GradleExcludeTestDependencies,
 		}, tech)
 	case techutils.Npm:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = npm.BuildDependencyTree(params)
