@@ -94,6 +94,32 @@ func TestGradleTreesWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestGradleTreesExcludeTestDependencies(t *testing.T) {
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
+	defer cleanUp()
+	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+
+	withTests, uniqueWithTests, err := buildGradleDependencyTree(&DepTreeParams{UseWrapper: true})
+	if assert.NoError(t, err) && assert.NotNil(t, withTests) {
+		assert.Contains(t, uniqueWithTests, "gav://junit:junit:4.11")
+	}
+
+	withoutTests, uniqueWithoutTests, err := buildGradleDependencyTree(&DepTreeParams{
+		UseWrapper:                    true,
+		GradleExcludeTestDependencies: true,
+	})
+	if assert.NoError(t, err) && assert.NotNil(t, withoutTests) {
+		assert.NotContains(t, uniqueWithoutTests, "gav://junit:junit:4.11")
+		assert.NotContains(t, uniqueWithoutTests, "gav://org.hamcrest:hamcrest-core:1.3")
+		assert.Contains(t, uniqueWithoutTests, "gav://commons-lang:commons-lang:2.4")
+
+		module := tests.GetAndAssertNode(t, withoutTests, "org.jfrog.example.gradle:webservice:1.0")
+		for _, node := range module.Nodes {
+			assert.NotEqual(t, "gav://junit:junit:4.11", node.Id)
+		}
+	}
+}
+
 func TestGradleTreesWithConfig(t *testing.T) {
 	// Create and change directory to test workspace
 	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle-example-config"))
