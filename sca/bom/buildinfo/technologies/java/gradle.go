@@ -174,7 +174,9 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
 		"-Dcom.jfrog.includeAllBuildFiles=true",
 		fmt.Sprintf("-Dcom.jfrog.includeIncludedBuilds=%t", gdt.useIncludedBuilds),
-		fmt.Sprintf("-Dcom.jfrog.excludeTestConfigurations=%t", gdt.excludeTestDependencies),
+	}
+	if gdt.excludeTestDependencies {
+		tasks = append(tasks, "-Dcom.jfrog.excludeConfigurationsPattern=(?i)test")
 	}
 
 	// Add curation audit mode for pass-through functionality if this is a curation command
