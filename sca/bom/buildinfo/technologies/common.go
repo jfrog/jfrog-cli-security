@@ -67,6 +67,9 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	NpmRunNative            bool
 	NpmLegacyPeerDeps       bool
+	// NpmForceLogsMax, when non-empty, is appended as --logs-max <value> to the install command.
+	// Leave empty unless ambient logs-max is known to be 0 — never override a nonzero setting.
+	NpmForceLogsMax string
 	// Yarn params
 	// YarnOverwriteYarnLock refreshes yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 	// Curation sets this to true; audit/scan leave it false to trust the existing lockfile.
@@ -89,6 +92,8 @@ type BuildInfoBomGeneratorParams struct {
 	HFProjectName string
 	// NuGet params
 	SolutionFilePath string
+	// Uv params
+	ScriptPath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {

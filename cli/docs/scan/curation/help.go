@@ -24,12 +24,14 @@ Common patterns:
   $ jf curation-audit --requirements-file=requirements-dev.txt
   $ jf curation-audit --docker-image=my-image:tag
   $ HF_ENDPOINT=https://my.jfrog.io/artifactory/api/huggingfaceml/my-hf-repo jf curation-audit --hugging-face-model=org/model:main
+  $ jf ca --script=script.py
 
 Gotchas:
 - The user/token must be entitled for Curation; otherwise the command exits with an entitlement notice.
 - Requires the project's package manager binary on PATH (npm, mvn, etc.).
 - Run from the project root or pass --working-dirs.
 - For Maven multi-module: --use-wrapper if mvnw is used.
+- --script (uv only) audits one PEP 723 inline-script .py file directly; --script and --working-dirs cannot be used together, run separate commands for each.
 - --hugging-face-model requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL. Datasets are not audited (curation does not currently cover datasets).
 
 Related: jf audit, jf rt npm-install, jf rt mvn`

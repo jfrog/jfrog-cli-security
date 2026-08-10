@@ -167,6 +167,26 @@ func TestCurationAuditCommandFlags_UseWrapperAuditFlag(t *testing.T) {
 	assert.True(t, found, "useWrapperAudit flag should be present in CurationAudit command flags. If this test fails, it means the flag was removed from cli/docs/flags.go")
 }
 
+func TestGetCurationCommandRejectsScriptWithWorkingDirs(t *testing.T) {
+	ctx := &components.Context{}
+	ctx.AddStringFlag(flags.Script, "script.py")
+	ctx.AddStringFlag(flags.WorkingDirs, "dir1,dir2")
+
+	_, err := getCurationCommand(ctx)
+	assert.ErrorContains(t, err, "--script")
+	assert.ErrorContains(t, err, "--working-dirs")
+}
+
+func TestGetCurationCommandRejectsScriptWithDockerImage(t *testing.T) {
+	ctx := &components.Context{}
+	ctx.AddStringFlag(flags.Script, "script.py")
+	ctx.AddStringFlag(flags.DockerImageName, "myimage:latest")
+
+	_, err := getCurationCommand(ctx)
+	assert.ErrorContains(t, err, "--script")
+	assert.ErrorContains(t, err, "--docker-image")
+}
+
 func TestEffectiveIncludeViolations(t *testing.T) {
 	tests := []struct {
 		name            string
