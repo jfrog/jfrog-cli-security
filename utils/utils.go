@@ -41,7 +41,7 @@ const (
 
 	EntitlementsMinVersion            = "3.66.5"
 	GitRepoKeyAnalyticsMinXrayVersion = "3.114.0"
-	ExternalAnalyticsMinXrayVersion   = "3.152.0"
+	ExternalAnalyticsMinXrayVersion   = "3.152.2" // TODO eran change - validate what is the minimal version!!
 	StaticScanMinVersion              = "3.133.0"
 
 	XrayToolName = "JFrog Xray Scanner"
