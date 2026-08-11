@@ -57,9 +57,10 @@ type BuildInfoBomGeneratorParams struct {
 	// Set by curation commands only; generic audit/scan commands leave this unset.
 	OutputFormat outFormat.OutputFormat
 	// Java params
-	IsMavenDepTreeInstalled bool
-	UseWrapper              bool
-	UseIncludedBuilds       bool
+	IsMavenDepTreeInstalled       bool
+	UseWrapper                    bool
+	UseIncludedBuilds             bool
+	GradleExcludeTestDependencies bool
 	// Python params
 	PipRequirementsFile string
 	// Npm params

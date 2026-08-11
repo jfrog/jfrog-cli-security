@@ -241,9 +241,10 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Curation params
 		IsCurationCmd: params.IsCurationCmd(),
 		// Java params
-		IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
-		UseWrapper:              params.UseWrapper(),
-		UseIncludedBuilds:       params.UseIncludedBuilds(),
+		IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled(),
+		UseWrapper:                    params.UseWrapper(),
+		UseIncludedBuilds:             params.UseIncludedBuilds(),
+		GradleExcludeTestDependencies: params.ExcludeTestDependencies(),
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
