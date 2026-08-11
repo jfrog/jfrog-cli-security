@@ -151,11 +151,11 @@ func buildDepsMap(deps map[string]pnpmLockDep, snapshots map[string]pnpmLockSnap
 		// dep.Version may contain a peer-dep suffix: "2.0.0(@peer/dep@1.0.0)"
 		// Strip it for the Xray ID; keep the raw form for snapshot lookup.
 		rawRef := dep.Version
-		_, cleanVersion := splitPnpmRef(rawRef)
+		realName, cleanVersion := resolveRefName(name, rawRef)
 		depKey := buildSnapshotKey(name, rawRef)
 
 		entry := pnpmLsDependency{
-			From:    name,
+			From:    realName,
 			Version: cleanVersion,
 		}
 		if !visited[depKey] {
@@ -176,10 +176,10 @@ func walkSnapshot(snapshotKey string, snapshots map[string]pnpmLockSnapshot, vis
 	}
 	result := make(map[string]pnpmLsDependency)
 	for name, rawRef := range snap.Dependencies {
-		_, cleanVersion := splitPnpmRef(rawRef)
+		realName, cleanVersion := resolveRefName(name, rawRef)
 		childKey := buildSnapshotKey(name, rawRef)
 		entry := pnpmLsDependency{
-			From:    name,
+			From:    realName,
 			Version: cleanVersion,
 		}
 		if !visited[childKey] {
@@ -190,6 +190,20 @@ func walkSnapshot(snapshotKey string, snapshots map[string]pnpmLockSnapshot, vis
 		result[name] = entry
 	}
 	return result
+}
+
+// resolveRefName returns the real registry package name and version for a dependency.
+// An aliased dependency ("strip-ansi-cjs": "npm:strip-ansi@^6.0.1") is recorded with the
+// alias as the map key and the real package in the ref ("strip-ansi@6.0.1"), so the ref
+// wins. A plain version ref carries no name, in which case the key is already the real
+// name. Getting this wrong yields a component ID for a package that does not exist, which
+// 404s the curation HEAD-check and leaves Xray with nothing to match.
+func resolveRefName(key, rawRef string) (name, version string) {
+	name, version = splitPnpmRef(rawRef)
+	if name == "" {
+		name = key
+	}
+	return
 }
 
 // splitPnpmRef splits a pnpm ref into (name, version), stripping any peer-dep suffix.

@@ -463,7 +463,7 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 		// query Artifactory for a package that doesn't exist (404).
 		for name, dependency := range project.Dependencies {
 			if dependency.Local {
-				_ = uniqueDepsSet.Remove(getDependencyId(name, dependency.Version))
+				_ = uniqueDepsSet.Remove(getDependencyId(dependencyName(name, dependency), dependency.Version))
 			}
 		}
 	}
@@ -475,13 +475,13 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 	treeMap := make(map[string]xray.DepTreeNode)
 	var directDependencies []string
 	for depName, dependency := range project.Dependencies {
-		directDependency := getDependencyId(depName, dependency.Version)
-		directDependencies = append(directDependencies, directDependency)
+		directDependency := getDependencyId(dependencyName(depName, dependency), dependency.Version)
+		directDependencies = appendUniqueChild(directDependencies, directDependency)
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, &treeMap)
 	}
 	for depName, dependency := range project.DevDependencies {
-		directDependency := getDependencyId(depName, dependency.Version)
-		directDependencies = append(directDependencies, directDependency)
+		directDependency := getDependencyId(dependencyName(depName, dependency), dependency.Version)
+		directDependencies = appendUniqueChild(directDependencies, directDependency)
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, &treeMap)
 	}
 	if len(directDependencies) > 0 {
@@ -494,11 +494,37 @@ func getDependencyId(depName, version string) string {
 	return techutils.Npm.GetXrayPackageTypeId() + depName + ":" + version
 }
 
+// appendUniqueChild appends candidateDependency unless it is already present. Two dependency
+// map keys can resolve to the same real name+version — e.g. a CJS/ESM alias pair both pointing
+// at "npm:strip-ansi@6.0.1" — and without this guard the duplicate ID is appended twice,
+// producing two identical sibling GraphNodes for what is really one installed package.
+func appendUniqueChild(children []string, candidateDependency string) []string {
+	for _, existingChild := range children {
+		if existingChild == candidateDependency {
+			return children
+		}
+	}
+	return append(children, candidateDependency)
+}
+
+// dependencyName returns the real registry package name for a dependency. Dependency maps
+// are keyed by the name the package is installed under, which for an aliased dependency
+// (e.g. "strip-ansi-cjs": "npm:strip-ansi@^6.0.1") is the alias rather than a package that
+// exists in the registry. Both sources report the real name in From — 'pnpm ls --json'
+// emits it as "from", and the lockfile parser resolves it from the ref — so From wins
+// whenever it is set.
+func dependencyName(key string, dep pnpmLsDependency) string {
+	if dep.From != "" {
+		return dep.From
+	}
+	return key
+}
+
 func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result *map[string]xray.DepTreeNode) {
 	for depName, dependency := range dependencies {
-		dependencyId := getDependencyId(depName, dependency.Version)
+		dependencyId := getDependencyId(dependencyName(depName, dependency), dependency.Version)
 		if node, ok := (*result)[parent]; ok {
-			node.Children = append(node.Children, dependencyId)
+			node.Children = appendUniqueChild(node.Children, dependencyId)
 			(*result)[parent] = node
 		} else {
 			(*result)[parent] = xray.DepTreeNode{Children: []string{dependencyId}}
