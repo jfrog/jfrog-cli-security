@@ -5034,3 +5034,171 @@ func TestGetUrlNameAndVersionByTechPipenv(t *testing.T) {
 	assert.Equal(t, "", scope, "python packages have no scope")
 	assert.Equal(t, "2.31.0", ver)
 }
+
+// =============================================================================
+// Tests for Cargo support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsCargo(t *testing.T) {
+	_, ok := supportedTech[techutils.Cargo]
+	assert.True(t, ok, "techutils.Cargo must be registered in supportedTech so that 'jf curation-audit' processes cargo projects")
+}
+
+// Unit-test equivalent of TC-02: an unconfigured server can't trip a version gate that isn't there.
+func TestCargoSupportedRegardlessOfArtifactoryVersion(t *testing.T) {
+	ca := NewCurationAuditCommand()
+
+	supported, err := supportedTech[techutils.Cargo](ca)
+	assert.NoError(t, err)
+	assert.True(t, supported, "Cargo must be supported unconditionally, with no Artifactory/Xray version check")
+
+	// Contrast: Pipenv's gate needs a real server, so it fails under the same unconfigured ca.
+	pipenvSupported, pipenvErr := supportedTech[techutils.Pipenv](ca)
+	assert.Error(t, pipenvErr, "Pipenv's version-gated entry should fail to resolve a version with no server configured")
+	assert.False(t, pipenvSupported)
+}
+
+func Test_getCargoNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "realistic package",
+			id:               "cargo://winapi:0.3.9",
+			artiUrl:          "https://test.jfrog.io/artifactory",
+			repo:             "my-cargo-repo",
+			wantDownloadUrls: []string{"https://test.jfrog.io/artifactory/api/cargo/my-cargo-repo/v1/crates/winapi/0.3.9/download"},
+			wantName:         "winapi",
+			wantScope:        "",
+			wantVersion:      "0.3.9",
+		},
+		{
+			name:             "artifactory url with trailing slash",
+			id:               "cargo://libc:0.2.155",
+			artiUrl:          "https://test.jfrog.io/artifactory/",
+			repo:             "cargo-remote",
+			wantDownloadUrls: []string{"https://test.jfrog.io/artifactory/api/cargo/cargo-remote/v1/crates/libc/0.2.155/download"},
+			wantName:         "libc",
+			wantScope:        "",
+			wantVersion:      "0.2.155",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			downloadUrls, name, scope, version := getCargoNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, downloadUrls)
+			assert.Equal(t, tt.wantName, name)
+			assert.Equal(t, tt.wantScope, scope)
+			assert.Equal(t, tt.wantVersion, version)
+		})
+	}
+}
+
+func writeCargoConfigWithArtifactoryReplace(t *testing.T, dir, artifactoryIndexUrl string) {
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".cargo"), 0755))
+	content := fmt.Sprintf(`[source.crates-io]
+replace-with = "artifactory-repo"
+
+[source.artifactory-repo]
+registry = %q
+`, artifactoryIndexUrl)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".cargo", "config.toml"), []byte(content), 0644))
+}
+
+func TestSetRepoFromCargoConfigNoServerConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://host/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// TestSetRepoFromCargoConfigRejectsHostMismatch: a .cargo/config.toml entry pointing at a
+// different host than the configured 'jf c' server must not receive that server's credentials.
+func TestSetRepoFromCargoConfigRejectsHostMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://attacker.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromCargoConfigAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case.
+func TestSetRepoFromCargoConfigAcceptsMatchingHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://configured-server.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+	})
+
+	require.NoError(t, ca.setRepoFromCargoConfig())
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromCargoConfigRejectsSchemeDowngrade: a .cargo/config.toml entry pointing at the
+// *same host* as the configured 'jf c' server, but over http instead of https, must not receive
+// that server's credentials — otherwise the host-only check would let a project-local file
+// downgrade them to cleartext.
+func TestSetRepoFromCargoConfigRejectsSchemeDowngrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+http://configured-server.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
