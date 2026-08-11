@@ -1258,6 +1258,29 @@ func TestReconcileDeclaredDirectDepsAgainstTree(t *testing.T) {
 		assert.Empty(t, root.Details.Dependencies, "must not duplicate a dep that yarn.lock already covers")
 	})
 
+	t.Run("same name resolved at a different version is still synthesised", func(t *testing.T) {
+		root := mkRoot()
+		// express@4.17.1 is already resolved elsewhere in the tree (e.g. a transitive
+		// dependency of some other package) — unrelated to the express@3.0.1 the user
+		// declared directly and that curation just blocked.
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":   root,
+			"express@npm:4.17.1": {Value: "express@npm:4.17.1", Details: bibuildutils.YarnDepDetails{Version: "4.17.1"}},
+		}
+		declared := map[string]string{"express": "3.0.1"}
+		reconcileDeclaredDirectDepsAgainstTree(depMap, root, declared)
+
+		synth, ok := depMap["express@npm:3.0.1"]
+		if assert.True(t, ok, "the declared (blocked) version must be synthesised even though a package of the same name resolved at a different version elsewhere in the tree") {
+			assert.Equal(t, "3.0.1", synth.Details.Version)
+		}
+		var rootChildLocators []string
+		for _, ptr := range root.Details.Dependencies {
+			rootChildLocators = append(rootChildLocators, ptr.Locator)
+		}
+		assert.Contains(t, rootChildLocators, "express@npm:3.0.1")
+	})
+
 	t.Run("nil root is a no-op (defensive)", func(t *testing.T) {
 		depMap := map[string]*bibuildutils.YarnDependency{}
 		// Must not panic, must not mutate the (empty) map.

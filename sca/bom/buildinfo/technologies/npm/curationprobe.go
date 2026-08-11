@@ -140,6 +140,9 @@ func CollectDeclaredDirectDeps(curWd string, workspaceDirs []string) map[string]
 			continue
 		}
 		for n, v := range MergeDirectDeps(memberPI) {
+			if existing, dup := declared[n]; dup && existing != v {
+				log.Debug(fmt.Sprintf("curation: %s declared at both %s and %s across workspace members; using %s", n, existing, v, v))
+			}
 			declared[n] = v
 		}
 	}
@@ -392,7 +395,8 @@ func convertBlockedDepsToJSON(blocked []BlockedDirectDep, pkgType techutils.Tech
 		}
 		if len(dep.Policies) == 0 {
 			if dep.Reason == "not_found" {
-				row.BlockingReason = "Package not found in curation repository"
+				// mirrors curation.BlockingReasonNotFound — import cycle prevents direct use
+				row.BlockingReason = "Package pending update"
 			} else {
 				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
 				row.BlockingReason = "Blocked by curation (response could not be parsed)"
@@ -431,7 +435,8 @@ func buildBlockedDirectDepsTableRows(blocked []BlockedDirectDep, pkgType techuti
 			row := baseRow
 			switch dep.Reason {
 			case "not_found":
-				row.Explanation = "Package not found in curation repository"
+				// mirrors curation.BlockingReasonNotFound — import cycle prevents direct use
+				row.Explanation = "Package pending update"
 			default:
 				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
 				row.Explanation = "Blocked by curation (response could not be parsed)"

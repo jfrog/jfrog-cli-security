@@ -656,7 +656,7 @@ func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
 			{Name: "weird-pkg", ProbedVersion: "2.0.0", Reason: "unknown_403"},
 		}, techutils.Yarn)
 		if assert.Len(t, rows, 2) {
-			assert.Equal(t, "Package not found in curation repository", rows[0].Explanation)
+			assert.Equal(t, "Package pending update", rows[0].Explanation)
 			assert.Equal(t, "Blocked by curation (response could not be parsed)", rows[1].Explanation)
 			assert.Empty(t, rows[0].Policy)
 			assert.Empty(t, rows[1].Policy)

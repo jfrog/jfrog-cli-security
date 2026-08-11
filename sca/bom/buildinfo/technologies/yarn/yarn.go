@@ -427,22 +427,8 @@ func reconcileDeclaredDirectDepsAgainstTree(
 	if root == nil || len(declared) == 0 {
 		return
 	}
-	resolvedNames := map[string]struct{}{}
-	for _, dep := range dependenciesMap {
-		if dep == nil {
-			continue
-		}
-		name, nameErr := dep.Name()
-		if nameErr != nil || name == "" {
-			continue
-		}
-		resolvedNames[name] = struct{}{}
-	}
 	var synthesised, unresolvedRanges []string
 	for name, spec := range declared {
-		if _, present := resolvedNames[name]; present {
-			continue
-		}
 		resolvedVer, probeable, isRangeOrTag := npm.ClassifyNpmVersionSpec(spec)
 		if probeable {
 			locator := name + "@npm:" + resolvedVer

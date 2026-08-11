@@ -1,6 +1,7 @@
 package pnpm
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -289,6 +290,227 @@ func TestParsePnpmLSContentNestsWorkspaceMembers(t *testing.T) {
 	assert.NotContains(t, uniqueDeps, getDependencyId("packages/create-vite", "0.0.0"))
 	assert.Contains(t, uniqueDeps, getDependencyId("rolldown", "1.0.3"))
 	assert.Contains(t, uniqueDeps, getDependencyId("cross-spawn", "7.0.6"))
+}
+
+// TestParsePnpmLSContentUsesRealNameForAliases asserts that an aliased dependency is
+// identified by its real registry package name rather than the alias. 'pnpm ls --json'
+// reports the real name in "from" while keying the map by the alias, and the lockfile
+// parser resolves it the same way. Using the alias produces a component ID for a package
+// that does not exist, which 404s the curation HEAD-check and makes Xray find no
+// vulnerabilities for it.
+func TestParsePnpmLSContentUsesRealNameForAliases(t *testing.T) {
+	project := pnpmLsProject{
+		Name:    "alias-project",
+		Version: "1.0.0",
+		Dependencies: map[string]pnpmLsDependency{
+			"strip-ansi-cjs": {From: "strip-ansi", Version: "6.0.1"},
+			"my-babel":       {From: "@babel/code-frame", Version: "7.29.7"},
+			"strip-ansi":     {From: "strip-ansi", Version: "7.2.0"},
+		},
+		DevDependencies: map[string]pnpmLsDependency{
+			"wrap-ansi-cjs": {From: "wrap-ansi", Version: "7.0.0"},
+		},
+	}
+	trees, uniqueDeps := parsePnpmLSContent([]pnpmLsProject{project})
+	require.Len(t, trees, 1)
+
+	assert.Contains(t, uniqueDeps, getDependencyId("strip-ansi", "6.0.1"))
+	assert.Contains(t, uniqueDeps, getDependencyId("@babel/code-frame", "7.29.7"))
+	assert.Contains(t, uniqueDeps, getDependencyId("wrap-ansi", "7.0.0"))
+	assert.Contains(t, uniqueDeps, getDependencyId("strip-ansi", "7.2.0"))
+
+	// The alias itself must never reach Artifactory or Xray.
+	assert.NotContains(t, uniqueDeps, getDependencyId("strip-ansi-cjs", "6.0.1"))
+	assert.NotContains(t, uniqueDeps, getDependencyId("my-babel", "7.29.7"))
+	assert.NotContains(t, uniqueDeps, getDependencyId("wrap-ansi-cjs", "7.0.0"))
+
+	assert.NotNil(t, findNodeByID(trees[0], getDependencyId("strip-ansi", "6.0.1")),
+		"the aliased package must appear in the tree under its real name")
+}
+
+// TestParsePnpmLSContentAliasedTransitive asserts the real name is also used for
+// transitive dependencies, which are attached through a separate code path.
+func TestParsePnpmLSContentAliasedTransitive(t *testing.T) {
+	project := pnpmLsProject{
+		Name:    "alias-project",
+		Version: "1.0.0",
+		Dependencies: map[string]pnpmLsDependency{
+			"parent": {From: "parent", Version: "1.0.0", Dependencies: map[string]pnpmLsDependency{
+				"strip-ansi-cjs": {From: "strip-ansi", Version: "6.0.1"},
+			}},
+		},
+	}
+	trees, uniqueDeps := parsePnpmLSContent([]pnpmLsProject{project})
+	require.Len(t, trees, 1)
+
+	assert.Contains(t, uniqueDeps, getDependencyId("strip-ansi", "6.0.1"))
+	assert.NotContains(t, uniqueDeps, getDependencyId("strip-ansi-cjs", "6.0.1"))
+
+	parent := findNodeByID(trees[0], getDependencyId("parent", "1.0.0"))
+	require.NotNil(t, parent)
+	assert.NotNil(t, findNodeByID(parent, getDependencyId("strip-ansi", "6.0.1")),
+		"the aliased transitive must be nested under its parent under the real name")
+}
+
+// TestPnpmLockfileAliasEndToEnd exercises the full curation pipeline for an aliased dependency —
+// pnpm-lock.yaml -> parsePnpmLockFile -> parsePnpmLSContent -> uniqueDeps — using the exact
+// lockfile shape pnpm 10 writes for "strip-ansi-cjs": "npm:strip-ansi@^6.0.1" (verified against a
+// real `pnpm install`). The two stages are covered individually elsewhere (pnpmlock_test.go
+// asserts From is set; pnpm_test.go asserts IDs from a hand-built pnpmLsProject), but neither
+// proves the two are actually wired together. A regression here — e.g. resolveRefName stops
+// setting From, or dependencyName stops reading it — would silently reintroduce the alias bug
+// this pipeline exists to fix, without failing either narrower test.
+func TestPnpmLockfileAliasEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	lock := "lockfileVersion: '9.0'\n" +
+		"importers:\n" +
+		"  .:\n" +
+		"    dependencies:\n" +
+		"      strip-ansi:\n" +
+		"        specifier: ^7.0.1\n" +
+		"        version: 7.2.0\n" +
+		"      strip-ansi-cjs:\n" +
+		"        specifier: npm:strip-ansi@^6.0.1\n" +
+		"        version: strip-ansi@6.0.1\n" +
+		"snapshots:\n" +
+		"  strip-ansi@7.2.0:\n" +
+		"    dependencies:\n" +
+		"      ansi-regex: 6.2.2\n" +
+		"  strip-ansi@6.0.1:\n" +
+		"    dependencies:\n" +
+		"      ansi-regex: 5.0.1\n" +
+		"  ansi-regex@6.2.2: {}\n" +
+		"  ansi-regex@5.0.1: {}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pnpm-lock.yaml"), []byte(lock), 0o644))
+
+	projects, err := parsePnpmLockFile(dir, ".")
+	require.NoError(t, err)
+	require.Len(t, projects, 1)
+
+	trees, uniqueDeps := parsePnpmLSContent(projects)
+	require.Len(t, trees, 1)
+
+	assert.Contains(t, uniqueDeps, getDependencyId("strip-ansi", "6.0.1"),
+		"the aliased direct dependency must reach uniqueDeps under its real name")
+	assert.Contains(t, uniqueDeps, getDependencyId("ansi-regex", "5.0.1"),
+		"the aliased dependency's own transitive must reach uniqueDeps")
+	assert.NotContains(t, uniqueDeps, getDependencyId("strip-ansi-cjs", "6.0.1"),
+		"the alias itself must never reach Artifactory or Xray")
+
+	aliasedNode := findNodeByID(trees[0], getDependencyId("strip-ansi", "6.0.1"))
+	require.NotNil(t, aliasedNode, "the aliased package must appear in the tree under its real name")
+	assert.NotNil(t, findNodeByID(aliasedNode, getDependencyId("ansi-regex", "5.0.1")),
+		"the aliased transitive must be nested under the aliased package's real-name node")
+}
+
+// TestPnpmLsJSONAliasEndToEnd exercises the JSON half of the curation pipeline for an aliased
+// dependency — a literal `pnpm ls --json` payload -> json.Unmarshal into []pnpmLsProject ->
+// parsePnpmLSContent -> uniqueDeps — using the same field shape calculateDependencies unmarshals
+// in production (pnpm.go:161-163). TestPnpmLockfileAliasEndToEnd covers the equivalent YAML/
+// lockfile boundary via a real yaml.Unmarshal; this is its JSON counterpart. The fix hinges on
+// the `json:"from"` struct tag on pnpmLsDependency — a test that builds pnpmLsProject/
+// pnpmLsDependency directly in Go, as the narrower alias tests do, would keep passing even if
+// that tag were wrong, since it never exercises encoding/json at all.
+func TestPnpmLsJSONAliasEndToEnd(t *testing.T) {
+	// Field names and nesting match real `pnpm ls --depth Infinity --json --long` output,
+	// captured against pnpm 10 for "strip-ansi-cjs": "npm:strip-ansi@^6.0.1". Extra fields
+	// pnpm emits (resolved, path, ...) are included to prove they don't interfere with
+	// unmarshalling into the narrower pnpmLsProject/pnpmLsDependency shape.
+	lsJSON := `[
+	  {
+	    "name": "alias-json-project",
+	    "version": "1.0.0",
+	    "dependencies": {
+	      "strip-ansi": {
+	        "from": "strip-ansi",
+	        "version": "7.2.0",
+	        "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
+	        "dependencies": {
+	          "ansi-regex": {"from": "ansi-regex", "version": "6.2.2"}
+	        }
+	      },
+	      "strip-ansi-cjs": {
+	        "from": "strip-ansi",
+	        "version": "6.0.1",
+	        "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
+	        "dependencies": {
+	          "ansi-regex": {"from": "ansi-regex", "version": "5.0.1"}
+	        }
+	      }
+	    }
+	  }
+	]`
+
+	var projects []pnpmLsProject
+	require.NoError(t, json.Unmarshal([]byte(lsJSON), &projects))
+	require.Len(t, projects, 1)
+	require.Contains(t, projects[0].Dependencies, "strip-ansi-cjs")
+	assert.Equal(t, "strip-ansi", projects[0].Dependencies["strip-ansi-cjs"].From,
+		"json:\"from\" must unmarshal into the From field")
+
+	trees, uniqueDeps := parsePnpmLSContent(projects)
+	require.Len(t, trees, 1)
+
+	assert.Contains(t, uniqueDeps, getDependencyId("strip-ansi", "6.0.1"),
+		"the aliased direct dependency must reach uniqueDeps under its real name")
+	assert.Contains(t, uniqueDeps, getDependencyId("ansi-regex", "5.0.1"),
+		"the aliased dependency's own transitive must reach uniqueDeps")
+	assert.NotContains(t, uniqueDeps, getDependencyId("strip-ansi-cjs", "6.0.1"),
+		"the alias itself must never reach Artifactory or Xray")
+
+	aliasedNode := findNodeByID(trees[0], getDependencyId("strip-ansi", "6.0.1"))
+	require.NotNil(t, aliasedNode, "the aliased package must appear in the tree under its real name")
+	assert.NotNil(t, findNodeByID(aliasedNode, getDependencyId("ansi-regex", "5.0.1")),
+		"the aliased transitive must be nested under the aliased package's real-name node")
+}
+
+// TestParsePnpmLSContentDuplicateSiblingOnAliasCollision covers two aliases resolving to the
+// same real name+version (e.g. a CJS/ESM split like "strip-ansi-cjs"/"strip-ansi-esm" both
+// pointing at "npm:strip-ansi@6.0.1"). Both keys survive dependencyName resolution as the same
+// dependency ID, so appending both unconditionally produces two identical sibling GraphNodes
+// under the same parent — the tree misrepresents the package as installed twice.
+func TestParsePnpmLSContentDuplicateSiblingOnAliasCollision(t *testing.T) {
+	project := pnpmLsProject{
+		Name:    "alias-collision-project",
+		Version: "1.0.0",
+		Dependencies: map[string]pnpmLsDependency{
+			"strip-ansi-cjs": {From: "strip-ansi", Version: "6.0.1"},
+			"strip-ansi-esm": {From: "strip-ansi", Version: "6.0.1"},
+		},
+	}
+	trees, uniqueDeps := parsePnpmLSContent([]pnpmLsProject{project})
+	require.Len(t, trees, 1)
+
+	realID := getDependencyId("strip-ansi", "6.0.1")
+	assert.Contains(t, uniqueDeps, realID)
+
+	var childIDs []string
+	for _, c := range trees[0].Nodes {
+		childIDs = append(childIDs, c.Id)
+	}
+	assert.Len(t, childIDs, 1, "expected one deduped sibling, got: %v", childIDs)
+}
+
+// TestAppendTransitiveDependenciesDuplicateSiblingOnAliasCollision covers the same collision
+// one level down: two aliased transitives of the same parent resolving to the same real
+// name+version must not produce duplicate sibling nodes under that parent either.
+func TestAppendTransitiveDependenciesDuplicateSiblingOnAliasCollision(t *testing.T) {
+	project := pnpmLsProject{
+		Name:    "alias-collision-transitive",
+		Version: "1.0.0",
+		Dependencies: map[string]pnpmLsDependency{
+			"parent": {From: "parent", Version: "1.0.0", Dependencies: map[string]pnpmLsDependency{
+				"strip-ansi-cjs": {From: "strip-ansi", Version: "6.0.1"},
+				"strip-ansi-esm": {From: "strip-ansi", Version: "6.0.1"},
+			}},
+		},
+	}
+	trees, _ := parsePnpmLSContent([]pnpmLsProject{project})
+	require.Len(t, trees, 1)
+
+	parent := findNodeByID(trees[0], getDependencyId("parent", "1.0.0"))
+	require.NotNil(t, parent)
+	assert.Len(t, parent.Nodes, 1, "expected one deduped sibling under parent, got: %v", parent.Nodes)
 }
 
 // TestResolveWorkspaceRoot covers the three cases: a standalone project (no marker),
