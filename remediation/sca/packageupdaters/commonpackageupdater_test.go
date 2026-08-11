@@ -28,6 +28,8 @@ type dependencyFixTest struct {
 	lockFileToVerifyItsChange string
 	// Verifies descriptor content is unchanged after error (for rollback testing)
 	descriptorToVerifyNoChange string
+	// Overrides the default "remediation"/"indirect-project" subdirectory picked by projectSubdir
+	projectSubDir string
 }
 
 const (
@@ -124,10 +126,18 @@ func TestUpdateDependency(t *testing.T) {
 			{
 				testcaseInfo:               "rollback-on-npm-install-failure",
 				fixDetails:                 createFixDetails(techutils.Npm, "minimist", "1.2.5", "1.2.6", true, "package.json", "package-lock.json"),
-				testDirName:                "npm-rollback",
+				projectSubDir:              "remediation-rollback",
 				fixSupported:               true,
 				errorExpected:              true,
 				descriptorToVerifyNoChange: "package.json",
+			},
+			{
+				testcaseInfo:               "rollback-on-npm-install-failure-nested-descriptor",
+				fixDetails:                 createFixDetails(techutils.Npm, "minimist", "1.2.5", "1.2.6", true, filepath.Join("app", "package.json"), filepath.Join("app", "package-lock.json")),
+				projectSubDir:              "remediation-rollback-nested",
+				fixSupported:               true,
+				errorExpected:              true,
+				descriptorToVerifyNoChange: filepath.Join("app", "package.json"),
 			},
 		},
 
@@ -169,7 +179,7 @@ func TestUpdateDependency(t *testing.T) {
 					if test.testDirName != "" {
 						testDirName = test.testDirName
 					}
-					cleanup := createTempDirAndChdir(t, testDirName+test.specificTechVersion, test.fixDetails.IsDirectDependency)
+					cleanup := createTempDirAndChdir(t, testDirName+test.specificTechVersion, test.fixDetails.IsDirectDependency, test.projectSubDir)
 					defer cleanup()
 
 					var lockFileContentBeforeUpdate []byte
@@ -224,8 +234,11 @@ func projectSubdir(directDependency bool) string {
 	return "indirect-project"
 }
 
-func createTempDirAndChdir(t *testing.T, tech string, directDependency bool) func() {
+func createTempDirAndChdir(t *testing.T, tech string, directDependency bool, subDirOverride string) func() {
 	subdir := projectSubdir(directDependency)
+	if subDirOverride != "" {
+		subdir = subDirOverride
+	}
 	projectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", tech, subdir)
 	tmpProjectPath, cleanup := tests.CreateTestProject(t, projectPath)
 	currDir, err := os.Getwd()
