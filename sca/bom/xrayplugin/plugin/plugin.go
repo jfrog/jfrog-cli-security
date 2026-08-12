@@ -27,12 +27,6 @@ const (
 	defaultXrayLibPluginVersion     = "1.4.0"
 
 	SnippetDetectionEnvVariable = "JFROG_XRAY_SNIPPET_SCAN_ENABLE"
-	XrayUrlEnvVariable          = "JFROG_XRAY_PLATFORM_URL"
-	XrayUserEnvVariable         = "JFROG_XRAY_USER"
-	// #nosec G101 -- Not credentials.
-	XrayPasswordEnvVariable = "JFROG_XRAY_PASSWORD"
-	// #nosec G101 -- Not credentials.
-	XrayTokenEnvVariable = "JFROG_XRAY_TOKEN"
 
 	xrayLibPluginRtRepository   = "xray-scan-lib"
 	XrayLibPluginExecutableName = "xray-scan-plugin"
