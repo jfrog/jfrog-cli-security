@@ -159,7 +159,6 @@ func (ibg *IndexerBomGenerator) IndexFile(filePath string) (*xrayClientUtils.Bin
 	}
 	if envVars := ibg.getIndexerEnvVars(); len(envVars) > 0 {
 		indexerCmd.Env = envVars.ToCommandEnvVars()
-		log.Verbose(fmt.Sprintf("Indexer environment variables:\n%s", envVars.ToString()))
 	}
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
