@@ -368,6 +368,9 @@ func TestPoetryCurationAudit(t *testing.T) {
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
 
+	appendToFile(t, filepath.Join(tempDirPath, "pyproject.toml"),
+		fmt.Sprintf("\n[[tool.poetry.source]]\nname = \"pypi-curation\"\nurl = \"%sapi/pypi/%s/simple\"\n", config.ArtifactoryUrl, repo))
+
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
 	output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)

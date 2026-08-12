@@ -291,7 +291,7 @@ func buildPoetryDownloadUrlsMap(serverDetails *config.ServerDetails, repository 
 		return nil, errorutils.CheckErrorf("server details with Artifactory URL are required for poetry curation")
 	}
 	if repository == "" {
-		return nil, errorutils.CheckErrorf("a poetry repository must be configured (run 'jf poetry-config') for poetry curation")
+		return nil, errorutils.CheckErrorf("a poetry repository must be configured (add an Artifactory [[tool.poetry.source]] entry to pyproject.toml) for poetry curation")
 	}
 	packages, err := readPoetryLockIfExists()
 	if err != nil {
@@ -1076,8 +1076,10 @@ func extractPoetrySourceNames(v any) []string {
 // ParsePyprojectArtifactorySource scans the current directory's pyproject.toml for a
 // [[tool.poetry.source]] entry whose url points at an Artifactory PyPI repository
 // (e.g. https://<host>/artifactory/api/pypi/<repo>/simple), returning its server + repo
-// name. Entries are checked in declaration order; the first Artifactory match wins.
-// Returns (nil, "", nil) when pyproject.toml is missing or has no such entry.
+// name. Returns (nil, "", nil) when pyproject.toml is missing or has no such entry.
+// Errors if more than one Artifactory-shaped entry is found (e.g. a stale entry left
+// from a prior migration) — silently picking one could resolve against the wrong repo,
+// so this is treated as ambiguous rather than resolved by declaration order.
 func ParsePyprojectArtifactorySource() (serverDetails *config.ServerDetails, repoName string, err error) {
 	exists, existErr := fileutils.IsFileExists(pyprojectToml, false)
 	if existErr != nil {
@@ -1096,20 +1098,41 @@ func ParsePyprojectArtifactorySource() (serverDetails *config.ServerDetails, rep
 	if !ok {
 		return nil, "", nil
 	}
+	type poetrySourceMatch struct {
+		name string
+		sd   *config.ServerDetails
+		repo string
+	}
+	var matches []poetrySourceMatch
 	for _, e := range arr {
 		m, ok := e.(map[string]any)
 		if !ok {
 			continue
 		}
+		name, _ := m["name"].(string)
 		rawURL, _ := m["url"].(string)
 		if strings.TrimSpace(rawURL) == "" {
 			continue
 		}
-		if sd, repo := parseArtifactoryPypiURL(rawURL); sd != nil {
-			return sd, repo, nil
+		sd, repo := parseArtifactoryPypiURL(rawURL)
+		if sd == nil {
+			continue
 		}
+		if serverCredentialState(sd) == partialCredentials {
+			return nil, "", fmt.Errorf("poetry: [[tool.poetry.source]] %q has incomplete URL credentials", name)
+		}
+		matches = append(matches, poetrySourceMatch{name: name, sd: sd, repo: repo})
 	}
-	return nil, "", nil
+	if len(matches) == 0 {
+		return nil, "", nil
+	}
+	if len(matches) > 1 {
+		return nil, "", fmt.Errorf(
+			"poetry: pyproject.toml declares multiple Artifactory [[tool.poetry.source]] entries (%q and %q) — "+
+				"remove the stale one so curation-audit can resolve unambiguously",
+			matches[0].name, matches[1].name)
+	}
+	return matches[0].sd, matches[0].repo, nil
 }
 
 func validateMinimumPoetryVersion(minVersion string) (int, error) {
@@ -1743,6 +1766,10 @@ func ParsePipConfigIndexUrl(paths ...string) (serverDetails *config.ServerDetail
 		if parseErr != nil || parsed.Scheme == "" || parsed.Host == "" || strings.Contains(rawURL, "/api/pypi/") {
 			return nil, "", "", fmt.Errorf("pip config \"%s\" [global] index-url is not a valid Artifactory PyPI URL", sourcePath)
 		}
+		return sd, repo, sourcePath, nil
+	}
+	if serverCredentialState(sd) == partialCredentials {
+		return nil, "", "", fmt.Errorf("pip config %q [global] index-url has incomplete URL credentials", sourcePath)
 	}
 	return sd, repo, sourcePath, nil
 }
@@ -1996,8 +2023,8 @@ func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 	if params.IsCurationCmd {
 		return false, restoreEnv, errorutils.CheckErrorf(
 			"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
-				"Either run 'jf pipenv-config', configure index-url in your user pip.conf via " +
-				"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
+				"Either configure index-url in your user pip.conf via Artifactory 'Set me up', " +
+				"or add an Artifactory [[source]] entry to your Pipfile.")
 	}
 	_, err = executeCommand("pipenv", "install", "-d")
 	return false, restoreEnv, err
