@@ -305,6 +305,79 @@ func TestClassifyBlankVersionEntry(t *testing.T) {
 	}
 }
 
+func TestResolveNpmAliasTarget(t *testing.T) {
+	tests := []struct {
+		spec        string
+		wantName    string
+		wantVersion string
+		wantOk      bool
+	}{
+		{"npm:strip-ansi@6.0.1", "strip-ansi", "6.0.1", true},
+		{"npm:strip-ansi@^6.0.1", "strip-ansi", "^6.0.1", true},
+		{"NPM:strip-ansi@6.0.1", "strip-ansi", "6.0.1", true}, // prefix match is case-insensitive
+		{"npm:@babel/code-frame@^7.24.7", "@babel/code-frame", "^7.24.7", true},
+		{"npm:strip-ansi", "", "", false},   // no '@' after the prefix at all
+		{"npm:", "", "", false},             // empty remainder
+		{"strip-ansi@6.0.1", "", "", false}, // not an alias at all
+		{"git+https://github.com/chalk/ansi-regex.git", "", "", false},
+	}
+	for _, tc := range tests {
+		name, version, ok := resolveNpmAliasTarget(tc.spec)
+		assert.Equal(t, tc.wantOk, ok, "spec %q", tc.spec)
+		assert.Equal(t, tc.wantName, name, "spec %q", tc.spec)
+		assert.Equal(t, tc.wantVersion, version, "spec %q", tc.spec)
+	}
+}
+
+// TestResolveNpmAliasEntries covers the exact shape of RTECO-1882 / XRAY-157605 reproduced in
+// npm's debug-log fallback: "strip-ansi-cjs": "npm:strip-ansi@6.0.1" is placeDep'd under the
+// alias name, but Artifactory's block notice for the real package can only ever be keyed
+// "strip-ansi" — so the rewrite must happen before classification ever runs.
+func TestResolveNpmAliasEntries(t *testing.T) {
+	entries := []npmLogEntry{
+		{Name: "strip-ansi-cjs", Version: "", ParentName: "myproj", ParentVersion: "1.0.0", Specifier: "npm:strip-ansi@6.0.1"},
+		// A transitive dependency of the aliased package — its ParentName must follow the rename.
+		{Name: "ansi-regex", Version: "5.0.1", ParentName: "strip-ansi-cjs", ParentVersion: "6.0.1"},
+		// Untouched: neither an alias itself nor a child of one.
+		{Name: "strip-ansi", Version: "7.2.0", ParentName: "myproj", ParentVersion: "1.0.0"},
+	}
+
+	resolved := resolveNpmAliasEntries(entries)
+
+	require.Len(t, resolved, 3)
+	assert.Equal(t, "strip-ansi", resolved[0].Name, "alias entry's own Name must become the real name")
+	assert.Equal(t, "6.0.1", resolved[0].Specifier, "alias entry's Specifier must become the inner version")
+	assert.Equal(t, "strip-ansi", resolved[1].ParentName, "a child of the alias must have its ParentName renamed too")
+	assert.Equal(t, "strip-ansi", resolved[2].Name, "an entry unrelated to the alias must be untouched")
+}
+
+// TestResolveNpmAliasEntriesLeavesMalformedAliasUntouched: an unparsable "npm:" specifier
+// (no '@') can't be resolved to a real package, so it must be left as-is — classifyNpmSpecifier
+// will still (correctly) treat it as non-registry rather than guessing at a target.
+func TestResolveNpmAliasEntriesLeavesMalformedAliasUntouched(t *testing.T) {
+	entries := []npmLogEntry{
+		{Name: "weird-cjs", Version: "", Specifier: "npm:strip-ansi"},
+	}
+	resolved := resolveNpmAliasEntries(entries)
+	assert.Equal(t, "weird-cjs", resolved[0].Name)
+	assert.Equal(t, "npm:strip-ansi", resolved[0].Specifier)
+}
+
+// TestClassifyBlankVersionEntryAfterAliasResolution proves the fix end to end at the
+// classification boundary: once resolveNpmAliasEntries has run, an aliased entry whose real
+// target is whole-package-blocked correctly classifies as npmEntryWholePackageBlocked instead
+// of npmEntryNonRegistrySpecifier — the exact misclassification reported live against a
+// "blocks open ssf" policy (RTECO-1882 / XRAY-157605).
+func TestClassifyBlankVersionEntryAfterAliasResolution(t *testing.T) {
+	blockedPackages := map[string]npmBlockedInfo{"strip-ansi": {Policy: "blocks open ssf", Condition: "open ssf"}}
+	entries := resolveNpmAliasEntries([]npmLogEntry{
+		{Name: "strip-ansi-cjs", Version: "", ParentName: "myproj", ParentVersion: "1.0.0", Specifier: "npm:strip-ansi@6.0.1"},
+	})
+	require.Len(t, entries, 1)
+	assert.Equal(t, npmEntryWholePackageBlocked, classifyBlankVersionEntry(entries[0], blockedPackages),
+		"an alias to a whole-package-blocked real package must not be reported as merely non-registry/not-evaluated")
+}
+
 func TestBuildGraphFromLogEntries(t *testing.T) {
 	entries := []npmLogEntry{
 		{Name: "express", Version: "5.2.1", ParentName: "myproj", ParentVersion: "1.0.0"},

@@ -28,5 +28,22 @@ Gotchas:
 - --from and --to must both be set when using V1 date-range mode and use YYYY-MM-DD format.
 - Stream values are validated; an invalid --stream value rejects the call.
 
-Related: jf xr curl, jf c show`
+Related: jf xr curl, jf c show
+
+QA:
+Q: How can I download updates for Xray's database using the license ID '123456' in JFrog Xray?
+A: jf xr ou --license-id 123456
+
+Q: What is the command to download updates for Xray's database from '2022-01-01' in Xray?
+A: jf xr ou --license-id your-license-id --from 2022-01-01
+
+Q: How can I download updates for Xray's database until '2022-12-31' in Xray?
+A: jf xr ou --license-id 'your-license-id' --to 2022-12-31
+
+Q: What is the command to download updates for Xray's database using Xray API version '3' in JFrog Xray?
+A: jf xr ou --license-id 'your-license-id' --version 3
+
+Q: How can I download updates for Xray's database to the target path './path/to/updates' in the JFrog Xray?
+A: jf xr ou --license-id 'your-license-id' --target './path/to/updates'
+`
 }

@@ -65,7 +65,7 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	return
 }
 
-func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanError error) {
+func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, scanError error) {
 	if !shouldReportEvents(xscVersion) {
 		return
 	}
@@ -80,7 +80,7 @@ func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.S
 		return
 	}
 
-	event := CreateFinalizedEvent(xrayVersion, multiScanId, startTime, totalFindings, resultsContext, scanError)
+	event := CreateFinalizedEvent(xrayVersion, multiScanId, startTime, totalFindings, resultsContext, scanTypesExecuted, uploadedArtifactPath, scanError)
 
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
 		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
@@ -101,25 +101,39 @@ func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *
 		cmdResults.StartTime,
 		getTotalFindings(cmdResults),
 		&cmdResults.ResultContext,
+		utils.SubScanTypesToStrings(cmdResults.GetStatusCodes().GetExecutedScanTypes()),
+		cmdResults.UploadedArtifactPath,
 		cmdResults.GetErrors(),
 	)
 }
 
-func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, err error) xscservices.XscAnalyticsGeneralEventFinalize {
+func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, err error) xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(startTime)
 	eventStatus := xscservices.Completed
 	if err != nil {
 		eventStatus = xscservices.Failed
 	}
 
-	var gitRepoUrlKey string
-	if resultsContext != nil && resultsContext.GitRepoHttpsCloneUrl != "" && checkVersionForGitRepoKeyAnalytics(xrayVersion) {
-		gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
+	var gitRepoUrlKey, projectKey string
+	if resultsContext != nil {
+		if resultsContext.GitRepoHttpsCloneUrl != "" && checkVersionForGitRepoKeyAnalytics(xrayVersion) {
+			gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
+		}
+		projectKey = resultsContext.ProjectKey
+	}
+
+	if !checkVersionForExternalAnalyticsFields(xrayVersion) {
+		scanTypesExecuted = nil
+		projectKey = ""
+		uploadedArtifactPath = ""
 	}
 
 	return xscservices.XscAnalyticsGeneralEventFinalize{
-		MultiScanId: multiScanId,
-		GitRepoUrl:  gitRepoUrlKey,
+		MultiScanId:          multiScanId,
+		GitRepoUrl:           gitRepoUrlKey,
+		ScanTypesExecuted:    scanTypesExecuted,
+		ProjectKey:           projectKey,
+		UploadedArtifactPath: uploadedArtifactPath,
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
 			EventStatus:       eventStatus,
 			TotalFindings:     totalFindings,
@@ -150,14 +164,22 @@ func checkVersionForGitRepoKeyAnalytics(xrayVersion string) bool {
 	if xrayVersion == "3.111.13" {
 		return true
 	}
-	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.GitRepoKeyAnalyticsMinVersion); e == nil {
+	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.GitRepoKeyAnalyticsMinXrayVersion); e == nil {
+		return true
+	}
+	return false
+}
+
+func checkVersionForExternalAnalyticsFields(xrayVersion string) bool {
+	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.ExternalAnalyticsMinXrayVersion); e == nil {
 		return true
 	}
 	return false
 }
 
 func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
+	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults),
+		&cmdResults.ResultContext, utils.SubScanTypesToStrings(cmdResults.GetStatusCodes().GetExecutedScanTypes()), cmdResults.UploadedArtifactPath, cmdResults.GetErrors())
 }
 
 func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails, projectKey string) (*xscservices.XscAnalyticsGeneralEvent, error) {

@@ -4111,6 +4111,33 @@ url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
 		"must resolve from the Pipfile [[source]], not the stray pipenv.yaml")
 }
 
+// TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf locks in the same
+// ignore-pipenv.yaml behavior for a well-formed config, not just a malformed one: even a
+// valid, correctly-configured pipenv.yaml (e.g. from a pre-existing 'jf pipenv-config' setup)
+// is deliberately ignored in favor of the Pipfile [[source]] entry.
+func TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte(`version: 1
+type: pipenv
+resolver:
+    repo: yaml-configured-repo
+    serverId: test
+`), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/pipfile-repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.NoError(t, err)
+	assert.Equal(t, "pipfile-repo", ca.PackageManagerConfig.TargetRepo(),
+		"pipenv.yaml is deliberately ignored even when valid — resolution always comes from Pipfile/pip.conf")
+}
+
 func TestSetRepoFromPipConfFallsBackToConfiguredServerCredentials(t *testing.T) {
 	t.Chdir(t.TempDir())
 	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")

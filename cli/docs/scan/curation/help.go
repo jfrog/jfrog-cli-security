@@ -34,5 +34,25 @@ Gotchas:
 - --script (uv only) audits one PEP 723 inline-script .py file directly; --script and --working-dirs cannot be used together, run separate commands for each.
 - --hugging-face-model requires HF_ENDPOINT set to the Artifactory Hugging Face repository URL. Datasets are not audited (curation does not currently cover datasets).
 
-Related: jf audit, jf rt npm-install, jf rt mvn`
+Related: jf audit, jf rt npm-install, jf rt mvn
+
+QA:
+Q: What's the command to scan project dependencies and find packages that were blocked by the JFrog Curation service?
+A: jf curation-audit
+
+Q: Can you tell me the command to scan project dependencies find blocked packages by Curation and get the results in JSON format?
+A: jf curation-audit --format=json
+
+Q: I want to scan the dependencies of projects in the directories 'npm_project1' and 'npm_project2' and find packages blocked by JFrog Curation. What's the command for that?
+A: jf curation-audit --working-dirs='npm_project1,npm_project2'
+
+Q: Can you tell me the command to scan the dependencies of projects in the directories 'npm_project1' and 'npm_project2' find blocked packages by Curation and get the results in JSON format?
+A: jf curation-audit --working-dirs='npm_project1,npm_project2' --format=json
+
+Q: How can I audit the project in the current directory using 5 threads to check the packages Curation status in parallel and display all known packages blocked by Curation Policies?
+A: jf curation-audit --threads=5
+
+Q: How can I curation-audit the project using a specific pip requirements file and display the output in JSON format?
+A: jf curation-audit --requirements-file='requirements.txt' --format=json
+`
 }

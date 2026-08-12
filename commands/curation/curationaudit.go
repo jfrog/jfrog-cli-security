@@ -454,7 +454,8 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	// Don't include scanErr.Error() here — it is in the returned err and the CLI framework
 	// prints it once; printing it here too would duplicate the full error message.
 	if scanErr != nil {
-		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete:")
+		// no positional claim: some fallback paths print their report before this banner, not after.
+		log.Error("Curation audit encountered errors while checking some packages; the report may be incomplete.")
 	}
 	for projectPath, report := range results {
 		if report.isPartial {
@@ -2269,6 +2270,7 @@ func cleanupForcedNpmDebugLog(logsDir string, logsMaxWasZero bool, baselineKey i
 // rotation manages them like any other run.
 func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils.Technology, results map[string]*CurationReport, originalErr error, logsMaxWasZero bool, baselineKey int64) error {
 	entries, blockedPackages, logFilePaths, parseErr := parseNpmDebugLog(logsDir, baselineKey)
+	entries = resolveNpmAliasEntries(entries)
 	if logsMaxWasZero {
 		defer func() {
 			for _, logFilePath := range logFilePaths {
@@ -2374,7 +2376,7 @@ func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils
 			// "curation never applied" categories, so it can't be mistaken for a real block.
 			advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
 				"Package '%s' (%s): Not evaluated: This dependency was not evaluated because it is resolved from a source "+
-					"other than an npm registry (such as a Git URL, local path, or npm alias), bypassing Artifactory. "+
+					"other than an npm registry (such as a Git URL or local path), bypassing Artifactory. "+
 					"As a result, curation policies do not apply.",
 				entry.Name, entry.Specifier))
 		case npmEntryETARGET:
