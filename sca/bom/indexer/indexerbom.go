@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -24,12 +26,20 @@ import (
 const (
 	indexingCommand          = "graph"
 	fileNotSupportedExitCode = 3
+
+	XrayUrlEnvVariable  = "JFROG_XRAY_PLATFORM_URL"
+	XrayUserEnvVariable = "JFROG_XRAY_USER"
+	// #nosec G101 -- Not credentials.
+	XrayPasswordEnvVariable = "JFROG_XRAY_PASSWORD"
+	// #nosec G101 -- Not credentials.
+	XrayTokenEnvVariable = "JFROG_XRAY_TOKEN"
 )
 
 // IndexerBomGenerator is a BomGenerator that uses the Xray Indexer to generate a CycloneDX SBOM.
 // It indexes a file and converts the resulting component graph to a CycloneDX SBOM.
 type IndexerBomGenerator struct {
 	bypassArchiveLimits bool
+	serverDetails       *config.ServerDetails
 
 	xrayManager *xray.XrayServicesManager
 	xrayVersion string
@@ -55,6 +65,14 @@ func WithBypassArchiveLimits(bypass bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if ibg, ok := sg.(*IndexerBomGenerator); ok {
 			ibg.bypassArchiveLimits = bypass
+		}
+	}
+}
+
+func WithServerDetails(serverDetails *config.ServerDetails) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if ibg, ok := sg.(*IndexerBomGenerator); ok {
+			ibg.serverDetails = serverDetails
 		}
 	}
 }
@@ -116,11 +134,32 @@ func CreateTargetEmptySbom(target results.ScanTarget) *cyclonedx.BOM {
 	return sbom
 }
 
+func (ibg *IndexerBomGenerator) getIndexerEnvVars() utils.EnvironmentVariables {
+	platformEnv := utils.EnvironmentVariables{}
+	if ibg.serverDetails != nil {
+		platformEnv[XrayUrlEnvVariable] = ibg.serverDetails.XrayUrl
+		if ibg.serverDetails.AccessToken != "" {
+			platformEnv[XrayTokenEnvVariable] = ibg.serverDetails.AccessToken
+		} else {
+			platformEnv[XrayUserEnvVariable] = ibg.serverDetails.User
+			platformEnv[XrayPasswordEnvVariable] = ibg.serverDetails.Password
+		}
+	}
+	if len(platformEnv) == 0 {
+		return nil
+	}
+	return utils.EnvironmentVariables(utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), platformEnv))
+}
+
 func (ibg *IndexerBomGenerator) IndexFile(filePath string) (*xrayClientUtils.BinaryGraphNode, error) {
 	var indexerResults xrayClientUtils.BinaryGraphNode
 	indexerCmd := exec.Command(ibg.indexerPath, indexingCommand, filePath, "--temp-dir", ibg.indexerTempDir)
 	if ibg.bypassArchiveLimits {
 		indexerCmd.Args = append(indexerCmd.Args, "--bypass-archive-limits")
+	}
+	if envVars := ibg.getIndexerEnvVars(); len(envVars) > 0 {
+		indexerCmd.Env = envVars.ToCommandEnvVars()
+		log.Verbose(fmt.Sprintf("Indexer environment variables:\n%s", envVars.ToString()))
 	}
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
