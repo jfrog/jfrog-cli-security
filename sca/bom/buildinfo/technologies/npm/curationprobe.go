@@ -159,6 +159,7 @@ func normalizeNpmVersion(spec string) (string, bool) {
 }
 
 // ClassifyNpmVersionSpec reports whether a version specifier is a probeable concrete semver, a range/dist-tag needing resolution, or a non-registry protocol.
+// Known limitation: "^"/"~"/comparison operators are stripped and the remaining version is treated as exact, so a caret/tilde range probes the declared floor version, not necessarily whatever version the package manager actually resolved.
 func ClassifyNpmVersionSpec(spec string) (resolvedVer string, probeable, rangeOrTag bool) {
 	s := strings.TrimSpace(spec)
 	if s == "" {

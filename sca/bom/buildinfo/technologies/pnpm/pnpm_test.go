@@ -3,6 +3,7 @@ package pnpm
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -700,7 +701,7 @@ func TestCurationNoLockfileErrorProbesWhenNoPackageNamed(t *testing.T) {
 		require.Error(t, err)
 		assert.NotEqual(t, resolveErr.Error(), err.Error(),
 			"must not short-circuit to the generic CVS message when no package was actually named — the probe should run instead")
-		assert.Contains(t, err.Error(), "Probing the declared direct dependencies did not surface the blocked package")
+		assert.Contains(t, err.Error(), "probing the declared direct dependencies did not find one blocked by curation")
 	})
 
 	t.Run("marker with affected-packages list still short-circuits", func(t *testing.T) {
@@ -822,5 +823,25 @@ func TestCollectDeclaredPnpmDirectDepsForMember(t *testing.T) {
 	t.Run("missing member package.json yields empty map", func(t *testing.T) {
 		declared := collectDeclaredPnpmDirectDeps(root, filepath.Join("packages", "does-not-exist"))
 		assert.Empty(t, declared)
+	})
+}
+
+// Pins the fix: only an actual 'pnpm install' failure should get curation framing — setup
+// errors (temp dir creation, project copy, initial lockfile stat) must propagate plainly,
+// mirroring yarn's tighter gate in resolveCurationLockfileDir.
+func TestIsCurationInstallFailure(t *testing.T) {
+	t.Run("wrapped install failure is recognized and unwrapped", func(t *testing.T) {
+		underlying := errors.New("pnpm install --lockfile-only failed: exit status 1")
+		wrapped := &curationInstallFailure{underlying}
+		installErr, ok := isCurationInstallFailure(wrapped)
+		assert.True(t, ok)
+		assert.Equal(t, underlying, installErr)
+	})
+
+	t.Run("plain setup error is not treated as a curation install failure", func(t *testing.T) {
+		setupErr := fmt.Errorf("failed to create a temporary dir: %w", errors.New("disk full"))
+		installErr, ok := isCurationInstallFailure(setupErr)
+		assert.False(t, ok, "setup errors must not be routed through curation framing")
+		assert.Nil(t, installErr)
 	})
 }

@@ -83,7 +83,11 @@ func buildDependencyTreeFromLockfile(pnpmExecPath, pnpmVersion, currentDir strin
 	workspaceRoot, importer := resolveWorkspaceRoot(currentDir)
 	lockfileDir, cleanup, resolveErr := resolveLockfileDir(pnpmExecPath, workspaceRoot)
 	if resolveErr != nil {
-		err = curationNoLockfileError(params, workspaceRoot, importer, resolveErr)
+		if installErr, ok := isCurationInstallFailure(resolveErr); ok {
+			err = curationNoLockfileError(params, workspaceRoot, importer, installErr)
+		} else {
+			err = resolveErr
+		}
 		return
 	}
 	defer func() {
@@ -142,7 +146,7 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	}
 	if len(probed) == 0 {
 		return errorutils.CheckErrorf(
-			"'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' aborted before the lockfile was written (curation is likely blocking manifests, not just tarballs). Probing the declared direct dependencies did not surface the blocked package, so it is likely a transitive dependency that cannot be enumerated without a 'pnpm-lock.yaml'. Check the debug log for the underlying pnpm install output to identify the blocked package, then remove/replace it or request a waiver and re-run 'jf ca'. Underlying pnpm error: %s",
+			"'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' failed, and probing the declared direct dependencies did not find one blocked by curation. This may be a transitive dependency blocked by curation (which cannot be enumerated without a 'pnpm-lock.yaml'), or an unrelated install failure. Check the debug log for the underlying pnpm install output to identify the cause, then remove/replace any blocked dependency or address the install failure directly, and re-run 'jf ca'. Underlying pnpm error: %s",
 			resolveErr.Error())
 	}
 	if tableErr := npm.PrintBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat, techutils.Pnpm); tableErr != nil {
@@ -507,19 +511,40 @@ func resolveLockfileDir(pnpmExecPath, workingDir string) (lockfileDir string, cl
 	out, runErr := getPnpmCmd(pnpmExecPath, tmpDir, "install", lockfileOnlyFlag, npm.IgnoreScriptsFlag, ignorePnpmfileFlag).GetCmd().CombinedOutput()
 	if runErr != nil {
 		log.Debug("pnpm install --lockfile-only failed:\n" + string(out))
-		err = wrapLockfileRegenError(out, runErr)
+		err = &curationInstallFailure{wrapLockfileRegenError(out, runErr)}
 		return "", cleanup, err
 	}
 
-	lockProduced, err := fileutils.IsFileExists(filepath.Join(tmpDir, "pnpm-lock.yaml"), false)
-	if err != nil {
+	lockProduced, statErr := fileutils.IsFileExists(filepath.Join(tmpDir, "pnpm-lock.yaml"), false)
+	if statErr != nil {
+		err = statErr
 		return "", cleanup, err
 	}
 	if !lockProduced {
-		err = errors.New("lockfile not produced after 'pnpm install --lockfile-only'")
+		err = &curationInstallFailure{errors.New("lockfile not produced after 'pnpm install --lockfile-only'")}
 		return "", cleanup, err
 	}
 	return tmpDir, cleanup, nil
+}
+
+// curationInstallFailure marks an error as coming from the actual 'pnpm install --lockfile-only'
+// attempt (or its immediate outcome), as opposed to setup failures (temp dir creation, project
+// copy, initial lockfile stat) that have nothing to do with curation and must not be given
+// curation framing or trigger the direct-dep probe — mirrors yarn's tighter gating in
+// resolveCurationLockfileDir, which only routes actual install failures to handleCurationInstallError.
+type curationInstallFailure struct{ err error }
+
+func (e *curationInstallFailure) Error() string { return e.err.Error() }
+func (e *curationInstallFailure) Unwrap() error { return e.err }
+
+// isCurationInstallFailure reports whether err reflects the pnpm install attempt itself failing,
+// returning the unwrapped underlying error for callers to pass to curationNoLockfileError.
+func isCurationInstallFailure(err error) (installErr error, ok bool) {
+	var failure *curationInstallFailure
+	if errors.As(err, &failure) {
+		return failure.err, true
+	}
+	return nil, false
 }
 
 // lockfileNeedsRefresh reports whether pnpm-lock.yaml is stale versus package.json,

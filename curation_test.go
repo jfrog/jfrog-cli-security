@@ -177,8 +177,7 @@ func TestYarnCurationAudit(t *testing.T) {
 
 // TestYarnV2CurationAudit: V2 has no lockfile-only mode, so a blocked package aborts the
 // install before yarn.lock is written, and enforcement falls to the direct-dep probe fallback
-// instead of the post-resolution HEAD-walker. NOTE: not run locally (needs a live platform) —
-// verify in CI before relying on it.
+// instead of the post-resolution HEAD-walker.
 func TestYarnV2CurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
 
