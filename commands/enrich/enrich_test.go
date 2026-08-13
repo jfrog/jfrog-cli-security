@@ -56,7 +56,7 @@ const componentRef = "pkg:maven/xerces/xercesImpl@2.11.0"
 
 // resultsWithNonCveVuln builds a scan result carrying a single vulnerability that has no CVE,
 // only an Xray issue id - the shape that used to crash AppendVulnsToJson/AppendVulnsToXML.
-func resultsWithNonCveVuln(t *testing.T, inputFile string) *results.SecurityCommandResults {
+func resultsWithNonCveVuln(inputFile string) *results.SecurityCommandResults {
 	cmdResults := results.NewCommandResults(utils.SBOM)
 	cmdResults.NewScanResults(results.ScanTarget{Target: inputFile}).ScaScanResults(0, services.ScanResponse{
 		Vulnerabilities: []services.Vulnerability{{
@@ -80,7 +80,7 @@ func TestAppendVulnsToJsonNonCveVuln(t *testing.T) {
 	require.NoError(t, os.WriteFile(inputFile, []byte(`{"bomFormat":"CycloneDX"}`), 0644))
 
 	buf := captureOutput(t)
-	require.NoError(t, AppendVulnsToJson(resultsWithNonCveVuln(t, inputFile)))
+	require.NoError(t, AppendVulnsToJson(resultsWithNonCveVuln(inputFile)))
 
 	output := buf.String()
 	assert.Contains(t, output, "XRAY-87173")
@@ -92,7 +92,7 @@ func TestAppendVulnsToXMLNonCveVuln(t *testing.T) {
 	require.NoError(t, os.WriteFile(inputFile, []byte(`<?xml version="1.0" encoding="UTF-8"?><bom></bom>`), 0644))
 
 	buf := captureOutput(t)
-	require.NoError(t, AppendVulnsToXML(resultsWithNonCveVuln(t, inputFile)))
+	require.NoError(t, AppendVulnsToXML(resultsWithNonCveVuln(inputFile)))
 
 	output := buf.String()
 	assert.Contains(t, output, "XRAY-87173")
