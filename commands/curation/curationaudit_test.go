@@ -4087,7 +4087,14 @@ func TestEffectiveParentVersion(t *testing.T) {
 	}
 }
 
-func TestSetRepoFromPipfileRejectsInvalidPresentConfig(t *testing.T) {
+// TestSetRepoFromPipfile_IgnoresPipenvYaml locks in that pipenv, like pip/poetry/uv, has no
+// 'jf pipenv-config' native-config equivalent: a stray or malformed .jfrog/projects/pipenv.yaml
+// (e.g. left over from an earlier version of this feature) must be ignored entirely —
+// resolution always comes from pip.conf, then the Pipfile [[source]], never from yaml.
+// HOME is isolated so this doesn't accidentally pick up the real machine's ~/.pip/pip.conf.
+func TestSetRepoFromPipfile_IgnoresPipenvYaml(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
 	t.Chdir(t.TempDir())
 	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte("resolver: [\n"), 0600))
@@ -4098,7 +4105,282 @@ url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
 
 	ca := NewCurationAuditCommand()
 	err := ca.setRepoFromPipfile()
+	require.NoError(t, err, "malformed pipenv.yaml must not break resolution — it's never read")
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "repo", ca.PackageManagerConfig.TargetRepo(),
+		"must resolve from the Pipfile [[source]], not the stray pipenv.yaml")
+}
+
+// TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf locks in the same
+// ignore-pipenv.yaml behavior for a well-formed config, not just a malformed one: even a
+// valid, correctly-configured pipenv.yaml (e.g. from a pre-existing 'jf pipenv-config' setup)
+// is deliberately ignored in favor of the Pipfile [[source]] entry.
+func TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte(`version: 1
+type: pipenv
+resolver:
+    repo: yaml-configured-repo
+    serverId: test
+`), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/pipfile-repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.NoError(t, err)
+	assert.Equal(t, "pipfile-repo", ca.PackageManagerConfig.TargetRepo(),
+		"pipenv.yaml is deliberately ignored even when valid — resolution always comes from Pipfile/pip.conf")
+}
+
+func TestSetRepoFromPipConfFallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_RejectsCredentialFallbackToDifferentHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://evil.example.com/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err, "must not silently send acme.jfrog.io credentials to evil.example.com")
+	assert.Contains(t, err.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte(`version: 1
+type: pip
+resolver:
+    repo: pip-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pip-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_PipConfOnly_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://user:token@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pypi-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPipConf_RejectsMalformedYaml(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte("resolver: [\n"), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
 	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf pip-config")
+	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_RejectsUnparsablePipConfUrl(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://admin:<token>@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a valid Artifactory PyPI URL")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://pypi.org/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "jf pip-config")
+	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromPyproject_IgnoresPoetryYaml locks in that poetry, like uv, has no
+// 'jf poetry-config' native-config equivalent: a stray .jfrog/projects/poetry.yaml (e.g.
+// left over from an earlier version of this feature, or copied from a pip/pipenv project)
+// must be ignored entirely — resolution always comes from pyproject.toml's
+// [[tool.poetry.source]], never from yaml.
+func TestSetRepoFromPyproject_IgnoresPoetryYaml(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "poetry.yaml"), []byte(`version: 1
+type: poetry
+resolver:
+    repo: yaml-repo
+    serverId: test
+`), 0600))
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/pyproject-repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pyproject-repo", ca.PackageManagerConfig.TargetRepo(),
+		"must resolve from pyproject.toml, not the stray poetry.yaml")
+}
+
+func TestSetRepoFromPyproject_SourcePresent_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "poetry-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_SourcePresent_FallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_RejectsCredentialFallbackToDifferentHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://evil.example.com/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err, "must not silently send acme.jfrog.io credentials to evil.example.com")
+	assert.Contains(t, err.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPyproject_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Artifactory PyPI resolver")
+	assert.Contains(t, err.Error(), "[[tool.poetry.source]]")
+	assert.NotContains(t, err.Error(), "jf poetry-config", "poetry is always-native now, like uv — no config command to suggest")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPyproject_NonArtifactorySourceFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Artifactory PyPI resolver")
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
@@ -4259,6 +4541,22 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Uv, false))
 	})
 
+	// pip/pipenv already resolve automatically (yaml, then pip.conf, then — for pipenv —
+	// the Pipfile [[source]]); --run-native has nothing to switch between, so it's
+	// accepted as a no-op, same as pnpm/yarn — a warning is emitted in auditTree.
+	t.Run("pip accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, false))
+	})
+	t.Run("pipenv accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, false))
+	})
+	t.Run("poetry accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
+	})
+
 	// Every other supported tech follows the same contract. Catch silent
 	// acceptance for any tech that's in the doc-table-of-supported but
 	// hasn't implemented a native flow — same UX as yarn.
@@ -4266,7 +4564,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		techutils.Gradle,
 		techutils.Maven,
 		techutils.Gem,
-		techutils.Pip,
 		techutils.Go,
 		techutils.Nuget,
 		techutils.Dotnet,
@@ -4285,6 +4582,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 			assert.NoError(t, validateRunNativeForTech(tech, false))
 		})
 	}
+
 }
 
 // TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
