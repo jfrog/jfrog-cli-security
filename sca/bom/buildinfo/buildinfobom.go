@@ -261,17 +261,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
-		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(java.DepTreeParams{
-			Server:                        artifactoryServerDetails,
-			DepsRepo:                      params.DependenciesRepository,
-			IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled,
-			UseWrapper:                    params.UseWrapper,
-			IsCurationCmd:                 params.IsCurationCmd,
-			MvnIncludePluginDeps:          params.MvnIncludePluginDeps,
-			CurationCacheFolder:           curationCacheFolder,
-			UseIncludedBuilds:             params.UseIncludedBuilds,
-			GradleExcludeTestDependencies: params.GradleExcludeTestDependencies,
-		}, tech)
+		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(buildJavaDepTreeParams(params, artifactoryServerDetails, curationCacheFolder), tech)
 	case techutils.Npm:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
@@ -320,6 +310,21 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	}
 	depTreeResult.FlatTree = createFlatTree(uniqueDepsIds)
 	return
+}
+
+func buildJavaDepTreeParams(params technologies.BuildInfoBomGeneratorParams, artifactoryServerDetails *config.ServerDetails, curationCacheFolder string) java.DepTreeParams {
+	return java.DepTreeParams{
+		Server:                        artifactoryServerDetails,
+		DepsRepo:                      params.DependenciesRepository,
+		InsecureTls:                   params.InsecureTls,
+		IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled,
+		UseWrapper:                    params.UseWrapper,
+		IsCurationCmd:                 params.IsCurationCmd,
+		MvnIncludePluginDeps:          params.MvnIncludePluginDeps,
+		CurationCacheFolder:           curationCacheFolder,
+		UseIncludedBuilds:             params.UseIncludedBuilds,
+		GradleExcludeTestDependencies: params.GradleExcludeTestDependencies,
+	}
 }
 
 func getUniqueDependencyCount(uniqueDepsIds []string, uniqDepsNodes map[string]*xray.DepTreeNode) int {

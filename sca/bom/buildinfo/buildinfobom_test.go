@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -252,4 +253,13 @@ func TestGetDiffDependencyTree(t *testing.T) {
 			assert.ElementsMatch(t, testCase.expectedDependencies, result.FlatTree.Nodes)
 		})
 	}
+}
+
+func TestBuildJavaDepTreeParamsPreservesInsecureTls(t *testing.T) {
+	t.Parallel()
+	params := technologies.BuildInfoBomGeneratorParams{InsecureTls: true, DependenciesRepository: "test-repo"}
+	result := buildJavaDepTreeParams(params, nil, "cache-folder")
+	assert.True(t, result.InsecureTls)
+	assert.Equal(t, "test-repo", result.DepsRepo)
+	assert.Equal(t, "cache-folder", result.CurationCacheFolder)
 }

@@ -1,10 +1,13 @@
 package java
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/beevik/etree"
 	"github.com/jfrog/build-info-go/utils"
@@ -701,6 +704,7 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 		UseWrapper:              true,
 		Server:                  server,
 		DepsRepo:                "test-repo",
+		InsecureTls:             true,
 		IsMavenDepTreeInstalled: true,
 		IsCurationCmd:           true,
 		CurationCacheFolder:     "/tmp/cache",
@@ -720,6 +724,170 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 	assert.Equal(t, "/tmp/cache", manager.curationCacheFolder)
 	assert.Equal(t, Tree, manager.cmdName)
 	assert.True(t, manager.mvnIncludePluginDeps, "MvnIncludePluginDeps must be propagated from params into the manager")
+	assert.True(t, manager.insecureTls, "InsecureTls must be propagated from params into the manager")
+}
+
+// TestInsecureTlsAddsWagonSslFlags locks in that --insecure-tls reaches the spawned mvn
+// process. Before this fix the flag only affected the CLI's own HTTP clients (Xray/Catalog/
+// Artifactory) and had no effect on the internally-invoked mvn subprocess, so a MITM proxy
+// that the CLI's own TLS bypass couldn't help with would still fail the plugin resolution.
+// Uses a fake mvnw that echoes its args, so no real Maven or network call is needed.
+func TestInsecureTlsAddsWagonSslFlags(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho \"$@\"\n"), 0644))
+
+	insecure := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, InsecureTls: true}, Tree)
+	out, err := insecure.RunMvnCmd([]string{"some-goal"})
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.insecure=true")
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.allowall=true")
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.ignore.validity.dates=true")
+	// Maven 3.9.0+ defaults to the native resolver transport, which ignores the wagon.* properties
+	// above and reads this one instead — both must be set for --insecure-tls to work regardless of
+	// which transport the resolved Maven version defaults to.
+	assert.Contains(t, string(out), "-Daether.connector.https.securityMode=insecure")
+
+	secure := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	out, err = secure.RunMvnCmd([]string{"some-goal"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "-Dmaven.wagon.http.ssl")
+	assert.NotContains(t, string(out), "-Daether.connector.https.securityMode")
+}
+
+// TestRunMvnCmdErrorIncludesCapturedOutput locks in that a failing mvn command's returned
+// error contains the process's actual stdout/stderr, not just Go's generic "exit status 1".
+// Before this fix that output was only ever logged at the Verbose level (above Debug), so
+// even a debug log wouldn't show the real Maven failure reason.
+func TestRunMvnCmdErrorIncludesCapturedOutput(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho 'a distinctive maven failure marker' >&2\nexit 1\n"), 0644))
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a distinctive maven failure marker")
+}
+
+// TestRunMvnCmdErrorTruncatesLargeOutput locks in that embedding captured output into the error
+// (added by this same fix) doesn't let an unbounded, noisy Maven run bloat the returned error
+// indefinitely. The tail is kept, since a failing run's [ERROR] block is typically at the end.
+func TestRunMvnCmdErrorTruncatesLargeOutput(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	script := "#!/bin/sh\ni=0\nwhile [ $i -lt 2000 ]; do\n  echo \"filler line $i of noisy maven info output\"\n  i=$((i+1))\ndone\necho 'a distinctive tail marker'\nexit 1\n"
+	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a distinctive tail marker", "the tail of the output, where a real [ERROR] block lives, must survive truncation")
+	assert.Less(t, len(err.Error()), 2*maxCapturedOutputInError, "error must be bounded even when the underlying command produces a large amount of output")
+	assert.Contains(t, err.Error(), "truncated", "a truncated error should say so")
+}
+
+// TestTruncateForErrorDoesNotSplitMultiByteRune: the naive byte-count cut lands mid-emoji here.
+func TestTruncateForErrorDoesNotSplitMultiByteRune(t *testing.T) {
+	t.Parallel()
+	const emoji = "🔥" // 4-byte UTF-8 rune
+	prefix := strings.Repeat("a", 8)
+	suffix := strings.Repeat("b", maxCapturedOutputInError-2)
+	output := prefix + emoji + suffix // naive cut at len(output)-maxCapturedOutputInError == 10, 2 bytes into the emoji
+
+	result := truncateForError(output)
+	assert.True(t, utf8.ValidString(result), "truncated output must be valid UTF-8, never a dangling continuation byte")
+}
+
+// TestRunMvnCmdErrorNoTrailingNewlineWhenOutputEmpty: no captured output shouldn't leave a dangling "\n".
+func TestRunMvnCmdErrorNoTrailingNewlineWhenOutputEmpty(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\nexit 1\n"), 0644))
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.False(t, strings.HasSuffix(err.Error(), "\n"), "error must not have a dangling trailing newline when there is no captured output")
+}
+
+// TestRunMvnCmdMasksCredentialsInError: server credentials must never appear verbatim in the error.
+func TestRunMvnCmdMasksCredentialsInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	script := "#!/bin/sh\necho 'auth failed for user secret-user-42 with password s3cr3t-p4ss!' >&2\nexit 1\n"
+	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+
+	server := &config.ServerDetails{User: "secret-user-42", Password: "s3cr3t-p4ss!"}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "s3cr3t-p4ss!", "password must never appear verbatim in the returned error")
+	assert.NotContains(t, err.Error(), "secret-user-42", "username must never appear verbatim in the returned error")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdErrorWrapsExitError: errors.As must be able to recover the underlying *exec.ExitError.
+func TestRunMvnCmdErrorWrapsExitError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho 'some output'\nexit 1\n"), 0644))
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	var exitErr *exec.ExitError
+	assert.True(t, errors.As(err, &exitErr), "the underlying *exec.ExitError must be recoverable via errors.As")
+}
+
+// TestRunMvnCmdCurationBlockUnaffectedByTruncation: the curation-block branch's fixed message
+// must stay independent of the truncation logic in the adjacent branch.
+func TestRunMvnCmdCurationBlockUnaffectedByTruncation(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	script := "#!/bin/sh\ni=0\nwhile [ $i -lt 2000 ]; do\n  echo \"noisy maven output line $i\"\n  i=$((i+1))\ndone\necho 'status code: 403'\nexit 1\n" // well over maxCapturedOutputInError
+	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, IsCurationCmd: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Less(t, len(err.Error()), 500, "the curation-block message is a fixed template, not proportional to output size")
+	assert.NotContains(t, err.Error(), "truncated", "the curation-block branch must never invoke the truncation logic")
 }
 
 // TestInjectPluginDeps locks in the dedup guard and the module-root fan-out
