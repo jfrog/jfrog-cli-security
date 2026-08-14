@@ -35,7 +35,24 @@ Gotchas:
 - --bypass-archive-limits is required for archives that exceed Xray's default size limit.
 - --fail defaults to true and exits non-zero on findings.
 
-Related: jf audit, jf build-scan, jf docker scan, jf sbom-enrich`
+Related: jf audit, jf build-scan, jf docker scan, jf sbom-enrich
+
+QA:
+Q: What's the command to scan a single jar file named 'app.jar' using JFrog CLI?
+A: jf scan app.jar
+
+Q: Can you tell me the command to scan all .jar files in the current directory?
+A: jf scan *.jar
+
+Q: I want to scan all .tar.gz files in the 'archives' directory. What's the command for that?
+A: jf scan "archives/*.tar.gz"
+
+Q: How do I scan all .zip files in the 'archives' directory and the subdirectories?
+A: jf scan "archives/**/*.zip"
+
+Q: What's the command to scan all files in the 'build' directory?
+A: jf scan "build/*"
+`
 }
 
 func GetArguments() []components.Argument {

@@ -33,6 +33,7 @@ type SastScanManager struct {
 	sastChangedFiles   []string
 	signedDescriptions bool
 	sastRules          string
+	excludeRules       []string
 
 	changedFilesMode bool
 
@@ -61,7 +62,7 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), params.ThreadId); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.ChangedFilesMode, params.SastRules, params.SastChangedFiles, params.ResultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.ChangedFilesMode, params.SastRules, params.SastChangedFiles, params.Target.GetCentralConfigSastExcludeRules(), params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -81,13 +82,14 @@ func (sastScanManager *SastScanManager) runSastScan(params SastScanParams) (vuln
 	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SastScan))
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles, excludeRules []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
 		sastRules:          sastRules,
 		changedFilesMode:   changedFilesMode,
 		sastChangedFiles:   sastChangedFiles,
+		excludeRules:       excludeRules,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
 	}
@@ -141,7 +143,7 @@ type scanConfiguration struct {
 	PathToResultsToCompare string         `yaml:"target-result-file,omitempty"`
 	Language               string         `yaml:"language,omitempty"`
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
+	ExcludedRules          []string       `yaml:"excluded_rules,omitempty"`
 	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
 	UserRules              string         `yaml:"user_rules,omitempty"`
 }
@@ -167,7 +169,7 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				Language:               sastScanner.Language,
-				ExcludedRules:          sastScanner.ExcludedRules,
+				ExcludedRules:          ssm.getExcludedRules(sastScanner.ExcludedRules),
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
@@ -188,6 +190,13 @@ func (ssm *SastScanManager) getScanRoots(defaultRoots []string) []string {
 	return ssm.sastChangedFiles
 }
 
+func (ssm *SastScanManager) getExcludedRules(moduleExcludedRules []string) []string {
+	if len(ssm.excludeRules) > 0 {
+		return ssm.excludeRules
+	}
+	return moduleExcludedRules
+}
+
 func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
@@ -196,6 +205,7 @@ func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget)
 				Roots:                  ssm.getScanRoots(jas.GetRootsFromTarget(target)),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
+				ExcludedRules:          target.GetCentralConfigSastExcludeRules(),
 				SastParameters: sastParameters{
 					SignedDescriptions: ssm.signedDescriptions,
 				},
