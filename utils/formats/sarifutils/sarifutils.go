@@ -934,3 +934,34 @@ func GetResultsByRuleId(ruleId string, runs ...*sarif.Run) (results []*sarif.Res
 	}
 	return
 }
+
+// A SAST scanner reports one result per data-flow path, so a single location can carry several results that
+// differ only by their code flow. Reports show one item per location, with every path that reaches it.
+func GroupResultsByLocation(runs []*sarif.Run) (grouped []*sarif.Run) {
+	for _, run := range runs {
+		groupedResults := []*sarif.Result{}
+		locationToResult := map[string]*sarif.Result{}
+		for _, result := range run.Results {
+			resultId := getResultIdByLocation(result)
+			existing, exists := locationToResult[resultId]
+			if !exists {
+				groupedResult := CopyResult(result)
+				locationToResult[resultId] = groupedResult
+				groupedResults = append(groupedResults, groupedResult)
+				continue
+			}
+			existing.CodeFlows = append(existing.CodeFlows, result.CodeFlows...)
+		}
+		groupedRun := *run
+		groupedRun.Results = groupedResults
+		grouped = append(grouped, &groupedRun)
+	}
+	return
+}
+
+func getResultIdByLocation(result *sarif.Result) string {
+	if len(result.Locations) == 0 {
+		return GetResultRuleId(result) + result.Level + GetResultMsgText(result)
+	}
+	return GetResultRuleId(result) + result.Level + GetResultMsgText(result) + GetLocationId(result.Locations[0])
+}

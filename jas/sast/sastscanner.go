@@ -19,7 +19,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -71,7 +70,7 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.runSastScan(params); err != nil {
 		return
 	}
-	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
+	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(sarifutils.GroupResultsByLocation(vulnerabilitiesResults)...), startTime, params.ThreadId))
 	return
 }
 
@@ -114,8 +113,6 @@ func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module, central
 	if err != nil {
 		return
 	}
-	groupResultsByLocation(vulnerabilitiesSarifRuns)
-	groupResultsByLocation(violationsSarifRuns)
 	return
 }
 
@@ -130,8 +127,6 @@ func (ssm *SastScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarif
 	if err != nil {
 		return
 	}
-	groupResultsByLocation(vulnerabilitiesSarifRuns)
-	groupResultsByLocation(violationsSarifRuns)
 	return
 }
 
@@ -219,38 +214,6 @@ func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
 // In the Sast scanner, there can be multiple results with the same location.
 // The only difference is that their CodeFlow values are different.
 // We combine those under the same result location value
-func groupResultsByLocation(sarifRuns []*sarif.Run) {
-	for _, sastRun := range sarifRuns {
-		locationToResult := map[string]*sarif.Result{}
-		for _, sastResult := range sastRun.Results {
-			resultID := getResultId(sastResult)
-			if result, exists := locationToResult[resultID]; exists {
-				result.CodeFlows = append(result.CodeFlows, sastResult.CodeFlows...)
-			} else {
-				locationToResult[resultID] = sastResult
-			}
-		}
-		sastRun.Results = maps.Values(locationToResult)
-	}
-}
-
-func getResultLocationStr(result *sarif.Result) string {
-	if len(result.Locations) == 0 {
-		return ""
-	}
-	location := result.Locations[0]
-	return fmt.Sprintf("%s%d%d%d%d",
-		sarifutils.GetLocationFileName(location),
-		sarifutils.GetLocationStartLine(location),
-		sarifutils.GetLocationStartColumn(location),
-		sarifutils.GetLocationEndLine(location),
-		sarifutils.GetLocationEndColumn(location))
-}
-
-func getResultId(result *sarif.Result) string {
-	return sarifutils.GetResultRuleId(result) + result.Level + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
-}
-
 // sastChangedFileDropStats counts reasons entries from git were not used as SAST roots.
 type sastChangedFileDropStats struct {
 	invalidPath   int
