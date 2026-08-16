@@ -2,15 +2,85 @@ package buildinfo
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreutils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func isolateResolverConfig(t *testing.T) string {
+	t.Helper()
+	t.Setenv(coreutils.HomeDir, t.TempDir())
+	dummyHome := t.TempDir()
+	t.Setenv("HOME", dummyHome)
+	t.Setenv("USERPROFILE", dummyHome)
+	require.NoError(t, config.SaveServersConf([]*config.ServerDetails{{
+		ServerId:       "test",
+		Url:            "http://localhost/",
+		ArtifactoryUrl: "http://localhost/artifactory/",
+	}}))
+	projectRoot := t.TempDir()
+	originalCwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectRoot))
+	t.Cleanup(func() { require.NoError(t, os.Chdir(originalCwd)) })
+	return projectRoot
+}
+
+func TestResolveTechParams(t *testing.T) {
+	t.Run("isolates DependenciesRepository per technology", func(t *testing.T) {
+		projectRoot := isolateResolverConfig(t)
+		projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
+		require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "go.yaml"),
+			[]byte("version: 1\ntype: go\nresolver:\n  serverId: test\n  repo: go-vir\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"),
+			[]byte("version: 1\ntype: npm\nresolver:\n  serverId: test\n  repo: npm-remote\n"), 0o644))
+
+		generator := NewBuildInfoBomGenerator()
+
+		goParams, _, err := generator.resolveTechParams(techutils.Go)
+		require.NoError(t, err)
+		assert.Equal(t, "go-vir", goParams.DependenciesRepository)
+
+		npmParams, _, err := generator.resolveTechParams(techutils.Npm)
+		require.NoError(t, err)
+		assert.Equal(t, "npm-remote", npmParams.DependenciesRepository)
+		assert.Empty(t, generator.params.DependenciesRepository)
+	})
+
+	t.Run("isolates ServerDetails from in-place mutation", func(t *testing.T) {
+		shared := &config.ServerDetails{
+			ServerId:       "test",
+			Url:            "http://localhost/",
+			ArtifactoryUrl: "http://localhost/artifactory/",
+		}
+		generator := NewBuildInfoBomGenerator()
+		generator.params = technologies.BuildInfoBomGeneratorParams{
+			ServerDetails:          shared,
+			DependenciesRepository: "cli-deps-repo",
+		}
+
+		techParams, _, err := generator.resolveTechParams(techutils.Nuget)
+		require.NoError(t, err)
+		require.NotNil(t, techParams.ServerDetails)
+		assert.NotSame(t, shared, techParams.ServerDetails)
+
+		techParams.ServerDetails.ArtifactoryUrl += "api/curation/audit"
+		assert.Equal(t, "http://localhost/artifactory/", shared.ArtifactoryUrl)
+		assert.Equal(t, "http://localhost/artifactory/", generator.params.ServerDetails.ArtifactoryUrl)
+	})
+}
 
 func TestMergeResults(t *testing.T) {
 	nodeA := &xrayUtils.GraphNode{Id: "npm://a:1"}
