@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
@@ -222,7 +223,7 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// Parsing JAS SAST results
-	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+	if err = parser.ParseSast(sarifutils.GroupResultsByLocation(targetResults.JasResults.JasVulnerabilities.SastScanResults)); err != nil {
 		return
 	}
 	// Parsing JAS Malicious Code results

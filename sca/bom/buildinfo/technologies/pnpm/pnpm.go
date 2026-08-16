@@ -10,9 +10,12 @@ import (
 	"strconv"
 	"strings"
 
+	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
+	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
@@ -22,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
+	"gopkg.in/yaml.v3"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -77,8 +81,13 @@ func buildDependencyTreeFromLockfile(pnpmExecPath, pnpmVersion, currentDir strin
 	// own importer. Resolve from the root, then scope to the importer matching currentDir:
 	// "." (the root) audits the whole workspace; a member audits only that member.
 	workspaceRoot, importer := resolveWorkspaceRoot(currentDir)
-	lockfileDir, cleanup, err := resolveLockfileDir(pnpmExecPath, workspaceRoot)
-	if err != nil {
+	lockfileDir, cleanup, resolveErr := resolveLockfileDir(pnpmExecPath, workspaceRoot)
+	if resolveErr != nil {
+		if installErr, ok := isCurationInstallFailure(resolveErr); ok {
+			err = curationNoLockfileError(params, workspaceRoot, importer, installErr)
+		} else {
+			err = resolveErr
+		}
 		return
 	}
 	defer func() {
@@ -93,6 +102,99 @@ func buildDependencyTreeFromLockfile(pnpmExecPath, pnpmVersion, currentDir strin
 	}
 	dependencyTrees, uniqueDeps = parsePnpmLSContent(projects)
 	return
+}
+
+// pnpmCvsBlockedVersionMarker is wrapLockfileRegenError's ERR_PNPM_NO_MATCHING_VERSION message prefix; curationNoLockfileError skips its probe when this matches AND pnpmCvsAffectedPackagesMarker is present, since only then is the package/version actually named.
+const pnpmCvsBlockedVersionMarker = "one or more pinned package versions were unavailable"
+
+// pnpmCvsAffectedPackagesMarker is the header formatPnpmCvsBlockedMessage only writes when parsePnpmCvsFailedPackages actually extracted a package name; its absence means the CVS message is generic, so the probe should still run.
+const pnpmCvsAffectedPackagesMarker = "Affected package(s):"
+
+// curationNoLockfileError builds an actionable error for a failed 'pnpm install --lockfile-only', probing declared direct deps (mirroring yarn's fallback) since pnpm aborts the whole resolve on any blocked package, direct or transitive.
+func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, workspaceRoot, importer string, resolveErr error) error {
+	if strings.Contains(resolveErr.Error(), pnpmCvsBlockedVersionMarker) && strings.Contains(resolveErr.Error(), pnpmCvsAffectedPackagesMarker) {
+		return resolveErr // already names the exact blocked package(s); the probe below would only add noise
+	}
+	// only populated for pnpm on the success path (setRepoFromNpmrcForPnpm runs after GetTechDependencyTree returns), so resolve it ourselves here on this failure path.
+	if params.DependenciesRepository == "" {
+		if registryConfig, regErr := GetNativePnpmRegistryConfig(); regErr == nil {
+			params.DependenciesRepository = registryConfig.RepoName
+			// mirrors setRepoFromNpmrcForPnpm: .npmrc's URL always wins (so the probe hits the right instance in multi-server setups), only the token falls back to the existing ServerDetails.
+			if registryConfig.AuthToken != "" {
+				params.ServerDetails = &config.ServerDetails{
+					ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+					AccessToken:    registryConfig.AuthToken,
+				}
+			} else if params.ServerDetails != nil {
+				// copy before mutating: params.ServerDetails may be the shared struct ca.ServerDetails() returns, and overwriting its URL in place would leak to other techs in a multi-tech audit.
+				copied := *params.ServerDetails
+				copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+				params.ServerDetails = &copied
+			}
+		} else {
+			log.Debug(fmt.Sprintf("pnpm curation probe: failed to read Artifactory repository from .npmrc: %s", regErr.Error()))
+		}
+	}
+	memberRel := importer
+	if memberRel == "." {
+		memberRel = ""
+	}
+	probed, totalProbed := probeBlockedPnpmDirectDeps(params, workspaceRoot, memberRel)
+	outputRef := string(outFormat.Table)
+	if params.OutputFormat == outFormat.Json {
+		outputRef = "JSON output"
+	}
+	if len(probed) == 0 {
+		return errorutils.CheckErrorf(
+			"'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' failed, and probing the declared direct dependencies did not find one blocked by curation. This may be a transitive dependency blocked by curation (which cannot be enumerated without a 'pnpm-lock.yaml'), or an unrelated install failure. Check the debug log for the underlying pnpm install output to identify the cause, then remove/replace any blocked dependency or address the install failure directly, and re-run 'jf ca'. Underlying pnpm error: %s",
+			resolveErr.Error())
+	}
+	if tableErr := npm.PrintBlockedDirectDepsTable(probed, totalProbed, params.OutputFormat, techutils.Pnpm); tableErr != nil {
+		log.Debug(fmt.Sprintf("pnpm curation probe: failed to render blocked deps table: %s", tableErr.Error()))
+	}
+	return errorutils.CheckErrorf(
+		"'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' aborted before the lockfile was written (curation is blocking manifests, not just tarballs). The %d direct dependencies that the curation repo rejected with HTTP 403 are listed in the %s above. Without a 'pnpm-lock.yaml' the audit cannot enumerate transitives; only direct blockers are listed. Once enough directs pass curation that pnpm writes a lockfile, transitive blockers are audited automatically. Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, resolve completes and the audit enumerates the full graph. Underlying pnpm error: %s",
+		len(probed), outputRef, outputRef, resolveErr.Error())
+}
+
+// probeBlockedPnpmDirectDeps delegates to the shared probe mechanism yarn's fallback also uses; workspaceMemberRel, when non-empty, scopes it to one workspace member.
+func probeBlockedPnpmDirectDeps(params technologies.BuildInfoBomGeneratorParams, curWd, workspaceMemberRel string) ([]npm.BlockedDirectDep, int) {
+	declared := collectDeclaredPnpmDirectDeps(curWd, workspaceMemberRel)
+	if len(declared) == 0 {
+		return nil, 0
+	}
+	return npm.ProbeBlockedDirectDeps(params, declared, "pnpm")
+}
+
+// collectDeclaredPnpmDirectDeps returns direct deps for the whole workspace (memberRel == "") or a single member's package.json; missing/empty member returns an empty map, no fallback.
+func collectDeclaredPnpmDirectDeps(curWd, memberRel string) map[string]string {
+	if memberRel == "" {
+		return npm.CollectDeclaredDirectDeps(curWd, expandPnpmWorkspaceDirs(curWd))
+	}
+	memberDir := filepath.Join(curWd, filepath.FromSlash(memberRel))
+	pi, err := bibuildutils.ReadPackageInfoFromPackageJsonIfExists(memberDir, nil)
+	if err != nil || pi == nil {
+		return map[string]string{}
+	}
+	return npm.MergeDirectDeps(pi)
+}
+
+// pnpmWorkspaceYAML mirrors pnpm-workspace.yaml's "packages" glob list — pnpm requires this file, unlike yarn/npm's package.json "workspaces" field.
+type pnpmWorkspaceYAML struct {
+	Packages []string `yaml:"packages"`
+}
+
+// expandPnpmWorkspaceDirs reads pnpm-workspace.yaml's "packages" glob list and expands it via the shared npm.ExpandWorkspaceDirs (same expansion yarn's "workspaces" reader uses).
+func expandPnpmWorkspaceDirs(curWd string) []string {
+	data, err := os.ReadFile(filepath.Join(curWd, "pnpm-workspace.yaml"))
+	if err != nil {
+		return nil
+	}
+	var ws pnpmWorkspaceYAML
+	if err := yaml.Unmarshal(data, &ws); err != nil || len(ws.Packages) == 0 {
+		return nil
+	}
+	return npm.ExpandWorkspaceDirs(curWd, ws.Packages, "pnpm")
 }
 
 // buildDependencyTreeFromPnpmLs is the audit/scan path: installs into a temp dir
@@ -239,7 +341,8 @@ func GetNativePnpmRegistryConfig() (*npm.NpmrcRegistryConfig, error) {
 	}, nil
 }
 
-const supportedPnpmMajorVersion = 10
+// minSupportedPnpmMajorVersion is the floor curation-audit has been verified against; the lockfile format (lockfileVersion '9.0') has stayed structurally identical from pnpm 10 through 11. No ceiling is enforced here because compatibility actually hinges on lockfileVersion, not the CLI major — validateLockfileVersion (pnpmlock.go) independently rejects any future format change.
+const minSupportedPnpmMajorVersion = 10
 
 // getPnpmExecPath locates the pnpm executable and returns it together with its version,
 // so callers needing the version (e.g. the curation version check) need not re-spawn it.
@@ -262,9 +365,7 @@ func getPnpmExecPath() (pnpmExecPath, pnpmVersion string, err error) {
 	return
 }
 
-// validateSupportedPnpmVersion returns an error unless the installed pnpm major
-// version is exactly supportedPnpmMajorVersion. Curation supports only that major,
-// so both older and newer majors are rejected.
+// validateSupportedPnpmVersion returns an error unless the installed pnpm major version is minSupportedPnpmMajorVersion or newer.
 func validateSupportedPnpmVersion(versionStr string) error {
 	// Version string may include extra lines (warnings on incompatible Node); take first token.
 	firstLine := strings.SplitN(versionStr, "\n", 2)[0]
@@ -273,19 +374,17 @@ func validateSupportedPnpmVersion(versionStr string) error {
 	if err != nil {
 		return fmt.Errorf("could not parse pnpm version %q: %w", versionStr, err)
 	}
-	if major != supportedPnpmMajorVersion {
-		return fmt.Errorf("resolving pnpm dependencies from Artifactory is currently not supported for pnpm versions other than %d.x. The current pnpm version is: %s", supportedPnpmMajorVersion, versionStr)
+	if major < minSupportedPnpmMajorVersion {
+		return fmt.Errorf("resolving pnpm dependencies from Artifactory is currently not supported for pnpm versions older than %d.x. The current pnpm version is: %s", minSupportedPnpmMajorVersion, versionStr)
 	}
 	return nil
 }
 
-// wrapLockfileRegenError checks the pnpm output for ERR_PNPM_NO_MATCHING_VERSION
-// (raised when CVS removes a blocked version from the packument) and returns a
-// curation-flavoured message. Any other failure is returned with the raw output.
+// wrapLockfileRegenError turns ERR_PNPM_NO_MATCHING_VERSION into a curation-flavoured message naming the blocked package(s); any other failure returns just runErr, since the raw output is already in the caller's log.Debug and would otherwise print twice.
 func wrapLockfileRegenError(out []byte, runErr error) error {
 	output := string(out)
 	if !strings.Contains(output, "ERR_PNPM_NO_MATCHING_VERSION") {
-		return fmt.Errorf("'pnpm install --lockfile-only' failed: %w\n%s", runErr, output)
+		return fmt.Errorf("'pnpm install --lockfile-only' failed: %w", runErr)
 	}
 	pkgs := parsePnpmCvsFailedPackages(output)
 	return errors.New(formatPnpmCvsBlockedMessage(pkgs))
@@ -334,7 +433,7 @@ func formatPnpmCvsBlockedMessage(pkgs []string) string {
 	var b strings.Builder
 	b.WriteString("Curation audit failed: one or more pinned package versions were unavailable during dependency resolution, so the corresponding curation policy violations could not be evaluated.")
 	if len(pkgs) > 0 {
-		b.WriteString("\n\nAffected package(s):\n")
+		b.WriteString("\n\n" + pnpmCvsAffectedPackagesMarker + "\n")
 		for _, p := range pkgs {
 			fmt.Fprintf(&b, " - %s\n", p)
 		}
@@ -412,19 +511,40 @@ func resolveLockfileDir(pnpmExecPath, workingDir string) (lockfileDir string, cl
 	out, runErr := getPnpmCmd(pnpmExecPath, tmpDir, "install", lockfileOnlyFlag, npm.IgnoreScriptsFlag, ignorePnpmfileFlag).GetCmd().CombinedOutput()
 	if runErr != nil {
 		log.Debug("pnpm install --lockfile-only failed:\n" + string(out))
-		err = wrapLockfileRegenError(out, runErr)
+		err = &curationInstallFailure{wrapLockfileRegenError(out, runErr)}
 		return "", cleanup, err
 	}
 
-	lockProduced, err := fileutils.IsFileExists(filepath.Join(tmpDir, "pnpm-lock.yaml"), false)
-	if err != nil {
+	lockProduced, statErr := fileutils.IsFileExists(filepath.Join(tmpDir, "pnpm-lock.yaml"), false)
+	if statErr != nil {
+		err = statErr
 		return "", cleanup, err
 	}
 	if !lockProduced {
-		err = errors.New("lockfile not produced after 'pnpm install --lockfile-only'")
+		err = &curationInstallFailure{errors.New("lockfile not produced after 'pnpm install --lockfile-only'")}
 		return "", cleanup, err
 	}
 	return tmpDir, cleanup, nil
+}
+
+// curationInstallFailure marks an error as coming from the actual 'pnpm install --lockfile-only'
+// attempt (or its immediate outcome), as opposed to setup failures (temp dir creation, project
+// copy, initial lockfile stat) that have nothing to do with curation and must not be given
+// curation framing or trigger the direct-dep probe — mirrors yarn's tighter gating in
+// resolveCurationLockfileDir, which only routes actual install failures to handleCurationInstallError.
+type curationInstallFailure struct{ err error }
+
+func (e *curationInstallFailure) Error() string { return e.err.Error() }
+func (e *curationInstallFailure) Unwrap() error { return e.err }
+
+// isCurationInstallFailure reports whether err reflects the pnpm install attempt itself failing,
+// returning the unwrapped underlying error for callers to pass to curationNoLockfileError.
+func isCurationInstallFailure(err error) (installErr error, ok bool) {
+	var failure *curationInstallFailure
+	if errors.As(err, &failure) {
+		return failure.err, true
+	}
+	return nil, false
 }
 
 // lockfileNeedsRefresh reports whether pnpm-lock.yaml is stale versus package.json,

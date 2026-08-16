@@ -19,7 +19,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -34,6 +33,7 @@ type SastScanManager struct {
 	sastChangedFiles   []string
 	signedDescriptions bool
 	sastRules          string
+	excludeRules       []string
 
 	changedFilesMode bool
 
@@ -62,7 +62,7 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), params.ThreadId); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.ChangedFilesMode, params.SastRules, params.SastChangedFiles, params.ResultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, params.SignedDescriptions, params.ChangedFilesMode, params.SastRules, params.SastChangedFiles, params.Target.GetCentralConfigSastExcludeRules(), params.ResultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func RunSastScan(params SastScanParams, scanner *jas.JasScanner) (vulnerabilitie
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.runSastScan(params); err != nil {
 		return
 	}
-	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), startTime, params.ThreadId))
+	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(sarifutils.GroupResultsByLocation(vulnerabilitiesResults)...), startTime, params.ThreadId))
 	return
 }
 
@@ -82,13 +82,14 @@ func (sastScanManager *SastScanManager) runSastScan(params SastScanParams) (vuln
 	return sastScanManager.scanner.DeprecatedRun(sastScanManager, *params.Target.DeprecatedAppsConfigModule, params.Target.GetCentralConfigExclusions(utils.SastScan))
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions, changedFilesMode bool, sastRules string, sastChangedFiles, excludeRules []string, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
 		sastRules:          sastRules,
 		changedFilesMode:   changedFilesMode,
 		sastChangedFiles:   sastChangedFiles,
+		excludeRules:       excludeRules,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
 	}
@@ -114,8 +115,6 @@ func (ssm *SastScanManager) DeprecatedRun(module jfrogappsconfig.Module, central
 	if err != nil {
 		return
 	}
-	groupResultsByLocation(vulnerabilitiesSarifRuns)
-	groupResultsByLocation(violationsSarifRuns)
 	return
 }
 
@@ -130,8 +129,6 @@ func (ssm *SastScanManager) Run(target results.ScanTarget) (vulnerabilitiesSarif
 	if err != nil {
 		return
 	}
-	groupResultsByLocation(vulnerabilitiesSarifRuns)
-	groupResultsByLocation(violationsSarifRuns)
 	return
 }
 
@@ -146,7 +143,7 @@ type scanConfiguration struct {
 	PathToResultsToCompare string         `yaml:"target-result-file,omitempty"`
 	Language               string         `yaml:"language,omitempty"`
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
+	ExcludedRules          []string       `yaml:"excluded_rules,omitempty"`
 	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
 	UserRules              string         `yaml:"user_rules,omitempty"`
 }
@@ -172,7 +169,7 @@ func (ssm *SastScanManager) deprecatedCreateConfigFile(module jfrogappsconfig.Mo
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				Language:               sastScanner.Language,
-				ExcludedRules:          sastScanner.ExcludedRules,
+				ExcludedRules:          ssm.getExcludedRules(sastScanner.ExcludedRules),
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
@@ -193,6 +190,13 @@ func (ssm *SastScanManager) getScanRoots(defaultRoots []string) []string {
 	return ssm.sastChangedFiles
 }
 
+func (ssm *SastScanManager) getExcludedRules(moduleExcludedRules []string) []string {
+	if len(ssm.excludeRules) > 0 {
+		return ssm.excludeRules
+	}
+	return moduleExcludedRules
+}
+
 func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget) error {
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
@@ -201,6 +205,7 @@ func (ssm *SastScanManager) createConfigFileForTarget(target results.ScanTarget)
 				Roots:                  ssm.getScanRoots(jas.GetRootsFromTarget(target)),
 				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
+				ExcludedRules:          target.GetCentralConfigSastExcludeRules(),
 				SastParameters: sastParameters{
 					SignedDescriptions: ssm.signedDescriptions,
 				},
@@ -219,38 +224,6 @@ func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
 // In the Sast scanner, there can be multiple results with the same location.
 // The only difference is that their CodeFlow values are different.
 // We combine those under the same result location value
-func groupResultsByLocation(sarifRuns []*sarif.Run) {
-	for _, sastRun := range sarifRuns {
-		locationToResult := map[string]*sarif.Result{}
-		for _, sastResult := range sastRun.Results {
-			resultID := getResultId(sastResult)
-			if result, exists := locationToResult[resultID]; exists {
-				result.CodeFlows = append(result.CodeFlows, sastResult.CodeFlows...)
-			} else {
-				locationToResult[resultID] = sastResult
-			}
-		}
-		sastRun.Results = maps.Values(locationToResult)
-	}
-}
-
-func getResultLocationStr(result *sarif.Result) string {
-	if len(result.Locations) == 0 {
-		return ""
-	}
-	location := result.Locations[0]
-	return fmt.Sprintf("%s%d%d%d%d",
-		sarifutils.GetLocationFileName(location),
-		sarifutils.GetLocationStartLine(location),
-		sarifutils.GetLocationStartColumn(location),
-		sarifutils.GetLocationEndLine(location),
-		sarifutils.GetLocationEndColumn(location))
-}
-
-func getResultId(result *sarif.Result) string {
-	return sarifutils.GetResultRuleId(result) + result.Level + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
-}
-
 // sastChangedFileDropStats counts reasons entries from git were not used as SAST roots.
 type sastChangedFileDropStats struct {
 	invalidPath   int

@@ -71,6 +71,13 @@ func getScaScanFileName(cmdResults *results.SecurityCommandResults) string {
 	return ""
 }
 
+func vulnerabilityId(vuln services.Vulnerability) string {
+	if len(vuln.Cves) > 0 && vuln.Cves[0].Id != "" {
+		return vuln.Cves[0].Id
+	}
+	return vuln.IssueId
+}
+
 func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	fileName := getScaScanFileName(cmdResults)
 	fileContent, err := os.ReadFile(fileName)
@@ -91,7 +98,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	}
 	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
-			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
+			vulnerability := map[string]string{"bom-ref": component, "id": vulnerabilityId(vuln)}
 			vulnerabilities = append(vulnerabilities, vulnerability)
 		}
 	}
@@ -119,7 +126,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 			addVuln := vulns.CreateElement("vulnerability")
 			addVuln.CreateAttr("bom-ref", component)
 			id := addVuln.CreateElement("id")
-			id.CreateText(vuln.Cves[0].Id)
+			id.CreateText(vulnerabilityId(vuln))
 		}
 	}
 	result.IndentTabs()

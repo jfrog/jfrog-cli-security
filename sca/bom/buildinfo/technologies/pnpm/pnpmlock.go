@@ -328,7 +328,7 @@ func validateLockfileVersion(v string) error {
 		return fmt.Errorf("pnpm-lock.yaml has an unrecognized lockfileVersion %q; run 'pnpm install --lockfile-only' to regenerate", v)
 	}
 	if majorNum < 9 {
-		return fmt.Errorf("pnpm-lock.yaml lockfileVersion %q is not supported (only 9.0 and later, written by pnpm 9/10, are parseable); run 'pnpm install --lockfile-only' with pnpm %d to regenerate", v, supportedPnpmMajorVersion)
+		return fmt.Errorf("pnpm-lock.yaml lockfileVersion %q is not supported (only 9.0 and later, written by pnpm 9+, are parseable); run 'pnpm install --lockfile-only' with pnpm %d to regenerate", v, minSupportedPnpmMajorVersion)
 	}
 	return nil
 }
