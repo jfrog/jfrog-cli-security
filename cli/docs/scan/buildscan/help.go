@@ -31,7 +31,21 @@ Gotchas:
 - Xray may need time to index the build; --trigger-scan-retries controls how long the CLI waits.
 - Without project/watches, no violations are produced even if --violations is set.
 
-Related: jf audit, jf scan, jf rt build-publish`
+Related: jf audit, jf scan, jf rt build-publish
+
+QA:
+Q: How can I scan the build 'my-build-name' with build number '18' in JFrog Xray?
+A: jf bs my-build-name 18
+
+Q: How can I scan the build 'my-build-name' with build number '18' and receive all vulnerabilities?
+A: jf bs my-build-name 18 --vuln
+
+Q: What is the command to scan the build 'my-build-name' with build number '18' and not fail the build in JFrog Xray?
+A: jf bs my-build-name 18 --fail=false
+
+Q: How can I scan the build 'my-build-name' with build number '18' and get the output in JSON format?
+A: jf bs my-build-name 18 --format=json
+`
 }
 
 func GetArguments() []components.Argument {

@@ -401,8 +401,17 @@ type matchedJsaVulnerability struct {
 	location *sarif.Location
 }
 
+func jasResultsForReport(jasType jasutils.JasScanType, runs []*sarif.Run) []*sarif.Run {
+	if jasType != jasutils.Sast {
+		return runs
+	}
+	return sarifutils.GroupResultsByLocation(runs)
+}
+
 func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasType jasutils.JasScanType, matchId string, violation services.XrayViolation) (match matchedJsaVulnerability) {
-	if matchId == "" {
+	id := getJasVulnerabilityId(violation, jasType)
+	if id == "" {
+		log.Debug(fmt.Sprintf("Skipping Jas violation with empty ID for issue ID %s violation ID %s", violation.IssueId, violation.Id))
 		return
 	}
 	found := false
@@ -411,7 +420,7 @@ func locateJasVulnerabilityInfo(cmdResults *results.SecurityCommandResults, jasT
 			log.Debug(fmt.Sprintf("Skipping %s violation search for target %s with no Jas results", jasType, target.ScanTarget))
 			continue
 		}
-		if err := results.ForEachJasIssue(target.JasResults.GetVulnerabilitiesResults(jasType), cmdResults.Entitlements.Jas,
+		if err := results.ForEachJasIssue(jasResultsForReport(jasType, target.JasResults.GetVulnerabilitiesResults(jasType)), cmdResults.Entitlements.Jas,
 			func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
 				if !found && isMatchingJasViolation(matchId, jasType, rule, location, run.Invocations, violation) {
 					// Found a relevant issue (JAS Violations only provide abbreviation and file name, no region so we match only by those)

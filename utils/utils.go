@@ -39,9 +39,10 @@ const (
 	BaseDocumentationURL = "https://docs.jfrog.com/security/docs/"
 	JasInfoURL           = BaseDocumentationURL + "advanced-security"
 
-	EntitlementsMinVersion        = "3.66.5"
-	GitRepoKeyAnalyticsMinVersion = "3.114.0"
-	StaticScanMinVersion          = "3.133.0"
+	EntitlementsMinVersion            = "3.66.5"
+	GitRepoKeyAnalyticsMinXrayVersion = "3.114.0"
+	ExternalAnalyticsMinXrayVersion   = "3.152.3"
+	StaticScanMinVersion              = "3.133.0"
 
 	XrayToolName = "JFrog Xray Scanner"
 
@@ -97,6 +98,17 @@ type SubScanType string
 
 func (s SubScanType) String() string {
 	return string(s)
+}
+
+func SubScanTypesToStrings(scanTypes []SubScanType) []string {
+	if len(scanTypes) == 0 {
+		return nil
+	}
+	strs := make([]string, len(scanTypes))
+	for i, t := range scanTypes {
+		strs[i] = t.String()
+	}
+	return strs
 }
 
 const (

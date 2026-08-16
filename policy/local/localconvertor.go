@@ -72,7 +72,7 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 				}
 			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
-				if e := results.ForEachJasIssue(target.JasResults.JasViolations.SastScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
+				if e := results.ForEachJasIssue(sarifutils.GroupResultsByLocation(target.JasResults.JasViolations.SastScanResults), cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.Target, e))
 				}
 			}

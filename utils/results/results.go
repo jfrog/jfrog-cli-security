@@ -51,17 +51,18 @@ type SecurityCommandResults struct {
 
 type ResultsMetaData struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId         string                         `json:"multi_scan_id,omitempty"`
-	XrayVersion         string                         `json:"xray_version"`
-	XscVersion          string                         `json:"xsc_version,omitempty"`
-	Entitlements        Entitlements                   `json:"entitlements"`
-	SecretValidation    bool                           `json:"secret_validation"`
-	CmdType             utils.CommandType              `json:"command_type"`
-	ResultContext       ResultContext                  `json:"result_context"`
-	GitContext          *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime           time.Time                      `json:"start_time"`
-	ResultsPlatformUrl  string                         `json:"results_platform_url,omitempty"`
-	AllowPartialResults bool                           `json:"allow_partial_results,omitempty"`
+	MultiScanId          string                         `json:"multi_scan_id,omitempty"`
+	XrayVersion          string                         `json:"xray_version"`
+	XscVersion           string                         `json:"xsc_version,omitempty"`
+	Entitlements         Entitlements                   `json:"entitlements"`
+	SecretValidation     bool                           `json:"secret_validation"`
+	CmdType              utils.CommandType              `json:"command_type"`
+	ResultContext        ResultContext                  `json:"result_context"`
+	GitContext           *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime            time.Time                      `json:"start_time"`
+	ResultsPlatformUrl   string                         `json:"results_platform_url,omitempty"`
+	AllowPartialResults  bool                           `json:"allow_partial_results,omitempty"`
+	UploadedArtifactPath string                         `json:"uploaded_artifact_path,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralErrors []SkippableError `json:"general_errors,omitempty"`
 }
@@ -123,6 +124,7 @@ func (rc *ResultContext) HasViolationContext() bool {
 }
 
 type ResultsStatus struct {
+	// When adding a new scan status field here, also add a corresponding branch in GetExecutedScanTypes below.
 	SbomScanStatusCode           *int `json:"sbom,omitempty"`
 	ScaScanStatusCode            *int `json:"sca,omitempty"`
 	ContextualAnalysisStatusCode *int `json:"contextual_analysis,omitempty"`
@@ -132,6 +134,26 @@ type ResultsStatus struct {
 	SastScanStatusCode           *int `json:"sast,omitempty"`
 	MaliciousScanStatusCode      *int `json:"malicious_code,omitempty"`
 	ViolationsStatusCode         *int `json:"violations,omitempty"`
+}
+
+func (r ResultsStatus) GetExecutedScanTypes() []utils.SubScanType {
+	var scanTypes []utils.SubScanType
+	if r.ScaScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ScaScan)
+	}
+	if r.ContextualAnalysisStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ContextualAnalysisScan)
+	}
+	if r.SecretsScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.SecretsScan)
+	}
+	if r.IacScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.IacScan)
+	}
+	if r.SastScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.SastScan)
+	}
+	return scanTypes
 }
 
 func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
@@ -370,6 +392,14 @@ func (st ScanTarget) ShouldValidateSecrets(cliRequested bool) bool {
 	return cliRequested
 }
 
+func (st ScanTarget) GetCentralConfigSastExcludeRules() []string {
+	excludeRules := datastructures.MakeSet[string]()
+	for _, module := range st.CentralConfigModules {
+		excludeRules.AddElements(module.ScanConfig.SastScannerConfig.ExcludeRules...)
+	}
+	return excludeRules.ToSlice()
+}
+
 func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
 	exclusions := datastructures.MakeSet[string]()
 	for _, module := range st.CentralConfigModules {
@@ -525,6 +555,11 @@ func (r *SecurityCommandResults) SetAllowPartialResults(allowPartialResults bool
 
 func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
 	r.ResultsPlatformUrl = resultsPlatformUrl
+	return r
+}
+
+func (r *SecurityCommandResults) SetUploadedArtifactPath(path string) *SecurityCommandResults {
+	r.UploadedArtifactPath = path
 	return r
 }
 

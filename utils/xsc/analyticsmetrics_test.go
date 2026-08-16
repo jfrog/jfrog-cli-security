@@ -169,6 +169,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			name:         "Valid audit result",
 			auditResults: getDummyContentForGeneralEvent(true, false, false),
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				ScanTypesExecuted:             []string{"sca", "services"},
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 9, EventStatus: xscservices.Completed},
 			},
 		},
@@ -176,6 +177,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			name:         "Scan failed with findings",
 			auditResults: getDummyContentForGeneralEvent(false, true, false),
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				ScanTypesExecuted:             []string{"sca"},
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
 			},
 		},
@@ -183,8 +185,44 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			name:         "Valid audit results with Watches and GitRepoUrl",
 			auditResults: getDummyContentForGeneralEvent(false, false, true),
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				ScanTypesExecuted:             []string{"sca"},
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Completed},
 				GitRepoUrl:                    "github.com/my-user/my-repo.git",
+			},
+		},
+		{
+			name: "Project key, scan types, and uploaded artifact path populate",
+			auditResults: func() *results.SecurityCommandResults {
+				cmdResults := results.NewCommandResults(utils.SourceCode).SetMultiScanId("msi").SetStartTime(time).SetXrayVersion(utils.ExternalAnalyticsMinXrayVersion).SetUploadedArtifactPath("myproject-frogbot/git.com/org/repo/commits/results.cdx.json")
+				cmdResults.ResultContext.ProjectKey = "myproject"
+				target := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
+				statusCode := 0
+				target.ResultsStatus.ScaScanStatusCode = &statusCode
+				target.ResultsStatus.SecretsScanStatusCode = &statusCode
+				return cmdResults
+			}(),
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				MultiScanId:                   "msi",
+				ProjectKey:                    "myproject",
+				ScanTypesExecuted:             []string{"sca", "secrets"},
+				UploadedArtifactPath:          "myproject-frogbot/git.com/org/repo/commits/results.cdx.json",
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
+			},
+		},
+		{
+			name: "Project key, scan types, and uploaded artifact path gated off below min Xray version",
+			auditResults: func() *results.SecurityCommandResults {
+				cmdResults := results.NewCommandResults(utils.SourceCode).SetMultiScanId("msi").SetStartTime(time).SetXrayVersion(utils.GitRepoKeyAnalyticsMinXrayVersion).SetUploadedArtifactPath("myproject-frogbot/git.com/org/repo/commits/results.cdx.json")
+				cmdResults.ResultContext.ProjectKey = "myproject"
+				target := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
+				statusCode := 0
+				target.ResultsStatus.ScaScanStatusCode = &statusCode
+				target.ResultsStatus.SecretsScanStatusCode = &statusCode
+				return cmdResults
+			}(),
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				MultiScanId:                   "msi",
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
 			},
 		},
 		{
@@ -203,6 +241,9 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			assert.Equal(t, testCase.expected.EventStatus, event.EventStatus)
 			assert.Equal(t, testCase.expected.GitRepoUrl, event.GitRepoUrl)
 			assert.Equal(t, testCase.auditResults.MultiScanId, event.MultiScanId)
+			assert.Equal(t, testCase.expected.ProjectKey, event.ProjectKey)
+			assert.Equal(t, testCase.expected.ScanTypesExecuted, event.ScanTypesExecuted)
+			assert.Equal(t, testCase.expected.UploadedArtifactPath, event.UploadedArtifactPath)
 			assert.NotEmpty(t, event.TotalScanDuration)
 		})
 	}
@@ -214,7 +255,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *results.SecurityCommandResults {
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
-	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).SetXrayVersion(utils.GitRepoKeyAnalyticsMinVersion)
+	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).SetXrayVersion(utils.ExternalAnalyticsMinXrayVersion)
 	cmdResults.StartTime = time.Now()
 	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
