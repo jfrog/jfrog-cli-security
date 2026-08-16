@@ -185,6 +185,10 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 
 func (b *BuildInfoBomGenerator) resolveTechParams(tech techutils.Technology) (techParams technologies.BuildInfoBomGeneratorParams, serverDetails *config.ServerDetails, err error) {
 	techParams = b.params
+	if b.params.ServerDetails != nil {
+		copied := *b.params.ServerDetails
+		techParams.ServerDetails = &copied
+	}
 	serverDetails, err = SetResolutionRepoInParamsIfExists(&techParams, tech)
 	return
 }

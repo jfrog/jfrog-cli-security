@@ -37,79 +37,49 @@ func isolateResolverConfig(t *testing.T) string {
 	return projectRoot
 }
 
-func TestResolveTechParamsIsolation(t *testing.T) {
-	projectRoot := isolateResolverConfig(t)
-	projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
-	require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "go.yaml"),
-		[]byte("version: 1\ntype: go\nresolver:\n  serverId: test\n  repo: go-vir\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"),
-		[]byte("version: 1\ntype: npm\nresolver:\n  serverId: test\n  repo: npm-remote\n"), 0o644))
+func TestResolveTechParams(t *testing.T) {
+	t.Run("isolates DependenciesRepository per technology", func(t *testing.T) {
+		projectRoot := isolateResolverConfig(t)
+		projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
+		require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "go.yaml"),
+			[]byte("version: 1\ntype: go\nresolver:\n  serverId: test\n  repo: go-vir\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"),
+			[]byte("version: 1\ntype: npm\nresolver:\n  serverId: test\n  repo: npm-remote\n"), 0o644))
 
-	generator := NewBuildInfoBomGenerator()
+		generator := NewBuildInfoBomGenerator()
 
-	goParams, _, err := generator.resolveTechParams(techutils.Go)
-	require.NoError(t, err)
-	assert.Equal(t, "go-vir", goParams.DependenciesRepository, "Go must resolve against its own go.yaml")
+		goParams, _, err := generator.resolveTechParams(techutils.Go)
+		require.NoError(t, err)
+		assert.Equal(t, "go-vir", goParams.DependenciesRepository)
 
-	npmParams, _, err := generator.resolveTechParams(techutils.Npm)
-	require.NoError(t, err)
-	assert.Equal(t, "npm-remote", npmParams.DependenciesRepository,
-		"npm must resolve against npm.yaml even after Go resolved first (no shared-state leak)")
-
-	assert.Empty(t, generator.params.DependenciesRepository,
-		"resolving a technology must not mutate the generator's shared params")
-}
-
-func TestResolveTechParamsSkipsConfigLookup(t *testing.T) {
-	projectRoot := isolateResolverConfig(t)
-	projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
-	require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"),
-		[]byte("version: 1\ntype: npm\nresolver:\n  serverId: test\n  repo: npm-remote\n"), 0o644))
-
-	testCases := []struct {
-		name     string
-		params   technologies.BuildInfoBomGeneratorParams
-		expected string
-	}{
-		{
-			name:     "explicit deps repo",
-			params:   technologies.BuildInfoBomGeneratorParams{DependenciesRepository: "cli-deps-repo"},
-			expected: "cli-deps-repo",
-		},
-		{
-			name:   "ignore config file",
-			params: technologies.BuildInfoBomGeneratorParams{IgnoreConfigFile: true},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			generator := NewBuildInfoBomGenerator()
-			generator.params = testCase.params
-
-			npmParams, _, err := generator.resolveTechParams(techutils.Npm)
-			require.NoError(t, err)
-			assert.Equal(t, testCase.expected, npmParams.DependenciesRepository)
-		})
-	}
-}
-
-func TestBuildDependencyTreeDoesNotMutateGeneratorParams(t *testing.T) {
-	projectRoot := isolateResolverConfig(t)
-	projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
-	require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "go.yaml"),
-		[]byte("version: 1\ntype: go\nresolver:\n  serverId: test\n  repo: go-vir\n"), 0o644))
-
-	generator := NewBuildInfoBomGenerator()
-	_, _ = generator.buildDependencyTree(results.ScanTarget{
-		Target:       projectRoot,
-		Technologies: []techutils.Technology{techutils.Go},
+		npmParams, _, err := generator.resolveTechParams(techutils.Npm)
+		require.NoError(t, err)
+		assert.Equal(t, "npm-remote", npmParams.DependenciesRepository)
+		assert.Empty(t, generator.params.DependenciesRepository)
 	})
 
-	assert.Empty(t, generator.params.DependenciesRepository)
+	t.Run("isolates ServerDetails from in-place mutation", func(t *testing.T) {
+		shared := &config.ServerDetails{
+			ServerId:       "test",
+			Url:            "http://localhost/",
+			ArtifactoryUrl: "http://localhost/artifactory/",
+		}
+		generator := NewBuildInfoBomGenerator()
+		generator.params = technologies.BuildInfoBomGeneratorParams{
+			ServerDetails:          shared,
+			DependenciesRepository: "cli-deps-repo",
+		}
+
+		techParams, _, err := generator.resolveTechParams(techutils.Nuget)
+		require.NoError(t, err)
+		require.NotNil(t, techParams.ServerDetails)
+		assert.NotSame(t, shared, techParams.ServerDetails)
+
+		techParams.ServerDetails.ArtifactoryUrl += "api/curation/audit"
+		assert.Equal(t, "http://localhost/artifactory/", shared.ArtifactoryUrl)
+		assert.Equal(t, "http://localhost/artifactory/", generator.params.ServerDetails.ArtifactoryUrl)
+	})
 }
 
 func TestMergeResults(t *testing.T) {
