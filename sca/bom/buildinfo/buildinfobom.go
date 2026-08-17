@@ -157,12 +157,12 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 	hasAnyTree := false
 	for _, tech := range techs {
 		log.Debug(fmt.Sprintf("Generating '%s' dependency tree for '%s'...", tech.ToFormal(), scan.Target))
-		serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, tech)
+		techParams, serverDetails, err := b.resolveTechParams(tech)
 		if err != nil {
 			buildErr = errors.Join(buildErr, fmt.Errorf("failed to set resolution repo in params: %w", err))
 			continue
 		}
-		treeResult, err := GetTechDependencyTree(b.params, serverDetails, tech)
+		treeResult, err := GetTechDependencyTree(techParams, serverDetails, tech)
 		if err != nil {
 			buildErr = errors.Join(buildErr, fmt.Errorf("failed while building '%s' dependency tree: %w", tech, err))
 			continue
@@ -181,6 +181,16 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return merged, buildErr
+}
+
+func (b *BuildInfoBomGenerator) resolveTechParams(tech techutils.Technology) (techParams technologies.BuildInfoBomGeneratorParams, serverDetails *config.ServerDetails, err error) {
+	techParams = b.params
+	if b.params.ServerDetails != nil {
+		copied := *b.params.ServerDetails
+		techParams.ServerDetails = &copied
+	}
+	serverDetails, err = SetResolutionRepoInParamsIfExists(&techParams, tech)
+	return
 }
 
 func mergeResults(existing, additional *DependencyTreeResult) *DependencyTreeResult {
@@ -261,17 +271,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
-		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(java.DepTreeParams{
-			Server:                        artifactoryServerDetails,
-			DepsRepo:                      params.DependenciesRepository,
-			IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled,
-			UseWrapper:                    params.UseWrapper,
-			IsCurationCmd:                 params.IsCurationCmd,
-			MvnIncludePluginDeps:          params.MvnIncludePluginDeps,
-			CurationCacheFolder:           curationCacheFolder,
-			UseIncludedBuilds:             params.UseIncludedBuilds,
-			GradleExcludeTestDependencies: params.GradleExcludeTestDependencies,
-		}, tech)
+		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(buildJavaDepTreeParams(params, artifactoryServerDetails, curationCacheFolder), tech)
 	case techutils.Npm:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
@@ -320,6 +320,21 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	}
 	depTreeResult.FlatTree = createFlatTree(uniqueDepsIds)
 	return
+}
+
+func buildJavaDepTreeParams(params technologies.BuildInfoBomGeneratorParams, artifactoryServerDetails *config.ServerDetails, curationCacheFolder string) java.DepTreeParams {
+	return java.DepTreeParams{
+		Server:                        artifactoryServerDetails,
+		DepsRepo:                      params.DependenciesRepository,
+		InsecureTls:                   params.InsecureTls,
+		IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled,
+		UseWrapper:                    params.UseWrapper,
+		IsCurationCmd:                 params.IsCurationCmd,
+		MvnIncludePluginDeps:          params.MvnIncludePluginDeps,
+		CurationCacheFolder:           curationCacheFolder,
+		UseIncludedBuilds:             params.UseIncludedBuilds,
+		GradleExcludeTestDependencies: params.GradleExcludeTestDependencies,
+	}
 }
 
 func getUniqueDependencyCount(uniqueDepsIds []string, uniqDepsNodes map[string]*xray.DepTreeNode) int {
