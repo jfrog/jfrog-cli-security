@@ -475,7 +475,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	// Populate x scan targets based on the provided parameters.
 	detectScanTargets(cmdResults, params)
 	if detectedTechsGuardCallback := params.DetectedTechnologiesGuardCallback(); detectedTechsGuardCallback != nil {
-		if err := detectedTechsGuardCallback(collectDetectedTechnologies(cmdResults)); err != nil {
+		if err := detectedTechsGuardCallback(cmdResults.GetTechnologies()); err != nil {
 			// allowSkippingError is hardcoded to false: this check must never be bypassable via AllowPartialResults.
 			cmdResults.AddGeneralError(err, false)
 			return
@@ -668,16 +668,6 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 		log.Debug(fmt.Sprintf("Root directory '%s' is excluded; creating scan target from %d explicit include path(s)", root, len(include)))
 	}
 	return &results.ScanTarget{Target: root, Include: include, Exclude: exclude}
-}
-
-func collectDetectedTechnologies(cmdResults *results.SecurityCommandResults) []techutils.Technology {
-	detected := datastructures.MakeSet[techutils.Technology]()
-	for _, targetResult := range cmdResults.Targets {
-		for _, tech := range targetResult.Technologies {
-			detected.Add(tech)
-		}
-	}
-	return detected.ToSlice()
 }
 
 func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditParams) (technologies []techutils.Technology) {
