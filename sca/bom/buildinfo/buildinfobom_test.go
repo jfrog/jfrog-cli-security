@@ -323,3 +323,12 @@ func TestGetDiffDependencyTree(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildJavaDepTreeParamsPreservesInsecureTls(t *testing.T) {
+	t.Parallel()
+	params := technologies.BuildInfoBomGeneratorParams{InsecureTls: true, DependenciesRepository: "test-repo"}
+	result := buildJavaDepTreeParams(params, nil, "cache-folder")
+	assert.True(t, result.InsecureTls)
+	assert.Equal(t, "test-repo", result.DepsRepo)
+	assert.Equal(t, "cache-folder", result.CurationCacheFolder)
+}

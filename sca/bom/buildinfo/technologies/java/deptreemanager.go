@@ -30,6 +30,7 @@ type DepTreeParams struct {
 	UseWrapper                    bool
 	Server                        *config.ServerDetails
 	DepsRepo                      string
+	InsecureTls                   bool
 	IsMavenDepTreeInstalled       bool
 	IsCurationCmd                 bool
 	MvnIncludePluginDeps          bool
