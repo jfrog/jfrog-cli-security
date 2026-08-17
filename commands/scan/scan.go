@@ -367,7 +367,11 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	scaErrGroup := new(errgroup.Group)
 	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, cmdResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		scaErrGroup.Go(func() error {
-			return scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator()
+			return scanCmd.bomGenerator.WithOptions(
+				indexer.WithXray(xrayManager, scanCmd.xrayVersion),
+				indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits),
+				indexer.WithServerDetails(scanCmd.serverDetails),
+			).PrepareGenerator()
 		})
 	} else {
 		log.Debug("SCA scans were not initiated, so SCA scan preparation was skipped...")

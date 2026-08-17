@@ -23,7 +23,6 @@ type XrayLibBomGenerator struct {
 	binaryPath       string
 	snippetDetection bool
 	specificTechs    []techutils.Technology
-	ServerDetails    *config.ServerDetails
 
 	// Artifactory Repository params
 	DownloadServerDetails  *config.ServerDetails
@@ -66,14 +65,6 @@ func WithSnippetDetection(snippetDetection bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
 			sbg.snippetDetection = snippetDetection
-		}
-	}
-}
-
-func WithServerDetails(serverDetails *config.ServerDetails) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) {
-		if sbg, ok := sg.(*XrayLibBomGenerator); ok {
-			sbg.ServerDetails = serverDetails
 		}
 	}
 }
@@ -154,15 +145,6 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 
 func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
 	envVars := utils.EnvironmentVariables{}
-	if sbg.ServerDetails != nil {
-		envVars[plugin.XrayUrlEnvVariable] = sbg.ServerDetails.XrayUrl
-		if sbg.ServerDetails.AccessToken != "" {
-			envVars[plugin.XrayTokenEnvVariable] = sbg.ServerDetails.AccessToken
-		} else {
-			envVars[plugin.XrayUserEnvVariable] = sbg.ServerDetails.User
-			envVars[plugin.XrayPasswordEnvVariable] = sbg.ServerDetails.Password
-		}
-	}
 	if sbg.snippetDetection {
 		envVars[plugin.SnippetDetectionEnvVariable] = "true"
 	}
