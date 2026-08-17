@@ -12,12 +12,14 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"unicode/utf8"
 
 	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -66,6 +68,7 @@ type MavenDepTreeManager struct {
 	settingsXmlPath      string
 	// userSettingsXmlPath overrides the ~/.m2/settings.xml seed path (test-only).
 	userSettingsXmlPath string
+	insecureTls         bool
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
@@ -77,6 +80,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 		isCurationCmd:        params.IsCurationCmd,
 		mvnIncludePluginDeps: params.MvnIncludePluginDeps,
 		curationCacheFolder:  params.CurationCacheFolder,
+		insecureTls:          params.InsecureTls,
 	}
 }
 
@@ -220,22 +224,74 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if mdt.settingsXmlPath != "" {
 		goals = append(goals, "-s", mdt.settingsXmlPath)
 	}
+	if mdt.insecureTls {
+		// aether.* covers Maven 3.9+'s native resolver transport; wagon.* covers the legacy one.
+		goals = append(goals,
+			"-Dmaven.wagon.http.ssl.insecure=true",
+			"-Dmaven.wagon.http.ssl.allowall=true",
+			"-Dmaven.wagon.http.ssl.ignore.validity.dates=true",
+			"-Daether.connector.https.securityMode=insecure",
+		)
+	}
 
 	execPath := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
 	cmdOutput, err = buildMvnExecCommand(mdt.useWrapper, execPath, goals).CombinedOutput()
 	if err != nil {
-		stringOutput := string(cmdOutput)
+		stringOutput := maskCredentials(string(cmdOutput), mdt.server)
 		if len(cmdOutput) > 0 {
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command '%s %s'\n\n%s", execPath, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command '%s %s': %s", execPath, strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %w", execPath, strings.Join(goals, " "), err)
+			if stringOutput != "" {
+				err = fmt.Errorf("%w\n%s", err, truncateForError(stringOutput))
+			}
 		}
 	}
 	return
+}
+
+// maskCredentials redacts known credentials from output, mirroring uv.go's maskPassword.
+func maskCredentials(output string, server *config.ServerDetails) string {
+	if server == nil {
+		return output
+	}
+	username, password, err := server.GetAuthenticationCredentials()
+	if err != nil {
+		return output
+	}
+	if password != "" {
+		output = strings.ReplaceAll(output, password, "***")
+	}
+	if username != "" {
+		output = strings.ReplaceAll(output, username, "***")
+	}
+	// Also mask percent-encoded forms, in case a userinfo-embedded URL is ever echoed back.
+	encodedUser, encodedPass, _ := strings.Cut(url.UserPassword(username, password).String(), ":")
+	if encodedPass != "" && encodedPass != password {
+		output = strings.ReplaceAll(output, encodedPass, "***")
+	}
+	if encodedUser != "" && encodedUser != username {
+		output = strings.ReplaceAll(output, encodedUser, "***")
+	}
+	return output
+}
+
+const maxCapturedOutputInError = 8 * 1024
+
+// truncateForError keeps the tail, advanced to a rune boundary to avoid invalid UTF-8.
+func truncateForError(output string) string {
+	if len(output) <= maxCapturedOutputInError {
+		return output
+	}
+	cut := len(output) - maxCapturedOutputInError
+	for cut < len(output) && !utf8.RuneStart(output[cut]) {
+		cut++
+	}
+	return fmt.Sprintf("...(truncated %d bytes; see verbose log for full output)...\n%s", cut, output[cut:])
 }
 
 func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
