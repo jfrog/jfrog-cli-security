@@ -727,6 +727,14 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 	assert.True(t, manager.insecureTls, "InsecureTls must be propagated from params into the manager")
 }
 
+// writeFakeMvnw writes both a POSIX mvnw and a Windows mvnw.cmd, since getMavenExecPath picks
+// the extension by OS. posixBody/windowsBody are the script bodies, without shebang/@echo off.
+func writeFakeMvnw(t *testing.T, posixBody, windowsBody string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\n"+posixBody), 0644))
+	require.NoError(t, os.WriteFile("mvnw.cmd", []byte("@echo off\r\n"+windowsBody), 0644))
+}
+
 // TestInsecureTlsAddsWagonSslFlags locks in that --insecure-tls reaches the spawned mvn
 // process. Before this fix the flag only affected the CLI's own HTTP clients (Xray/Catalog/
 // Artifactory) and had no effect on the internally-invoked mvn subprocess, so a MITM proxy
@@ -740,7 +748,7 @@ func TestInsecureTlsAddsWagonSslFlags(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho \"$@\"\n"), 0644))
+	writeFakeMvnw(t, "echo \"$@\"\n", "echo %*\r\n")
 
 	insecure := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, InsecureTls: true}, Tree)
 	out, err := insecure.RunMvnCmd([]string{"some-goal"})
@@ -772,7 +780,7 @@ func TestRunMvnCmdErrorIncludesCapturedOutput(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho 'a distinctive maven failure marker' >&2\nexit 1\n"), 0644))
+	writeFakeMvnw(t, "echo 'a distinctive maven failure marker' >&2\nexit 1\n", "echo a distinctive maven failure marker 1>&2\r\nexit /b 1\r\n")
 
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
 	_, err = manager.RunMvnCmd([]string{"some-goal"})
@@ -791,8 +799,9 @@ func TestRunMvnCmdErrorTruncatesLargeOutput(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	script := "#!/bin/sh\ni=0\nwhile [ $i -lt 2000 ]; do\n  echo \"filler line $i of noisy maven info output\"\n  i=$((i+1))\ndone\necho 'a distinctive tail marker'\nexit 1\n"
-	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+	posixScript := "i=0\nwhile [ $i -lt 2000 ]; do\n  echo \"filler line $i of noisy maven info output\"\n  i=$((i+1))\ndone\necho 'a distinctive tail marker'\nexit 1\n"
+	windowsScript := "for /l %%i in (0,1,1999) do echo filler line %%i of noisy maven info output\r\necho a distinctive tail marker\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
 
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
 	_, err = manager.RunMvnCmd([]string{"some-goal"})
@@ -823,7 +832,7 @@ func TestRunMvnCmdErrorNoTrailingNewlineWhenOutputEmpty(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\nexit 1\n"), 0644))
+	writeFakeMvnw(t, "exit 1\n", "exit /b 1\r\n")
 
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
 	_, err = manager.RunMvnCmd([]string{"some-goal"})
@@ -840,8 +849,9 @@ func TestRunMvnCmdMasksCredentialsInError(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	script := "#!/bin/sh\necho 'auth failed for user secret-user-42 with password s3cr3t-p4ss!' >&2\nexit 1\n"
-	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+	posixScript := "echo 'auth failed for user secret-user-42 with password s3cr3t-p4ss!' >&2\nexit 1\n"
+	windowsScript := "echo auth failed for user secret-user-42 with password s3cr3t-p4ss! 1>&2\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
 
 	server := &config.ServerDetails{User: "secret-user-42", Password: "s3cr3t-p4ss!"}
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
@@ -849,6 +859,51 @@ func TestRunMvnCmdMasksCredentialsInError(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "s3cr3t-p4ss!", "password must never appear verbatim in the returned error")
 	assert.NotContains(t, err.Error(), "secret-user-42", "username must never appear verbatim in the returned error")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdMasksPercentEncodedCredentialsInError: a password can also leak in its
+// percent-encoded form if Maven's transport layer echoes a userinfo-embedded URL.
+func TestRunMvnCmdMasksPercentEncodedCredentialsInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	//#nosec G101 - dummy credentials for testing
+	posixScript := "echo 'Transfer failed for https://bob:p%40ss%21@artifactory.example.com/repo' >&2\nexit 1\n"
+	//#nosec G101 - dummy credentials for testing
+	windowsScript := "echo Transfer failed for https://bob:p%%40ss%%21@artifactory.example.com/repo 1>&2\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
+
+	server := &config.ServerDetails{User: "bob", Password: "p@ss!"}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "p%40ss%21", "the percent-encoded password must also be redacted")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdMasksAccessTokenInError: GetAuthenticationCredentials returns the access token as
+// the password value for token-only setups; it must be masked the same way.
+func TestRunMvnCmdMasksAccessTokenInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	const token = "secret-access-token-abc123"
+	writeFakeMvnw(t, "echo 'auth failed with token "+token+"' >&2\nexit 1\n", "echo auth failed with token "+token+" 1>&2\r\nexit /b 1\r\n")
+
+	server := &config.ServerDetails{AccessToken: token}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), token, "access token must never appear verbatim in the returned error")
 	assert.Contains(t, err.Error(), "***")
 }
 
@@ -861,7 +916,7 @@ func TestRunMvnCmdErrorWrapsExitError(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\necho 'some output'\nexit 1\n"), 0644))
+	writeFakeMvnw(t, "echo 'some output'\nexit 1\n", "echo some output\r\nexit /b 1\r\n")
 
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
 	_, err = manager.RunMvnCmd([]string{"some-goal"})
@@ -880,8 +935,10 @@ func TestRunMvnCmdCurationBlockUnaffectedByTruncation(t *testing.T) {
 	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
 	defer restoreDir()
 
-	script := "#!/bin/sh\ni=0\nwhile [ $i -lt 2000 ]; do\n  echo \"noisy maven output line $i\"\n  i=$((i+1))\ndone\necho 'status code: 403'\nexit 1\n" // well over maxCapturedOutputInError
-	require.NoError(t, os.WriteFile("mvnw", []byte(script), 0644))
+	// well over maxCapturedOutputInError
+	posixScript := "i=0\nwhile [ $i -lt 2000 ]; do\n  echo \"noisy maven output line $i\"\n  i=$((i+1))\ndone\necho 'status code: 403'\nexit 1\n"
+	windowsScript := "for /l %%i in (0,1,1999) do echo noisy maven output line %%i\r\necho status code: 403\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
 
 	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, IsCurationCmd: true}, Tree)
 	_, err = manager.RunMvnCmd([]string{"some-goal"})

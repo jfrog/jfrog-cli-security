@@ -491,8 +491,14 @@ func TestPoetryCurationAudit(t *testing.T) {
 	blockedURL := "/api/pypi/" + repo + "/packages/aa/urllib3-1.26.20-py2.py3-none-any.whl"
 	expectedRequest := map[string]bool{blockedURL: false}
 	requestToFail := map[string]bool{blockedURL: false}
+	// The href carries a #sha256 fragment (PEP 503) plus data-core-metadata (PEP 658/714),
+	// so a real 'poetry lock' trusts the declared hash and fetches only the metadata sidecar
+	// to resolve dependency info — it never downloads the (nonexistent, curation-blocked)
+	// wheel itself. Verification of the hash only happens at install time, which
+	// curation-audit never reaches.
 	serverMock, config := curationServer(t, expectedRequest, requestToFail, map[string]string{
-		"urllib3": `<a href="../../packages/aa/urllib3-1.26.20-py2.py3-none-any.whl">urllib3-1.26.20-py2.py3-none-any.whl</a>`,
+		"urllib3": `<a href="../../packages/aa/urllib3-1.26.20-py2.py3-none-any.whl#sha256=` +
+			strings.Repeat("0", 64) + `" data-core-metadata="true">urllib3-1.26.20-py2.py3-none-any.whl</a>`,
 	})
 	defer serverMock.Close()
 
@@ -502,8 +508,12 @@ func TestPoetryCurationAudit(t *testing.T) {
 	config.User = "admin"
 	config.Password = "password"
 	config.ServerId = "test"
-	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
+	config.XrayUrl = config.Url
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false).SetMakeDefault(true)
 	assert.NoError(t, configCmd.Run())
+
+	appendToFile(t, filepath.Join(tempDirPath, "pyproject.toml"),
+		fmt.Sprintf("\n[[tool.poetry.source]]\nname = \"pypi-curation\"\nurl = \"%sapi/pypi/%s/simple\"\n", config.ArtifactoryUrl, repo))
 
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
@@ -842,6 +852,20 @@ func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail
 			for name, href := range index {
 				if strings.HasSuffix(r.URL.Path, "/simple/"+name+"/") {
 					_, err := w.Write([]byte("<html><body>" + href + "</body></html>"))
+					require.NoError(t, err)
+					return
+				}
+			}
+			// PEP 658/714 metadata sidecar: the href above advertises data-core-metadata,
+			// so a real 'poetry lock' fetches only this file to resolve dependency info —
+			// it never downloads the (curation-blocked, nonexistent) wheel itself.
+			if strings.HasSuffix(r.URL.Path, ".whl.metadata") {
+				wheelName := strings.TrimSuffix(r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:], ".whl.metadata")
+				parts := strings.SplitN(wheelName, "-", 3)
+				if len(parts) >= 2 {
+					// parts come from a URL this same test process constructs (via appendToFile
+					// above) against its own loopback-only mock server, not untrusted input.
+					_, err := fmt.Fprintf(w, "Metadata-Version: 2.1\nName: %s\nVersion: %s\n", parts[0], parts[1]) // #nosec G705
 					require.NoError(t, err)
 					return
 				}

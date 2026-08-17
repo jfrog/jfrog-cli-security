@@ -269,6 +269,14 @@ func maskCredentials(output string, server *config.ServerDetails) string {
 	if username != "" {
 		output = strings.ReplaceAll(output, username, "***")
 	}
+	// Also mask percent-encoded forms, in case a userinfo-embedded URL is ever echoed back.
+	encodedUser, encodedPass, _ := strings.Cut(url.UserPassword(username, password).String(), ":")
+	if encodedPass != "" && encodedPass != password {
+		output = strings.ReplaceAll(output, encodedPass, "***")
+	}
+	if encodedUser != "" && encodedUser != username {
+		output = strings.ReplaceAll(output, encodedUser, "***")
+	}
 	return output
 }
 

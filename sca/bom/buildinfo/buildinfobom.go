@@ -157,12 +157,12 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 	hasAnyTree := false
 	for _, tech := range techs {
 		log.Debug(fmt.Sprintf("Generating '%s' dependency tree for '%s'...", tech.ToFormal(), scan.Target))
-		serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, tech)
+		techParams, serverDetails, err := b.resolveTechParams(tech)
 		if err != nil {
 			buildErr = errors.Join(buildErr, fmt.Errorf("failed to set resolution repo in params: %w", err))
 			continue
 		}
-		treeResult, err := GetTechDependencyTree(b.params, serverDetails, tech)
+		treeResult, err := GetTechDependencyTree(techParams, serverDetails, tech)
 		if err != nil {
 			buildErr = errors.Join(buildErr, fmt.Errorf("failed while building '%s' dependency tree: %w", tech, err))
 			continue
@@ -181,6 +181,16 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return merged, buildErr
+}
+
+func (b *BuildInfoBomGenerator) resolveTechParams(tech techutils.Technology) (techParams technologies.BuildInfoBomGeneratorParams, serverDetails *config.ServerDetails, err error) {
+	techParams = b.params
+	if b.params.ServerDetails != nil {
+		copied := *b.params.ServerDetails
+		techParams.ServerDetails = &copied
+	}
+	serverDetails, err = SetResolutionRepoInParamsIfExists(&techParams, tech)
+	return
 }
 
 func mergeResults(existing, additional *DependencyTreeResult) *DependencyTreeResult {
