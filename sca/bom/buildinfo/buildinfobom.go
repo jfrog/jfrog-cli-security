@@ -396,6 +396,7 @@ func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGenerato
 	params.DependenciesRepository = artifactoryDetails.TargetRepository
 	params.ServerDetails = artifactoryDetails.ServerDetails
 	serverDetails = artifactoryDetails.ServerDetails
+	log.Info(fmt.Sprintf("%s: using Artifactory repository %q from %s.yaml config file", tech.String(), artifactoryDetails.TargetRepository, tech.String()))
 	return
 }
 

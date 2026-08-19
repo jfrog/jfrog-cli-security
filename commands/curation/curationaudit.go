@@ -58,7 +58,6 @@ import (
 	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
-	"github.com/jfrog/gofrog/version"
 	uvtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/uv"
 	yarntech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
@@ -998,23 +997,6 @@ func projectPinsYarnPackageManager(workingDir string) bool {
 	return strings.HasPrefix(strings.TrimSpace(pkg.PackageManager), "yarn@")
 }
 
-// resolveResolverTechForCuration returns the tech whose *.yaml config drives
-// SetResolutionRepoInParamsIfExists. For yarn with no yarn.yaml, falls back to
-// npm.yaml — npm and yarn share the same Artifactory npm API.
-func resolveResolverTechForCuration(tech techutils.Technology) techutils.Technology {
-	if tech != techutils.Yarn {
-		return tech
-	}
-	if _, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType()); yarnConfigExists {
-		return tech
-	}
-	if _, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType()); !npmConfigExists {
-		return tech
-	}
-	log.Info("No yarn.yaml found; using npm.yaml for resolver configuration (npm and yarn share the same Artifactory npm API).")
-	return techutils.Npm
-}
-
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
 	serverDetails, err = ca.GetAuth(tech)
 	if err != nil {
@@ -1046,14 +1028,14 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry, prefers an
+// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry/Yarn, prefers an
 // already-set ca.PackageManagerConfig (native detection) over the generic server so install
 // and the later GetAuth-based probes hit the same endpoint. Other techs keep using the
 // generic server, matching their pre-existing behavior.
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1134,10 +1116,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv/Pip/Poetry's native repo/server before getBuildInfoParamsByTech so install and the
-	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
-	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig == nil {
+	// Resolve Pipenv/Pip/Poetry/Yarn's native repo/server early, before getBuildInfoParamsByTech,
+	// so install and the later probes share an endpoint. Other techs resolve later via
+	// SetResolutionRepoInParamsIfExists. A failure here is fatal for all four — none has a further
+	// fallback: pip already checked pip.yaml internally, pipenv/poetry never had one,
+	// and yarn deliberately skips yarn.yaml too.
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
@@ -1181,8 +1165,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pnpm {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
 	}
-	// --run-native has no effect for yarn regardless of version; the registry is
-	// always read from the yarn-specific config (yarn.yaml for V2/V3, .yarnrc.yml for V4).
+	// --run-native has no effect for yarn; the registry is always read natively from .yarnrc.yml.
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Yarn {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn")
@@ -1212,9 +1195,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
-	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
-	resolverTech := resolveResolverTechForCuration(tech)
-	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, resolverTech)
+	// Pipenv/Pip/Poetry/Yarn already resolved above — a no-op for them here.
+	// Still applies to every other tech that resolves via a *.yaml config file (jf <tech>-config).
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
 		return err
 	}
@@ -1662,10 +1645,8 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromPyproject()
 	}
 
-	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
-	// Detect the running yarn version and route to the appropriate path.
-	// Version detection failures are fatal — silently falling through to the
-	// V2/V3 path would use different flags and break the audit.
+	// Yarn V2, V3, and V4 all store registry config in the same .yarnrc.yml
+	// (Berry) format, so curation-audit resolves it natively.
 	if tech == techutils.Yarn {
 		yarnExecPath, yarnExecErr := bibuildutils.GetYarnExecutable()
 		if yarnExecErr != nil {
@@ -1673,39 +1654,26 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		}
 		workingDir, wdErr := coreutils.GetWorkingDirectory()
 		if wdErr != nil {
-			return fmt.Errorf("could not determine working directory for yarn version detection: %w", wdErr)
+			return fmt.Errorf("could not determine working directory for yarn native config resolution: %w", wdErr)
 		}
-		versionStr, versionErr := bibuildutils.GetVersion(yarnExecPath, workingDir)
-		if versionErr != nil {
-			return fmt.Errorf("could not detect yarn version: %w. Ensure the yarn binary at %q is functional (try 'yarn --version') before running 'jf ca'", versionErr, yarnExecPath)
+		// Reject V1 first, or it would hit a confusing .yarnrc.yml error instead of
+		// the clear "Yarn V1 is not supported" message.
+		if err := yarntech.VerifyYarnVersionSupportedForCuration(yarnExecPath, workingDir); err != nil {
+			return err
 		}
-		yarnVersion := version.NewVersion(versionStr)
-		if yarnVersion.Compare(yarntech.YarnV4Version) <= 0 {
-			return ca.setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir)
-		}
-		// V2/V3: fall through to getRepoParams (yarn.yaml / npm.yaml).
+		return ca.setRepoFromYarnrc(yarnExecPath, workingDir)
 	}
 
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
-		// npm and yarn share the same Artifactory npm API for curation, so their
-		// repository configs are interchangeable. Fall back to the sibling tech's
-		// config when the primary one is missing (e.g. the project was configured
-		// with 'jf yarn-config' but is detected as npm because yarn.lock is absent).
-		primaryErr := err
-		switch tech {
-		case techutils.Npm:
-			resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType())
-		case techutils.Yarn:
-			resolverParams, err = ca.getRepoParams(techutils.Npm.GetProjectType())
-		}
-		if err != nil {
-			// Return the primary tech's error so the user sees the correct command.
-			// Yarn's CLI config command is 'jf yarn-config', not 'jf yarn c'.
-			if tech == techutils.Yarn {
-				return errorutils.CheckErrorf("no config file was found! Before running jf ca on a yarn project for the first time, the project should be configured using the 'jf yarn-config' command")
+		// npm and yarn share the same Artifactory npm API for curation.
+		if tech == techutils.Npm {
+			primaryErr := err
+			if resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType()); err != nil {
+				return primaryErr
 			}
-			return primaryErr
+		} else {
+			return err
 		}
 	}
 	ca.setPackageManagerConfig(resolverParams)
@@ -1955,39 +1923,39 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 	return nil
 }
 
-// setRepoFromYarnrcForYarnV4 reads Artifactory connection details from the
-// project's .yarnrc.yml via the Yarn CLI. Yarn V4 uses native mode — no
+// setRepoFromYarnrc reads Artifactory connection details from the project's
+// .yarnrc.yml via the Yarn CLI. Yarn V2, V3, and V4 all use native mode — no
 // jf yarn-config step is required; the registry URL and auth token live in
-// .yarnrc.yml already. This is always called for Yarn V4 curation.
+// .yarnrc.yml already. This is always called for Yarn curation.
 //
 // Auth priority:
 //  1. Token from .yarnrc.yml — preferred, scoped to the exact registry URL.
 //  2. Token from 'jf c' server config — fallback when .yarnrc.yml carries no token.
-func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir string) error {
-	registryConfig, err := yarntech.GetNativeYarnV4RegistryConfig(yarnExecPath, workingDir)
+func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir string) error {
+	registryConfig, err := yarntech.GetNativeYarnRegistryConfig(yarnExecPath, workingDir)
 	if err != nil {
 		log.Warn("Ensure npmRegistryServer is configured in .yarnrc.yml (e.g. npmRegistryServer: \"https://<host>/artifactory/api/npm/<repo>/\")")
-		return fmt.Errorf("yarn V4: failed to read Artifactory details from .yarnrc.yml: %w", err)
+		return fmt.Errorf("yarn: failed to read Artifactory details from .yarnrc.yml: %w", err)
 	}
 
 	var serverDetails *config.ServerDetails
 	if registryConfig.AuthToken != "" {
-		log.Debug("yarn V4: using auth token from .yarnrc.yml")
+		log.Debug("yarn: using auth token from .yarnrc.yml")
 		serverDetails = &config.ServerDetails{
 			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 			AccessToken:    registryConfig.AuthToken,
 		}
 	} else {
-		log.Debug("yarn V4: no token in .yarnrc.yml — using 'jf c' server credentials")
-		base, sdErr := ca.ServerDetails()
-		if sdErr != nil || base == nil {
-			return fmt.Errorf("yarn V4: no auth token found in .yarnrc.yml and no 'jf c' server configured: %w", sdErr)
+		log.Debug("yarn: no token in .yarnrc.yml — using 'jf c' server credentials")
+		// .yarnrc.yml carries no token, so we're about to attach the configured 'jf c'
+		// server's real credentials to whatever host it declares. credentialFallbackServerDetails
+		// refuses that unless the declared host matches the configured server, same as
+		// pip/poetry/uv, so a project-controlled .yarnrc.yml can't redirect our credentials
+		// to an unrelated/attacker host.
+		serverDetails, err = ca.credentialFallbackServerDetails("yarn", ".yarnrc.yml", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
 		}
-		// Copy before mutating: ca.ServerDetails() returns the shared struct, and
-		// overwriting its URL would leak to other techs in a multi-tech audit.
-		copied := *base
-		copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
-		serverDetails = &copied
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).
@@ -1995,12 +1963,11 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	// Populate depsRepo on the audit-params interface so getBuildInfoParamsByTech
-	// returns the correct repository name. For V4 native mode the user never passes
+	// returns the correct repository name. In native mode the user never passes
 	// --deps-repo, so ca.DepsRepo() would otherwise be "". The repo name is consumed
-	// downstream by the curation error messages and probeBlockedDirectDeps HEAD checks
-	// (V4 does not route installs through the curation endpoint).
+	// downstream by the curation error messages and probeBlockedDirectDeps HEAD checks.
 	ca.SetDepsRepo(registryConfig.RepoName)
-	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	log.Info(fmt.Sprintf("yarn: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
