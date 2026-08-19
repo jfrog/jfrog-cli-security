@@ -240,7 +240,7 @@ func logYarnLockEntryCount(yarnLockPath string) {
 
 // verifyYarnVersionSupportedForCuration returns an error for Yarn V1,
 // which cannot be routed through Artifactory for curation.
-// V2/V3 use configured-registry mode (jf yarn-config); V4 uses native mode (.yarnrc.yml).
+// V2, V3, and V4 all resolve the registry natively from .yarnrc.yml.
 func verifyYarnVersionSupportedForCuration(yarnExecPath, curWd string) error {
 	versionStr, err := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if err != nil {
@@ -546,24 +546,23 @@ func resolveCurationLockfileDir(
 // Executes the user's 'install' command or a default 'install' command if none was specified.
 func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
 	depsRepo := params.DependenciesRepository
-	if depsRepo == "" {
-		// Run install without configuring an Artifactory server
+
+	// Skip credential injection when no repo was resolved, or for curation (native
+	// .yarnrc.yml resolution already has it, for V2/V3/V4 alike). Only non-curation
+	// V2/V3 with a repo from --deps-repo or 'jf yarn-config' still needs it below.
+	useNativeInstall := depsRepo == "" || params.IsCurationCmd
+	if !useNativeInstall {
+		executableYarnVersion, versionErr := bibuildutils.GetVersion(yarnExecPath, curWd)
+		if versionErr != nil {
+			return versionErr
+		}
+		useNativeInstall = version.NewVersion(executableYarnVersion).Compare(YarnV4Version) <= 0
+	}
+	if useNativeInstall {
 		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
 	}
 
-	executableYarnVersion, err := bibuildutils.GetVersion(yarnExecPath, curWd)
-	if err != nil {
-		return err
-	}
-	yarnVersion := version.NewVersion(executableYarnVersion)
-
-	// V4 always uses native mode (.yarnrc.yml); --deps-repo / yarn.yaml are not applicable.
-	// If depsRepo is somehow non-empty for V4, skip credential injection and install as-is.
-	if yarnVersion.Compare(YarnV4Version) <= 0 {
-		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
-	}
-
-	// V2/V3: inject Artifactory credentials via GetYarnAuthDetails + ModifyYarnConfigurations.
+	// V2/V3 (non-curation): inject Artifactory credentials via GetYarnAuthDetails + ModifyYarnConfigurations.
 	// V1 is rejected earlier by verifyYarnVersionSupportedForCuration (curation) or is unsupported
 	// by the jfrog-cli-artifactory yarn integration (non-curation).
 	restoreYarnrcFunc, err := ioutils.BackupFile(filepath.Join(curWd, yarn.YarnrcFileName), yarn.YarnrcBackupFileName)
@@ -1045,12 +1044,13 @@ func filterYarnDepMapToWorkspaceMember(
 	return filtered, memberRoot, nil
 }
 
-// GetNativeYarnV4RegistryConfig reads the Artifactory registry URL and auth
-// token from the project's .yarnrc.yml via the Yarn CLI. Yarn V4 uses native
-// mode — credentials are already stored in .yarnrc.yml, no jf yarn-config step
-// is required. The URL must contain /api/npm/<repo>/ so that ParseArtifactoryNpmRegistryUrl
+// GetNativeYarnRegistryConfig reads the Artifactory registry URL and auth
+// token from the project's .yarnrc.yml via the Yarn CLI. Yarn V2, V3, and V4
+// all use the same Berry .yarnrc.yml format, so curation-audit resolves the
+// registry natively for every version — no jf yarn-config step is required.
+// The URL must contain /api/npm/<repo>/ so that ParseArtifactoryNpmRegistryUrl
 // can extract the Artifactory base URL and repository name.
-func GetNativeYarnV4RegistryConfig(yarnExecPath, workingDir string) (*npm.NpmrcRegistryConfig, error) {
+func GetNativeYarnRegistryConfig(yarnExecPath, workingDir string) (*npm.NpmrcRegistryConfig, error) {
 	registryURL, err := runYarnConfigGet(yarnExecPath, workingDir, "npmRegistryServer")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read npmRegistryServer from .yarnrc.yml: %w", err)
@@ -1116,17 +1116,17 @@ func readNpmAuthTokenFromYarnrcFiles(registryURL, workingDir string) string {
 		}
 		var rc yarnrcFile
 		if err := yaml.Unmarshal(data, &rc); err != nil {
-			log.Debug(fmt.Sprintf("yarn V4: could not parse %s: %s", path, err))
+			log.Debug(fmt.Sprintf("yarn: could not parse %s: %s", path, err))
 			continue
 		}
 		// Scoped registry entry takes priority (trailing-slash tolerant).
 		if entry, ok := lookupNpmRegistryEntry(rc.NpmRegistries, registryURL); ok && entry.NpmAuthToken != "" {
-			log.Debug(fmt.Sprintf("yarn V4: using auth token from scoped npmRegistries entry in %s", path))
+			log.Debug(fmt.Sprintf("yarn: using auth token from scoped npmRegistries entry in %s", path))
 			return entry.NpmAuthToken
 		}
 		// Fall back to top-level npmAuthToken in the same file.
 		if rc.NpmAuthToken != "" {
-			log.Debug(fmt.Sprintf("yarn V4: using top-level npmAuthToken from %s", path))
+			log.Debug(fmt.Sprintf("yarn: using top-level npmAuthToken from %s", path))
 			return rc.NpmAuthToken
 		}
 	}
