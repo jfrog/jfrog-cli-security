@@ -116,7 +116,7 @@ func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
 	return
 }
 
-func GetSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
+func GetExposureScannerRuleId(rule *sarif.ReportingDescriptor) string {
 	ruleId := GetRuleScannerId(rule)
 	if ruleId == "" {
 		return ""

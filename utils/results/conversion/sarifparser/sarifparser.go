@@ -49,6 +49,7 @@ var (
 const (
 	ScaRun        RunInJfrogReport = "sca"
 	SecretsRun    RunInJfrogReport = "secrets"
+	ServicesRun   RunInJfrogReport = "services"
 	IacRun        RunInJfrogReport = "iac"
 	SastRun       RunInJfrogReport = "sast"
 	ViolationsRun RunInJfrogReport = "violations"
@@ -77,6 +78,7 @@ type currentTargetRuns struct {
 	// Current run cache information
 	scaCurrentRun       *sarif.Run
 	secretsCurrentRun   *sarif.Run
+	servicesCurrentRun  *sarif.Run
 	iacCurrentRun       *sarif.Run
 	sastCurrentRun      *sarif.Run
 	maliciousCurrentRun *sarif.Run
@@ -155,6 +157,10 @@ func (sc *CmdResultsSarifConverter) flush() {
 	// Flush secrets if needed
 	if sc.currentTargetConvertedRuns.secretsCurrentRun != nil {
 		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.secretsCurrentRun)
+	}
+	// Flush services if needed
+	if sc.currentTargetConvertedRuns.servicesCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.servicesCurrentRun)
 	}
 	// Flush iac if needed
 	if sc.currentTargetConvertedRuns.iacCurrentRun != nil {
@@ -297,6 +303,11 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 		iacResult, iacRule := createJasViolation(iacViolation)
 		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{iacRule}, iacResult)
 	}
+	// Services violations
+	for _, servicesViolation := range violationsScanResults.Services {
+		servicesResult, servicesRule := createJasViolation(servicesViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{servicesRule}, servicesResult)
+	}
 	// Sast violations
 	for _, sastViolation := range violationsScanResults.Sast {
 		sastResult, sastRule := createJasViolation(sastViolation)
@@ -436,6 +447,14 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...[]*sarif.Run) (err e
 	return
 }
 
+func (sc *CmdResultsSarifConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
+		return
+	}
+	sc.currentTargetConvertedRuns.servicesCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.servicesCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.ServicesScan), results.CollectRuns(services...)...)...)
+	return
+}
+
 func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
@@ -467,6 +486,8 @@ func (sc *CmdResultsSarifConverter) addResultsToCurrentRun(runType RunInJfrogRep
 		currentRun = sc.currentTargetConvertedRuns.scaCurrentRun
 	case SecretsRun:
 		currentRun = sc.currentTargetConvertedRuns.secretsCurrentRun
+	case ServicesRun:
+		currentRun = sc.currentTargetConvertedRuns.servicesCurrentRun
 	case IacRun:
 		currentRun = sc.currentTargetConvertedRuns.iacCurrentRun
 	case SastRun:
@@ -930,6 +951,8 @@ func getResultViolationType(violationType string) utils.SubScanType {
 		return utils.SecretsScan
 	case violationutils.IacViolationType:
 		return utils.IacScan
+	case violationutils.ServicesViolationType:
+		return utils.ServicesScan
 	case violationutils.SastViolationType:
 		return utils.SastScan
 	default:
@@ -947,6 +970,10 @@ func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanTy
 	}
 	if strings.HasPrefix(scanType, "EXP") || strings.Contains(scanType, "SECRET") {
 		return utils.SecretsScan
+	}
+	// TODO: Add more rules to identify Services and validate them
+	if strings.Contains(scanType, "GITHUB-ACTIONS") {
+		return utils.ServicesScan
 	}
 	// TODO: Add more rules to identify IAC
 	// Default to SAST

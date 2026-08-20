@@ -631,6 +631,11 @@ func getResultsTypesSummaryString(index commandsummary.Index, violations bool, s
 			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.SastResult.String()))
 		}
 	}
+	if summary.ServicesResults != nil {
+		if count := summary.GetTotal(formats.ServicesResult); count > 0 {
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ServicesResult.String()))
+		}
+	}
 	if summary.IacResults != nil {
 		if count := summary.GetTotal(formats.IacResult); count > 0 {
 			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.IacResult.String()))

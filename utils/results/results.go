@@ -27,6 +27,7 @@ const (
 	CmdStepSca                = "SCA Scan"
 	CmdStepContextualAnalysis = "Contextual Analysis Enrichment"
 	CmdStepIaC                = "IaC Scan"
+	CmdStepServices           = "Services Scan"
 	CmdStepSecrets            = "Secret Detection Scan"
 	CmdStepSast               = "Static Application Security Testing (SAST)"
 	CmdStepMaliciousCode      = "Malicious Code"
@@ -129,6 +130,7 @@ type ResultsStatus struct {
 	ContextualAnalysisStatusCode *int `json:"contextual_analysis,omitempty"`
 	SecretsScanStatusCode        *int `json:"secrets,omitempty"`
 	IacScanStatusCode            *int `json:"iac,omitempty"`
+	ServicesScanStatusCode       *int `json:"services,omitempty"`
 	SastScanStatusCode           *int `json:"sast,omitempty"`
 	MaliciousScanStatusCode      *int `json:"malicious_code,omitempty"`
 	ViolationsStatusCode         *int `json:"violations,omitempty"`
@@ -166,6 +168,8 @@ func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
 		return isScanFailed(status.SecretsScanStatusCode)
 	case CmdStepIaC:
 		return isScanFailed(status.IacScanStatusCode)
+	case CmdStepServices:
+		return isScanFailed(status.ServicesScanStatusCode)
 	case CmdStepSast:
 		return isScanFailed(status.SastScanStatusCode)
 	case CmdStepMaliciousCode:
@@ -197,6 +201,10 @@ func (status *ResultsStatus) UpdateStatus(step SecurityCommandStep, statusCode *
 	case CmdStepSecrets:
 		if shouldUpdateStatus(status.SecretsScanStatusCode, statusCode) {
 			status.SecretsScanStatusCode = statusCode
+		}
+	case CmdStepServices:
+		if shouldUpdateStatus(status.ServicesScanStatusCode, statusCode) {
+			status.ServicesScanStatusCode = statusCode
 		}
 	case CmdStepIaC:
 		if shouldUpdateStatus(status.IacScanStatusCode, statusCode) {
@@ -255,6 +263,7 @@ type JasScansResults struct {
 type JasScanResults struct {
 	SecretsScanResults   []*sarif.Run `json:"secrets,omitempty"`
 	IacScanResults       []*sarif.Run `json:"iac,omitempty"`
+	ServicesScanResults  []*sarif.Run `json:"services,omitempty"`
 	SastScanResults      []*sarif.Run `json:"sast,omitempty"`
 	MaliciousScanResults []*sarif.Run `json:"malicious_code,omitempty"`
 }
@@ -351,6 +360,10 @@ func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) 
 			if module.ScanConfig.IacScannerConfig.EnableIacScan {
 				return utils.NewBoolPtr(true)
 			}
+		case utils.ServicesScan:
+			if module.ScanConfig.ServicesScannerConfig.EnableServicesScan {
+				return utils.NewBoolPtr(true)
+			}
 		case utils.SecretsScan:
 			if module.ScanConfig.SecretsScannerConfig.EnableSecretsScan {
 				return utils.NewBoolPtr(true)
@@ -400,6 +413,8 @@ func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []st
 			exclusions.AddElements(module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
 		case utils.IacScan:
 			exclusions.AddElements(module.ScanConfig.IacScannerConfig.ExcludePatterns...)
+		case utils.ServicesScan:
+			exclusions.AddElements(module.ScanConfig.ServicesScannerConfig.ExcludePatterns...)
 		case utils.SecretsScan:
 			exclusions.AddElements(module.ScanConfig.SecretsScannerConfig.ExcludePatterns...)
 		case utils.SastScan:
@@ -483,6 +498,7 @@ func (r *SecurityCommandResults) IsJASRequested(requestedScans ...utils.SubScanT
 	return utils.IsScanRequested(r.CmdType, utils.ContextualAnalysisScan, r.IsScanRequestedByCentralConfig(utils.ContextualAnalysisScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.SecretsScan, r.IsScanRequestedByCentralConfig(utils.SecretsScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.IacScan, r.IsScanRequestedByCentralConfig(utils.IacScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.ServicesScan, r.IsScanRequestedByCentralConfig(utils.ServicesScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.SastScan, r.IsScanRequestedByCentralConfig(utils.SastScan), requestedScans...)
 }
 
@@ -705,6 +721,7 @@ func (r *SecurityCommandResults) GetStatusCodes() ResultsStatus {
 		status.UpdateStatus(CmdStepSca, targetResults.ResultsStatus.ScaScanStatusCode)
 		status.UpdateStatus(CmdStepContextualAnalysis, targetResults.ResultsStatus.ContextualAnalysisStatusCode)
 		status.UpdateStatus(CmdStepSecrets, targetResults.ResultsStatus.SecretsScanStatusCode)
+		status.UpdateStatus(CmdStepServices, targetResults.ResultsStatus.ServicesScanStatusCode)
 		status.UpdateStatus(CmdStepIaC, targetResults.ResultsStatus.IacScanStatusCode)
 		status.UpdateStatus(CmdStepSast, targetResults.ResultsStatus.SastScanStatusCode)
 		status.UpdateStatus(CmdStepMaliciousCode, targetResults.ResultsStatus.MaliciousScanStatusCode)
@@ -873,6 +890,12 @@ func (sr *TargetResults) AddJasScanResults(scanType jasutils.JasScanType, vulner
 			sr.JasResults.JasVulnerabilities.SecretsScanResults = append(sr.JasResults.JasVulnerabilities.SecretsScanResults, vulnerabilitiesRuns...)
 			sr.JasResults.JasViolations.SecretsScanResults = append(sr.JasResults.JasViolations.SecretsScanResults, violationsRuns...)
 		}
+	case jasutils.Services:
+		sr.ResultsStatus.UpdateStatus(CmdStepServices, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.ServicesScanResults = append(sr.JasResults.JasVulnerabilities.ServicesScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.ServicesScanResults = append(sr.JasResults.JasViolations.ServicesScanResults, violationsRuns...)
+		}
 	case jasutils.IaC:
 		sr.ResultsStatus.UpdateStatus(CmdStepIaC, &exitCode)
 		if sr.JasResults != nil {
@@ -970,6 +993,8 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 	switch scanType {
 	case jasutils.Secrets:
 		return jsr.JasVulnerabilities.SecretsScanResults
+	case jasutils.Services:
+		return jsr.JasVulnerabilities.ServicesScanResults
 	case jasutils.IaC:
 		return jsr.JasVulnerabilities.IacScanResults
 	case jasutils.Sast:
@@ -984,6 +1009,8 @@ func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) 
 	switch scanType {
 	case jasutils.Secrets:
 		return jsr.JasViolations.SecretsScanResults
+	case jasutils.Services:
+		return jsr.JasViolations.ServicesScanResults
 	case jasutils.IaC:
 		return jsr.JasViolations.IacScanResults
 	case jasutils.Sast:

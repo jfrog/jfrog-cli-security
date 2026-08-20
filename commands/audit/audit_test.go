@@ -755,6 +755,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 		expectedCaNotCovered    int
 		expectedCaNotApplicable int
 		expectedSastIssues      int
+		expectedServicesIssues  int
 		expectedSecretsIssues   int
 		expectedIacIssues       int
 	}{
@@ -782,6 +783,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
 						},
 					},
 				}},
@@ -814,6 +818,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
@@ -843,6 +850,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
 						},
 					},
 				}},
@@ -875,10 +885,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
-			expectedSecretsIssues: 16,
+			expectedSecretsIssues: 17,
 		},
 		{
 			name:        "Secrets scanner is enabled with exclusions",
@@ -906,10 +919,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 8,
 		},
 		{
 			name:        "Enable only Sast scanner",
@@ -935,6 +951,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
 						},
 					},
 				}},
@@ -967,6 +986,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
@@ -996,6 +1018,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
 						},
 					},
 				}},
@@ -1028,10 +1053,77 @@ func TestAuditWithConfigProfile(t *testing.T) {
 							EnableIacScan:   true,
 							ExcludePatterns: []string{"**/*iac/gcp*/**"},
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedIacIssues: 0,
+		},
+		{
+			name:        "Enable only Services scanner",
+			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			configProfile: services.ConfigProfile{
+				ProfileName: "only-services",
+				Modules: []services.Module{{
+					ModuleId:     1,
+					ModuleName:   "only-services-module",
+					PathFromRoot: ".",
+					ScanConfig: services.ScanConfig{
+						ScaScannerConfig: services.ScaScannerConfig{
+							EnableScaScan: false,
+						},
+						ContextualAnalysisScannerConfig: services.CaScannerConfig{
+							EnableCaScan: false,
+						},
+						SastScannerConfig: services.SastScannerConfig{
+							EnableSastScan: false,
+						},
+						IacScannerConfig: services.IacScannerConfig{
+							EnableIacScan: false,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
+					},
+				}},
+			},
+			expectedServicesIssues: 6,
+		},
+		{
+			name:        "Services scanner is enabled with exclusions",
+			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			configProfile: services.ConfigProfile{
+				ProfileName: "services-with-exclusions",
+				Modules: []services.Module{{
+					ModuleId:     1,
+					ModuleName:   "services-with-exclusions-module",
+					PathFromRoot: ".",
+					ScanConfig: services.ScanConfig{
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+							ExcludePatterns:    []string{"**/*.git*/**"},
+						},
+						ScaScannerConfig: services.ScaScannerConfig{
+							EnableScaScan: false,
+						},
+						ContextualAnalysisScannerConfig: services.CaScannerConfig{
+							EnableCaScan: false,
+						},
+						SastScannerConfig: services.SastScannerConfig{
+							EnableSastScan: false,
+						},
+						SecretsScannerConfig: services.SecretsScannerConfig{
+							EnableSecretsScan: false,
+						},
+						IacScannerConfig: services.IacScannerConfig{
+							EnableIacScan: false,
+						},
+					},
+				}},
+			},
+			expectedServicesIssues: 0,
 		},
 		{
 			name:        "Enable All Scanners",
@@ -1058,13 +1150,17 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
 					},
 				}},
 			},
-			expectedSastIssues:    2,
-			expectedSecretsIssues: 16,
-			expectedIacIssues:     9,
-			expectedCaNotCovered:  15,
+			expectedServicesIssues: 6,
+			expectedSastIssues:     2,
+			expectedSecretsIssues:  17,
+			expectedIacIssues:      9,
+			expectedCaNotCovered:   15,
 		},
 		{
 			name:        "All scanners enabled but some with exclude patterns",
@@ -1093,19 +1189,23 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
 					},
 				}},
 			},
-			expectedSastIssues:    0,
-			expectedSecretsIssues: 7,
-			expectedIacIssues:     9,
-			expectedCaNotCovered:  15,
+			expectedServicesIssues: 6,
+			expectedSastIssues:     0,
+			expectedSecretsIssues:  8,
+			expectedIacIssues:      9,
+			expectedCaNotCovered:   15,
 		},
 	}
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
+			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
 			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testcase.testDirPath)
@@ -1145,9 +1245,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
-				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount},
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + testcase.expectedServicesIssues},
 				Vulnerabilities: &validations.VulnerabilityCount{
-					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues},
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: testcase.expectedServicesIssues},
 					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
 				},
 			})

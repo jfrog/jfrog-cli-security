@@ -169,8 +169,8 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			name:         "Valid audit result",
 			auditResults: getDummyContentForGeneralEvent(true, false, false),
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
-				ScanTypesExecuted:             []string{"sca"},
-				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
+				ScanTypesExecuted:             []string{"sca", "services"},
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 9, EventStatus: xscservices.Completed},
 			},
 		},
 		{
@@ -269,6 +269,10 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 		}
 		scanResults.JasResults.JasVulnerabilities.IacScanResults = []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
+		}
+		scanResults.JasResults.JasVulnerabilities.ServicesScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 		}
