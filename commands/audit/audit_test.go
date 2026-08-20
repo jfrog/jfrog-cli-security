@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -601,6 +602,49 @@ func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing
 		}
 	}
 	assert.True(t, hasNpm, "expected Npm among detected technologies")
+}
+
+func TestPopulateScanTargetsDetectedTechnologiesGuardCallbackIsNotSkippable(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	mavenDir := filepath.Join(baseDir, "maven-wd")
+	assert.NoError(t, os.MkdirAll(mavenDir, 0o755))
+	createEmptyFile(t, filepath.Join(mavenDir, "pom.xml"))
+
+	callbackErr := errors.New("environment guard failed")
+
+	tests := []struct {
+		name                string
+		allowPartialResults bool
+	}{
+		{
+			name:                "Partial results disabled - fail upon every error",
+			allowPartialResults: false,
+		},
+		{
+			name:                "allowPartialResults=true - callback error must still propagate",
+			allowPartialResults: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).SetAllowPartialResults(tt.allowPartialResults)
+			params := NewAuditParams()
+			params.SetWorkingDirs([]string{mavenDir})
+			params.SetIsRecursiveScan(false)
+			params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+			params.SetDetectedTechnologiesGuardCallback(func(detected []techutils.Technology) error {
+				return callbackErr
+			})
+
+			populateScanTargets(cmdRes, params)
+
+			// The callback error must surface via GetErrors() regardless of AllowPartialResults
+			assert.ErrorContains(t, cmdRes.GetErrors(), callbackErr.Error())
+		})
+	}
 }
 
 func TestShouldGenerateSbom(t *testing.T) {

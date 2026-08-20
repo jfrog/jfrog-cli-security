@@ -474,6 +474,13 @@ func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.Xray
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	// Populate x scan targets based on the provided parameters.
 	detectScanTargets(cmdResults, params)
+	if detectedTechsGuardCallback := params.DetectedTechnologiesGuardCallback(); detectedTechsGuardCallback != nil {
+		if err := detectedTechsGuardCallback(cmdResults.GetTechnologies()); err != nil {
+			// allowSkippingError is hardcoded to false: this check must never be bypassable via AllowPartialResults.
+			cmdResults.AddGeneralError(err, false)
+			return
+		}
+	}
 	// Populate target information for the scans
 	for _, targetResult := range cmdResults.Targets {
 		// Generate SBOM for the target if requested or for SCA scans.
@@ -483,7 +490,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
 			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
 			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
-			xrayplugin.WithServerDetails(params.serverDetails),
 		),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,

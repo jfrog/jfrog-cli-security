@@ -1,6 +1,8 @@
 package sarifutils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -341,9 +343,30 @@ func copyCodeFlow(flow *sarif.CodeFlow) *sarif.CodeFlow {
 func copyThreadFlow(threadFlow *sarif.ThreadFlow) *sarif.ThreadFlow {
 	copied := &sarif.ThreadFlow{}
 	for _, location := range threadFlow.Locations {
-		copied.Locations = append(copied.Locations, sarif.NewThreadFlowLocation().WithLocation(CopyLocation(location.Location)))
+		copied.Locations = append(copied.Locations, copyThreadFlowLocation(location))
 	}
 	return copied
+}
+
+func copyThreadFlowLocation(location *sarif.ThreadFlowLocation) *sarif.ThreadFlowLocation {
+	if location == nil {
+		return nil
+	}
+	return &sarif.ThreadFlowLocation{
+		ExecutionOrder: location.ExecutionOrder,
+		Importance:     location.Importance,
+		Index:          location.Index,
+		Kinds:          location.Kinds,
+		Location:       CopyLocation(location.Location),
+		Module:         copyStrAttribute(location.Module),
+		NestingLevel:   location.NestingLevel,
+		Properties:     location.Properties,
+		State:          location.State,
+		Stack:          location.Stack,
+		Taxa:           location.Taxa,
+		WebRequest:     location.WebRequest,
+		WebResponse:    location.WebResponse,
+	}
 }
 
 func copyMsgAttribute(attr *sarif.Message) *sarif.Message {
@@ -387,18 +410,20 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 		return nil
 	}
 	copied := sarif.NewLocation()
-	copied.ID = 0
+	copied.ID = location.ID
 	if location.PhysicalLocation != nil {
 		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
-			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)))
-			copied.PhysicalLocation.WithRegion(sarif.NewRegion().
-				WithCharOffset(0).
-				WithByteOffset(0).
+			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)).WithIndex(location.PhysicalLocation.ArtifactLocation.Index))
+			region := sarif.NewRegion().
 				WithStartLine(GetLocationStartLine(location)).
 				WithStartColumn(GetLocationStartColumn(location)).
 				WithEndLine(GetLocationEndLine(location)).
-				WithEndColumn(GetLocationEndColumn(location)))
+				WithEndColumn(GetLocationEndColumn(location))
+			if srcRegion := location.PhysicalLocation.Region; srcRegion != nil {
+				region.WithCharOffset(srcRegion.CharOffset).WithByteOffset(srcRegion.ByteOffset)
+			}
+			copied.PhysicalLocation.WithRegion(region)
 			if snippet := GetLocationSnippetText(location); len(snippet) > 0 {
 				copied.PhysicalLocation.Region.WithSnippet(sarif.NewArtifactContent().WithText(snippet))
 			}
@@ -407,6 +432,8 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
 		logicalCopy := sarif.NewLogicalLocation().WithProperties(logicalLocation.Properties)
+		logicalCopy.Index = logicalLocation.Index
+		logicalCopy.ParentIndex = logicalLocation.ParentIndex
 		if logicalLocation.Name != nil {
 			logicalCopy.WithName(*logicalLocation.Name)
 		}
@@ -964,4 +991,69 @@ func getResultIdByLocation(result *sarif.Result) string {
 		return GetResultRuleId(result) + result.Level + GetResultMsgText(result)
 	}
 	return GetResultRuleId(result) + result.Level + GetResultMsgText(result) + GetLocationId(result.Locations[0])
+}
+
+// SARIF fields that go-sarif v3 encodes as signed ints with -1 meaning "unset".
+// go-sarif v1.1.1 (Xray) models the same fields as *uint, so a negative value is invalid JSON for that consumer.
+var unsignedSarifIndexKeys = map[string]struct{}{
+	"index":            {},
+	"parentIndex":      {},
+	"ruleIndex":        {},
+	"invocationIndex":  {},
+	"resultGraphIndex": {},
+	"runGraphIndex":    {},
+	"executionOrder":   {},
+	"absoluteAddress":  {},
+	"id":               {},
+}
+
+// StripUnsetIndexes removes negative SARIF index-like fields from JSON so the payload
+// can be decoded by go-sarif v1 (*uint) consumers. Zero and positive values are kept.
+func StripUnsetIndexes(content []byte) ([]byte, error) {
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, fmt.Errorf("decode json for index sanitization: %w", err)
+	}
+	stripNegativeIndexFields(decoded)
+	sanitized, err := json.MarshalIndent(decoded, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal sanitized json: %w", err)
+	}
+	return sanitized, nil
+}
+
+func stripNegativeIndexFields(node any) {
+	switch value := node.(type) {
+	case map[string]any:
+		for key, child := range value {
+			if _, isIndexKey := unsignedSarifIndexKeys[key]; isIndexKey && isNegativeJSONNumber(child) {
+				delete(value, key)
+				continue
+			}
+			stripNegativeIndexFields(child)
+		}
+	case []any:
+		for _, child := range value {
+			stripNegativeIndexFields(child)
+		}
+	}
+}
+
+func isNegativeJSONNumber(value any) bool {
+	switch number := value.(type) {
+	case json.Number:
+		if asInt, err := number.Int64(); err == nil {
+			return asInt < 0
+		}
+		asFloat, err := number.Float64()
+		return err == nil && asFloat < 0
+	case float64:
+		return number < 0
+	case int:
+		return number < 0
+	default:
+		return false
+	}
 }
