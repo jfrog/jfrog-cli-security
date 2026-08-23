@@ -147,6 +147,9 @@ func (r ResultsStatus) GetExecutedScanTypes() []utils.SubScanType {
 	if r.SecretsScanStatusCode != nil {
 		scanTypes = append(scanTypes, utils.SecretsScan)
 	}
+	if r.ServicesScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ServicesScan)
+	}
 	if r.IacScanStatusCode != nil {
 		scanTypes = append(scanTypes, utils.IacScan)
 	}
