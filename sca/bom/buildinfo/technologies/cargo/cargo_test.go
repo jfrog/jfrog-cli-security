@@ -839,6 +839,7 @@ func TestCaretBounds(t *testing.T) {
 		{req: "1.2.3-alpha", ok: false},
 		{req: "1.2.3+build5", ok: false},
 		{req: "1.2.3.4", ok: false},
+		{req: "-1.2.3", ok: false},
 		{req: "", ok: false},
 	}
 	for _, tt := range tests {
