@@ -3,16 +3,28 @@ package cargo
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// skipIfCargoUnavailable skips t if cargo can't actually run -- exec.LookPath alone isn't enough,
+// since a rustup shim can exist on PATH with no default toolchain configured (e.g. some CI images).
+func skipIfCargoUnavailable(t *testing.T) {
+	t.Helper()
+	if exec.Command("cargo", "--version").Run() != nil {
+		t.Skip("cargo not available")
+	}
+}
 
 func TestBuildDependencyTreeRejectsNonCurationInvocation(t *testing.T) {
 	t.Setenv("PATH", "")
@@ -21,13 +33,9 @@ func TestBuildDependencyTreeRejectsNonCurationInvocation(t *testing.T) {
 	assert.NotContains(t, err.Error(), "could not find the 'cargo' executable")
 }
 
-// A project-shipped .cargo/config.toml must not survive the copy into the temp resolution dir --
-// Cargo prefers the config closest to the working directory, so a copied project-local config
-// would otherwise override the isolated CARGO_HOME redirect below and silently defeat curation.
+// A project-shipped .cargo/config.toml must not survive the copy, or it would override the isolated CARGO_HOME.
 func TestBuildDependencyTreeProjectLocalCargoConfigOverridesCurationRedirect(t *testing.T) {
-	if _, err := exec.LookPath("cargo"); err != nil {
-		t.Skip("cargo not installed")
-	}
+	skipIfCargoUnavailable(t)
 	projectDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".cargo"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".cargo", "config.toml"), []byte(`
@@ -90,6 +98,12 @@ func writeCargoPackage(t *testing.T, root, name string, pathDeps map[string]stri
 // hermeticCargoEnv points HOME/CARGO_HOME at fresh temp dirs, isolating the test from the machine's own config.
 func hermeticCargoEnv(t *testing.T) {
 	t.Helper()
+	// Preserve RUSTUP_HOME -- wiping HOME alone orphans CI's rustup-shimmed cargo from its toolchain.
+	if os.Getenv("RUSTUP_HOME") == "" {
+		if realHome, err := os.UserHomeDir(); err == nil {
+			t.Setenv("RUSTUP_HOME", filepath.Join(realHome, ".rustup"))
+		}
+	}
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CARGO_HOME", t.TempDir())
 }
@@ -102,7 +116,7 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { require.NoError(t, os.Chdir(prevWd)) })
 }
 
-func curationParams(t *testing.T) technologies.BuildInfoBomGeneratorParams {
+func curationParams() technologies.BuildInfoBomGeneratorParams {
 	return technologies.BuildInfoBomGeneratorParams{
 		IsCurationCmd:          true,
 		ServerDetails:          &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/", User: "admin", Password: "pw"},
@@ -112,9 +126,7 @@ func curationParams(t *testing.T) technologies.BuildInfoBomGeneratorParams {
 
 // Auditing a member of a root-crate workspace must report the member's own deps, not the root crate's.
 func TestBuildDependencyTreeRootCrateWorkspaceMemberScoping(t *testing.T) {
-	if _, err := exec.LookPath("cargo"); err != nil {
-		t.Skip("cargo not installed")
-	}
+	skipIfCargoUnavailable(t)
 	hermeticCargoEnv(t)
 	root := t.TempDir()
 	writeCargoPackage(t, root, "leaf-a", nil)
@@ -136,7 +148,7 @@ members = ["member-b", "leaf-a", "leaf-c"]
 	require.NoError(t, os.WriteFile(filepath.Join(root, "src", "lib.rs"), []byte(""), 0600))
 
 	chdir(t, filepath.Join(root, "member-b"))
-	trees, uniqueDeps, err := BuildDependencyTree(curationParams(t))
+	trees, uniqueDeps, err := BuildDependencyTree(curationParams())
 	require.NoError(t, err)
 
 	require.Len(t, trees, 1)
@@ -148,9 +160,7 @@ members = ["member-b", "leaf-a", "leaf-c"]
 
 // Auditing a member of a virtual-manifest workspace must not report sibling members' dependencies too.
 func TestBuildDependencyTreeVirtualWorkspaceMemberScoping(t *testing.T) {
-	if _, err := exec.LookPath("cargo"); err != nil {
-		t.Skip("cargo not installed")
-	}
+	skipIfCargoUnavailable(t)
 	hermeticCargoEnv(t)
 	root := t.TempDir()
 	writeCargoPackage(t, root, "leaf-x", nil)
@@ -163,7 +173,7 @@ members = ["member-x", "leaf-x", "member-y", "leaf-y"]
 `), 0600))
 
 	chdir(t, filepath.Join(root, "member-x"))
-	trees, uniqueDeps, err := BuildDependencyTree(curationParams(t))
+	trees, uniqueDeps, err := BuildDependencyTree(curationParams())
 	require.NoError(t, err)
 
 	require.Len(t, trees, 1)
@@ -175,9 +185,7 @@ members = ["member-x", "leaf-x", "member-y", "leaf-y"]
 
 // Two distinct members of the same workspace must each get their own report; only a literal repeat is a duplicate.
 func TestBuildDependencyTreeDistinctMembersBothReported(t *testing.T) {
-	if _, err := exec.LookPath("cargo"); err != nil {
-		t.Skip("cargo not installed")
-	}
+	skipIfCargoUnavailable(t)
 	hermeticCargoEnv(t)
 	root := t.TempDir()
 	writeCargoPackage(t, root, "leaf-x", nil)
@@ -190,23 +198,21 @@ members = ["member-x", "leaf-x", "member-y", "leaf-y"]
 `), 0600))
 
 	chdir(t, filepath.Join(root, "member-x"))
-	_, uniqueDepsX, err := BuildDependencyTree(curationParams(t))
+	_, uniqueDepsX, err := BuildDependencyTree(curationParams())
 	require.NoError(t, err)
 	assert.Contains(t, uniqueDepsX, PackageTypeIdentifier+"leaf-x:0.1.0")
 
 	chdir(t, filepath.Join(root, "member-y"))
-	_, uniqueDepsY, err := BuildDependencyTree(curationParams(t))
+	_, uniqueDepsY, err := BuildDependencyTree(curationParams())
 	require.NoError(t, err, "a distinct member must not be deduped against a different member's audit")
 	assert.Contains(t, uniqueDepsY, PackageTypeIdentifier+"leaf-y:0.1.0")
 
 	chdir(t, filepath.Join(root, "member-x"))
-	_, _, err = BuildDependencyTree(curationParams(t))
+	_, _, err = BuildDependencyTree(curationParams())
 	require.ErrorIs(t, err, ErrCargoWorkspaceAlreadyAudited, "a literal repeat of the same directory must still be caught")
 }
 
-// A global ambient .cargo/config.toml that already replaces crates-io with Artifactory is invisible
-// once CARGO_HOME is redirected to the isolated temp dir below, so the isolated config must always
-// wire its own crates-io replacement rather than relying on the ambient one surviving the redirect.
+// The isolated config must always wire its own crates-io replacement, since a global ambient one is invisible once CARGO_HOME redirects.
 func TestProtectCargoCurationEnvironmentAlwaysOverridesCratesIo(t *testing.T) {
 	ambientCargoHome := t.TempDir()
 	projectDir := t.TempDir()
@@ -230,10 +236,44 @@ registry = "sparse+https://ambient.example.com/artifactory/api/cargo/cargo-remot
 	require.NoError(t, err)
 	defer func() { require.NoError(t, restore()) }()
 
-	written, err := os.ReadFile(filepath.Join(os.Getenv("CARGO_HOME"), "config.toml"))
+	written, err := os.ReadFile(filepath.Join(os.Getenv("CARGO_HOME"), "config.toml")) // #nosec G703 -- test-controlled temp CARGO_HOME, not attacker input
 	require.NoError(t, err)
 	assert.Contains(t, string(written), "[source.crates-io]")
 	assert.Contains(t, string(written), "replace-with")
+}
+
+// An ambient registries name unsafe for a bare TOML key must not be reused as-is -- it must not corrupt the isolated config.
+func TestProtectCargoCurationEnvironmentRejectsUnsafeAmbientRegistriesName(t *testing.T) {
+	ambientCargoHome := t.TempDir()
+	projectDir := t.TempDir()
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() { _ = os.Chdir(origWd) })
+
+	ambientConfig := `[registry]
+default = "evil name]"
+
+[registries."evil name]"]
+index = "sparse+https://ambient.example.com/artifactory/api/cargo/cargo-remote/index/"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(ambientCargoHome, "config.toml"), []byte(ambientConfig), 0600))
+	t.Setenv("CARGO_HOME", ambientCargoHome)
+
+	server := &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/", User: "admin", Password: "pw"}
+	restore, err := protectCargoCurationEnvironment(server, "curation-repo")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, restore()) }()
+
+	written, err := os.ReadFile(filepath.Join(os.Getenv("CARGO_HOME"), "config.toml")) // #nosec G703 -- test-controlled temp CARGO_HOME, not attacker input
+	require.NoError(t, err)
+	assert.NotContains(t, string(written), "evil name",
+		"an unsafe ambient registries name must not be spliced unescaped into the isolated config")
+
+	var decoded map[string]interface{}
+	_, decErr := toml.Decode(string(written), &decoded)
+	require.NoError(t, decErr, "the isolated config.toml must always be valid TOML, written:\n%s", string(written))
 }
 
 func TestEnsureCargoLockfileWrapsUnderlyingError(t *testing.T) {
@@ -502,6 +542,47 @@ func TestReadEffectiveCargoConfig(t *testing.T) {
 		_, _, err = readEffectiveCargoConfig()
 		require.Error(t, err)
 	})
+
+	t.Run("a project-local config silent on registries falls through to CARGO_HOME's, like firecracker-microvm's", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		cargoHome, err := filepath.EvalSymlinks(t.TempDir())
+		require.NoError(t, err)
+		t.Setenv("CARGO_HOME", cargoHome)
+		require.NoError(t, os.WriteFile(filepath.Join(cargoHome, "config.toml"), []byte(`
+[source.crates-io]
+replace-with = "artifactory"
+
+[source.artifactory]
+registry = "sparse+https://acme.jfrog.io/artifactory/api/cargo/cargo-remote/index/"
+`), 0600))
+
+		projectDir, err := filepath.EvalSymlinks(t.TempDir())
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".cargo"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".cargo", "config.toml"), []byte(`
+[build]
+target-dir = "target"
+
+[net]
+retry = 2
+
+[env]
+FOO = "bar"
+`), 0600))
+
+		prevWd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(projectDir))
+		defer func() { require.NoError(t, os.Chdir(prevWd)) }()
+
+		content, sourcePath, err := readEffectiveCargoConfig()
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(cargoHome, "config.toml"), sourcePath,
+			"a project-local config that never mentions a registry must not hide CARGO_HOME's")
+		_, ok := parseCargoConfigRegistry(content)
+		assert.True(t, ok)
+	})
 }
 
 func TestDetectConflictingCargoSources(t *testing.T) {
@@ -710,6 +791,42 @@ func TestBuildCargoDepTree(t *testing.T) {
 		_, _, err := buildCargoDepTree(lock, "")
 		require.Error(t, err)
 	})
+
+	t.Run("a shared dependency's subtree is expanded once, not once per path reaching it", func(t *testing.T) {
+		// Diamond fan-in: each level's two packages depend on both of the level below's, doubling paths to the bottom.
+		const levels = 12
+		pkgs := []cargoPackage{
+			{Name: "leaf-a", Version: "0.1.0"},
+			{Name: "leaf-b", Version: "0.1.0"},
+		}
+		prevA, prevB := "leaf-a", "leaf-b"
+		for i := 1; i <= levels; i++ {
+			a, b := fmt.Sprintf("a%d", i), fmt.Sprintf("b%d", i)
+			pkgs = append(pkgs,
+				cargoPackage{Name: a, Version: "0.1.0", Dependencies: []string{prevA, prevB}},
+				cargoPackage{Name: b, Version: "0.1.0", Dependencies: []string{prevA, prevB}},
+			)
+			prevA, prevB = a, b
+		}
+		pkgs = append(pkgs, cargoPackage{Name: "root-crate", Version: "0.1.0", Dependencies: []string{prevA, prevB}})
+
+		trees, uniqueDeps, err := buildCargoDepTree(cargoLockFile{Packages: pkgs}, "root-crate")
+		require.NoError(t, err)
+		require.Len(t, trees, 1)
+
+		var countNodes func(n *xrayUtils.GraphNode) int
+		countNodes = func(n *xrayUtils.GraphNode) int {
+			total := 1
+			for _, c := range n.Nodes {
+				total += countNodes(c)
+			}
+			return total
+		}
+		total := countNodes(trees[0])
+		assert.Less(t, total, 6*levels,
+			"a shared diamond dependency must be expanded once, not once per path (got a node count consistent with exponential re-expansion)")
+		assert.Len(t, uniqueDeps, 2*levels+2, "every distinct package must still be reported exactly once")
+	})
 }
 
 func TestLockMatchesDeclaredDependencies(t *testing.T) {
@@ -733,6 +850,22 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 `)
 		declared := map[string]map[string]string{"mycrate": {"foo": "=1.0.0"}}
+		assert.True(t, lockMatchesDeclaredDependencies(lockPath, declared))
+	})
+
+	t.Run("exact pin with a space after '=' matching the locked version is not stale", func(t *testing.T) {
+		lockPath := writeLock(t, t.TempDir(), `
+[[package]]
+name = "mycrate"
+version = "0.1.0"
+dependencies = ["foo"]
+
+[[package]]
+name = "foo"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+`)
+		declared := map[string]map[string]string{"mycrate": {"foo": "= 1.0.0"}}
 		assert.True(t, lockMatchesDeclaredDependencies(lockPath, declared))
 	})
 

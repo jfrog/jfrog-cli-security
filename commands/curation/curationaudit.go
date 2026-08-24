@@ -223,7 +223,17 @@ type ErrorResp struct {
 	// Message is the field name most package managers' curation-block body uses.
 	Message string `json:"message"`
 	// Detail is the field name Artifactory uses instead, for cargo's curation-block body.
-	Detail string `json:"detail"`
+	// RawMessage, not string: other techs (e.g. Docker) send "detail" as a JSON object.
+	Detail json.RawMessage `json:"detail"`
+}
+
+// detailAsMessage returns Detail's value when Detail is itself a JSON string, or "" otherwise.
+func (e ErrorResp) detailAsMessage() string {
+	var s string
+	if err := json.Unmarshal(e.Detail, &s); err != nil {
+		return ""
+	}
+	return s
 }
 
 type PackageStatus struct {
@@ -461,7 +471,8 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	// Don't include scanErr.Error() here — it is in the returned err and the CLI framework
 	// prints it once; printing it here too would duplicate the full error message.
 	if scanErr != nil {
-		log.Error("Curation audit encountered errors while checking some packages; the report below may be incomplete:")
+		// no positional claim: some fallback paths print their report before this banner, not after.
+		log.Error("Curation audit encountered errors while checking some packages; the report may be incomplete.")
 	}
 	for projectPath, report := range results {
 		if report.isPartial {
@@ -768,6 +779,13 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 				techs = append(techs, hfTech)
 			}
 		}
+		// Cargo has no shared 'indicators' entry (see techutils.go), so detect it directly here.
+		if hasCargoProject(ca.OriginPath) {
+			cargoTech := techutils.Cargo.String()
+			if !slices.Contains(techs, cargoTech) {
+				techs = append(techs, cargoTech)
+			}
+		}
 		for i, tech := range techs {
 			techs[i] = resolveNpmYarnTech(tech)
 		}
@@ -893,6 +911,19 @@ func hasPythonFiles(dir string) bool {
 	return found
 }
 
+// hasCargoProject returns true if dir directly contains a Cargo.toml or Cargo.lock.
+func hasCargoProject(dir string) bool {
+	if dir == "" {
+		dir = "."
+	}
+	for _, name := range []string{"Cargo.toml", "Cargo.lock"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func validateCurationAuditFlags(ca *CurationAuditCommand) error {
 	if ca.DockerImageName() != "" && ca.HuggingFaceModel() != "" {
 		return errorutils.CheckErrorf(
@@ -1015,14 +1046,14 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-// getBuildInfoParamsByTech resolves install-time server details. For Pipenv, prefers an
+// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry, prefers an
 // already-set ca.PackageManagerConfig (native detection) over the generic server so install
 // and the later GetAuth-based probes hit the same endpoint. Other techs keep using the
 // generic server, matching their pre-existing behavior.
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if tech == techutils.Pipenv && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1089,8 +1120,9 @@ func countPackageNodes(rootNodes map[string]struct{}, flatTreeNodes []*xrayUtils
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	// --run-native is meaningful for npm; pnpm/yarn/uv accept it as a no-op; reject it
-	// early for every other tech.
+	// --run-native only changes behavior for npm; pnpm/yarn/uv/poetry accept it as a no-op,
+	// pip/pipenv resolve automatically without needing the flag — reject it early only
+	// for techs with no native flow at all.
 	if err := validateRunNativeForTech(tech, ca.RunNative()); err != nil {
 		return err
 	}
@@ -1102,16 +1134,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv's native repo/server before getBuildInfoParamsByTech so install and the
+	// Resolve Pipenv/Pip/Poetry's native repo/server before getBuildInfoParamsByTech so install and the
 	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
 	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
-	if tech == techutils.Pipenv && ca.PackageManagerConfig == nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
 	}
-	// Cargo has no 'jf cargo-config' file; resolve its repo from .cargo/config.toml instead.
-	if tech == techutils.Cargo && ca.PackageManagerConfig == nil {
+	// Cargo never pre-populates PackageManagerConfig, so a non-nil value here is stale leftover state.
+	if tech == techutils.Cargo {
 		if err := ca.setRepoFromCargoConfig(); err != nil {
 			return err
 		}
@@ -1163,6 +1195,22 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	// --run-native has no effect for cargo; it always resolves natively.
 	if ca.RunNative() && tech == techutils.Cargo {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for cargo; cargo always resolves natively from .cargo/config.toml")
+	}
+	// poetry has no 'jf poetry-config' either — it always resolves natively from
+	// pyproject.toml's [[tool.poetry.source]]; --run-native is a no-op here too.
+	if ca.RunNative() && tech == techutils.Poetry {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for poetry; poetry always resolves natively from the Artifactory [[tool.poetry.source]] entry in pyproject.toml")
+	}
+	// pip already resolves automatically (yaml, then pip.conf); --run-native has
+	// nothing to switch between here. Deferred: emitted after the spinner stops
+	// so the message is not overwritten.
+	if ca.RunNative() && tech == techutils.Pip {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pip; the repository is resolved automatically from 'jf pip-config' or ~/.pip/pip.conf")
+	}
+	// pipenv has no 'jf pipenv-config' either — it always resolves automatically
+	// from pip.conf, then the Pipfile [[source]]; --run-native is a no-op here too.
+	if ca.RunNative() && tech == techutils.Pipenv {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1427,8 +1475,8 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 			return nil, fmt.Errorf("got unexpected response structure while sending waiver request: %s", body)
 		}
 		// Cargo's curation-block body uses "detail" instead of "message" (see ErrorResp.Detail).
-		if resp.Errors[0].Message == "" && resp.Errors[0].Detail != "" {
-			resp.Errors[0].Message = resp.Errors[0].Detail
+		if resp.Errors[0].Message == "" {
+			resp.Errors[0].Message = resp.Errors[0].detailAsMessage()
 		}
 		parts := strings.Split(resp.Errors[0].Message, "|")
 		if len(parts) != 2 {
@@ -1597,6 +1645,10 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromUvToml()
 	}
 
+	if tech == techutils.Pip {
+		return ca.setRepoFromPipConf()
+	}
+
 	if tech == techutils.Pipenv {
 		return ca.setRepoFromPipfile()
 	}
@@ -1604,6 +1656,10 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	// Cargo has no 'jf cargo-config' command; read the registry from .cargo/config.toml instead.
 	if tech == techutils.Cargo {
 		return ca.setRepoFromCargoConfig()
+	}
+
+	if tech == techutils.Poetry {
+		return ca.setRepoFromPyproject()
 	}
 
 	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
@@ -1656,39 +1712,13 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	return nil
 }
 
-// setRepoFromPipfile detects the Artifactory PyPI source for pipenv curation.
+// setRepoFromPipfile detects the Artifactory PyPI source for pipenv curation. Pipenv has no
+// 'jf pipenv-config' native-config equivalent — it is always native:
 //
 // Detection priority:
-//  1. pipenv.yaml — explicit 'jf pipenv-config'.
-//  2. User pip.conf index-url — Artifactory "Set me up" for pip.
-//  3. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
+//  1. User pip.conf index-url — Artifactory "Set me up" for pip.
+//  2. Pipfile [[source]] — Artifactory URL declared directly in the Pipfile.
 func (ca *CurationAuditCommand) setRepoFromPipfile() error {
-	projectType := techutils.Pipenv.GetProjectType()
-	_, configExists, err := project.GetProjectConfFilePath(projectType)
-	if err != nil {
-		return err
-	}
-
-	if configExists {
-		resolverParams, err := ca.getRepoParams(projectType)
-		if err != nil {
-			return err
-		}
-		configuredServer, err := resolverParams.ServerDetails()
-		if err != nil {
-			return err
-		}
-		fallbackServer, _ := ca.ServerDetails()
-		server, repo, err := python.ResolvePipfileArtifactorySource("Pipfile", configuredServer, resolverParams.TargetRepo(), fallbackServer)
-		if err != nil {
-			return err
-		}
-		repoConfig := (&project.RepositoryConfig{}).SetTargetRepo(repo).SetServerDetails(server)
-		ca.setPackageManagerConfig(repoConfig)
-		ca.SetDepsRepo(repo)
-		return nil
-	}
-
 	configuredServer, configuredRepo, pipConfPath, err := python.ParsePipConfigIndexUrl(python.DefaultPipConfPaths()...)
 	if err != nil {
 		return err
@@ -1724,14 +1754,94 @@ func (ca *CurationAuditCommand) setRepoFromPipfile() error {
 
 	return errorutils.CheckErrorf(
 		"curation-audit for pipenv requires an Artifactory PyPI resolver. " +
-			"Either run 'jf pipenv-config', configure index-url in your user pip.conf via " +
-			"Artifactory 'Set me up', or add an Artifactory [[source]] entry to your Pipfile.")
+			"Either configure index-url in your user pip.conf via Artifactory 'Set me up', " +
+			"or add an Artifactory [[source]] entry to your Pipfile.")
+}
+
+// setRepoFromPipConf detects the Artifactory PyPI source for native pip curation.
+//
+// Detection priority:
+//  1. pip.yaml — explicit 'jf pip-config'.
+//  2. User pip.conf index-url — Artifactory "Set me up" for pip.
+func (ca *CurationAuditCommand) setRepoFromPipConf() error {
+	projectType := techutils.Pip.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("pip: using Artifactory repository %q from pip.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
+	configuredServer, configuredRepo, pipConfPath, err := python.ParsePipConfigIndexUrl(python.DefaultPipConfPaths()...)
+	if err != nil {
+		return err
+	}
+	if configuredRepo != "" && configuredServer != nil {
+		serverDetails := configuredServer
+		if configuredServer.User == "" && configuredServer.Password == "" && configuredServer.AccessToken == "" {
+			serverDetails, err = ca.credentialFallbackServerDetails("pip", pipConfPath, configuredServer.ArtifactoryUrl)
+			if err != nil {
+				return err
+			}
+		}
+		repoConfig := (&project.RepositoryConfig{}).
+			SetTargetRepo(configuredRepo).
+			SetServerDetails(serverDetails)
+		ca.setPackageManagerConfig(repoConfig)
+		ca.SetDepsRepo(configuredRepo)
+		log.Info(fmt.Sprintf("pip: using Artifactory repository %q from %s", configuredRepo, pipConfPath))
+		return nil
+	}
+
+	return errorutils.CheckErrorf(
+		"curation-audit for pip requires an Artifactory PyPI resolver. " +
+			"Either run 'jf pip-config' or configure index-url in your user pip.conf via Artifactory 'Set me up'.")
+}
+
+// setRepoFromPyproject detects the Artifactory PyPI source for poetry curation. Poetry has no
+// 'jf poetry-config' native-config equivalent — it is always native: the only source
+// is the Artifactory [[tool.poetry.source]] entry declared directly in pyproject.toml.
+func (ca *CurationAuditCommand) setRepoFromPyproject() error {
+	configuredServer, configuredRepo, err := python.ParsePyprojectArtifactorySource()
+	if err != nil {
+		return err
+	}
+	if configuredRepo == "" || configuredServer == nil {
+		return errorutils.CheckErrorf(
+			"curation-audit for poetry requires an Artifactory PyPI resolver. " +
+				"Add an Artifactory [[tool.poetry.source]] entry to your pyproject.toml (e.g. via Artifactory's 'Set me up').")
+	}
+	serverDetails := configuredServer
+	if configuredServer.User == "" && configuredServer.Password == "" && configuredServer.AccessToken == "" {
+		serverDetails, err = ca.credentialFallbackServerDetails("poetry", "pyproject.toml's [[tool.poetry.source]]", configuredServer.ArtifactoryUrl)
+		if err != nil {
+			return err
+		}
+	}
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(configuredRepo).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(configuredRepo)
+	log.Info(fmt.Sprintf("poetry: using Artifactory repository %q from pyproject.toml [[tool.poetry.source]]", configuredRepo))
+	return nil
 }
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
-// pnpm/yarn/uv accept it as a no-op (they always resolve natively). Extend the
-// allow-list below when a new tech adds the matching native-config flow.
+// pnpm/yarn/uv/pip/pipenv/poetry accept it as a no-op (a warning is emitted in auditTree)
+// since their resolution is already automatic and has nothing for the flag to
+// switch between. Extend the allow-list below when a new tech adds the
+// matching native-config flow.
 func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	if !runNative {
 		return nil
@@ -1750,15 +1860,18 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		techutils.Uv: {},
 		// cargo always resolves natively from .cargo/config.toml; --run-native is a no-op.
 		techutils.Cargo: {},
+		// poetry always resolves natively too; no 'jf poetry-config'.
+		techutils.Poetry: {},
+		// pip already resolves automatically (yaml, then pip.conf), so --run-native
+		// has nothing to switch between; a warning is emitted in auditTree rather
+		// than an error.
+		techutils.Pip: {},
+		// pipenv has no 'jf pipenv-config' either — always resolves automatically
+		// from pip.conf, then the Pipfile [[source]].
+		techutils.Pipenv: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
-	}
-	if tech == techutils.Pipenv {
-		return errorutils.CheckErrorf(
-			"--run-native is not supported for 'pipenv' projects. " +
-				"Run 'jf ca' without --run-native; the repository is resolved automatically from " +
-				"'jf pipenv-config', ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile.")
 	}
 	return errorutils.CheckErrorf(
 		"--run-native is not supported for '%s' projects. "+
@@ -1901,26 +2014,14 @@ func (ca *CurationAuditCommand) setRepoFromUvToml() error {
 		return fmt.Errorf("uv: failed to read Artifactory details from uv.toml: %w", err)
 	}
 
-	base, sdErr := ca.ServerDetails()
-	if sdErr != nil {
-		return fmt.Errorf("uv: failed to read 'jf c' server configuration: %w", sdErr)
+	serverDetails, err := ca.credentialFallbackServerDetails("uv", "pyproject.toml/uv.toml", registryConfig.ArtifactoryUrl)
+	if err != nil {
+		return err
 	}
-	if base == nil {
-		return errorutils.CheckErrorf("uv: no 'jf c' server configured")
-	}
-	if !sameArtifactoryHost(base.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
-		return errorutils.CheckErrorf(
-			"uv: the Artifactory URL declared in pyproject.toml/uv.toml (%s) does not match the "+
-				"configured 'jf c' server (%s) — refusing to send its credentials to a different host. "+
-				"Align the two, or select the matching server with --server-id.",
-			registryConfig.ArtifactoryUrl, base.ArtifactoryUrl)
-	}
-	copied := *base
-	copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
 
 	repoConfig := (&project.RepositoryConfig{}).
 		SetTargetRepo(registryConfig.RepoName).
-		SetServerDetails(&copied)
+		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
@@ -1938,29 +2039,41 @@ func (ca *CurationAuditCommand) setRepoFromCargoConfig() error {
 		return fmt.Errorf("cargo: failed to read Artifactory details from .cargo/config.toml: %w", err)
 	}
 
-	base, sdErr := ca.ServerDetails()
-	if sdErr != nil {
-		return fmt.Errorf("cargo: failed to read 'jf c' server configuration: %w", sdErr)
+	serverDetails, err := ca.credentialFallbackServerDetails("cargo", ".cargo/config.toml", registryConfig.ArtifactoryUrl)
+	if err != nil {
+		return err
 	}
-	if base == nil {
-		return errorutils.CheckErrorf("cargo: no 'jf c' server configured")
-	}
-	if !sameArtifactoryHost(base.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
-		return errorutils.CheckErrorf(
-			"cargo: the Artifactory URL declared in .cargo/config.toml (%s) does not match the "+
-				"configured 'jf c' server (%s) — refusing to send its credentials to a different host. "+
-				"Align the two, or select the matching server with --server-id.",
-			registryConfig.ArtifactoryUrl, base.ArtifactoryUrl)
-	}
-	copied := *base
-	copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
 
 	repoConfig := (&project.RepositoryConfig{}).
 		SetTargetRepo(registryConfig.RepoName).
-		SetServerDetails(&copied)
+		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	ca.SetDepsRepo(registryConfig.RepoName)
 	return nil
+}
+
+// credentialFallbackServerDetails builds ServerDetails for a native config source (uv.toml,
+// pip.conf, pyproject.toml [[tool.poetry.source]], ...) that has no credentials of its own, by
+// copying the currently configured 'jf c' server's credentials and swapping in the discovered
+// Artifactory URL. Refuses to reuse credentials across hosts: if discoveredArtifactoryUrl's
+// host/scheme doesn't match the configured server's, it errors instead of silently sending real
+// credentials to an unrelated host — tech and sourceDescription are used only to name the
+// offending tech/file in that error.
+func (ca *CurationAuditCommand) credentialFallbackServerDetails(tech, sourceDescription, discoveredArtifactoryUrl string) (*config.ServerDetails, error) {
+	base, sdErr := ca.ServerDetails()
+	if sdErr != nil || base == nil {
+		return nil, errorutils.CheckErrorf("%s: no 'jf c' server configured to source credentials for %s", tech, sourceDescription)
+	}
+	if !sameArtifactoryHost(base.ArtifactoryUrl, discoveredArtifactoryUrl) {
+		return nil, errorutils.CheckErrorf(
+			"%s: the Artifactory URL declared in %s (%s) does not match the configured 'jf c' "+
+				"server (%s) — refusing to send its credentials to a different host. "+
+				"Align the two, or select the matching server with --server-id.",
+			tech, sourceDescription, discoveredArtifactoryUrl, base.ArtifactoryUrl)
+	}
+	copied := *base
+	copied.ArtifactoryUrl = discoveredArtifactoryUrl
+	return &copied, nil
 }
 
 // sameArtifactoryHost reports whether configuredUrl and discoveredUrl share the same
@@ -2248,6 +2361,7 @@ func cleanupForcedNpmDebugLog(logsDir string, logsMaxWasZero bool, baselineKey i
 // rotation manages them like any other run.
 func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils.Technology, results map[string]*CurationReport, originalErr error, logsMaxWasZero bool, baselineKey int64) error {
 	entries, blockedPackages, logFilePaths, parseErr := parseNpmDebugLog(logsDir, baselineKey)
+	entries = resolveNpmAliasEntries(entries)
 	if logsMaxWasZero {
 		defer func() {
 			for _, logFilePath := range logFilePaths {
@@ -2353,7 +2467,7 @@ func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils
 			// "curation never applied" categories, so it can't be mistaken for a real block.
 			advisoryWarnings = append(advisoryWarnings, fmt.Sprintf(
 				"Package '%s' (%s): Not evaluated: This dependency was not evaluated because it is resolved from a source "+
-					"other than an npm registry (such as a Git URL, local path, or npm alias), bypassing Artifactory. "+
+					"other than an npm registry (such as a Git URL or local path), bypassing Artifactory. "+
 					"As a result, curation policies do not apply.",
 				entry.Name, entry.Specifier))
 		case npmEntryETARGET:
@@ -2738,8 +2852,8 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 			}, nil
 		}
 		// Cargo's curation-block body uses "detail" instead of "message".
-		if respError.Errors[0].Message == "" && respError.Errors[0].Detail != "" {
-			respError.Errors[0].Message = respError.Errors[0].Detail
+		if respError.Errors[0].Message == "" {
+			respError.Errors[0].Message = respError.Errors[0].detailAsMessage()
 		}
 		// if the error message contains the curation string key, then we can be sure it got blocked by Curation service.
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {

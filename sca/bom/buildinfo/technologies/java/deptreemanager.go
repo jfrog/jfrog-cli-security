@@ -27,14 +27,16 @@ func BuildDependencyTree(depTreeParams DepTreeParams, tech techutils.Technology)
 }
 
 type DepTreeParams struct {
-	UseWrapper              bool
-	Server                  *config.ServerDetails
-	DepsRepo                string
-	IsMavenDepTreeInstalled bool
-	IsCurationCmd           bool
-	MvnIncludePluginDeps    bool
-	CurationCacheFolder     string
-	UseIncludedBuilds       bool
+	UseWrapper                    bool
+	Server                        *config.ServerDetails
+	DepsRepo                      string
+	InsecureTls                   bool
+	IsMavenDepTreeInstalled       bool
+	IsCurationCmd                 bool
+	MvnIncludePluginDeps          bool
+	CurationCacheFolder           string
+	UseIncludedBuilds             bool
+	GradleExcludeTestDependencies bool
 }
 
 type DepTreeManager struct {

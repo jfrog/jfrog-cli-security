@@ -1,6 +1,7 @@
 package sarifutils
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAggregateMultipleRunsIntoSingle(t *testing.T) {
@@ -619,4 +621,274 @@ func TestGetResultFingerprint(t *testing.T) {
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetResultFingerprint(test.result))
 	}
+}
+
+func TestGroupResultsByLocation(t *testing.T) {
+	tests := []struct {
+		run            *sarif.Run
+		expectedOutput *sarif.Run
+	}{
+		{
+			run:            CreateRunWithDummyResults(),
+			expectedOutput: CreateRunWithDummyResults(),
+		},
+		{
+			// No similar groups at all
+			run: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+			),
+			expectedOutput: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+			),
+		},
+		{
+			// With similar groups
+			run: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+			),
+			expectedOutput: CreateRunWithDummyResults(
+				CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+					CreateCodeFlow(CreateThreadFlow(
+						CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					)),
+				}),
+				CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+			),
+		},
+	}
+
+	for _, test := range tests {
+		grouped := GroupResultsByLocation([]*sarif.Run{test.run})
+		require.Len(t, grouped, 1)
+		assert.ElementsMatch(t, test.expectedOutput.Results, grouped[0].Results)
+	}
+}
+
+// GroupResultsByLocation copies results via go-sarif constructors, which default index fields to -1.
+// Analyzer Manager output unmarshals omitted indexes as 0; the copy must keep those values so uploaded CDX matches --output-dir dumps.
+func TestCopyLocationPreservesSourceIdAndRegionOffsets(t *testing.T) {
+	location := CreateLocation("file.go", 1, 2, 3, 4, "snippet")
+	location.ID = -1
+	location.PhysicalLocation.Region.CharOffset = -1
+	location.PhysicalLocation.Region.ByteOffset = -1
+
+	copied := CopyLocation(location)
+	require.NotNil(t, copied)
+	assert.Equal(t, -1, copied.ID, "must not replace constructor sentinel with 0")
+	assert.Equal(t, -1, copied.PhysicalLocation.Region.CharOffset)
+	assert.Equal(t, -1, copied.PhysicalLocation.Region.ByteOffset)
+
+	location.ID = 7
+	location.PhysicalLocation.Region.CharOffset = 10
+	location.PhysicalLocation.Region.ByteOffset = 20
+	copied = CopyLocation(location)
+	assert.Equal(t, 7, copied.ID)
+	assert.Equal(t, 10, copied.PhysicalLocation.Region.CharOffset)
+	assert.Equal(t, 20, copied.PhysicalLocation.Region.ByteOffset)
+}
+
+func TestGroupResultsByLocationPreservesZeroIndexes(t *testing.T) {
+	location := CreateLocation("src/main/java/com/example/HelloWorld.java", 5, 29, 5, 42, "String[] args")
+	location.PhysicalLocation.ArtifactLocation.Index = 0
+	location.LogicalLocations = []*sarif.LogicalLocation{{
+		FullyQualifiedName: ptrTo("com.example.HelloWorld.main"),
+		Index:              0,
+		ParentIndex:        0,
+	}}
+
+	threadFlowLocation := &sarif.ThreadFlowLocation{
+		ExecutionOrder: 0,
+		Importance:     "",
+		Index:          0,
+		Location:       location,
+	}
+	result := CreateResultWithLocations("result-msg", "rule1", "error", location).WithCodeFlows([]*sarif.CodeFlow{
+		{ThreadFlows: []*sarif.ThreadFlow{{Locations: []*sarif.ThreadFlowLocation{threadFlowLocation}}}},
+	})
+
+	grouped := GroupResultsByLocation([]*sarif.Run{CreateRunWithDummyResults(result)})
+	require.Len(t, grouped, 1)
+	require.Len(t, grouped[0].Results, 1)
+
+	copiedLocation := grouped[0].Results[0].Locations[0]
+	assert.Equal(t, 0, copiedLocation.PhysicalLocation.ArtifactLocation.Index)
+	require.Len(t, copiedLocation.LogicalLocations, 1)
+	assert.Equal(t, 0, copiedLocation.LogicalLocations[0].Index)
+	assert.Equal(t, 0, copiedLocation.LogicalLocations[0].ParentIndex)
+
+	copiedThreadFlowLocation := grouped[0].Results[0].CodeFlows[0].ThreadFlows[0].Locations[0]
+	assert.Equal(t, 0, copiedThreadFlowLocation.Index)
+	assert.Equal(t, 0, copiedThreadFlowLocation.ExecutionOrder)
+	assert.Equal(t, "", copiedThreadFlowLocation.Importance)
+}
+
+func ptrTo[T any](v T) *T {
+	return &v
+}
+
+// Mirrors go-sarif v1.1.1 index fields (*uint + omitempty). Negative sentinels from v3 fail to decode.
+type legacySarifPayload struct {
+	Runs []legacyRun `json:"runs"`
+}
+
+type legacyRun struct {
+	Results []legacyResult `json:"results"`
+}
+
+type legacyResult struct {
+	RuleIndex *uint            `json:"ruleIndex,omitempty"`
+	Locations []legacyLocation `json:"locations"`
+	CodeFlows []legacyCodeFlow `json:"codeFlows,omitempty"`
+}
+
+type legacyCodeFlow struct {
+	ThreadFlows []legacyThreadFlow `json:"threadFlows"`
+}
+
+type legacyThreadFlow struct {
+	Locations []legacyThreadFlowLocation `json:"locations"`
+}
+
+type legacyThreadFlowLocation struct {
+	Index          *uint           `json:"index,omitempty"`
+	ExecutionOrder *uint           `json:"executionOrder,omitempty"`
+	Location       *legacyLocation `json:"location,omitempty"`
+}
+
+type legacyLocation struct {
+	ID               *uint                   `json:"id,omitempty"`
+	PhysicalLocation *legacyPhysicalLocation `json:"physicalLocation,omitempty"`
+	LogicalLocations []legacyLogicalLocation `json:"logicalLocations,omitempty"`
+}
+
+type legacyPhysicalLocation struct {
+	ArtifactLocation *legacyArtifactLocation `json:"artifactLocation,omitempty"`
+}
+
+type legacyArtifactLocation struct {
+	URI   string `json:"uri,omitempty"`
+	Index *uint  `json:"index,omitempty"`
+}
+
+type legacyLogicalLocation struct {
+	Index       *uint `json:"index,omitempty"`
+	ParentIndex *uint `json:"parentIndex,omitempty"`
+}
+
+func TestStripUnsetIndexesKeepsPayloadDecodableByLegacyConsumers(t *testing.T) {
+	payload := []byte(`{
+		"runs": [{
+			"results": [{
+				"ruleIndex": -1,
+				"locations": [{
+					"id": -1,
+					"physicalLocation": {
+						"artifactLocation": {"uri": "file.go", "index": -1}
+					},
+					"logicalLocations": [{"index": -1, "parentIndex": -1}]
+				}],
+				"codeFlows": [{
+					"threadFlows": [{
+						"locations": [{
+							"index": -1,
+							"executionOrder": -1,
+							"location": {
+								"physicalLocation": {
+									"artifactLocation": {"uri": "file.go", "index": 0}
+								}
+							}
+						}]
+					}]
+				}]
+			}, {
+				"ruleIndex": 2,
+				"locations": [{
+					"id": 0,
+					"physicalLocation": {
+						"artifactLocation": {"uri": "other.go", "index": 5}
+					}
+				}]
+			}]
+		}]
+	}`)
+
+	var before legacySarifPayload
+	require.Error(t, json.Unmarshal(payload, &before), "negative indexes must fail go-sarif v1 *uint decoding")
+
+	sanitized, err := StripUnsetIndexes(payload)
+	require.NoError(t, err)
+
+	var after legacySarifPayload
+	require.NoError(t, json.Unmarshal(sanitized, &after))
+	require.Len(t, after.Runs, 1)
+	require.Len(t, after.Runs[0].Results, 2)
+
+	first := after.Runs[0].Results[0]
+	assert.Nil(t, first.RuleIndex)
+	require.Len(t, first.Locations, 1)
+	assert.Nil(t, first.Locations[0].ID)
+	assert.Nil(t, first.Locations[0].PhysicalLocation.ArtifactLocation.Index)
+	require.Len(t, first.Locations[0].LogicalLocations, 1)
+	assert.Nil(t, first.Locations[0].LogicalLocations[0].Index)
+	assert.Nil(t, first.Locations[0].LogicalLocations[0].ParentIndex)
+	require.Len(t, first.CodeFlows, 1)
+	threadLoc := first.CodeFlows[0].ThreadFlows[0].Locations[0]
+	assert.Nil(t, threadLoc.Index)
+	assert.Nil(t, threadLoc.ExecutionOrder)
+	require.NotNil(t, threadLoc.Location.PhysicalLocation.ArtifactLocation.Index)
+	assert.Equal(t, uint(0), *threadLoc.Location.PhysicalLocation.ArtifactLocation.Index)
+
+	second := after.Runs[0].Results[1]
+	require.NotNil(t, second.RuleIndex)
+	assert.Equal(t, uint(2), *second.RuleIndex)
+	require.NotNil(t, second.Locations[0].ID)
+	assert.Equal(t, uint(0), *second.Locations[0].ID)
+	require.NotNil(t, second.Locations[0].PhysicalLocation.ArtifactLocation.Index)
+	assert.Equal(t, uint(5), *second.Locations[0].PhysicalLocation.ArtifactLocation.Index)
 }

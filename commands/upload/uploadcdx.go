@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 )
@@ -119,6 +120,10 @@ func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
 		outputBytes, err := utils.GetAsJsonBytes(ucc.contentToUpload, true, true)
 		if err != nil {
 			return "", fmt.Errorf("failed to convert CycloneDx content to JSON: %w", err)
+		}
+		// Xray uses legacy SARIF format, so we need to strip the unset indexes
+		if outputBytes, err = sarifutils.StripUnsetIndexes(outputBytes); err != nil {
+			return "", fmt.Errorf("failed to sanitize CycloneDx SARIF indexes: %w", err)
 		}
 		if ucc.fileToUpload, err = utils.DumpCdxJsonContentToFile(outputBytes, tempDir, ucc.filePrefix, 0); err != nil {
 			return "", fmt.Errorf("failed to save CycloneDx content to file: %w", err)

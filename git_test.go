@@ -270,7 +270,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 }
 
 func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinXrayVersion)
 	defer testCleanUp()
 	// TODO: investigate why "issues" npm project causes flaky tests XRAY-145258
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues-mvn")
@@ -308,8 +308,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 69, Sast: 5, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 7, MissingContext: 1, Inactive: 1},
+				ValidateScan:                &validations.ScanCount{Sca: 70, Sast: 5, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},
@@ -343,8 +343,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 8, Sast: 5, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 7, MissingContext: 1, Inactive: 1},
+				ValidateScan:                &validations.ScanCount{Sca: 9, Sast: 5, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 8, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},

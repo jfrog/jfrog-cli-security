@@ -266,6 +266,59 @@ func findNewestNpmDebugLogChunksAfter(logsDir string, afterKey int64) ([]string,
 	return paths, nil
 }
 
+// resolveNpmAliasTarget parses an "npm:<name>@<versionSpec>" alias specifier — how an npm
+// alias ("pkg-cjs": "npm:pkg@6.0.1") is recorded in npm's debug log — into the real registry
+// package name and the version/range it targets. ok=false for anything else, including a
+// malformed alias (no '@' after stripping the prefix) — that's treated as genuinely
+// unresolvable rather than guessed at.
+func resolveNpmAliasTarget(spec string) (name, versionSpec string, ok bool) {
+	const npmAliasPrefix = "npm:"
+	trimmed := strings.TrimSpace(spec)
+	if !strings.HasPrefix(strings.ToLower(trimmed), npmAliasPrefix) {
+		return "", "", false
+	}
+	rest := trimmed[len(npmAliasPrefix):]
+	// LastIndex, not Index: a scoped real name ("@babel/code-frame") contains its own '@', so
+	// the version separator is always the final one.
+	i := strings.LastIndex(rest, "@")
+	if i <= 0 {
+		return "", "", false
+	}
+	return rest[:i], rest[i+1:], true
+}
+
+// resolveNpmAliasEntries rewrites every entry whose Specifier is a resolvable npm alias
+// ("pkg-cjs": "npm:pkg@6.0.1") to the real package it targets — Name becomes the real name and
+// Specifier becomes the inner version/range — then propagates that rename to any other entry's
+// ParentName that referenced the alias, so parent-child edges in the reconstructed tree still
+// line up.
+//
+// npm's debug log always names a placeDep entry after the alias, never the real package.
+// Artifactory's block notices and the registry both know it only by the real name, so every
+// blockedPackages lookup, HEAD-check, and graph edge downstream must see the real name — done
+// once here, at the point the wrong name would otherwise enter the system, so every consumer
+// below (classification, the graph, the report) needs no alias-awareness of its own. See
+// RTECO-1882 / XRAY-157605: the same class of bug this fixes on the non-fallback path.
+func resolveNpmAliasEntries(entries []npmLogEntry) []npmLogEntry {
+	aliasToReal := map[string]string{}
+	for i, entry := range entries {
+		if realName, realSpec, ok := resolveNpmAliasTarget(entry.Specifier); ok {
+			aliasToReal[entry.Name] = realName
+			entries[i].Name = realName
+			entries[i].Specifier = realSpec
+		}
+	}
+	if len(aliasToReal) == 0 {
+		return entries
+	}
+	for i, entry := range entries {
+		if realParent, ok := aliasToReal[entry.ParentName]; ok {
+			entries[i].ParentName = realParent
+		}
+	}
+	return entries
+}
+
 // classifyBlankVersionEntry categorizes an npmLogEntry whose Version is blank (non-blank is
 // always npmEntryResolved). A range/wildcard/dist-tag is never treated as probeable even after
 // stripping its operator (e.g. "^2.0.0" -> "2.0.0") — that stripped value is a guess at what npm

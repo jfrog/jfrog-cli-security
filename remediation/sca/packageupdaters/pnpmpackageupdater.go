@@ -115,7 +115,7 @@ func (pnpm *PnpmPackageUpdater) regenerateLockfile(fixDetails *FixDetails, descr
 		if err := pnpm.runPnpmInstallLockOnly(); err != nil {
 			log.Warn(fmt.Sprintf("Failed to regenerate lock file after updating '%s' to version '%s': %s. Rolling back...", fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion, err.Error()))
 			//#nosec G306 -- 0644 is correct for a checked-out source file.
-			if rollbackErr := os.WriteFile(descriptorPath, backupContent, 0644); rollbackErr != nil {
+			if rollbackErr := os.WriteFile(filepath.Base(descriptorPath), backupContent, 0644); rollbackErr != nil {
 				return fmt.Errorf("failed to rollback descriptor after lock file regeneration failure: %w (original error: %v)", rollbackErr, err)
 			}
 			return err

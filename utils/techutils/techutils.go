@@ -310,10 +310,10 @@ var technologiesData = map[Technology]TechData{
 		projectType:        project.Ruby,
 		language:           Ruby,
 	},
+	// No 'indicators': Cargo is curation-only and would otherwise be auto-detected by jf audit too.
 	Cargo: {
 		formal:             "Cargo",
 		xrayPackageType:    "cargo",
-		indicators:         []string{"Cargo.toml", "Cargo.lock"},
 		packageDescriptors: []string{"Cargo.toml"},
 		execCommand:        "cargo",
 		language:           Rust,

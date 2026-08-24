@@ -83,33 +83,68 @@ func GetNativeCargoRegistryConfig() (*CargoRegistryConfig, error) {
 	return cfg, nil
 }
 
-// readEffectiveCargoConfig mirrors Cargo's own config-discovery order: project-local walk-up first, then $CARGO_HOME.
+// readEffectiveCargoConfig walks candidates in Cargo's precedence order; a registry-silent one doesn't hide one further up.
 func readEffectiveCargoConfig() (content, sourcePath string, err error) {
-	if wd, wdErr := os.Getwd(); wdErr == nil {
-		if path, found := findProjectCargoConfig(wd); found {
-			if data, readErr := os.ReadFile(path); readErr == nil {
-				return string(data), path, nil
-			}
+	var firstContent, firstPath string
+	for _, path := range cargoConfigCandidates() {
+		data, readErr := os.ReadFile(path) // #nosec G304,G703 -- path comes from walking up from our own cwd, or from CARGO_HOME/the user's own home dir, not attacker-controlled
+		if readErr != nil {
+			continue
 		}
+		if firstContent == "" {
+			firstContent, firstPath = string(data), path
+		}
+		if _, ok := parseCargoConfigRegistry(string(data)); ok {
+			return string(data), path, nil
+		}
+	}
+	if firstContent != "" {
+		return firstContent, firstPath, nil
 	}
 
 	home := os.Getenv("CARGO_HOME")
 	if home == "" {
-		userHome, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return "", "", errorutils.CheckErrorf("cargo: could not determine home directory: %s", homeErr)
-		}
-		home = filepath.Join(userHome, ".cargo")
-	}
-	for _, name := range []string{"config.toml", "config"} {
-		path := filepath.Join(home, name)
-		if data, readErr := os.ReadFile(path); readErr == nil {
-			return string(data), path, nil
+		if userHome, homeErr := os.UserHomeDir(); homeErr == nil {
+			home = filepath.Join(userHome, ".cargo")
 		}
 	}
 	return "", "", errorutils.CheckErrorf(
 		"cargo: no .cargo/config.toml found (project-local or in %s) — configure Cargo to resolve "+
 			"through Artifactory via the 'Set Me Up' instructions for your Cargo repository", home)
+}
+
+// cargoConfigCandidates returns every .cargo/config(.toml) from cwd up to HOME, then $CARGO_HOME's own, in Cargo's own precedence order.
+func cargoConfigCandidates() []string {
+	var candidates []string
+	if wd, err := os.Getwd(); err == nil {
+		home, _ := os.UserHomeDir()
+		for dir := wd; ; {
+			for _, name := range []string{"config.toml", "config"} {
+				path := filepath.Join(dir, ".cargo", name)
+				if _, statErr := os.Stat(path); statErr == nil {
+					candidates = append(candidates, path)
+				}
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir || (home != "" && dir == home) {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	cargoHome := os.Getenv("CARGO_HOME")
+	if cargoHome == "" {
+		if userHome, err := os.UserHomeDir(); err == nil {
+			cargoHome = filepath.Join(userHome, ".cargo")
+		}
+	}
+	if cargoHome != "" {
+		for _, name := range []string{"config.toml", "config"} {
+			candidates = append(candidates, filepath.Join(cargoHome, name))
+		}
+	}
+	return candidates
 }
 
 // findProjectCargoConfig walks up from dir to $HOME looking for .cargo/config.toml (or legacy .cargo/config).
@@ -240,7 +275,7 @@ func DetectConflictingCargoSources() error {
 
 	if wd, wdErr := os.Getwd(); wdErr == nil {
 		if path, found := findProjectCargoConfig(wd); found {
-			if data, readErr := os.ReadFile(path); readErr == nil {
+			if data, readErr := os.ReadFile(path); readErr == nil { // #nosec G304,G703 -- path is found by walking up from our own cwd, not attacker-controlled
 				addRefs(string(data), path)
 			}
 		}
@@ -253,7 +288,7 @@ func DetectConflictingCargoSources() error {
 	}
 	if home != "" {
 		for _, fname := range []string{"config.toml", "config"} {
-			if data, readErr := os.ReadFile(filepath.Join(home, fname)); readErr == nil {
+			if data, readErr := os.ReadFile(filepath.Join(home, fname)); readErr == nil { // #nosec G304,G703 -- home is CARGO_HOME or the user's own home dir, not attacker-controlled
 				addRefs(string(data), filepath.Join(home, fname))
 				break
 			}
@@ -333,13 +368,13 @@ func collectDeclaredDependenciesByPackage(root string) (map[string]map[string]st
 		if d.IsDir() || d.Name() != cargoTomlFileName {
 			return nil
 		}
-		data, readErr := os.ReadFile(path)
+		data, readErr := os.ReadFile(path) // #nosec G122,G304 -- root is our own temp-dir copy of the audited project, not attacker input
 		if readErr != nil {
-			return nil
+			return nil //nolint:nilerr // an unreadable Cargo.toml is skipped, not fatal to the whole walk
 		}
 		var manifest cargoManifest
 		if _, decErr := toml.Decode(string(data), &manifest); decErr != nil {
-			return nil
+			return nil //nolint:nilerr // a malformed Cargo.toml is skipped, not fatal to the whole walk
 		}
 		if manifest.Package == nil || manifest.Package.Name == "" {
 			return nil // virtual workspace root -- nothing of its own to check; members are visited separately
@@ -359,8 +394,7 @@ func collectDeclaredDependenciesByPackage(root string) (map[string]map[string]st
 	return byPackage, nil
 }
 
-// lockMatchesDeclaredDependencies reports whether Cargo.lock still matches Cargo.toml's declared deps.
-// Only exact pins are verified against the locked version; any other requirement forces regeneration.
+// lockMatchesDeclaredDependencies reports whether the lock still matches declared deps (exact pins only).
 func lockMatchesDeclaredDependencies(lockPath string, declaredByPackage map[string]map[string]string) bool {
 	data, err := os.ReadFile(lockPath)
 	if err != nil {
@@ -398,6 +432,7 @@ func lockMatchesDeclaredDependencies(lockPath string, declaredByPackage map[stri
 			trimmed := strings.TrimSpace(req)
 			resolved := resolveCargoDependency(byName, edge)
 			if exactVersion, ok := strings.CutPrefix(trimmed, "="); ok {
+				exactVersion = strings.TrimSpace(exactVersion)
 				if len(resolved) != 1 || resolved[0].Version != exactVersion {
 					return false
 				}
@@ -415,9 +450,7 @@ func lockMatchesDeclaredDependencies(lockPath string, declaredByPackage map[stri
 	return true
 }
 
-// caretBounds computes the inclusive lower and exclusive upper bound of a default/caret Cargo version
-// requirement ("1.2.3", "^1.2.3", "1.2", "1", ...); ok is false for anything else (tilde, wildcard,
-// comparison operators, multiple comma-separated requirements, or a pre-release/build-metadata suffix).
+// caretBounds computes [lower, upper) for a default/caret requirement; ok is false for any other shape.
 func caretBounds(req string) (lower, upper [3]int, ok bool) {
 	req = strings.TrimPrefix(req, "^")
 	if req == "" {
@@ -549,7 +582,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 			log.Warn(fmt.Sprintf("cargo: could not remove temp dir %s: %v", tempDir, rmErr))
 		}
 	}()
-	// Exclude .cargo: a project-shipped config.toml would otherwise take precedence over the isolated CARGO_HOME below.
+	// Exclude .cargo (a project config would override the isolated CARGO_HOME below) -- only filters copyRoot's own children.
 	if err = biutils.CopyDir(copyRoot, tempDir, true, []string{technologies.DotVsRepoSuffix, cargoTargetDirName, cargoConfigDirName}); err != nil {
 		err = fmt.Errorf("cargo: could not copy project to temp dir: %w", err)
 		return
@@ -665,7 +698,7 @@ func findLocalPackage(candidates []*cargoPackage) *cargoPackage {
 	return nil
 }
 
-// appendCargoChildren recursively adds pkg's dependency edges as children of node.
+// appendCargoChildren adds pkg's dependency edges as children of node, expanding each package once (same guard as cocoapods.go).
 func appendCargoChildren(node *xrayUtils.GraphNode, pkg *cargoPackage, byName map[string][]*cargoPackage, uniqueDeps *datastructures.Set[string]) {
 	if node.NodeHasLoop() {
 		return
@@ -678,9 +711,12 @@ func appendCargoChildren(node *xrayUtils.GraphNode, pkg *cargoPackage, byName ma
 		}
 		for _, dep := range deps {
 			id := PackageTypeIdentifier + dep.Name + ":" + dep.Version
-			uniqueDeps.Add(id)
 			child := &xrayUtils.GraphNode{Id: id, Parent: node}
 			node.Nodes = append(node.Nodes, child)
+			if uniqueDeps.Exists(id) {
+				continue
+			}
+			uniqueDeps.Add(id)
 			appendCargoChildren(child, dep, byName, uniqueDeps)
 		}
 	}
@@ -717,6 +753,20 @@ func parseCargoDependencyEntry(edge string) (name, version string) {
 	return
 }
 
+// isValidCargoBareKey reports whether name is safe to splice unescaped into a TOML table header.
+func isValidCargoBareKey(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		isSafe := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-'
+		if !isSafe {
+			return false
+		}
+	}
+	return true
+}
+
 // protectCargoCurationEnvironment points CARGO_HOME at an isolated temp dir for the duration of resolution, same pattern pipenv curation uses.
 func protectCargoCurationEnvironment(server *config.ServerDetails, repoName string) (restore func() error, err error) {
 	tempHome, err := fileutils.CreateTempDir()
@@ -727,9 +777,9 @@ func protectCargoCurationEnvironment(server *config.ServerDetails, repoName stri
 
 	sparseUrl := "sparse+" + strings.TrimRight(server.GetArtifactoryUrl(), "/") + "/api/cargo/" + repoName + "/index/"
 
-	// Reuse the ambient config's own registries name -- a mismatched duplicate for the same URL makes real cargo fail.
+	// Reuse the ambient config's own registries name (validated -- it's spliced unescaped into TOML below).
 	registriesName := cargoRegistryName
-	if ambient, ambientErr := GetNativeCargoRegistryConfig(); ambientErr == nil && ambient != nil && ambient.AmbientRegistriesName != "" {
+	if ambient, ambientErr := GetNativeCargoRegistryConfig(); ambientErr == nil && ambient != nil && isValidCargoBareKey(ambient.AmbientRegistriesName) {
 		registriesName = ambient.AmbientRegistriesName
 	}
 	// Always self-contained: the ambient config's own crates-io replacement is invisible once CARGO_HOME is redirected below.

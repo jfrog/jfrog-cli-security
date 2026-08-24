@@ -1090,7 +1090,7 @@ requests = "*"
 	require.NotNil(t, restore)
 	t.Cleanup(func() { require.NoError(t, restore()) })
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pipenv-config")
+	assert.Contains(t, err.Error(), "pip.conf")
 	assert.Contains(t, err.Error(), "Pipfile")
 }
 
@@ -1618,6 +1618,7 @@ func TestParsePipConfigIndexUrl(t *testing.T) {
 		wantArtURL  string
 		wantUser    string
 		wantNoMatch bool
+		wantErr     string
 	}{
 		{
 			name: "artifactory index-url with credentials",
@@ -1658,6 +1659,18 @@ func TestParsePipConfigIndexUrl(t *testing.T) {
 			wantRepo:   "right",
 			wantArtURL: "https://right.example.com/artifactory/",
 		},
+		{
+			name: "incomplete URL credentials — username with no password",
+			content: "[global]\n" +
+				"index-url = https://admin@myrt.example.com/artifactory/api/pypi/libs-pypi/simple\n",
+			wantErr: "incomplete URL credentials",
+		},
+		{
+			name: "incomplete URL credentials — password with no username",
+			content: "[global]\n" +
+				"index-url = https://:mytoken@myrt.example.com/artifactory/api/pypi/libs-pypi/simple\n",
+			wantErr: "incomplete URL credentials",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1668,6 +1681,11 @@ func TestParsePipConfigIndexUrl(t *testing.T) {
 			require.NoError(t, f.Close())
 
 			sd, repo, _, err := ParsePipConfigIndexUrl(f.Name())
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				return
+			}
 			require.NoError(t, err)
 			if tc.wantNoMatch {
 				assert.Empty(t, repo)
@@ -1825,6 +1843,105 @@ func TestParsePipConfigIndexUrlMergesAcrossPaths(t *testing.T) {
 		assert.Equal(t, "legacy-repo", repo)
 		assert.Equal(t, legacy, sourcePath)
 	})
+}
+
+func TestParsePyprojectArtifactorySource(t *testing.T) {
+	cases := []struct {
+		name        string
+		content     string
+		noFile      bool
+		wantRepo    string
+		wantArtURL  string
+		wantUser    string
+		wantNoMatch bool
+		wantErr     string
+	}{
+		{
+			name:        "missing pyproject.toml",
+			noFile:      true,
+			wantNoMatch: true,
+		},
+		{
+			name:        "no [[tool.poetry.source]] key",
+			content:     "[tool.poetry]\nname = \"proj\"\n",
+			wantNoMatch: true,
+		},
+		{
+			name: "single artifactory source, no credentials",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"jfrog\"\n" +
+				"url = \"https://myrt.example.com/artifactory/api/pypi/libs-pypi/simple\"\n",
+			wantRepo:   "libs-pypi",
+			wantArtURL: "https://myrt.example.com/artifactory/",
+		},
+		{
+			name: "single artifactory source, with credentials",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"jfrog\"\n" +
+				"url = \"https://admin:mytoken@myrt.example.com/artifactory/api/pypi/libs-pypi/simple\"\n",
+			wantRepo:   "libs-pypi",
+			wantArtURL: "https://myrt.example.com/artifactory/",
+			wantUser:   "admin",
+		},
+		{
+			name: "non-artifactory source is not a match",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"pypi\"\n" +
+				"url = \"https://pypi.org/simple\"\n",
+			wantNoMatch: true,
+		},
+		{
+			name: "incomplete URL credentials — username with no password",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"jfrog\"\n" +
+				"url = \"https://admin@myrt.example.com/artifactory/api/pypi/libs-pypi/simple\"\n",
+			wantErr: "incomplete URL credentials",
+		},
+		{
+			name: "incomplete URL credentials — password with no username",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"jfrog\"\n" +
+				"url = \"https://:mytoken@myrt.example.com/artifactory/api/pypi/libs-pypi/simple\"\n",
+			wantErr: "incomplete URL credentials",
+		},
+		{
+			name: "multiple artifactory-shaped sources is ambiguous",
+			content: "[[tool.poetry.source]]\n" +
+				"name = \"jfrog-old\"\n" +
+				"url = \"https://old.example.com/artifactory/api/pypi/old-repo/simple\"\n" +
+				"[[tool.poetry.source]]\n" +
+				"name = \"jfrog-new\"\n" +
+				"url = \"https://new.example.com/artifactory/api/pypi/new-repo/simple\"\n",
+			wantErr: "multiple Artifactory",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			if !tc.noFile {
+				require.NoError(t, os.WriteFile("pyproject.toml", []byte(tc.content), 0600))
+			}
+
+			sd, repo, err := ParsePyprojectArtifactorySource()
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			if tc.wantNoMatch {
+				assert.Empty(t, repo)
+				assert.Nil(t, sd)
+				return
+			}
+			assert.Equal(t, tc.wantRepo, repo)
+			require.NotNil(t, sd)
+			assert.Equal(t, tc.wantArtURL, sd.ArtifactoryUrl)
+			if tc.wantUser != "" {
+				assert.Equal(t, tc.wantUser, sd.User)
+			}
+		})
+	}
 }
 
 func TestRunPipenvInstallNonCurationKeepsExistingInvocation(t *testing.T) {

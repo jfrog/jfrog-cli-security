@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -28,7 +26,7 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil, nil)
 	assert.NoError(t, err)
 
 	// Assert
@@ -52,7 +50,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, nil, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
 	// Check if path value exists and file is created
@@ -67,7 +65,7 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", true, false, "", nil, nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
@@ -78,9 +76,9 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
 		assert.Len(t, vulnerabilitiesResults, 1)
 		assert.Empty(t, vulnerabilitiesResults[0].Results)
-		groupResultsByLocation(vulnerabilitiesResults)
-		assert.Len(t, vulnerabilitiesResults, 1)
-		assert.Empty(t, vulnerabilitiesResults[0].Results)
+		grouped := sarifutils.GroupResultsByLocation(vulnerabilitiesResults)
+		assert.Len(t, grouped, 1)
+		assert.Empty(t, grouped[0].Results)
 	}
 }
 
@@ -90,7 +88,7 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil)
+	sastScanManager, err := newSastScanManager(scanner, "tempDirPath", false, false, "", nil, nil)
 	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
@@ -101,95 +99,9 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
 		assert.Len(t, vulnerabilitiesResults, 1)
 		assert.NotEmpty(t, vulnerabilitiesResults[0].Results)
-		groupResultsByLocation(vulnerabilitiesResults)
+		grouped := sarifutils.GroupResultsByLocation(vulnerabilitiesResults)
 		// File has 4 results, 2 of them at the same location different codeFlow
-		assert.Len(t, vulnerabilitiesResults[0].Results, 3)
-	}
-}
-
-func TestGroupResultsByLocation(t *testing.T) {
-	tests := []struct {
-		run            *sarif.Run
-		expectedOutput *sarif.Run
-	}{
-		{
-			run:            sarifutils.CreateRunWithDummyResults(),
-			expectedOutput: sarifutils.CreateRunWithDummyResults(),
-		},
-		{
-			// No similar groups at all
-			run: sarifutils.CreateRunWithDummyResults(
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
-				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
-						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-			),
-			expectedOutput: sarifutils.CreateRunWithDummyResults(
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
-				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
-						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-			),
-		},
-		{
-			// With similar groups
-			run: sarifutils.CreateRunWithDummyResults(
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
-						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
-			),
-			expectedOutput: sarifutils.CreateRunWithDummyResults(
-				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
-					)),
-					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
-						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
-					)),
-				}),
-				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-			),
-		},
-	}
-
-	for _, test := range tests {
-		groupResultsByLocation([]*sarif.Run{test.run})
-		assert.ElementsMatch(t, test.expectedOutput.Results, test.run.Results)
+		assert.Len(t, grouped[0].Results, 3)
 	}
 }
 
@@ -203,7 +115,7 @@ func TestSastRules(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
 	require.NoError(t, err)
 
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, false, "test-rules.json", nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "test-rules.json", sastScanManager.sastRules)
 	assert.Equal(t, filepath.Join(scannerTempDir, "config.yaml"), sastScanManager.configFileName)
@@ -330,7 +242,7 @@ func TestCreateConfigFile_ChangedFilesModeRoots(t *testing.T) {
 	require.NoError(t, err)
 
 	changed := []string{"src/a.go", "src/b.go"}
-	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil)
+	ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, nil)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -413,7 +325,7 @@ func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles)
+			ssm, err := newSastScanManager(scanner, scannerTempDir, false, tc.changedFilesMode, "", tc.changedFiles, nil)
 			require.NoError(t, err)
 			require.NoError(t, ssm.createConfigFileForTarget(target))
 			got := readConfigRoots(t, ssm.configFileName)
@@ -424,4 +336,73 @@ func TestCreateConfigFileForTarget_ChangedFilesModeRoots(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExcludedRulesFromCentralConfig(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+	scanner.TempDir = tempDir
+
+	profileRules := []string{"java-stored-command-injection"}
+	appsConfigRules := []string{"java-sql-injection"}
+	target := results.ScanTarget{Target: filepath.Join("root", "repository")}
+	targetWithProfileRules := results.ScanTarget{
+		Target: target.Target,
+		CentralConfigModules: []xscservices.Module{{
+			ScanConfig: xscservices.ScanConfig{SastScannerConfig: xscservices.SastScannerConfig{ExcludeRules: profileRules}},
+		}},
+	}
+
+	readExcludedRules := func(t *testing.T, configFileName string) []string {
+		t.Helper()
+		data, err := os.ReadFile(configFileName)
+		require.NoError(t, err)
+		var cfg struct {
+			Scans []struct {
+				ExcludedRules []string `yaml:"excluded_rules,omitempty"`
+			} `yaml:"scans,omitempty"`
+		}
+		require.NoError(t, yaml.Unmarshal(data, &cfg))
+		require.Len(t, cfg.Scans, 1)
+		return cfg.Scans[0].ExcludedRules
+	}
+	newManager := func(t *testing.T, excludeRules []string) *SastScanManager {
+		t.Helper()
+		scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String(), 0)
+		require.NoError(t, err)
+		ssm, err := newSastScanManager(scanner, scannerTempDir, false, false, "", nil, excludeRules)
+		require.NoError(t, err)
+		return ssm
+	}
+
+	appsConfig, err := jas.CreateJFrogAppsConfig([]string{})
+	require.NoError(t, err)
+	appsModule := appsConfig.Modules[0]
+	appsModule.Scanners.Sast = &jfrogappsconfig.SastScanner{ExcludedRules: appsConfigRules}
+
+	t.Run("target flow uses the central config rules", func(t *testing.T) {
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.createConfigFileForTarget(targetWithProfileRules))
+		assert.ElementsMatch(t, profileRules, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("target flow without central config rules excludes nothing", func(t *testing.T) {
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.createConfigFileForTarget(target))
+		assert.Empty(t, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("central config rules take precedence over jfrog-apps-config", func(t *testing.T) {
+		ssm := newManager(t, profileRules)
+		require.NoError(t, ssm.deprecatedCreateConfigFile(appsModule, false, nil))
+		assert.ElementsMatch(t, profileRules, readExcludedRules(t, ssm.configFileName))
+	})
+
+	t.Run("jfrog-apps-config rules are kept when the central config has none", func(t *testing.T) {
+		ssm := newManager(t, nil)
+		require.NoError(t, ssm.deprecatedCreateConfigFile(appsModule, false, nil))
+		assert.ElementsMatch(t, appsConfigRules, readExcludedRules(t, ssm.configFileName))
+	})
 }

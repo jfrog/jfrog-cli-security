@@ -1334,3 +1334,12 @@ func TestHasUnauditedPep723Script_NoScripts(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, found)
 }
+
+// Cargo is curation-only, so it must have no shared-detection indicators for jf audit/jf scan to find.
+func TestCargoHasNoSharedDetectionIndicator(t *testing.T) {
+	for _, name := range []string{"Cargo.toml", "Cargo.lock"} {
+		isIndicator, err := Cargo.isIndicator(name)
+		require.NoError(t, err)
+		assert.False(t, isIndicator, "%q must not be a shared-detection indicator for Cargo", name)
+	}
+}

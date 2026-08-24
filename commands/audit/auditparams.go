@@ -24,12 +24,14 @@ type AuditParams struct {
 	appsConfig  *jfrogappsconfig.JFrogAppsConfig
 	workingDirs []string
 	// Common params to all scan routines
-	resultsContext    results.ResultContext
-	gitContext        *xscServices.XscGitInfoContext
-	rootDir           string
-	installFunc       func(tech string) error
-	fixableOnly       bool
-	minSeverityFilter severityutils.Severity
+	resultsContext results.ResultContext
+	gitContext     *xscServices.XscGitInfoContext
+	rootDir        string
+	installFunc    func(tech string) error
+	// Optional hook invoked once technologies are detected for all targets, before any SBOM/dependency-tree generation runs (i.e. before any build-tool plugin executes untrusted code). A non-nil error aborts the scan.
+	detectedTechnologiesGuardCallback func(detectedTechnologies []techutils.Technology) error
+	fixableOnly                       bool
+	minSeverityFilter                 severityutils.Severity
 	*AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
@@ -163,6 +165,15 @@ func (params *AuditParams) SetInstallFunc(installFunc func(tech string) error) *
 	return params
 }
 
+func (params *AuditParams) SetDetectedTechnologiesGuardCallback(callback func(detectedTechnologies []techutils.Technology) error) *AuditParams {
+	params.detectedTechnologiesGuardCallback = callback
+	return params
+}
+
+func (params *AuditParams) DetectedTechnologiesGuardCallback() func(detectedTechnologies []techutils.Technology) error {
+	return params.detectedTechnologiesGuardCallback
+}
+
 func (params *AuditParams) FixableOnly() bool {
 	return params.fixableOnly
 }
@@ -241,9 +252,10 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Curation params
 		IsCurationCmd: params.IsCurationCmd(),
 		// Java params
-		IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
-		UseWrapper:              params.UseWrapper(),
-		UseIncludedBuilds:       params.UseIncludedBuilds(),
+		IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled(),
+		UseWrapper:                    params.UseWrapper(),
+		UseIncludedBuilds:             params.UseIncludedBuilds(),
+		GradleExcludeTestDependencies: params.ExcludeTestDependencies(),
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
