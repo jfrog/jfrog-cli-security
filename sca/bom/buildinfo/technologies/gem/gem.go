@@ -490,12 +490,12 @@ func GetNativeGemRegistryConfig() (*GemrcRegistryConfig, error) {
 		return nil, err
 	}
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("no ':sources:' configured in ~/.gemrc -- run 'gem sources --add <artifactory-gems-url>' " +
-			"(see Artifactory's 'Set Me Up' instructions for your Gems repository)")
+		return nil, fmt.Errorf("no ':sources:' configured in %s -- run 'gem sources --add <artifactory-gems-url>' "+
+			"(see Artifactory's 'Set Me Up' instructions for your Gems repository)", sourcePath)
 	}
 	for _, source := range sources {
 		if cfg, ok := parseArtifactoryGemSourceUrl(source); ok {
-			log.Debug(fmt.Sprintf("gem: found Artifactory-shaped source %q in %s", source, sourcePath))
+			log.Debug(fmt.Sprintf("gem: found Artifactory-shaped source for repo %q at %s (from %s)", cfg.RepoName, cfg.ArtifactoryUrl, sourcePath))
 			return cfg, nil
 		}
 	}

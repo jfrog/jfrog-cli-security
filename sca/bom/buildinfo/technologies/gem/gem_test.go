@@ -1,11 +1,13 @@
 package gem
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -305,6 +307,24 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		assert.Contains(t, err.Error(), "gem sources --add")
 	})
 
+	// Regression test: the "no sources" error used to hardcode "~/.gemrc" even when the empty
+	// ':sources:' list came from a GEMRC-listed file, unlike its sibling error a few lines down
+	// (no Artifactory-shaped source found), which already names the actual file.
+	t.Run("an empty ':sources:' list from a GEMRC-listed file names that file, not ~/.gemrc", func(t *testing.T) {
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+
+		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
+		require.NoError(t, os.WriteFile(gemrcOverride, []byte(":sources: []\n"), 0600))
+		t.Setenv("GEMRC", gemrcOverride)
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), gemrcOverride)
+		assert.NotContains(t, err.Error(), "~/.gemrc")
+	})
+
 	t.Run("falls back to $XDG_CONFIG_HOME/gem/gemrc when ~/.gemrc doesn't exist", func(t *testing.T) {
 		tempHome := t.TempDir()
 		xdgConfigHome := t.TempDir()
@@ -333,5 +353,28 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		_, err := GetNativeGemRegistryConfig()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "point at an Artifactory Gems repository")
+	})
+
+	// Regression test: the debug log used to print the raw gemrc source string, which leaks
+	// any embedded user:token@host credentials (a normal RubyGems gemrc pattern) into logs.
+	t.Run("debug log does not leak embedded credentials from the gemrc source", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600)) // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		var buf bytes.Buffer
+		origLogger := log.Logger
+		log.SetLogger(log.NewLogger(log.DEBUG, &buf))
+		defer log.SetLogger(origLogger)
+
+		_, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.NotContains(t, buf.String(), "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
+			"gemrc source credentials must never be written to the log")
+		assert.NotContains(t, buf.String(), "admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
+			"gemrc source credentials must never be written to the log")
 	})
 }
