@@ -488,7 +488,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
-			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
+			buildinfo.WithDescriptors(targetResult.GetDescriptors(params.RootDir())),
 			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 		),
 			bom.SbomGeneratorParams{
