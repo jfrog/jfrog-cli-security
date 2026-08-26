@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/yarn"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -47,7 +48,14 @@ const (
 	v3UpdateLockfileFlag = "--mode=update-lockfile"
 	// Ignores any build scripts
 	v3SkipBuildFlag = "--mode=skip-build"
-	yarnV2Version   = "2.0.0"
+	// Env vars yarn reads for npm auth, used to inject curation's fallback credential
+	// (see injectCurationFallbackAuthEnv) without touching YARN_NPM_REGISTRY_SERVER.
+	//#nosec G101
+	yarnNpmAuthIdentEnv = "YARN_NPM_AUTH_IDENT"
+	//#nosec G101
+	yarnNpmAuthTokenEnv  = "YARN_NPM_AUTH_TOKEN"
+	yarnNpmAlwaysAuthEnv = "YARN_NPM_ALWAYS_AUTH"
+	yarnV2Version        = "2.0.0"
 	yarnV3Version   = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
@@ -295,6 +303,17 @@ func lockfileMtime(yarnLockPath string) time.Time {
 	return info.ModTime()
 }
 
+// installErrCarriesCurationBlockSignal reports whether installErr looks like a curation
+// block (HTTP 403), as opposed to an unrelated failure (e.g. an auth error). Yarn echoes
+// curation's HTTP response verbatim, e.g. "YN0035: ... Response Code: 403 (Forbidden)".
+func installErrCarriesCurationBlockSignal(installErr error) bool {
+	if installErr == nil {
+		return false
+	}
+	errText := strings.ToLower(installErr.Error())
+	return strings.Contains(errText, "403") || strings.Contains(errText, "forbidden")
+}
+
 // curationNoLockfileError builds an actionable error for when 'yarn install'
 // did not produce yarn.lock. Probes declared direct deps against the curation
 // repo and renders blocked ones in a table. Error text is version-specific:
@@ -302,6 +321,13 @@ func lockfileMtime(yarnLockPath string) time.Time {
 // blocking manifests (not just tarballs).
 func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath, workspaceMemberRel string, installErr error) error {
 	probed, totalProbed := probeBlockedDirectDeps(params, curWd, workspaceMemberRel)
+	// Only blame curation when there's actual evidence of a block: a rejected direct dep
+	// from the probe, or a curation-block signal in installErr. Otherwise installErr is
+	// unrelated, and blaming curation would misdirect engineers into removing packages
+	// curation never evaluated.
+	if len(probed) == 0 && !installErrCarriesCurationBlockSignal(installErr) {
+		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' — 'yarn install' failed for a reason unrelated to a curation block (no HTTP 403/rejected-package evidence found). Check the debug log for the underlying 'yarn install' output. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, installErr.Error())
+	}
 	outputRef := string(outFormat.Table)
 	if params.OutputFormat == outFormat.Json {
 		outputRef = "JSON output"
@@ -558,7 +584,21 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		useNativeInstall = version.NewVersion(executableYarnVersion).Compare(YarnV4Version) <= 0
 	}
 	if useNativeInstall {
-		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
+		if params.IsCurationCmd && depsRepo != "" {
+			// If .yarnrc.yml has no token, curation may have resolved a fallback credential
+			// into params.ServerDetails. Inject it into the subprocess env, since the native
+			// install path above skips the GetYarnAuthDetails+ModifyYarnConfigurations
+			// injection below (which also sets YARN_NPM_REGISTRY_SERVER, unwanted here).
+			restoreAuthEnv, authErr := injectCurationFallbackAuthEnv(params.ServerDetails, depsRepo)
+			if authErr != nil {
+				return authErr
+			}
+			defer func() {
+				err = errors.Join(err, restoreAuthEnv())
+			}()
+		}
+		err = runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
+		return
 	}
 
 	// V2/V3 (non-curation): inject Artifactory credentials via GetYarnAuthDetails + ModifyYarnConfigurations.
@@ -592,6 +632,52 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", params.ServerDetails.Url, depsRepo))
 	err = runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
 	return err
+}
+
+// injectCurationFallbackAuthEnv sets YARN_NPM_AUTH_IDENT/YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH
+// from serverDetails for the yarn subprocess, without setting YARN_NPM_REGISTRY_SERVER — the
+// registry must keep coming from .yarnrc.yml. No-op (returns a no-op restore) when serverDetails
+// has no usable credentials, so the anonymous case is unchanged.
+func injectCurationFallbackAuthEnv(serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
+	noOpRestore := func() error { return nil }
+	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "") {
+		return noOpRestore, nil
+	}
+	_, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
+	if err != nil {
+		return noOpRestore, err
+	}
+	if npmAuthIdent == "" && npmAuthToken == "" {
+		return noOpRestore, nil
+	}
+
+	envUpdates := map[string]string{
+		yarnNpmAuthIdentEnv:  npmAuthIdent,
+		yarnNpmAuthTokenEnv:  npmAuthToken,
+		yarnNpmAlwaysAuthEnv: "true",
+	}
+	backup := make(map[string]*string, len(envUpdates))
+	for key, value := range envUpdates {
+		if oldVal, existed := os.LookupEnv(key); existed {
+			backup[key] = &oldVal
+		} else {
+			backup[key] = nil
+		}
+		if setErr := os.Setenv(key, value); setErr != nil {
+			return noOpRestore, setErr
+		}
+	}
+	return func() error {
+		var restoreErrs []error
+		for key, oldVal := range backup {
+			if oldVal == nil {
+				restoreErrs = append(restoreErrs, os.Unsetenv(key))
+				continue
+			}
+			restoreErrs = append(restoreErrs, os.Setenv(key, *oldVal))
+		}
+		return errors.Join(restoreErrs...)
+	}, nil
 }
 
 // isInstallRequired reports whether 'yarn install' must run before enumerating

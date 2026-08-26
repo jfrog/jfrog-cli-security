@@ -936,7 +936,7 @@ func validateCurationAuditFlags(ca *CurationAuditCommand) error {
 // resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml
 // (the developer ran 'jf yarn-config' but the file-system detector fell back to npm),
 // or when the project has a yarn indicator file (.yarnrc.yml / yarn.lock / .yarnrc / .yarn)
-// without a yarn.yaml — which is the V4 native mode case where no jf yarn-config is needed.
+// without a yarn.yaml — which is the native .yarnrc.yml mode case where no jf yarn-config is needed.
 func resolveNpmYarnTech(tech string) string {
 	if techutils.Technology(tech) != techutils.Npm {
 		return tech
@@ -950,7 +950,7 @@ func resolveNpmYarnTech(tech string) string {
 		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
 		return techutils.Yarn.String()
 	}
-	// V4 native mode: no yarn.yaml, but project may have a local yarn indicator
+	// Native .yarnrc.yml mode: no yarn.yaml, but project may have a local yarn indicator
 	// (.yarnrc.yml / yarn.lock / .yarnrc / .yarn) OR only a global ~/.yarnrc.yml
 	// (set via 'yarn config set --home', as the Artifactory "Set Up" page instructs).
 	// Guard against false-positives: if package-lock.json exists the project is npm.
@@ -972,7 +972,7 @@ func resolveNpmYarnTech(tech string) string {
 		if projectPinsYarnPackageManager(workingDir) {
 			if homeDir, err := os.UserHomeDir(); err == nil {
 				if _, err := os.Stat(filepath.Join(homeDir, ".yarnrc.yml")); err == nil {
-					log.Info("No npm.yaml or yarn.yaml found but package.json pins yarn and global ~/.yarnrc.yml detected — treating project as yarn (V4 native mode).")
+					log.Info("No npm.yaml or yarn.yaml found but package.json pins yarn and global ~/.yarnrc.yml detected — treating project as yarn (native .yarnrc.yml mode).")
 					return techutils.Yarn.String()
 				}
 			}

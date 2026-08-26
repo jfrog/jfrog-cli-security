@@ -364,6 +364,17 @@ func yarnCurationServer(t *testing.T, expectedRequest, requestToFail map[string]
 				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
 				require.NoError(t, err)
 				return
+			case "/api/npm/auth":
+				// Hit by GetYarnAuthDetails when curation falls back to 'jf c' server
+				// credentials (no token in .yarnrc.yml) to inject auth into the yarn subprocess.
+				_, err := w.Write([]byte("_auth = YWRtaW46cGFzc3dvcmQ=\nalways-auth = true\n"))
+				require.NoError(t, err)
+				return
+			case "/api/repositories/npms":
+				// Hit by GetYarnAuthDetails's repo-exists check, same fallback-auth path as above.
+				_, err := w.Write([]byte(`{"key":"npms","rclass":"remote","packageType":"npm"}`))
+				require.NoError(t, err)
+				return
 			}
 			// Blocked tarball GET (issued by the HEAD-walker after the 403 HEAD): return
 			// the curation policy message so the package is reported as blocked-by-policy.

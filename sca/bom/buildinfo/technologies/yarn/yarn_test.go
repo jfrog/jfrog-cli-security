@@ -2,8 +2,10 @@ package yarn
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -22,6 +25,79 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess runs
+// configureYarnResolutionServerAndRunInstall end-to-end against a fake yarn executable, using
+// a curation fallback credential (no token in .yarnrc.yml, only params.ServerDetails). It
+// asserts the subprocess actually receives YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH, and that
+// YARN_NPM_REGISTRY_SERVER is never set (registry must keep coming from .yarnrc.yml).
+func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake yarn executable is a POSIX shell script")
+	}
+	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockArtifactory.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
+	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
+	fakeYarnScript := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
+		"env > " + envCaptureFile + "\n" +
+		"exit 0\n"
+	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+
+	//#nosec G101 -- test fixture, not a real secret
+	const fallbackToken = "fallback-jf-c-token-xyz"
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+		ServerDetails: &config.ServerDetails{
+			ArtifactoryUrl: mockArtifactory.URL + "/artifactory/",
+			AccessToken:    fallbackToken,
+		},
+	}
+
+	require.NoError(t, configureYarnResolutionServerAndRunInstall(params, curWd, fakeYarnPath))
+
+	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
+	require.NoError(t, readErr, "the install subprocess (not just the --version probe) must have run")
+	capturedEnv := string(capturedEnvBytes)
+
+	assert.Contains(t, capturedEnv, "YARN_NPM_AUTH_TOKEN="+fallbackToken,
+		"the fallback credential resolved from params.ServerDetails must reach the yarn subprocess's env")
+	assert.Contains(t, capturedEnv, "YARN_NPM_ALWAYS_AUTH=true")
+	assert.NotContains(t, capturedEnv, "YARN_NPM_REGISTRY_SERVER=",
+		"registry must keep coming from .yarnrc.yml — this injection must never set it")
+
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		_, exists := os.LookupEnv(key)
+		assert.False(t, exists, "%s must be restored (unset) after the subprocess exits", key)
+	}
+}
+
+// TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials verifies that with no usable
+// credentials, injectCurationFallbackAuthEnv sets no env vars and its restore is a no-op —
+// the anonymous-resolution case is unchanged.
+func TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials(t *testing.T) {
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		require.NoError(t, os.Unsetenv(key))
+	}
+
+	restore, err := injectCurationFallbackAuthEnv(nil, "some-repo")
+	require.NoError(t, err)
+	require.NotNil(t, restore)
+	require.NoError(t, restore())
+
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		_, exists := os.LookupEnv(key)
+		assert.False(t, exists, "%s must not be set when serverDetails has no credentials", key)
+	}
+}
 
 func TestParseYarnDependenciesMap(t *testing.T) {
 	npmId := techutils.Npm.GetXrayPackageTypeId()
@@ -718,6 +794,46 @@ func TestCollectDeclaredDirectDepsAcrossWorkspaces(t *testing.T) {
 // probe table here — that runs as a side effect (printed to stdout) and
 // is covered by the probe-collection tests above; this test focuses on
 // the error string the user sees AFTER the table.
+// TestCurationNoLockfileErrorNeutralWhenUnrelatedToCuration verifies that when the probe finds
+// no blocked deps (no declared deps here) and installErr's text carries no curation-block
+// signal (no "403"/"forbidden"), curationNoLockfileError returns a neutral "unrelated failure"
+// message instead of blaming curation.
+func TestCurationNoLockfileErrorNeutralWhenUnrelatedToCuration(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("EACCES: permission denied, mkdir '/tmp/.yarn/berry/cache'")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "unrelated to a curation block")
+	assert.NotContains(t, msg, "curation is blocking manifests")
+	assert.Contains(t, msg, installErr.Error(), "must propagate the underlying error for traceability")
+}
+
+// TestCurationNoLockfileErrorBlamesCurationOnHttp403 verifies that when installErr's text does
+// carry a curation-block signal (HTTP 403), curationNoLockfileError keeps the curation-blaming
+// wording — this is a regression guard against over-correcting the fix above.
+func TestCurationNoLockfileErrorBlamesCurationOnHttp403(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("YN0035: Response Code: 403 (Forbidden)")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unrelated to a curation block")
+}
+
 func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
 	root := t.TempDir()
 	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
