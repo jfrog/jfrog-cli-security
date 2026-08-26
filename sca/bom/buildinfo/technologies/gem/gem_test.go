@@ -85,19 +85,19 @@ func TestParseArtifactoryGemSourceUrl(t *testing.T) {
 	}{
 		{
 			name:          "artifactory gems source with embedded credentials",
-			sourceUrl:     "https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/", // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+			sourceUrl:     "https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/", // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
 			expectMatch:   true,
-			expectedRtUrl: "https://z0jpd630304795.jfrogdev.org/artifactory/",
-			expectedRepo:  "rubygems-repo-jfca",
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
 			expectedUser:  "admin",
 			expectedToken: "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
 		},
 		{
 			name:          "artifactory gems source without credentials (anonymous access)",
-			sourceUrl:     "https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/",
+			sourceUrl:     "https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/",
 			expectMatch:   true,
-			expectedRtUrl: "https://z0jpd630304795.jfrogdev.org/artifactory/",
-			expectedRepo:  "rubygems-repo-jfca",
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
 		},
 		{
 			name:          "reverse-proxy source without /artifactory context root",
@@ -108,10 +108,10 @@ func TestParseArtifactoryGemSourceUrl(t *testing.T) {
 		},
 		{
 			name:          "source without trailing slash",
-			sourceUrl:     "https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca",
+			sourceUrl:     "https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test",
 			expectMatch:   true,
-			expectedRtUrl: "https://z0jpd630304795.jfrogdev.org/artifactory/",
-			expectedRepo:  "rubygems-repo-jfca",
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
 		},
 		{
 			name:        "public rubygems.org source is not Artifactory-shaped",
@@ -120,7 +120,7 @@ func TestParseArtifactoryGemSourceUrl(t *testing.T) {
 		},
 		{
 			name:        "empty repository segment",
-			sourceUrl:   "https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/",
+			sourceUrl:   "https://myrt.jfrogdev.org/artifactory/api/gems/",
 			expectMatch: false,
 		},
 		{
@@ -207,7 +207,7 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 
 		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
 		require.NoError(t, os.WriteFile(gemrcOverride,
-			[]byte(":sources:\n- https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/\n"), 0600))
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
 
 		t.Setenv("HOME", tempHome)
 		t.Setenv("USERPROFILE", tempHome)
@@ -215,8 +215,8 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 
 		cfg, err := GetNativeGemRegistryConfig()
 		require.NoError(t, err)
-		assert.Equal(t, "https://z0jpd630304795.jfrogdev.org/artifactory/", cfg.ArtifactoryUrl)
-		assert.Equal(t, "rubygems-repo-jfca", cfg.RepoName)
+		assert.Equal(t, "https://myrt.jfrogdev.org/artifactory/", cfg.ArtifactoryUrl)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
 	})
 
 	t.Run("sources with no Artifactory-shaped entry returns a clear error", func(t *testing.T) {
@@ -236,7 +236,7 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		tempHome := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
 			[]byte(":sources:\n"+
-				"- https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/\n"+
+				"- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"+
 				"- https://rubygems.org/\n"), 0600))
 		t.Setenv("HOME", tempHome)
 		t.Setenv("USERPROFILE", tempHome)
@@ -244,7 +244,7 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 
 		cfg, err := GetNativeGemRegistryConfig()
 		require.NoError(t, err)
-		assert.Equal(t, "rubygems-repo-jfca", cfg.RepoName)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
 	})
 
 	t.Run("the Artifactory-shaped source is found regardless of its position in the list", func(t *testing.T) {
@@ -252,20 +252,20 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
 			[]byte(":sources:\n"+
 				"- https://rubygems.org/\n"+
-				"- https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/\n"), 0600))
+				"- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
 		t.Setenv("HOME", tempHome)
 		t.Setenv("USERPROFILE", tempHome)
 		t.Setenv("GEMRC", "")
 
 		cfg, err := GetNativeGemRegistryConfig()
 		require.NoError(t, err)
-		assert.Equal(t, "rubygems-repo-jfca", cfg.RepoName)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
 	})
 
 	t.Run("GEMRC fully replaces ~/.gemrc's sources instead of merging with them", func(t *testing.T) {
 		tempHome := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
-			[]byte(":sources:\n- https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/\n"), 0600))
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
 
 		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
 		require.NoError(t, os.WriteFile(gemrcOverride, []byte(":sources:\n- https://rubygems.org/\n"), 0600))
@@ -310,7 +310,7 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		xdgConfigHome := t.TempDir()
 		require.NoError(t, os.MkdirAll(filepath.Join(xdgConfigHome, "gem"), 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(xdgConfigHome, "gem", "gemrc"),
-			[]byte(":sources:\n- https://z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/\n"), 0600))
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
 
 		t.Setenv("HOME", tempHome)
 		t.Setenv("USERPROFILE", tempHome)
@@ -319,13 +319,13 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 
 		cfg, err := GetNativeGemRegistryConfig()
 		require.NoError(t, err)
-		assert.Equal(t, "rubygems-repo-jfca", cfg.RepoName)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
 	})
 
 	t.Run("a source with the wrong API path is not mistaken for an Artifactory Gems repository", func(t *testing.T) {
 		tempHome := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
-			[]byte(":sources:\n- https://z0jpd630304795.jfrogdev.org/artifactory/api/rubygems/rubygems-repo-jfca/\n"), 0600))
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/rubygems/rubygems-repo-test/\n"), 0600))
 		t.Setenv("HOME", tempHome)
 		t.Setenv("USERPROFILE", tempHome)
 		t.Setenv("GEMRC", "")
