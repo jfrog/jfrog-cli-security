@@ -85,7 +85,7 @@ func TestParseArtifactoryGemSourceUrl(t *testing.T) {
 	}{
 		{
 			name:          "artifactory gems source with embedded credentials",
-			sourceUrl:     "https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/",
+			sourceUrl:     "https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@z0jpd630304795.jfrogdev.org/artifactory/api/gems/rubygems-repo-jfca/", // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
 			expectMatch:   true,
 			expectedRtUrl: "https://z0jpd630304795.jfrogdev.org/artifactory/",
 			expectedRepo:  "rubygems-repo-jfca",
