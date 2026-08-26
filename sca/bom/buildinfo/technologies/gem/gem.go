@@ -4,16 +4,19 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"gopkg.in/yaml.v3"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -27,6 +30,7 @@ const (
 	stateSearchGEM        = iota
 	stateSearchSpecsKeyword
 	stateInSpecsSection
+	artifactoryApiGemsPath = "/api/gems/"
 )
 
 var sectionTerminators = map[string]bool{
@@ -77,6 +81,15 @@ type internalGemDep struct{ Name, Constraint string }
 type internalGemRef struct {
 	Ref, Name, Version string
 	Dependencies       map[string]internalGemDep
+}
+
+// GemrcRegistryConfig holds the Artifactory URL, repo name, and credentials
+// parsed from a gemrc source entry.
+type GemrcRegistryConfig struct {
+	ArtifactoryUrl string
+	RepoName       string
+	AuthUser       string
+	AuthToken      string
 }
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
@@ -466,4 +479,136 @@ func calculateUniqueDependencies(trees []*xrayUtils.GraphNode) []string {
 	}
 
 	return result
+}
+
+// GetNativeGemRegistryConfig reads gemrc's ':sources:' list and returns the first
+// Artifactory gems source found. Gem has no 'jf ruby-config' command, so this is
+// always how it resolves the curation repository.
+func GetNativeGemRegistryConfig() (*GemrcRegistryConfig, error) {
+	sources, sourcePath, err := readEffectiveGemSources(DefaultGemrcPaths()...)
+	if err != nil {
+		return nil, err
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no ':sources:' configured in ~/.gemrc -- run 'gem sources --add <artifactory-gems-url>' " +
+			"(see Artifactory's 'Set Me Up' instructions for your Gems repository)")
+	}
+	for _, source := range sources {
+		if cfg, ok := parseArtifactoryGemSourceUrl(source); ok {
+			log.Debug(fmt.Sprintf("gem: found Artifactory-shaped source %q in %s", source, sourcePath))
+			return cfg, nil
+		}
+	}
+	return nil, fmt.Errorf(
+		"none of the sources configured in %s point at an Artifactory Gems repository (expected %q in the URL) -- "+
+			"run 'gem sources --add <artifactory-gems-url>' (see Artifactory's 'Set Me Up' instructions for your Gems repository)",
+		sourcePath, artifactoryApiGemsPath)
+}
+
+// DefaultGemrcPaths returns gemrc file candidates in RubyGems' load order:
+// ~/.gemrc, followed by any files listed in GEMRC. A later file's ':sources:' overrides an earlier one.
+func DefaultGemrcPaths() []string {
+	var paths []string
+	if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		userGemrc := filepath.Join(home, ".gemrc")
+		if _, statErr := os.Stat(userGemrc); statErr == nil {
+			paths = append(paths, userGemrc)
+		} else {
+			configHome := os.Getenv("XDG_CONFIG_HOME")
+			if configHome == "" {
+				configHome = filepath.Join(home, ".config")
+			}
+			paths = append(paths, filepath.Join(configHome, "gem", "gemrc"))
+		}
+	}
+	if envGemrc := os.Getenv("GEMRC"); envGemrc != "" {
+		separator := ":"
+		if runtime.GOOS == "windows" {
+			separator = ";"
+		}
+		for _, path := range strings.Split(envGemrc, separator) {
+			if path = strings.TrimSpace(path); path != "" {
+				paths = append(paths, path)
+			}
+		}
+	}
+	return paths
+}
+
+// readEffectiveGemSources returns the ':sources:' list from the last gemrc path
+// that defines one. Missing files are skipped, not treated as errors.
+func readEffectiveGemSources(paths ...string) (sources []string, sourcePath string, err error) {
+	for _, path := range paths {
+		data, readErr := os.ReadFile(path) // #nosec G304 -- path comes from DefaultGemrcPaths() (fixed home-relative paths) or the user's own GEMRC env var, not attacker-controlled
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				continue
+			}
+			return nil, "", fmt.Errorf("failed to read %s: %w", path, readErr)
+		}
+		var raw map[string]any
+		if unmarshalErr := yaml.Unmarshal(data, &raw); unmarshalErr != nil {
+			return nil, "", fmt.Errorf("failed to parse %s: %w", path, unmarshalErr)
+		}
+		if list, ok := extractGemSourcesList(raw); ok {
+			sources, sourcePath = list, path
+		}
+	}
+	if sourcePath == "" {
+		sourcePath = "~/.gemrc"
+	}
+	return sources, sourcePath, nil
+}
+
+// extractGemSourcesList reads the ':sources:' array from a decoded gemrc map.
+// RubyGems accepts the key with or without its leading colon, so both are checked.
+func extractGemSourcesList(raw map[string]any) ([]string, bool) {
+	value, ok := raw[":sources"]
+	if !ok {
+		value, ok = raw["sources"]
+	}
+	if !ok {
+		return nil, false
+	}
+	rawList, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	sources := make([]string, 0, len(rawList))
+	for _, entry := range rawList {
+		if s, ok := entry.(string); ok && strings.TrimSpace(s) != "" {
+			sources = append(sources, strings.TrimSpace(s))
+		}
+	}
+	return sources, true
+}
+
+// parseArtifactoryGemSourceUrl parses a gem source URL shaped like
+// https://[user[:token]@]<host>/artifactory/api/gems/<repo>/, extracting the
+// Artifactory base URL, repo name, and any embedded credentials.
+func parseArtifactoryGemSourceUrl(sourceUrl string) (*GemrcRegistryConfig, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(sourceUrl))
+	if err != nil || parsed.Host == "" || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
+		return nil, false
+	}
+	apiGemsIdx := strings.Index(parsed.Path, artifactoryApiGemsPath)
+	if apiGemsIdx < 0 {
+		return nil, false
+	}
+	repoName := strings.TrimSuffix(strings.TrimPrefix(parsed.Path[apiGemsIdx:], artifactoryApiGemsPath), "/")
+	if slashIdx := strings.Index(repoName, "/"); slashIdx != -1 {
+		repoName = repoName[:slashIdx]
+	}
+	if repoName == "" {
+		return nil, false
+	}
+	cfg := &GemrcRegistryConfig{
+		ArtifactoryUrl: fmt.Sprintf("%s://%s%s", parsed.Scheme, parsed.Host, parsed.Path[:apiGemsIdx+1]),
+		RepoName:       repoName,
+	}
+	if parsed.User != nil {
+		cfg.AuthUser = parsed.User.Username()
+		cfg.AuthToken, _ = parsed.User.Password()
+	}
+	return cfg, true
 }

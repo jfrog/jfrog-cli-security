@@ -537,7 +537,21 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
 	// Create the server details config file
 	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
+
+	// Gem has no 'jf ruby-config'/ruby.yaml — it always resolves natively from a
+	// gemrc-style ':sources:' list.
+	var callbackGemrc func()
+	if testCase.tech == techutils.Gem {
+		gemrcPath := filepath.Join(tempHomeDirPath, "gemrc")
+		gemSource := strings.TrimSuffix(config.ArtifactoryUrl, "/") + "/api/gems/ruby-remote/"
+		assert.NoError(t, os.WriteFile(gemrcPath, []byte(":sources:\n- "+gemSource+"\n"), 0600))
+		callbackGemrc = clienttestutils.SetEnvWithCallbackAndAssert(t, "GEMRC", gemrcPath)
+	}
+
 	return func() {
+		if callbackGemrc != nil {
+			callbackGemrc()
+		}
 		callbackHomeDir()
 		err := fileutils.RemoveTempDir(tempHomeDirPath)
 		if err != nil {
@@ -668,14 +682,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			requestToFail: map[string]bool{
@@ -4668,6 +4682,12 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
 	})
+	// gem has no 'jf ruby-config' either; it always resolves natively from ~/.gemrc,
+	// so --run-native has nothing to switch between — accepted as a no-op.
+	t.Run("gem accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, false))
+	})
 
 	// Every other supported tech follows the same contract. Catch silent
 	// acceptance for any tech that's in the doc-table-of-supported but
@@ -4675,7 +4695,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	otherTechs := []techutils.Technology{
 		techutils.Gradle,
 		techutils.Maven,
-		techutils.Gem,
 		techutils.Go,
 		techutils.Nuget,
 		techutils.Dotnet,
@@ -5606,6 +5625,112 @@ func TestSetRepoFromCargoConfigRejectsSchemeDowngrade(t *testing.T) {
 	require.Error(t, setErr)
 	assert.Contains(t, setErr.Error(), "does not match")
 	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+func writeGemrcWithSource(t *testing.T, homeDir, sourceUrl string) {
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".gemrc"), []byte(":sources:\n- "+sourceUrl+"\n"), 0600))
+}
+
+func TestSetRepoFromGemrcNoServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://host/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// A ~/.gemrc source pointing at a different host must not receive the configured server's credentials.
+func TestSetRepoFromGemrcRejectsHostMismatch(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://attacker.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// The host check must not block the legitimate same-host case, and must fall back to the
+// configured 'jf c' server's credentials when the ~/.gemrc source has none of its own.
+func TestSetRepoFromGemrcAcceptsMatchingHost(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "fallback-token",
+	})
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "fallback-token", serverDetails.AccessToken, "must fall back to the configured server's credentials")
+}
+
+// The same host over http instead of https must not receive credentials -- a host-only check would allow this downgrade.
+func TestSetRepoFromGemrcRejectsSchemeDowngrade(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "http://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+// Embedded credentials in the ~/.gemrc source URL must be used as-is, with no 'jf c' server required at all.
+func TestSetRepoFromGemrcUsesEmbeddedCredentialsWithoutServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "admin", serverDetails.User)
+	assert.Equal(t, "mytoken", serverDetails.Password)
 }
 
 func TestHasCargoProject(t *testing.T) {

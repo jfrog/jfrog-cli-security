@@ -1,5 +1,0 @@
-version: 1
-type: gem
-resolver:
-  repo: ruby-remote
-  serverId: test
