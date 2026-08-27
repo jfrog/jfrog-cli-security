@@ -14,7 +14,7 @@ import (
 	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func newTestServerDetails(t *testing.T, serverUrl string) *config.ServerDetails {
+func newTestServerDetails(serverUrl string) *config.ServerDetails {
 	return &config.ServerDetails{XrayUrl: serverUrl + "/"}
 }
 
@@ -34,7 +34,7 @@ func TestUploadViaXrayApi_SendsExpectedRequest(t *testing.T) {
 	defer server.Close()
 
 	path, err := uploadViaXrayApi(
-		newTestServerDetails(t, server.URL),
+		newTestServerDetails(server.URL),
 		"frogbot",
 		"github.com/org/repo/main/commits",
 		"source_code.cdx.json",
@@ -59,7 +59,7 @@ func TestUploadViaXrayApi_NoProjectKey_OmitsQueryParam(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := uploadViaXrayApi(newTestServerDetails(t, server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
+	_, err := uploadViaXrayApi(newTestServerDetails(server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
 
 	require.NoError(t, err)
 	assert.Empty(t, gotQuery)
@@ -71,6 +71,6 @@ func TestUploadViaXrayApi_ServerError_ReturnsError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := uploadViaXrayApi(newTestServerDetails(t, server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
+	_, err := uploadViaXrayApi(newTestServerDetails(server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
 	assert.Error(t, err)
 }
