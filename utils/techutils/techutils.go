@@ -36,6 +36,7 @@ const (
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
 	Ruby       CodeLanguage = "ruby"
+	Rust       CodeLanguage = "rust"
 	// package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
 	SwiftLang     CodeLanguage = "Any"
@@ -60,6 +61,7 @@ const (
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
 	Gem       Technology = "ruby"
+	Cargo     Technology = "cargo"
 	// Not Supported by build-info BOM generator
 	Docker        Technology = "docker"
 	HuggingFaceML Technology = "huggingfaceml"
@@ -97,6 +99,7 @@ var AllTechnologiesStrings = []string{
 	Swift.String(),
 	NoTech.String(),
 	Gem.String(),
+	Cargo.String(),
 	Rpm.String(),
 	Debian.String(),
 	Composer.String(),
@@ -306,6 +309,14 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{"Gemfile"},
 		projectType:        project.Ruby,
 		language:           Ruby,
+	},
+	// No 'indicators': Cargo is curation-only and would otherwise be auto-detected by jf audit too.
+	Cargo: {
+		formal:             "Cargo",
+		xrayPackageType:    "cargo",
+		packageDescriptors: []string{"Cargo.toml"},
+		execCommand:        "cargo",
+		language:           Rust,
 	},
 	// Snippet detection
 	Cpp: {formal: "Github", packageType: "github", xrayPackageType: "cpp"},

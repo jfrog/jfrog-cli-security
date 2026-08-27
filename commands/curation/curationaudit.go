@@ -42,6 +42,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	cargotech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cargo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
@@ -157,6 +158,8 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	techutils.Pipenv: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Pipenv, MinArtiPassThroughSupport)
 	},
+	// Cargo's dep-tree building never uses the api/curation/audit pass-through, so no version gate applies.
+	techutils.Cargo: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
@@ -216,8 +219,21 @@ type ErrorsResp struct {
 }
 
 type ErrorResp struct {
-	Status  int    `json:"status"`
+	Status int `json:"status"`
+	// Message is the field name most package managers' curation-block body uses.
 	Message string `json:"message"`
+	// Detail is the field name Artifactory uses instead, for cargo's curation-block body.
+	// RawMessage, not string: other techs (e.g. Docker) send "detail" as a JSON object.
+	Detail json.RawMessage `json:"detail"`
+}
+
+// detailAsMessage returns Detail's value when Detail is itself a JSON string, or "" otherwise.
+func (e ErrorResp) detailAsMessage() string {
+	var s string
+	if err := json.Unmarshal(e.Detail, &s); err != nil {
+		return ""
+	}
+	return s
 }
 
 type PackageStatus struct {
@@ -431,8 +447,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for _, absWd := range absWorkingDirs {
 		log.Info("Running curation audit on project:", absWd)
 		if absWd != rootDir {
-			if err = os.Chdir(absWd); err != nil {
-				return errorutils.CheckError(err)
+			// Local var, not the named return err -- must not clobber an error already accumulated below.
+			if chdirErr := os.Chdir(absWd); chdirErr != nil {
+				return errorutils.CheckError(chdirErr)
 			}
 		}
 		// OriginPath scopes hasPythonFiles and params.HFWorkingDirectory to this working directory.
@@ -762,6 +779,13 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 				techs = append(techs, hfTech)
 			}
 		}
+		// Cargo has no shared 'indicators' entry (see techutils.go), so detect it directly here.
+		if hasCargoProject(ca.OriginPath) {
+			cargoTech := techutils.Cargo.String()
+			if !slices.Contains(techs, cargoTech) {
+				techs = append(techs, cargoTech)
+			}
+		}
 		for i, tech := range techs {
 			techs[i] = resolveNpmYarnTech(tech)
 		}
@@ -885,6 +909,19 @@ func hasPythonFiles(dir string) bool {
 		return nil
 	})
 	return found
+}
+
+// hasCargoProject returns true if dir directly contains a Cargo.toml or Cargo.lock.
+func hasCargoProject(dir string) bool {
+	if dir == "" {
+		dir = "."
+	}
+	for _, name := range []string{"Cargo.toml", "Cargo.lock"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func validateCurationAuditFlags(ca *CurationAuditCommand) error {
@@ -1105,6 +1142,12 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
+	// Cargo never pre-populates PackageManagerConfig, so a non-nil value here is stale leftover state.
+	if tech == techutils.Cargo {
+		if err := ca.setRepoFromCargoConfig(); err != nil {
+			return err
+		}
+	}
 	params, err := ca.getBuildInfoParamsByTech(tech)
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
@@ -1124,6 +1167,15 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			}
 		}
 	}
+	// cargo has no jf cargo-config yaml; use server details from .cargo/config.toml instead.
+	if tech == techutils.Cargo {
+		params.IgnoreConfigFile = true
+		if ca.PackageManagerConfig != nil {
+			if cargoSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && cargoSD != nil {
+				params.ServerDetails = cargoSD
+			}
+		}
+	}
 	// Pnpm always resolves natively from .npmrc — --run-native is redundant and has no effect.
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Pnpm {
@@ -1139,6 +1191,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	// 'jf uv-config' to opt out of).
 	if ca.RunNative() && tech == techutils.Uv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for uv; uv always resolves natively from uv.toml/pyproject.toml")
+	}
+	// --run-native has no effect for cargo; it always resolves natively.
+	if ca.RunNative() && tech == techutils.Cargo {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for cargo; cargo always resolves natively from .cargo/config.toml")
 	}
 	// poetry has no 'jf poetry-config' either — it always resolves natively from
 	// pyproject.toml's [[tool.poetry.source]]; --run-native is a no-op here too.
@@ -1200,6 +1256,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	}
 	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
+		// Skip a duplicate --working-dirs entry that was already audited.
+		if tech == techutils.Cargo && errors.Is(err, cargotech.ErrCargoWorkspaceAlreadyAudited) {
+			ca.pendingWarnings = append(ca.pendingWarnings, fmt.Sprintf("cargo: %q was already audited via a duplicate --working-dirs entry — skipped", ca.OriginPath))
+			return nil
+		}
 		// When CVS strips a pinned version from the simple index, pip/poetry/uv
 		// can't resolve the project and GetTechDependencyTree returns a CvsBlockedError.
 		// Instead of aborting with no output, run the metadata-API fallback to
@@ -1405,18 +1466,17 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 		if err = errorutils.CheckResponseStatusWithBody(response, body, http.StatusForbidden); err != nil {
 			return nil, fmt.Errorf("recieived unexpected response while sending waiver request: %v", err)
 		}
-		var resp struct {
-			Errors []struct {
-				Status  int    `json:"status"`
-				Message string `json:"message"`
-			} `json:"errors"`
-		}
-		if err := json.Unmarshal(body, &resp); err != nil {
+		resp := &ErrorsResp{}
+		if err := json.Unmarshal(body, resp); err != nil {
 			return nil, fmt.Errorf("failed decoding waiver request status %v", err)
 		}
 
 		if len(resp.Errors) != 1 {
 			return nil, fmt.Errorf("got unexpected response structure while sending waiver request: %s", body)
+		}
+		// Cargo's curation-block body uses "detail" instead of "message" (see ErrorResp.Detail).
+		if resp.Errors[0].Message == "" {
+			resp.Errors[0].Message = resp.Errors[0].detailAsMessage()
 		}
 		parts := strings.Split(resp.Errors[0].Message, "|")
 		if len(parts) != 2 {
@@ -1591,6 +1651,11 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 
 	if tech == techutils.Pipenv {
 		return ca.setRepoFromPipfile()
+	}
+
+	// Cargo has no 'jf cargo-config' command; read the registry from .cargo/config.toml instead.
+	if tech == techutils.Cargo {
+		return ca.setRepoFromCargoConfig()
 	}
 
 	if tech == techutils.Poetry {
@@ -1793,6 +1858,8 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// uv always resolves natively; no 'jf uv-config' exists,
 		// so --run-native is a redundant no-op.
 		techutils.Uv: {},
+		// cargo always resolves natively from .cargo/config.toml; --run-native is a no-op.
+		techutils.Cargo: {},
 		// poetry always resolves natively too; no 'jf poetry-config'.
 		techutils.Poetry: {},
 		// pip already resolves automatically (yaml, then pip.conf), so --run-native
@@ -1958,6 +2025,30 @@ func (ca *CurationAuditCommand) setRepoFromUvToml() error {
 	ca.setPackageManagerConfig(repoConfig)
 	ca.SetDepsRepo(registryConfig.RepoName)
 	log.Info(fmt.Sprintf("uv: using Artifactory URL %q and repository %q from uv.toml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromCargoConfig reads the Artifactory registry Cargo already resolves against from .cargo/config.toml.
+func (ca *CurationAuditCommand) setRepoFromCargoConfig() error {
+	if err := cargotech.DetectConflictingCargoSources(); err != nil {
+		return err
+	}
+
+	registryConfig, err := cargotech.GetNativeCargoRegistryConfig()
+	if err != nil {
+		return fmt.Errorf("cargo: failed to read Artifactory details from .cargo/config.toml: %w", err)
+	}
+
+	serverDetails, err := ca.credentialFallbackServerDetails("cargo", ".cargo/config.toml", registryConfig.ArtifactoryUrl)
+	if err != nil {
+		return err
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
 	return nil
 }
 
@@ -2760,6 +2851,10 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				PkgType:           string(nc.tech),
 			}, nil
 		}
+		// Cargo's curation-block body uses "detail" instead of "message".
+		if respError.Errors[0].Message == "" {
+			respError.Errors[0].Message = respError.Errors[0].detailAsMessage()
+		}
 		// if the error message contains the curation string key, then we can be sure it got blocked by Curation service.
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {
 			blockingReason := BlockingReasonPolicy
@@ -2847,6 +2942,8 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return
 	case techutils.Go:
 		return getGoNameScopeAndVersion(node.Id, artiUrl, repo)
+	case techutils.Cargo:
+		return getCargoNameScopeAndVersion(node.Id, artiUrl, repo)
 	case techutils.Nuget:
 		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
 		return
@@ -2924,6 +3021,20 @@ func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, 
 		version = nameVersion[1]
 	}
 	url := strings.TrimSuffix(artiUrl, "/") + "/api/go/" + repo + "/" + name + "/@v/" + version + ".zip"
+	return []string{url}, name, "", version
+}
+
+// input - id: cargo://winapi:0.3.9
+// input - repo: my-cargo-repo
+// output - downloadUrl: <artiUrl>/api/cargo/my-cargo-repo/v1/crates/winapi/0.3.9/download
+func getCargoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
+	id = strings.TrimPrefix(id, cargotech.PackageTypeIdentifier)
+	nameVersion := strings.Split(id, ":")
+	name = nameVersion[0]
+	if len(nameVersion) > 1 {
+		version = nameVersion[1]
+	}
+	url := strings.TrimSuffix(artiUrl, "/") + "/api/cargo/" + repo + "/v1/crates/" + name + "/" + version + "/download"
 	return []string{url}, name, "", version
 }
 
