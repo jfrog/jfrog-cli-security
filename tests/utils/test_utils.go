@@ -28,6 +28,7 @@ import (
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
@@ -54,6 +55,15 @@ func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int,
 	} else if daysSinceDate > durationDays {
 		t.Logf("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call. (%s)", msg)
 	}
+}
+
+// ExpectedServicesIssueCount returns the expected JAS Services findings for the current OS.
+// Analyzer Manager's GitHub Actions services scanner currently does not detect workflow files on Windows.
+func ExpectedServicesIssueCount(count int) int {
+	if coreutils.IsWindows() {
+		return 0
+	}
+	return count
 }
 
 func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {

@@ -14,7 +14,6 @@ import (
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
-	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -1235,12 +1234,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			} else {
 				scaResultsCount = testcase.expectedScaIssues
 			}
+			expectedServicesIssues := securityTestUtils.ExpectedServicesIssueCount(testcase.expectedServicesIssues)
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
-				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + testcase.expectedServicesIssues},
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + expectedServicesIssues},
 				Vulnerabilities: &validations.VulnerabilityCount{
-					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: testcase.expectedServicesIssues},
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: expectedServicesIssues},
 					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
 				},
 			})
@@ -1251,7 +1251,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
-	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -1263,7 +1263,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	auditBasicParams := (&AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
-		SetXrayVersion(utils.EntitlementsMinVersion).
+		SetXrayVersion(services.ConfigProfileNewSchemaMinXrayVersion).
 		SetUseJas(true).
 		SetIsRecursiveScan(true)
 
@@ -1274,7 +1274,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
 		SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
-		SetScaScanStrategy(enrich.NewEnrichScanStrategy()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
@@ -1282,7 +1282,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 6)
+	assert.Len(t, filesList, 7)
 
 	searchForStrWithSubString(t, filesList, "bom")
 	searchForStrWithSubString(t, filesList, "sca")
