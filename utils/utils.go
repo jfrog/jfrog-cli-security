@@ -43,7 +43,7 @@ const (
 	GitRepoKeyAnalyticsMinXrayVersion = "3.114.0"
 	ExternalAnalyticsMinXrayVersion   = "3.152.3"
 	StaticScanMinVersion              = "3.133.0"
-	XrayCdxUploadMinVersion           = "3.152.4" // TODO eran: confirm this is the correct final version once the companion
+	XrayCdxUploadMinVersion           = "3.154.0" // TODO eran: confirm this is the correct final version once the companion
 
 	XrayToolName = "JFrog Xray Scanner"
 
