@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	securityxray "github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -53,9 +54,13 @@ func buildScanCdxFileName(cmdType utils.CommandType) string {
 }
 
 func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, artifactFinalRepoPath, fileName, projectKey string, cdxResults *cdxutils.FullBOM) (artifactPath string, err error) {
-	bomStr, err := utils.GetAsJsonString(cdxResults, true, true)
+	bomBytes, err := utils.GetAsJsonBytes(cdxResults, true, true)
 	if err != nil {
 		return "", fmt.Errorf("failed marshaling cdx for upload: %w", err)
+	}
+	// Xray uses legacy SARIF format, so we need to strip the unset indexes
+	if bomBytes, err = sarifutils.StripUnsetIndexes(bomBytes); err != nil {
+		return "", fmt.Errorf("failed to sanitize CycloneDx SARIF indexes: %w", err)
 	}
 	xrayManager, err := securityxray.CreateXrayServiceManager(serverDetails, securityxray.WithScopedProjectKey(projectKey))
 	if err != nil {
@@ -65,7 +70,7 @@ func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, a
 		RepoName: rtResultRepository,
 		RepoPath: artifactFinalRepoPath,
 		FileName: fileName,
-		Bom:      bomStr,
+		Bom:      string(bomBytes),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed uploading the scan results via xray: %w", err)
