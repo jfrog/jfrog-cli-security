@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
@@ -746,7 +745,7 @@ func TestShouldGenerateSbom(t *testing.T) {
 
 // Note: Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
 func TestAuditWithConfigProfile(t *testing.T) {
-	testDirPath := filepath.Join("..", "..", "tests", "testdata", "git", "projects", "issues-mvn")
+	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	testcases := []struct {
 		name                    string
 		configProfile           services.ConfigProfile
@@ -888,7 +887,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 2,
+			expectedSecretsIssues: 16,
 		},
 		{
 			name: "Secrets scanner is enabled with exclusions",
@@ -910,7 +909,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"**/fake-creds.txt"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
@@ -921,7 +920,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 1,
+			expectedSecretsIssues: 7,
 		},
 		{
 			name: "Enable only Sast scanner",
@@ -953,7 +952,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSastIssues: 5,
+			expectedSastIssues: 2,
 		},
 		{
 			name: "Sast scanner is enabled with exclusions",
@@ -972,7 +971,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"**/vulnapp/**"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: false,
@@ -1018,7 +1017,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedIacIssues: 4,
+			expectedIacIssues: 9,
 		},
 		{
 			name: "Iac is enabled with exclusions",
@@ -1043,7 +1042,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan:   true,
-							ExcludePatterns: []string{"**/iac"},
+							ExcludePatterns: []string{"**/*iac/gcp*/**"},
 						},
 						ServicesScannerConfig: services.ServicesScannerConfig{
 							EnableServicesScan: false,
@@ -1146,10 +1145,10 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				}},
 			},
 			expectedServicesIssues: 6,
-			expectedSastIssues:     5,
-			expectedSecretsIssues:  6,
-			expectedIacIssues:      4,
-			expectedScaIssues:      15,
+			expectedSastIssues:     2,
+			expectedSecretsIssues:  16,
+			expectedIacIssues:      9,
+			expectedScaIssues:      16,
 		},
 		{
 			name: "All scanners enabled but some with exclude patterns",
@@ -1168,11 +1167,11 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						SastScannerConfig: services.SastScannerConfig{
 							EnableSastScan:  true,
-							ExcludePatterns: []string{"**/vulnapp/**"},
+							ExcludePatterns: []string{"**/*flask_webgoat*/**"},
 						},
 						SecretsScannerConfig: services.SecretsScannerConfig{
 							EnableSecretsScan: true,
-							ExcludePatterns:   []string{"**/fake-creds.txt"},
+							ExcludePatterns:   []string{"**/*api_secrets*/**"},
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
@@ -1185,8 +1184,8 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedServicesIssues: 6,
 			expectedSastIssues:     0,
-			expectedSecretsIssues:  5,
-			expectedIacIssues:      4,
+			expectedSecretsIssues:  7,
+			expectedIacIssues:      9,
 			expectedScaIssues:      15,
 		},
 	}
@@ -1200,7 +1199,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: xrayVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
-			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectFromZip(t, testDirPath)
+			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testDirPath)
 			defer cleanUp()
 
 			configProfile := testcase.configProfile
@@ -1213,9 +1212,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
-				SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-				SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator()).
+				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
 				SetRootDir(tempProjectPath).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -1273,9 +1272,9 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator())
+		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
