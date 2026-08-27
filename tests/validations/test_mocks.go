@@ -150,7 +150,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails, *map[string]int) {
 	apiCallCounts := make(map[string]int)
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xray", "api/v1/") {
 			apiCallCounts[VersionApi]++
 			_, err := fmt.Fprintf(w, `{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)
 			if !assert.NoError(t, err) {

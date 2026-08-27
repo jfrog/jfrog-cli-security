@@ -203,8 +203,8 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Licenses: 3, Violations: 18, Vulnerabilities: 18},
-			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
+			// Check that we have at least one violation for each scan type. (IAC and Services are not supported in old flows)
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
 	)
 
