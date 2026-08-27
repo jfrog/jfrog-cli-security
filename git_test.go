@@ -262,9 +262,9 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Vulnerabilities: 18, Violations: 18},
 			// Validate we have vulnerabilities for each scan type (to make sure if violations are issue when fail or not related and issue from other places before)
-			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
-			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Services: 6}},
+			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+			// Check that we have at least one violation for each scan type. (IAC and Services are not supported in old flows)
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
 	)
 }
@@ -292,7 +292,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		}
 	}()
 
-	onlyScan := []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan, securityUtils.ServicesScan}
+	// Services scan is not supported in old flows, so we don't include it in the onlyScan list
+	onlyScan := []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan}
 
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
@@ -310,7 +311,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 72, Sast: 5, Secrets: 6, Services: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 72, Sast: 5, Secrets: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
@@ -345,7 +346,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 6, Services: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 6},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,

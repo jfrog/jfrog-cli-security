@@ -14,6 +14,7 @@ import (
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
@@ -1221,9 +1223,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
+				SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
+				SetScaScanStrategy(enrich.NewEnrichScanStrategy()).
+				SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator()).
 				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -1280,9 +1282,9 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
+		SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
+		SetScaScanStrategy(enrich.NewEnrichScanStrategy()).
+		SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
@@ -1296,6 +1298,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	searchForStrWithSubString(t, filesList, "iac")
 	searchForStrWithSubString(t, filesList, "sast")
 	searchForStrWithSubString(t, filesList, "secrets")
+	searchForStrWithSubString(t, filesList, "services")
 	searchForStrWithSubString(t, filesList, "applicability")
 }
 
