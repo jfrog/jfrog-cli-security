@@ -43,6 +43,7 @@ const (
 	GitRepoKeyAnalyticsMinXrayVersion = "3.114.0"
 	ExternalAnalyticsMinXrayVersion   = "3.152.3"
 	StaticScanMinVersion              = "3.133.0"
+	XrayCdxUploadMinVersion           = "3.152.4" // TODO eran: confirm this is the correct final version once the companion
 
 	XrayToolName = "JFrog Xray Scanner"
 
@@ -407,12 +408,16 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, prefix, 
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(prefix), GetCurrentTimeUnix(), suffix))
+	resultsFileFullPath = filepath.Join(scanResultsOutputDir, BuildResultFileName(prefix, suffix))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, prefix, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return "", fmt.Errorf("failed to write %s scan results to file: %s", prefix, err.Error())
 	}
 	return
+}
+
+func BuildResultFileName(prefix, suffix string) string {
+	return fmt.Sprintf("%s_%s.%s", strings.ToLower(prefix), GetCurrentTimeUnix(), suffix)
 }
 
 func GetCurrentTimeUnix() string {

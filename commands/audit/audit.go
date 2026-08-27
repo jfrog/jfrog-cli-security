@@ -1028,7 +1028,7 @@ func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityComm
 		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
-	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.GetRtResultRepositoryWithProjectKey(), cmdResults); err != nil {
+	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.GetRtResultRepositoryWithProjectKey(), cmdResults, auditParams.GetXrayVersion()); err != nil {
 		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
 	}
 	return
