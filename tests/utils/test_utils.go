@@ -59,6 +59,7 @@ func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int,
 
 // ExpectedServicesIssueCount returns the expected JAS Services findings for the current OS.
 // Analyzer Manager's GitHub Actions services scanner currently does not detect workflow files on Windows.
+// Scanner bug is tracked in XRAY-159123.
 func ExpectedServicesIssueCount(count int) int {
 	if coreutils.IsWindows() {
 		return 0
