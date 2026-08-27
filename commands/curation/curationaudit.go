@@ -1301,7 +1301,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return err
 	}
-	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv || tech == techutils.Uv {
 		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return err
@@ -2208,7 +2208,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		requestDetails := nc.httpClientDetails.Clone()
 		var resp *http.Response
 		var err error
-		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 			resp, _, err = nc.sendBoundedRequest(http.MethodHead, packageUrl, requestDetails)
 		} else {
 			resp, _, err = nc.rtManager.Client().SendHead(packageUrl, requestDetails)
@@ -2289,7 +2289,7 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	if err != nil {
 		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
 	}
-	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv || tech == techutils.Uv {
 		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return fmt.Errorf("curation-blocked resolution fallback: failed to create bounded HTTP manager: %w", err)
@@ -2570,7 +2570,7 @@ func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
@@ -2610,7 +2610,7 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
@@ -2711,7 +2711,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		headDetails := nc.httpClientDetails.Clone()
 		var headResp *http.Response
 		var headErr error
-		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 			headResp, _, headErr = nc.sendBoundedRequest(http.MethodHead, dlURL, headDetails)
 		} else {
 			headResp, _, headErr = nc.rtManager.Client().SendHead(dlURL, headDetails)
@@ -2811,7 +2811,7 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	var getResp *http.Response
 	var respBody []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		getResp, respBody, err = nc.sendBoundedRequest(http.MethodGet, packageUrl, requestDetails)
 	} else {
 		getResp, respBody, _, err = nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)
