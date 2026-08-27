@@ -1215,7 +1215,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
-				SetRootDir(tempProjectPath).
+				SetWorkingDirs([]string{tempProjectPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
