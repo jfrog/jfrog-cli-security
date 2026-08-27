@@ -110,6 +110,9 @@ runs:
         python -m pip install conan
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Cargo (Rust)
+      run: rustup default stable
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
 
     - name: Install Swift on Linux and macOS
       uses: SwiftyLab/setup-swift@latest
