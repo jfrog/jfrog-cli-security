@@ -53,7 +53,7 @@ func buildScanCdxFileName(cmdType utils.CommandType) string {
 }
 
 func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, artifactFinalRepoPath, fileName, projectKey string, cdxResults *cdxutils.FullBOM) (artifactPath string, err error) {
-	bomBytes, err := utils.GetAsJsonBytes(cdxResults, true, true)
+	bomStr, err := utils.GetAsJsonString(cdxResults, true, true)
 	if err != nil {
 		return "", fmt.Errorf("failed marshaling cdx for upload: %w", err)
 	}
@@ -65,7 +65,7 @@ func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, a
 		RepoName: rtResultRepository,
 		RepoPath: artifactFinalRepoPath,
 		FileName: fileName,
-		Bom:      bomBytes,
+		Bom:      bomStr,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed uploading the scan results via xray: %w", err)
