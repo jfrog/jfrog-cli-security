@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -668,14 +669,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			requestToFail: map[string]bool{
@@ -1096,43 +1097,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 			expectedError: fmt.Sprintf("failed sending HEAD request to %s for package '%s'. Status-code: %v. "+
 				"Cause: executor timeout after 2 attempts with 0 milliseconds wait intervals",
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
-		},
-		{
-			name:          "dotnet tree",
-			tech:          techutils.Dotnet,
-			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
-			serveResources: map[string]string{
-				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
-				"index.json":               filepath.Join("resources", "index.json"),
-				"13.0.3":                   filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
-			},
-			requestToFail: map[string]bool{
-				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
-			},
-			expectedResp: map[string]*CurationReport{
-				"dotnet-curation": {packagesStatus: []*PackageStatus{
-					{
-						Action:            "blocked",
-						ParentName:        "Newtonsoft.Json",
-						ParentVersion:     "13.0.3",
-						BlockedPackageUrl: "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
-						PackageName:       "Newtonsoft.Json",
-						PackageVersion:    "13.0.3",
-						BlockingReason:    "Policy violations",
-						DepRelation:       "direct",
-						PkgType:           "nuget",
-						Policy: []Policy{
-							{
-								Policy:    "pol1",
-								Condition: "cond1",
-							},
-						},
-					},
-				},
-					totalNumberOfPackages: 1,
-				},
-			},
-			allowInsecureTls: true,
 		},
 	}
 	return tests
@@ -4632,7 +4596,7 @@ func TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects(t *testing.T) 
 }
 
 // TestValidateRunNativeForTech checks that --run-native is accepted for the
-// allow-listed native-config techs (npm, pnpm, yarn, uv) and rejected for all other
+// allow-listed native-config techs (npm, pnpm, yarn, uv, NuGet) and rejected for all other
 // techs with an error that names the offending tech.
 func TestValidateRunNativeForTech(t *testing.T) {
 	// Sanity: npm and pnpm are allow-listed techs. Both flag states pass.
@@ -4668,6 +4632,10 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
 	})
+	t.Run("NuGet accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, false))
+	})
 
 	// Every other supported tech follows the same contract. Catch silent
 	// acceptance for any tech that's in the doc-table-of-supported but
@@ -4677,7 +4645,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		techutils.Maven,
 		techutils.Gem,
 		techutils.Go,
-		techutils.Nuget,
 		techutils.Dotnet,
 		techutils.Conan,
 		techutils.Cocoapods,
@@ -4695,6 +4662,134 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		})
 	}
 
+}
+
+// writeFakeDotnetExecutableForTest writes a "dotnet" executable in dir that, when invoked as
+// 'dotnet nuget list source', prints sourcesOutput to stdout.
+func writeFakeDotnetExecutableForTest(t *testing.T, dir, sourcesOutput string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake dotnet executable is a POSIX shell script")
+	}
+	path := filepath.Join(dir, "dotnet")
+	script := "#!/bin/sh\ncat <<'EOF'\n" + sourcesOutput + "\nEOF\n"
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+	return path
+}
+
+// TestSetRepoFromNuGetSourceAcceptsMatchingHost verifies the happy path: a configured NuGet
+// source whose host matches the 'jf c' server is selected, and the resulting
+// PackageManagerConfig carries the 'jf c' credentials plus the repo/URL parsed from the
+// native source list.
+func TestSetRepoFromNuGetSourceAcceptsMatchingHost(t *testing.T) {
+	toolDir := t.TempDir()
+	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+		"  1.  nuget.org [Enabled]\n"+
+		"      https://api.nuget.org/v3/index.json\n"+
+		"  2.  MyArtifactory [Enabled]\n"+
+		"      https://configured-server.example.com/artifactory/api/nuget/v3/nuget-test-repo/index.json\n")
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	require.NoError(t, ca.setRepoFromNuGetSource())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "nuget-test-repo", ca.PackageManagerConfig.TargetRepo())
+	resolvedServer, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "super-secret-token", resolvedServer.AccessToken,
+		"must reuse the 'jf c' server credentials, not require jf nuget-config")
+	assert.Equal(t, "https://configured-server.example.com/artifactory/", resolvedServer.ArtifactoryUrl)
+}
+
+// TestSetRepoFromNuGetSourceNoMatchingHost verifies that when none of the configured NuGet
+// sources match the 'jf c' server's host, setRepoFromNuGetSource returns a clear, actionable
+// error and never attaches credentials.
+func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
+	toolDir := t.TempDir()
+	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+		"  1.  nuget.org [Enabled]\n"+
+		"      https://api.nuget.org/v3/index.json\n")
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromNuGetSource()
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "could not find a NuGet source")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when no source matches")
+}
+
+// TestSetRepoFromNuGetSourceNoServerConfigured verifies the clear error surfaced when
+// auditing NuGet but no 'jf c' server is configured at all.
+func TestSetRepoFromNuGetSourceNoServerConfigured(t *testing.T) {
+	projectDir := t.TempDir()
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromNuGetSource()
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "requires a configured Artifactory server")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative is an integration-style check
+// that SetRepo(Nuget) always dispatches to setRepoFromNuGetSource — NuGet has no
+// 'jf nuget-config'/nuget.yaml equivalent, so unlike npm this must not depend on --run-native.
+func TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative(t *testing.T) {
+	for _, runNative := range []bool{true, false} {
+		t.Run(fmt.Sprintf("run-native=%v", runNative), func(t *testing.T) {
+			toolDir := t.TempDir()
+			writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+				"  1.  MyArtifactory [Enabled]\n"+
+				"      https://configured-server.example.com/artifactory/api/nuget/v3/nuget-test-repo/index.json\n")
+			t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+				[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+			restoreCwd := changeDirForTest(t, projectDir)
+			defer restoreCwd()
+			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
+			defer restoreHome()
+
+			ca := NewCurationAuditCommand()
+			ca.SetServerDetails(&config.ServerDetails{
+				Url:            "https://configured-server.example.com/",
+				ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+				AccessToken:    "super-secret-token",
+			})
+			ca.SetRunNative(runNative)
+
+			require.NoError(t, ca.SetRepo(techutils.Nuget))
+			require.NotNil(t, ca.PackageManagerConfig)
+			assert.Equal(t, "nuget-test-repo", ca.PackageManagerConfig.TargetRepo())
+		})
+	}
 }
 
 // TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
@@ -5624,6 +5719,80 @@ func TestHasCargoProject(t *testing.T) {
 	t.Run("neither present", func(t *testing.T) {
 		assert.False(t, hasCargoProject(t.TempDir()))
 	})
+}
+
+// TestDoCurationAudit_Nuget is a full integration test: it runs a real 'dotnet restore' against
+// the mock Artifactory server. NuGet has no 'jf nuget-config'; the registry is discovered by
+// matching the mock server's dynamic URL against a real, generated NuGet.Config (own harness,
+// like TestDoCurationAudit_Cargo, since the URL/port isn't known until the mock server starts).
+func TestDoCurationAudit_Nuget(t *testing.T) {
+	if err := exec.Command("dotnet", "--version").Run(); err != nil {
+		t.Skip("dotnet SDK not available")
+	}
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation")
+
+	requestToFail := map[string]bool{
+		"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"curated-nuget/index.json": filepath.Join(basePathToTests, pathToProject, "resources", "feed.json"),
+		"index.json":               filepath.Join(basePathToTests, pathToProject, "resources", "index.json"),
+		"13.0.3":                   filepath.Join(basePathToTests, pathToProject, "resources", "newtonsoft.json.13.0.3.nupkg"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject, allowInsecureTls: true}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	// NuGet has no 'jf nuget-config'; wire the registry via a real NuGet.Config pointing at the
+	// mock server's dynamic URL, the same way a user's machine/project would be configured.
+	nugetConfig := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="Artifactory" value="%sapi/nuget/v3/curated-nuget/index.json" />
+  </packageSources>
+</configuration>
+`, serverConfig.ArtifactoryUrl)
+	require.NoError(t, os.WriteFile(filepath.Join(testDirPath, "NuGet.Config"), []byte(nugetConfig), 0600))
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"dotnet-curation": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action:            "blocked",
+					ParentName:        "Newtonsoft.Json",
+					ParentVersion:     "13.0.3",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+					PackageName:       "Newtonsoft.Json",
+					PackageVersion:    "13.0.3",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "nuget",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
 }
 
 // skipIfCargoUnavailable skips t if cargo can't actually run -- exec.LookPath alone isn't enough,

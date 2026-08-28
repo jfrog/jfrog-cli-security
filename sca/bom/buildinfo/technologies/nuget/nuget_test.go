@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -373,4 +375,338 @@ func TestSolutionFilePathValidation(t *testing.T) {
 			assert.Nil(t, uniqueDeps)
 		})
 	}
+}
+
+func TestParseNuGetSourcesOutput(t *testing.T) {
+	testCases := []struct {
+		name     string
+		output   string
+		expected []nugetSource
+	}{
+		{
+			name: "dotnet-style detailed output, single enabled source",
+			output: "Registered Sources:\n" +
+				"  1.  nuget.org [Enabled]\n" +
+				"      https://api.nuget.org/v3/index.json\n",
+			expected: []nugetSource{
+				{name: "nuget.org", url: "https://api.nuget.org/v3/index.json"},
+			},
+		},
+		{
+			name: "multiple sources, disabled source is skipped",
+			output: "Registered Sources:\n" +
+				"  1.  nuget.org [Enabled]\n" +
+				"      https://api.nuget.org/v3/index.json\n" +
+				"  2.  MyArtifactory [Enabled]\n" +
+				"      https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json\n" +
+				"  3.  OldFeed [Disabled]\n" +
+				"      https://old.example.com/index.json\n",
+			expected: []nugetSource{
+				{name: "nuget.org", url: "https://api.nuget.org/v3/index.json"},
+				{name: "MyArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json"},
+			},
+		},
+		{
+			name: "legacy nuget.exe 'sources List' output — same detailed format",
+			output: "Registered Sources:\n" +
+				"  1.  nuget.org [Enabled]\n" +
+				"      https://api.nuget.org/v3/index.json\n",
+			expected: []nugetSource{
+				{name: "nuget.org", url: "https://api.nuget.org/v3/index.json"},
+			},
+		},
+		{
+			name:     "no sources configured",
+			output:   "Registered Sources:\n  There are no sources.\n",
+			expected: nil,
+		},
+		{
+			name:     "empty output",
+			output:   "",
+			expected: nil,
+		},
+		{
+			name: "header with no URL line following (malformed/truncated) is skipped",
+			output: "Registered Sources:\n" +
+				"  1.  nuget.org [Enabled]\n" +
+				"  2.  MyArtifactory [Enabled]\n" +
+				"      https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json\n",
+			expected: []nugetSource{
+				{name: "MyArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json"},
+			},
+		},
+		{
+			name: "source name containing brackets/spaces is captured correctly",
+			output: "Registered Sources:\n" +
+				"  1.  My [Company] Feed [Enabled]\n" +
+				"      https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json\n",
+			expected: []nugetSource{
+				{name: "My [Company] Feed", url: "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseNuGetSourcesOutput(tc.output)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestParseArtifactoryNugetSourceUrl(t *testing.T) {
+	testCases := []struct {
+		name           string
+		sourceUrl      string
+		expectedBase   string
+		expectedRepo   string
+		expectErr      bool
+		errMsgContains string
+	}{
+		{
+			name:         "V3 standard URL with /artifactory context root",
+			sourceUrl:    "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json",
+			expectedBase: "https://artifactory.example.com/artifactory/",
+			expectedRepo: "nuget-remote",
+		},
+		{
+			name:         "V2 standard URL with /artifactory context root",
+			sourceUrl:    "https://artifactory.example.com/artifactory/api/nuget/nuget-remote",
+			expectedBase: "https://artifactory.example.com/artifactory/",
+			expectedRepo: "nuget-remote",
+		},
+		{
+			name:         "V2 URL with trailing slash",
+			sourceUrl:    "https://artifactory.example.com/artifactory/api/nuget/nuget-remote/",
+			expectedBase: "https://artifactory.example.com/artifactory/",
+			expectedRepo: "nuget-remote",
+		},
+		{
+			name:         "V3 reverse-proxy URL without /artifactory context root",
+			sourceUrl:    "https://nuget.company.com/api/nuget/v3/nuget-remote/index.json",
+			expectedBase: "https://nuget.company.com/",
+			expectedRepo: "nuget-remote",
+		},
+		{
+			name:         "V2 reverse-proxy URL without /artifactory context root",
+			sourceUrl:    "https://nuget.company.com/api/nuget/nuget-remote",
+			expectedBase: "https://nuget.company.com/",
+			expectedRepo: "nuget-remote",
+		},
+		{
+			name:           "non-Artifactory URL",
+			sourceUrl:      "https://api.nuget.org/v3/index.json",
+			expectErr:      true,
+			errMsgContains: "does not appear to be an Artifactory NuGet registry",
+		},
+		{
+			name:           "Artifactory NuGet API path with no repo name",
+			sourceUrl:      "https://artifactory.example.com/artifactory/api/nuget/v3/index.json",
+			expectErr:      true,
+			errMsgContains: "could not extract repository name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			base, repo, err := parseArtifactoryNugetSourceUrl(tc.sourceUrl)
+			if tc.expectErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errMsgContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedBase, base)
+			assert.Equal(t, tc.expectedRepo, repo)
+		})
+	}
+}
+
+func TestHostOf(t *testing.T) {
+	testCases := []struct {
+		name         string
+		rawUrl       string
+		expectedHost string
+		expectErr    bool
+	}{
+		{name: "standard https URL", rawUrl: "https://artifactory.example.com/artifactory/api/nuget/v3/repo/index.json", expectedHost: "artifactory.example.com"},
+		{name: "URL with port", rawUrl: "https://artifactory.example.com:8081/artifactory/api/nuget/repo", expectedHost: "artifactory.example.com"},
+		{name: "no host in URL", rawUrl: "/just/a/path", expectErr: true},
+		{name: "empty URL", rawUrl: "", expectErr: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			host, err := hostOf(tc.rawUrl)
+			if tc.expectErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedHost, host)
+		})
+	}
+}
+
+func TestSelectMatchingNuGetSource(t *testing.T) {
+	sources := []nugetSource{
+		{name: "nuget.org", url: "https://api.nuget.org/v3/index.json"},
+		{name: "MyArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json"},
+	}
+
+	t.Run("matches the configured Artifactory host, case-insensitively", func(t *testing.T) {
+		result, err := selectMatchingNuGetSource(sources, "https://Artifactory.Example.com/artifactory/", dotnetToolType)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "MyArtifactory", result.SourceName)
+		assert.Equal(t, "https://artifactory.example.com/artifactory/", result.ArtifactoryUrl)
+		assert.Equal(t, "nuget-remote", result.RepoName)
+	})
+
+	t.Run("no configured source matches the host", func(t *testing.T) {
+		result, err := selectMatchingNuGetSource(sources, "https://other-artifactory.example.com/artifactory/", dotnetToolType)
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "could not find a NuGet source configured")
+		assert.Contains(t, err.Error(), "dotnet nuget list source")
+	})
+
+	t.Run("error message references legacy nuget CLI command for nugetToolType", func(t *testing.T) {
+		_, err := selectMatchingNuGetSource(sources, "https://other-artifactory.example.com/artifactory/", nugetToolType)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nuget sources List")
+	})
+
+	t.Run("source matches host but is not a recognizable Artifactory NuGet URL", func(t *testing.T) {
+		malformed := []nugetSource{
+			{name: "BadArtifactory", url: "https://artifactory.example.com/some/other/path"},
+		}
+		_, err := selectMatchingNuGetSource(malformed, "https://artifactory.example.com/artifactory/", dotnetToolType)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not a recognizable Artifactory NuGet repository URL")
+	})
+
+	t.Run("invalid configured Artifactory URL", func(t *testing.T) {
+		_, err := selectMatchingNuGetSource(sources, "not-a-valid-url-%", dotnetToolType)
+		require.Error(t, err)
+	})
+}
+
+// writeFakeToolExecutable writes an executable in dir named toolName that echoes the given
+// stdout content regardless of arguments, for exercising listNativeNuGetSources /
+// GetNativeNuGetRegistryConfig without depending on a real dotnet/nuget install.
+func writeFakeToolExecutable(t *testing.T, dir, toolName, stdout string) string {
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(dir, toolName+".cmd")
+		script := "@echo off\r\n" + "echo " + stdout + "\r\n"
+		require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+		return path
+	}
+	path := filepath.Join(dir, toolName)
+	script := "#!/bin/sh\ncat <<'EOF'\n" + stdout + "\nEOF\n"
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+	return path
+}
+
+func TestListNativeNuGetSources(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tool executable is a POSIX shell script")
+	}
+	fakeOutput := "Registered Sources:\n" +
+		"  1.  MyArtifactory [Enabled]\n" +
+		"      https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json\n"
+
+	toolDir := t.TempDir()
+	writeFakeToolExecutable(t, toolDir, "dotnet", fakeOutput)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	sources, err := listNativeNuGetSources(dotnetToolType)
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	assert.Equal(t, "MyArtifactory", sources[0].name)
+}
+
+func TestListNativeNuGetSourcesUnsupportedTool(t *testing.T) {
+	_, err := listNativeNuGetSources("some-other-tool")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported tool type")
+}
+
+func TestListNativeNuGetSourcesCommandFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tool executable is a POSIX shell script")
+	}
+	toolDir := t.TempDir()
+	failingScriptPath := filepath.Join(toolDir, "dotnet")
+	require.NoError(t, os.WriteFile(failingScriptPath, []byte("#!/bin/sh\necho 'boom' >&2\nexit 1\n"), 0o755))
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, err := listNativeNuGetSources(dotnetToolType)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boom")
+}
+
+// TestGetNativeNuGetRegistryConfig_DotnetProject runs GetNativeNuGetRegistryConfig end-to-end
+// against a fake 'dotnet' executable and a project directory containing a PackageReference-style
+// .csproj (so getProjectToolName resolves to the dotnet CLI), verifying the full resolution
+// priority: detect tool -> list sources -> match by host -> parse Artifactory URL/repo.
+func TestGetNativeNuGetRegistryConfig_DotnetProject(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tool executable is a POSIX shell script")
+	}
+	fakeOutput := "Registered Sources:\n" +
+		"  1.  nuget.org [Enabled]\n" +
+		"      https://api.nuget.org/v3/index.json\n" +
+		"  2.  MyArtifactory [Enabled]\n" +
+		"      https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json\n"
+
+	toolDir := t.TempDir()
+	writeFakeToolExecutable(t, toolDir, "dotnet", fakeOutput)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte("<Project><ItemGroup><PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.1\" /></ItemGroup></Project>"), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origWd)) }()
+
+	serverDetails := &config.ServerDetails{ArtifactoryUrl: "https://artifactory.example.com/artifactory/"}
+	result, err := GetNativeNuGetRegistryConfig(serverDetails)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "MyArtifactory", result.SourceName)
+	assert.Equal(t, "https://artifactory.example.com/artifactory/", result.ArtifactoryUrl)
+	assert.Equal(t, "nuget-remote", result.RepoName)
+}
+
+// TestGetNativeNuGetRegistryConfig_NoMatchingSource verifies the clear, actionable error when
+// none of the configured NuGet sources match the configured Artifactory server's host.
+func TestGetNativeNuGetRegistryConfig_NoMatchingSource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tool executable is a POSIX shell script")
+	}
+	fakeOutput := "Registered Sources:\n" +
+		"  1.  nuget.org [Enabled]\n" +
+		"      https://api.nuget.org/v3/index.json\n"
+
+	toolDir := t.TempDir()
+	writeFakeToolExecutable(t, toolDir, "dotnet", fakeOutput)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte("<Project><ItemGroup><PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.1\" /></ItemGroup></Project>"), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origWd)) }()
+
+	serverDetails := &config.ServerDetails{ArtifactoryUrl: "https://artifactory.example.com/artifactory/"}
+	result, err := GetNativeNuGetRegistryConfig(serverDetails)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "could not find a NuGet source configured")
 }

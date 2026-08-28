@@ -47,6 +47,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	nugettech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/nuget"
 	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -1053,7 +1054,7 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Nuget) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1134,10 +1135,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv/Pip/Poetry's native repo/server before getBuildInfoParamsByTech so install and the
-	// later probes share an endpoint. Other techs resolve later via SetResolutionRepoInParamsIfExists
-	// and must not be forced through SetRepo this early (they tolerate having no config file yet).
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry) && ca.PackageManagerConfig == nil {
+	// Resolve Pipenv/Pip/Poetry/NuGet's native repo/server before getBuildInfoParamsByTech so
+	// install and the later probes share an endpoint. Other techs resolve later via
+	// SetResolutionRepoInParamsIfExists and must not be forced through SetRepo this early
+	// (they tolerate having no config file yet).
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Nuget) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
@@ -1152,9 +1154,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
-	// When --run-native is set for npm, or for pnpm (always .npmrc-based), the Artifactory
-	// details are already populated from .npmrc. Skip the yaml config file lookup.
-	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
+	// Artifactory details are already populated for --run-native npm, and always for
+	// pnpm/NuGet (native-only, no yaml config). Skip the yaml config file lookup for these.
+	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm || tech == techutils.Nuget {
 		params.IgnoreConfigFile = true
 	}
 	// uv has no jf uv-config yaml; skip config file lookup and use server details
@@ -1211,6 +1213,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	// from pip.conf, then the Pipfile [[source]]; --run-native is a no-op here too.
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
+	}
+	// NuGet always resolves natively from the NuGet/.NET CLI's configured sources,
+	// so --run-native is a no-op here too.
+	if ca.RunNative() && tech == techutils.Nuget {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1634,6 +1641,12 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrc()
 	}
 
+	// NuGet always resolves natively from the NuGet/.NET CLI's configured sources,
+	// regardless of --run-native (no yaml config equivalent exists).
+	if tech == techutils.Nuget {
+		return ca.setRepoFromNuGetSource()
+	}
+
 	// Pnpm always reads from .npmrc — there is no 'jf pnpm-config' command.
 	// pnpm shares the npm registry protocol, so the same .npmrc key/URL format applies.
 	if tech == techutils.Pnpm {
@@ -1838,10 +1851,9 @@ func (ca *CurationAuditCommand) setRepoFromPyproject() error {
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
-// pnpm/yarn/uv/pip/pipenv/poetry accept it as a no-op (a warning is emitted in auditTree)
-// since their resolution is already automatic and has nothing for the flag to
-// switch between. Extend the allow-list below when a new tech adds the
-// matching native-config flow.
+// pnpm/yarn/uv/pip/pipenv/poetry/NuGet accept it as a no-op (auditTree emits a warning)
+// since their resolution is already automatic. Extend the allow-list below when a new
+// tech adds a matching native-config flow.
 func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	if !runNative {
 		return nil
@@ -1850,6 +1862,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	// both 'jf <tech>' and 'jf ca'.
 	supported := map[techutils.Technology]struct{}{
 		techutils.Npm: {},
+		// NuGet always resolves natively from the NuGet/.NET CLI's configured
+		// sources, so --run-native is a redundant no-op.
+		techutils.Nuget: {},
 		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
 		// rather than an error (a warning is emitted in auditTree).
 		techutils.Pnpm: {},
@@ -1910,6 +1925,35 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromNuGetSource finds the native NuGet/.NET CLI source whose host matches the
+// 'jf c' server, and builds PackageManagerConfig from its Artifactory URL and repo name.
+// Credentials always come from the 'jf c' server, never from the native config.
+func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
+	serverDetails, err := ca.ServerDetails()
+	if err != nil {
+		return err
+	}
+	if serverDetails == nil || serverDetails.GetArtifactoryUrl() == "" {
+		return errorutils.CheckErrorf("curation-audit for NuGet requires a configured Artifactory server. Run 'jf c add' to configure a server")
+	}
+
+	registryConfig, err := nugettech.GetNativeNuGetRegistryConfig(serverDetails)
+	if err != nil {
+		return fmt.Errorf("NuGet: %w", err)
+	}
+
+	resolvedServerDetails := *serverDetails
+	resolvedServerDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(&resolvedServerDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("NuGet: using native source %q (Artifactory URL %q, repository %q)", registryConfig.SourceName, registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 

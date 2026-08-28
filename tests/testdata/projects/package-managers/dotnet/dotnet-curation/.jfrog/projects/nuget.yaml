@@ -1,5 +1,0 @@
-version: 1
-type: nuget
-resolver:
-  repo: curated-nuget
-  serverId: test
