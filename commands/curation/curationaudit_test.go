@@ -4666,7 +4666,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 
 // writeFakeDotnetExecutableForTest writes a "dotnet" executable in dir that, when invoked as
 // 'dotnet nuget list source', prints sourcesOutput to stdout.
-func writeFakeDotnetExecutableForTest(t *testing.T, dir, sourcesOutput string) string {
+func writeFakeDotnetExecutableForTest(t *testing.T, dir, sourcesOutput string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("fake dotnet executable is a POSIX shell script")
@@ -4674,7 +4674,6 @@ func writeFakeDotnetExecutableForTest(t *testing.T, dir, sourcesOutput string) s
 	path := filepath.Join(dir, "dotnet")
 	script := "#!/bin/sh\ncat <<'EOF'\n" + sourcesOutput + "\nEOF\n"
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
-	return path
 }
 
 // TestSetRepoFromNuGetSourceAcceptsMatchingHost verifies the happy path: a configured NuGet

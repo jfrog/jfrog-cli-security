@@ -594,17 +594,16 @@ func TestSelectMatchingNuGetSource(t *testing.T) {
 // writeFakeToolExecutable writes an executable in dir named toolName that echoes the given
 // stdout content regardless of arguments, for exercising listNativeNuGetSources /
 // GetNativeNuGetRegistryConfig without depending on a real dotnet/nuget install.
-func writeFakeToolExecutable(t *testing.T, dir, toolName, stdout string) string {
+func writeFakeToolExecutable(t *testing.T, dir, toolName, stdout string) {
 	if runtime.GOOS == "windows" {
 		path := filepath.Join(dir, toolName+".cmd")
 		script := "@echo off\r\n" + "echo " + stdout + "\r\n"
 		require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
-		return path
+		return
 	}
 	path := filepath.Join(dir, toolName)
 	script := "#!/bin/sh\ncat <<'EOF'\n" + stdout + "\nEOF\n"
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
-	return path
 }
 
 func TestListNativeNuGetSources(t *testing.T) {
