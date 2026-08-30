@@ -28,6 +28,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
@@ -203,7 +204,7 @@ func (ca *CurationAuditCommand) getXrayVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return "", err
 	}

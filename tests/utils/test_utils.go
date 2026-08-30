@@ -21,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
-	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
@@ -494,7 +493,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 }
 
 func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
-	manager, version, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(details)
+	manager, version, err := xray.CreateXrayServiceManagerAndGetVersion(details)
 	if err != nil {
 		return fmt.Errorf("failed to create Xray service manager: %w", err)
 	}
