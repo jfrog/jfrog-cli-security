@@ -32,12 +32,14 @@ const (
 
 	TestConfigProfileName = "default-profile"
 
-	VersionApi        = "version"
-	EntitlementsApi   = "entitlements"
-	GraphScanPostAPI  = "graphScan_post"
-	GraphScanGetAPI   = "graphScan_get"
-	ConfigProfileAPI  = "config_profile"
-	WatchResourcesAPI = "watch_resources"
+	VersionApi                  = "version"
+	EntitlementsApi             = "entitlements"
+	GraphScanPostAPI            = "graphScan_post"
+	GraphScanGetAPI             = "graphScan_get"
+	ConfigProfileAPI            = "config_profile"
+	WatchResourcesAPI           = "watch_resources"
+	CveApplicabilityInputAPI    = "cve_applicability_input"
+	cveApplicabilityInputApiUrl = "/xray/api/v1/internal/cve_applicability_input_vulnerabilities"
 )
 
 var (
@@ -150,12 +152,24 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails, *map[string]int) {
 	apiCallCounts := make(map[string]int)
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xray", "api/v1/") {
 			apiCallCounts[VersionApi]++
 			_, err := fmt.Fprintf(w, `{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)
-			if !assert.NoError(t, err) {
-				return
-			}
+			assert.NoError(t, err)
+			// The Analyzer Manager resolves the Xray version from this endpoint to decide between the
+			// unified JAS binary and the legacy per-scanner binaries, so it must not fall through to the
+			// Xsc handler's catch-all 404.
+			return
+		}
+		if r.RequestURI == cveApplicabilityInputApiUrl && r.Method == http.MethodPost {
+			// The unified JAS binary fetches the CVE applicability indicators from Xray instead of using
+			// locally bundled data. An empty list is a valid response and makes every requested CVE be
+			// reported as 'not covered'.
+			apiCallCounts[CveApplicabilityInputAPI]++
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"api_version": "1.0.0", "vulnerabilities": []}`))
+			assert.NoError(t, err)
+			return
 		}
 		if r.RequestURI == "/xray/api/v1/entitlements/feature/contextual_analysis" {
 			if r.Method == http.MethodGet {

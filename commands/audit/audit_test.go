@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
@@ -887,7 +888,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 16,
+			expectedSecretsIssues: 15,
 		},
 		{
 			name: "Secrets scanner is enabled with exclusions",
@@ -920,7 +921,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 10,
 		},
 		{
 			name: "Enable only Sast scanner",
@@ -1146,9 +1147,10 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedServicesIssues: 6,
 			expectedSastIssues:     2,
-			expectedSecretsIssues:  16,
+			expectedSecretsIssues:  15,
 			expectedIacIssues:      9,
-			expectedScaIssues:      16,
+			expectedScaIssues:      15,
+			expectedCaNotCovered:   15,
 		},
 		{
 			name: "All scanners enabled but some with exclude patterns",
@@ -1184,19 +1186,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedServicesIssues: 6,
 			expectedSastIssues:     0,
-			expectedSecretsIssues:  7,
+			expectedSecretsIssues:  10,
 			expectedIacIssues:      9,
 			expectedScaIssues:      15,
+			expectedCaNotCovered:   15,
 		},
 	}
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			xrayVersion := utils.EntitlementsMinVersion
-			if testcase.configProfile.Modules[0].ScanConfig.ServicesScannerConfig.EnableServicesScan {
-				xrayVersion = services.ConfigProfileNewSchemaMinXrayVersion
-			}
-			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: xrayVersion, XscVersion: services.ConfigProfileMinXscVersion})
+			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
 			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testDirPath)
@@ -1212,10 +1211,10 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
-				SetWorkingDirs([]string{tempProjectPath}).
+				SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator()).
+				SetRootDir(tempProjectPath).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
@@ -1267,14 +1266,14 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetIsRecursiveScan(true)
 
 	auditParams := NewAuditParams().
-		SetWorkingDirs([]string{tempProjectPath}).
+		SetRootDir(tempProjectPath).
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+		SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
+		SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
@@ -1298,7 +1297,7 @@ func searchForStrWithSubString(t *testing.T, filesList []string, subString strin
 			return
 		}
 	}
-	assert.Fail(t, "File %s not found in the list", subString)
+	assert.Fail(t, fmt.Sprintf("File %s not found in the list", subString))
 }
 
 func TestAuditWithPartialResults(t *testing.T) {
