@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -113,7 +114,7 @@ func (cmd *MaliciousScanCommand) Run() (err error) {
 }
 
 func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entitledForJas bool, workingDirs []string, err error) {
-	xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xrayUtils.WithScopedProjectKey(cmd.project))
+	xrayManager, xrayVersion, err := corexray.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, corexray.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return "", false, nil, err
 	}

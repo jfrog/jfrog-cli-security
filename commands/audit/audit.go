@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -156,7 +157,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		return
 	}
 	// Get the defined and active watches from the platform.
-	manager, err := xsc.CreateXscService(serverDetails, xrayutils.WithScopedProjectKey(projectKey))
+	manager, err := xsc.CreateXscService(serverDetails, corexray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to create Xray services manager: %s", err.Error()))
 		return
@@ -422,7 +423,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		return cmdResults.AddGeneralError(err, false)
 	}
 	// Send entitlement requests
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
@@ -1042,7 +1043,7 @@ func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to get server details: %s", err.Error())
 	}
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to create Xray service manager: %s", err.Error())
 	}
