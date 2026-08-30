@@ -32,13 +32,15 @@ func toActualValuesSummary(results formats.ResultsSummary) (actualValues Validat
 		Vulnerabilities: results.GetTotalVulnerabilities(),
 		Violations:      results.GetTotalViolations(),
 		// Jas vulnerabilities
-		SastVulnerabilities:    results.GetTotalVulnerabilities(formats.SastResult),
-		SecretsVulnerabilities: results.GetTotalVulnerabilities(formats.SecretsResult),
-		IacVulnerabilities:     results.GetTotalVulnerabilities(formats.IacResult),
+		SastVulnerabilities:     results.GetTotalVulnerabilities(formats.SastResult),
+		SecretsVulnerabilities:  results.GetTotalVulnerabilities(formats.SecretsResult),
+		IacVulnerabilities:      results.GetTotalVulnerabilities(formats.IacResult),
+		ServicesVulnerabilities: results.GetTotalVulnerabilities(formats.ServicesResult),
 		// Jas violations
-		SastViolations:    results.GetTotalViolations(formats.SastResult),
-		SecretsViolations: results.GetTotalViolations(formats.SecretsResult),
-		IacViolations:     results.GetTotalViolations(formats.IacResult),
+		SastViolations:     results.GetTotalViolations(formats.SastResult),
+		SecretsViolations:  results.GetTotalViolations(formats.SecretsResult),
+		IacViolations:      results.GetTotalViolations(formats.IacResult),
+		ServicesViolations: results.GetTotalViolations(formats.ServicesResult),
 		// Sca vulnerabilities
 		ScaVulnerabilities: results.GetTotalVulnerabilities(formats.ScaSecurityResult),
 		// Sca violations

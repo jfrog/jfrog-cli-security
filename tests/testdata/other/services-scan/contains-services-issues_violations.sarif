@@ -1,0 +1,62 @@
+{
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "JFrog Services scanner",
+                    "rules": [],
+                    "version": ""
+                }
+            },
+            "invocations": [
+                {
+                    "executionSuccessful": true,
+                    "arguments": [
+                        "./svc_scanner",
+                        "scan",
+                        "scan.yaml"
+                    ],
+                    "workingDirectory": {
+                        "uri": "file:///tmp/services-scanner"
+                    }
+                }
+            ],
+            "results": [
+                {
+                    "properties": {
+                        "issueId": "services-violation-1",
+                        "policies": [
+                            "policy"
+                        ],
+                        "watch": "watch"
+                    },
+                    "message": {
+                        "text": "Overly broad permissions write-all detected"
+                    },
+                    "level": "error",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///tmp/services-scanner/.github/workflows/services.yml"
+                                },
+                                "region": {
+                                    "endColumn": 20,
+                                    "endLine": 10,
+                                    "snippet": {
+                                        "text": "permissions: write-all"
+                                    },
+                                    "startColumn": 1,
+                                    "startLine": 10
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "GITHUB-ACTIONS-permissions-write-all"
+                }
+            ]
+        }
+    ],
+    "version": "2.1.0",
+    "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+}
