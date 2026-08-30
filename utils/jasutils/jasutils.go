@@ -45,6 +45,10 @@ func GetJasScanTypes() []JasScanType {
 	return []JasScanType{Applicability, Secrets, IaC, Sast, MaliciousCode, Services}
 }
 
+// exposureJasScanTypes are JAS categories that Xray reports via ExposureDetails (EXP-*).
+// Search order for type detection; extend by appending.
+var ExposureJasScanTypes = []JasScanType{Secrets, Services, IaC}
+
 func (tvs TokenValidationStatus) String() string { return string(tvs) }
 
 func (tvs TokenValidationStatus) ToString() string {

@@ -50,6 +50,10 @@ func GetResultViolationType(result *sarif.Result) (violationType string) {
 	return GetResultProperty(ViolationTypeSarifPropertyKey, result)
 }
 
+func GetRuleViolationType(rule *sarif.ReportingDescriptor) string {
+	return GetRuleProperty(ViolationTypeSarifPropertyKey, rule)
+}
+
 func GetResultPropertyTokenValidation(result *sarif.Result) string {
 	return GetResultProperty(TokenValidationStatusSarifPropertyKey, result)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -670,9 +671,66 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 	}
 }
 
-func TestGetScanType(t *testing.T) {
-	assert.Equal(t, utils.ServicesScan, getScanType("", "GITHUB-ACTIONS-permissions-write-all"))
-	assert.Equal(t, utils.SecretsScan, getScanType("", "EXP-SECRET-TOKEN"))
-	assert.Equal(t, utils.SastScan, getScanType("", "aws_cloudfront_tls_only"))
-	assert.Equal(t, utils.IacScan, getScanType(utils.IacScan, "GITHUB-ACTIONS-permissions-write-all"))
+func TestResolveScanType(t *testing.T) {
+	assert.Equal(t, utils.ServicesScan, resolveScanType("", violationutils.ServicesViolationType.String()))
+	assert.Equal(t, utils.IacScan, resolveScanType("", violationutils.IacViolationType.String()))
+	assert.Equal(t, utils.SecretsScan, resolveScanType("", violationutils.SecretsViolationType.String()))
+	assert.Equal(t, utils.SastScan, resolveScanType("", violationutils.SastViolationType.String()))
+	assert.Equal(t, utils.ScaScan, resolveScanType("", violationutils.CveViolationType.String()))
+	assert.Equal(t, utils.ScaScan, resolveScanType(utils.ScaScan, ""))
+	assert.Empty(t, resolveScanType("", ""))
+	// Stamped type wins over the caller default.
+	assert.Equal(t, utils.ServicesScan, resolveScanType(utils.SastScan, violationutils.ServicesViolationType.String()))
+}
+
+func TestGetScanTypeFromRule(t *testing.T) {
+	servicesRule := dummyRule("GITHUB-ACTIONS-permissions-write-all")
+	servicesRule.Properties = sarif.NewPropertyBag()
+	servicesRule.Properties.Add(sarifutils.ViolationTypeSarifPropertyKey, violationutils.ServicesViolationType.String())
+
+	assert.Equal(t, utils.ServicesScan, getScanTypeFromRule("", servicesRule))
+	assert.Empty(t, getScanTypeFromRule("", dummyRule("GITHUB-ACTIONS-permissions-write-all")))
+	assert.Equal(t, utils.IacScan, getScanTypeFromRule(utils.IacScan, dummyRule("aws_cloudfront_tls_only")))
+}
+
+func TestGetScanTypeFromResult(t *testing.T) {
+	typed := dummyResult("GITHUB-ACTIONS-permissions-write-all")
+	typed.Properties = sarif.NewPropertyBag()
+	typed.Properties.Add(sarifutils.ViolationTypeSarifPropertyKey, violationutils.ServicesViolationType.String())
+
+	assert.Equal(t, utils.ServicesScan, getScanTypeFromResult("", typed))
+	assert.Empty(t, getScanTypeFromResult("", dummyResult("EXP-SECRET-TOKEN")))
+	assert.Equal(t, utils.SecretsScan, getScanTypeFromResult(utils.SecretsScan, dummyResult("EXP-SECRET-TOKEN")))
+}
+
+func TestCreateJasViolationStampsScanTypeOnRule(t *testing.T) {
+	sharedRule := dummyRule("GITHUB-ACTIONS-permissions-write-all")
+	sharedRule.Properties = sarif.NewPropertyBag()
+	sharedRule.Properties.Add(sarifutils.JasScannerIdSarifPropertyKey, "GITHUB-ACTIONS-permissions-write-all")
+
+	newViolation := func(id string) violationutils.JasViolation {
+		return violationutils.JasViolation{
+			Violation: violationutils.Violation{ViolationType: violationutils.ServicesViolationType, Watch: "watch", ViolationId: id},
+			Rule:      sharedRule,
+			Result:    dummyResult("GITHUB-ACTIONS-permissions-write-all"),
+		}
+	}
+	result, rule := createJasViolation(newViolation("violation-1"))
+	// Multiple violations share a single rule instance, the type stamp is idempotent.
+	_, sameRule := createJasViolation(newViolation("violation-2"))
+
+	assert.Same(t, sharedRule, rule)
+	assert.Same(t, sharedRule, sameRule)
+	assert.Equal(t, violationutils.ServicesViolationType.String(), sarifutils.GetRuleViolationType(rule))
+	assert.Equal(t, utils.ServicesScan, getScanTypeFromRule("", rule))
+	assert.Equal(t, "GITHUB-ACTIONS-permissions-write-all", sarifutils.GetRuleScannerId(rule))
+	assert.Equal(t, violationutils.ServicesViolationType.String(), sarifutils.GetResultViolationType(result))
+}
+
+func dummyRule(id string) *sarif.ReportingDescriptor {
+	return sarif.NewRule(id).WithName(id)
+}
+
+func dummyResult(ruleId string) *sarif.Result {
+	return sarif.NewRuleResult(ruleId).WithMessage(sarif.NewTextMessage("issue")).WithLevel(severityutils.LevelError.String())
 }

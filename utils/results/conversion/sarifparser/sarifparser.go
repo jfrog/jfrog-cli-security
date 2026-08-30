@@ -594,8 +594,9 @@ func createAndAddScaIssue(params scaParseParams, sarifResults *[]*sarif.Result, 
 }
 
 func createJasViolation(jasViolation violationutils.JasViolation) (sarifResult *sarif.Result, rule *sarif.ReportingDescriptor) {
-	// Rule is the same as the vulnerability rule, no need to create a new one
-	rule = jasViolation.Rule
+	// Rule is the same as the vulnerability rule, no need to create a new one. A rule always belongs to a single scan type,
+	// so stamping the type on it is idempotent even though the rule is shared with the vulnerabilities run.
+	rule = appendViolationTypeToSarifRule(jasViolation.Rule, jasViolation.Violation)
 	// Copy the result to avoid modifying the original one, Append the violation context to the result properties
 	sarifResult = appendViolationContextToSarifResult(sarifutils.CopyResult(jasViolation.Result), jasViolation.Violation)
 	return
@@ -620,6 +621,9 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 		params.Summary,
 		params.MarkdownDescription,
 	)
+	if isViolation {
+		rule = appendViolationTypeToSarifRule(rule, *params.Violation)
+	}
 	if len(params.DirectComponents) == 0 && params.ImpactedPackagesName == "" && params.ImpactedPackagesVersion == "" {
 		log.Debug(fmt.Sprintf("Issue %s without any components, adding a result with the issue id only without any location", issueId))
 		// Issue without any components, lets add a result with the issue id only
@@ -686,6 +690,17 @@ func appendViolationContextToSarifResult(sarifResult *sarif.Result, violation vi
 		sarifResult.Properties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(policies, ","))
 	}
 	return sarifResult
+}
+
+func appendViolationTypeToSarifRule(rule *sarif.ReportingDescriptor, violation violationutils.Violation) *sarif.ReportingDescriptor {
+	if rule == nil || violation.ViolationType == "" {
+		return rule
+	}
+	if rule.Properties == nil {
+		rule.Properties = sarif.NewPropertyBag()
+	}
+	rule.Properties.Add(sarifutils.ViolationTypeSarifPropertyKey, violation.ViolationType.String())
+	return rule
 }
 
 func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
@@ -930,19 +945,21 @@ func getScanTypeFromRule(subScanType utils.SubScanType, rule *sarif.ReportingDes
 	if rule == nil {
 		return subScanType
 	}
-	return getScanType(subScanType, sarifutils.GetRuleId(rule))
+	return resolveScanType(subScanType, sarifutils.GetRuleViolationType(rule))
 }
 
 func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) utils.SubScanType {
 	if result == nil {
 		return subScanType
 	}
-	// Try to get from properties first
-	if violationType := sarifutils.GetResultViolationType(result); violationType != "" {
+	return resolveScanType(subScanType, sarifutils.GetResultViolationType(result))
+}
+
+func resolveScanType(defaultType utils.SubScanType, violationType string) utils.SubScanType {
+	if violationType != "" {
 		return getResultViolationType(violationType)
 	}
-	// Fallback to rule id
-	return getScanType(subScanType, sarifutils.GetResultRuleId(result))
+	return defaultType
 }
 
 func getResultViolationType(violationType string) utils.SubScanType {
@@ -958,26 +975,6 @@ func getResultViolationType(violationType string) utils.SubScanType {
 	default:
 		return utils.ScaScan
 	}
-}
-
-func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
-	if defaultType != "" || scanType == "" {
-		// If default type is given, use it
-		return defaultType
-	}
-	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
-		return utils.ScaScan
-	}
-	if strings.HasPrefix(scanType, "EXP") || strings.Contains(scanType, "SECRET") {
-		return utils.SecretsScan
-	}
-	// TODO: Add more rules to identify Services and validate them
-	if strings.Contains(scanType, "GITHUB-ACTIONS") {
-		return utils.ServicesScan
-	}
-	// TODO: Add more rules to identify IAC
-	// Default to SAST
-	return utils.SastScan
 }
 
 func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target *results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {

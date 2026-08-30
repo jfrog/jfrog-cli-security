@@ -145,10 +145,6 @@ func dumpViolationsResponseToFileIfNeeded(generatedViolations *services.Violatio
 	return utils.DumpJsonContentToFile(fileContent, resultsOutputDir, "violations", -1)
 }
 
-// exposureJasScanTypes are JAS categories that Xray reports via ExposureDetails (EXP-*).
-// Search order for type detection; extend by appending.
-var exposureJasScanTypes = []jasutils.JasScanType{jasutils.Secrets, jasutils.Services, jasutils.IaC}
-
 func convertToViolations(cmdResults *results.SecurityCommandResults, generatedViolations []services.XrayViolation) (convertedViolations violationutils.Violations, err error) {
 	convertedViolations = violationutils.Violations{}
 	for _, violation := range generatedViolations {
@@ -192,7 +188,7 @@ func isExposureViolation(violation services.XrayViolation) bool {
 }
 
 func isExposureJasScanType(jasType jasutils.JasScanType) bool {
-	return slices.Contains(exposureJasScanTypes, jasType)
+	return slices.Contains(jasutils.ExposureJasScanTypes, jasType)
 }
 
 // bomResolvedComponent holds the result of a single locateBomComponentInfo call for one Xray infected-component ID.
@@ -373,7 +369,7 @@ func convertToExposureJasViolation(cmdResults *results.SecurityCommandResults, v
 	}
 	// Full exposure id (EXP-<scanner_id>-<unique_id>) — matched by scanner-id prefix against local rules.
 	exposureId := violation.ExposureDetails.Id
-	for _, jasType := range exposureJasScanTypes {
+	for _, jasType := range jasutils.ExposureJasScanTypes {
 		match := locateJasVulnerabilityInfo(cmdResults, jasType, exposureId, violation)
 		if jasViolation := jasViolationFromMatch(jasType, violation, match); jasViolation != nil {
 			return jasViolation, jasType
