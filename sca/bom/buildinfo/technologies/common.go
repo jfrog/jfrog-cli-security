@@ -19,9 +19,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
+	xrayUtils "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 )
 
@@ -130,7 +130,7 @@ func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive 
 func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
 	technology := scanGraphParams.Technology()
-	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
+	xrayManager, err := xrayUtils.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xrayUtils.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		return nil, err
 	}

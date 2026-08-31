@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	servicesScan "github.com/jfrog/jfrog-cli-security/jas/services"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -85,6 +86,11 @@ func AddJasScannersTasks(params JasRunnerParams) error {
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
 
+	if generalError := addJasScanTaskIfNeeded(params, utils.ServicesScan, runServicesScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
+	}
+
 	if generalError := addJasScanTaskIfNeeded(params, utils.SastScan, runSastScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
@@ -146,6 +152,29 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Secrets, threadId, vulnerabilitiesResults, violationsResults)
+	}
+}
+
+func runServicesScan(params *JasRunnerParams) parallel.TaskFunc {
+	return func(threadId int) (err error) {
+		defer func() {
+			params.Runner.JasScannersWg.Done()
+		}()
+		servicesScanParams := servicesScan.ServicesScanParams{
+			ThreadId:         threadId,
+			TargetCount:      params.TargetCount,
+			ResultsToCompare: getSourceRunsToCompare(params, jasutils.Services),
+			Target:           params.ScanResults.ScanTarget,
+		}
+		vulnerabilitiesResults, violationsResults, err := servicesScan.RunServicesScan(params.Scanner, servicesScanParams)
+		params.Runner.ResultsMu.Lock()
+		defer params.Runner.ResultsMu.Unlock()
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		params.ScanResults.AddJasScanResults(jasutils.Services, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.Services, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Services, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 

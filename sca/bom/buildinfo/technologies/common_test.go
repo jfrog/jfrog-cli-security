@@ -34,7 +34,7 @@ func TestGetScaExcludePattern(t *testing.T) {
 		{
 			name:            "Test no exclude pattern recursive",
 			isRecursiveScan: true,
-			expected:        "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+			expected:        "(^.*\\.git$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
 			name:       "Test exclude pattern not recursive",
@@ -43,7 +43,7 @@ func TestGetScaExcludePattern(t *testing.T) {
 		},
 		{
 			name:     "Test no exclude pattern",
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+			expected: "(^.*\\.git$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
 			name:       "Test exclude patterns from config profile",

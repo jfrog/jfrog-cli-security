@@ -180,9 +180,9 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow
 	return
 }
 
-func ConvertToIacOrSastTableRow(rows []SourceCodeRow) (tableRows []iacOrSastTableRow) {
+func ConvertToBasicJasTableRow(rows []SourceCodeRow) (tableRows []basicJasTableRow) {
 	for i := range rows {
-		tableRows = append(tableRows, iacOrSastTableRow{
+		tableRows = append(tableRows, basicJasTableRow{
 			severity:   rows[i].Severity,
 			file:       rows[i].File,
 			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),

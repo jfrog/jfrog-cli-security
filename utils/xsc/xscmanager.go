@@ -3,13 +3,12 @@ package xsc
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscservices "github.com/jfrog/jfrog-client-go/xray/services/xsc"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservicesutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
-
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const MinXscVersionForErrorReport = "1.7.7"

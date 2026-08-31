@@ -71,6 +71,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(secrets ...[]*sarif.Run) error
+	ParseServices(services ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
 	ParseMalicious(malicious ...[]*sarif.Run) error
@@ -216,6 +217,10 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parsing JAS Secrets results
 	if err = parser.ParseSecrets(targetResults.JasResults.JasVulnerabilities.SecretsScanResults); err != nil {
+		return
+	}
+	// Parsing JAS Services results
+	if err = parser.ParseServices(targetResults.JasResults.JasVulnerabilities.ServicesScanResults); err != nil {
 		return
 	}
 	// Parsing JAS IAC results

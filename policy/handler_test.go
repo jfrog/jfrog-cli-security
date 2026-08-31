@@ -126,6 +126,15 @@ func TestCheckPolicyFailPrError(t *testing.T) {
 			expectedErr: NewFailPrError(),
 		},
 		{
+			name: "services violations with fail PR",
+			resultToTest: createResultsWithViolations(violationutils.Violations{
+				Services: []violationutils.JasViolation{
+					createJasViolation("JAS-SVC-1", violationutils.ServicesViolationType, createPolicy(false, true, false)),
+				},
+			}),
+			expectedErr: NewFailPrError(),
+		},
+		{
 			name: "violations with no fail PR",
 			resultToTest: createResultsWithViolations(violationutils.Violations{
 				Sca: []violationutils.CveViolation{
