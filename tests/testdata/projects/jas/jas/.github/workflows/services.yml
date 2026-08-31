@@ -1,0 +1,76 @@
+name: Misconfigured CI Pipeline
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+# Overly broad permissions
+permissions: write-all
+
+env:
+  # Hardcoded credentials
+  AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+  AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  DB_PASSWORD: "supersecret123!"
+  API_TOKEN: "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Dangerous: checks out PR code under pull_request_target (script injection risk)
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+
+      # Dangerous: running untrusted input directly in shell (script injection)
+      - name: Print PR title
+        run: echo "PR title is ${{ github.event.pull_request.title }}"
+
+      # Dangerous: curl piped to bash from untrusted source
+      - name: Install dependencies
+        run: curl -fsSL https://example.com/install.sh | bash
+
+      # Dangerous: unpinned third-party action (supply chain risk)
+      - name: Run some action
+        uses: some-org/some-action@main
+
+      # Dangerous: secret exposed as plain env var and echoed
+      - name: Deploy
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: |
+          echo "Deploying with key: $SECRET_KEY"
+          ./deploy.sh --token $SECRET_KEY
+
+      # Dangerous: GITHUB_TOKEN with unnecessary write permissions used in script
+      - name: Comment on PR
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"body": "Build passed!"}' \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: build
+    # No environment protection rules
+    steps:
+      - name: Deploy to production
+        env:
+          # Hardcoded private key
+          PRIVATE_KEY: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEowIBAAKCAQEA2a2rwplBQLF29amygykEMmYz0+Kcj3bKBp29Zz0mM9WXDdUk
+            FwSPBjRMTCCPjJWFRMFCqCwBTOgHzEMqCqMwRDXJFGMbIBEZQpj4l3R7EXAMPLE
+            -----END RSA PRIVATE KEY-----
+          DB_HOST: "prod-db.internal.example.com"
+          DB_USER: "admin"
+          DB_PASS: "prod_password_123"
+        run: ./scripts/deploy-prod.sh

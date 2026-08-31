@@ -1,0 +1,129 @@
+{
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "JFrog Services scanner",
+                    "rules": [],
+                    "version": ""
+                }
+            },
+            "invocations": [
+                {
+                    "executionSuccessful": true,
+                    "arguments": [
+                        "./svc_scanner",
+                        "scan",
+                        "scan.yaml"
+                    ],
+                    "workingDirectory": {
+                        "uri": "file:///tmp/services-scanner"
+                    }
+                }
+            ],
+            "results": [
+                {
+                    "message": {
+                        "text": "Overly broad permissions write-all detected"
+                    },
+                    "level": "error",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///tmp/services-scanner/.github/workflows/services.yml"
+                                },
+                                "region": {
+                                    "endColumn": 20,
+                                    "endLine": 10,
+                                    "snippet": {
+                                        "text": "permissions: write-all"
+                                    },
+                                    "startColumn": 1,
+                                    "startLine": 10
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "GITHUB-ACTIONS-permissions-write-all"
+                },
+                {
+                    "message": {
+                        "text": "Hardcoded credentials detected in workflow env"
+                    },
+                    "level": "error",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///tmp/services-scanner/.github/workflows/services.yml"
+                                },
+                                "region": {
+                                    "endColumn": 40,
+                                    "endLine": 15,
+                                    "snippet": {
+                                        "text": "AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE"
+                                    },
+                                    "startColumn": 3,
+                                    "startLine": 15
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "GITHUB-ACTIONS-hardcoded-credentials"
+                },
+                {
+                    "message": {
+                        "text": "Unpinned third-party action detected"
+                    },
+                    "level": "warning",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///tmp/services-scanner/.github/workflows/services.yml"
+                                },
+                                "region": {
+                                    "endColumn": 40,
+                                    "endLine": 41,
+                                    "snippet": {
+                                        "text": "uses: some-org/some-action@main"
+                                    },
+                                    "startColumn": 9,
+                                    "startLine": 41
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "GITHUB-ACTIONS-unpinned-action"
+                },
+                {
+                    "message": {
+                        "text": "pull_request_target with untrusted checkout detected"
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///tmp/services-scanner/.github/workflows/services.yml"
+                                },
+                                "region": {
+                                    "endColumn": 30,
+                                    "endLine": 4,
+                                    "snippet": {
+                                        "text": "pull_request_target:"
+                                    },
+                                    "startColumn": 3,
+                                    "startLine": 4
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "GITHUB-ACTIONS-pull-request-target"
+                }
+            ]
+        }
+    ],
+    "version": "2.1.0",
+    "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+}
