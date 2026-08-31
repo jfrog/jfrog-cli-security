@@ -56,7 +56,7 @@ const (
 	yarnNpmAuthTokenEnv  = "YARN_NPM_AUTH_TOKEN"
 	yarnNpmAlwaysAuthEnv = "YARN_NPM_ALWAYS_AUTH"
 	yarnV2Version        = "2.0.0"
-	yarnV3Version   = "3.0.0"
+	yarnV3Version        = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -311,7 +311,7 @@ func installErrCarriesCurationBlockSignal(installErr error) bool {
 		return false
 	}
 	errText := strings.ToLower(installErr.Error())
-	return strings.Contains(errText, "403") || strings.Contains(errText, "forbidden")
+	return strings.Contains(errText, "response code: 403")
 }
 
 // curationNoLockfileError builds an actionable error for when 'yarn install'
@@ -584,11 +584,13 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		useNativeInstall = version.NewVersion(executableYarnVersion).Compare(YarnV4Version) <= 0
 	}
 	if useNativeInstall {
-		if params.IsCurationCmd && depsRepo != "" {
-			// If .yarnrc.yml has no token, curation may have resolved a fallback credential
-			// into params.ServerDetails. Inject it into the subprocess env, since the native
-			// install path above skips the GetYarnAuthDetails+ModifyYarnConfigurations
-			// injection below (which also sets YARN_NPM_REGISTRY_SERVER, unwanted here).
+		if params.IsCurationCmd && depsRepo != "" && params.YarnCredentialsFromFallback {
+			// .yarnrc.yml had no token, so curation resolved a fallback credential into
+			// params.ServerDetails. Inject it into the subprocess env — the native install
+			// path above skips the GetYarnAuthDetails+ModifyYarnConfigurations injection
+			// below (which also sets YARN_NPM_REGISTRY_SERVER, unwanted here). Gated on
+			// YarnCredentialsFromFallback to avoid a redundant call when .yarnrc.yml
+			// already has its own token.
 			restoreAuthEnv, authErr := injectCurationFallbackAuthEnv(params.ServerDetails, depsRepo)
 			if authErr != nil {
 				return authErr

@@ -307,6 +307,11 @@ type CurationAuditCommand struct {
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
 	scriptPath            string
+	// yarnCredentialsFromFallback is true when .yarnrc.yml had no token of its own and
+	// setRepoFromYarnrc fell back to the 'jf c' server's credentials. Threaded into
+	// params.YarnCredentialsFromFallback so the subprocess only gets fallback auth injected
+	// when it's actually needed.
+	yarnCredentialsFromFallback bool
 	// pendingWarnings collects log.Warn messages that must be emitted after the
 	// progress spinner stops; otherwise the spinner's ANSI clear codes overwrite them.
 	pendingWarnings []string
@@ -1068,6 +1073,9 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
 		// Yarn: always refresh yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 		YarnOverwriteYarnLock: true,
+		// Set only when setRepoFromYarnrc actually fell back to 'jf c' credentials — see the
+		// field doc on yarnCredentialsFromFallback for why this must stay conditional.
+		YarnCredentialsFromFallback: ca.yarnCredentialsFromFallback,
 		// Pnpm params
 		MaxTreeDepth: ca.MaxTreeDepth(),
 		// Python params
@@ -1945,6 +1953,7 @@ func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir strin
 			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 			AccessToken:    registryConfig.AuthToken,
 		}
+		ca.yarnCredentialsFromFallback = false
 	} else {
 		log.Debug("yarn: no token in .yarnrc.yml — using 'jf c' server credentials")
 		// .yarnrc.yml carries no token, so we're about to attach the configured 'jf c'
@@ -1956,6 +1965,7 @@ func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir strin
 		if err != nil {
 			return err
 		}
+		ca.yarnCredentialsFromFallback = true
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).

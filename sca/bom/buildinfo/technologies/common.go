@@ -75,6 +75,11 @@ type BuildInfoBomGeneratorParams struct {
 	// YarnOverwriteYarnLock refreshes yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 	// Curation sets this to true; audit/scan leave it false to trust the existing lockfile.
 	YarnOverwriteYarnLock bool
+	// YarnCredentialsFromFallback is true when .yarnrc.yml had no token of its own and
+	// ServerDetails' credentials came from the 'jf c' server config instead. When false, the
+	// same token is already in use by .yarnrc.yml's native resolution, so injecting it into
+	// the subprocess env would just add a redundant network call.
+	YarnCredentialsFromFallback bool
 	// Pnpm params
 	MaxTreeDepth string
 	// Docker params

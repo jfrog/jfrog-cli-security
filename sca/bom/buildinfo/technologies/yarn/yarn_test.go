@@ -54,8 +54,9 @@ func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubpro
 	//#nosec G101 -- test fixture, not a real secret
 	const fallbackToken = "fallback-jf-c-token-xyz"
 	params := technologies.BuildInfoBomGeneratorParams{
-		IsCurationCmd:          true,
-		DependenciesRepository: "tst-yarn-repo",
+		IsCurationCmd:               true,
+		DependenciesRepository:      "tst-yarn-repo",
+		YarnCredentialsFromFallback: true,
 		ServerDetails: &config.ServerDetails{
 			ArtifactoryUrl: mockArtifactory.URL + "/artifactory/",
 			AccessToken:    fallbackToken,
@@ -78,6 +79,56 @@ func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubpro
 		_, exists := os.LookupEnv(key)
 		assert.False(t, exists, "%s must be restored (unset) after the subprocess exits", key)
 	}
+}
+
+// TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback verifies that
+// when .yarnrc.yml already has its own token (YarnCredentialsFromFallback is false),
+// injectCurationFallbackAuthEnv is skipped — no GetYarnAuthDetails call is made. Proven by
+// pointing ServerDetails at a server that always 500s: if the gate ever fires unconditionally
+// again, that call would fail and the install would error.
+func TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake yarn executable is a POSIX shell script")
+	}
+	var artifactoryCalled bool
+	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		artifactoryCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockArtifactory.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
+	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
+	fakeYarnScript := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
+		"env > " + envCaptureFile + "\n" +
+		"exit 0\n"
+	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+
+	//#nosec G101 -- test fixture, not a real secret
+	const yarnrcToken = "yarnrc-own-token-abc"
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:               true,
+		DependenciesRepository:      "tst-yarn-repo",
+		YarnCredentialsFromFallback: false,
+		ServerDetails: &config.ServerDetails{
+			ArtifactoryUrl: mockArtifactory.URL + "/artifactory/",
+			AccessToken:    yarnrcToken,
+		},
+	}
+
+	require.NoError(t, configureYarnResolutionServerAndRunInstall(params, curWd, fakeYarnPath),
+		"must succeed even though the mock server 500s — GetYarnAuthDetails must never be called")
+	assert.False(t, artifactoryCalled,
+		"no request should reach Artifactory: .yarnrc.yml already has its own token, so no fallback injection is needed")
+
+	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
+	require.NoError(t, readErr, "the install subprocess must have run")
+	assert.NotContains(t, string(capturedEnvBytes), "YARN_NPM_AUTH_TOKEN="+yarnrcToken,
+		"the token already lives in .yarnrc.yml; env injection is redundant when not falling back")
 }
 
 // TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials verifies that with no usable
@@ -832,6 +883,41 @@ func TestCurationNoLockfileErrorBlamesCurationOnHttp403(t *testing.T) {
 	err := curationNoLockfileError(params, root, "", "", installErr)
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unrelated to a curation block")
+}
+
+// TestCurationNoLockfileErrorDoesNotMatchBare403InUnrelatedText verifies a "403" appearing
+// incidentally in unrelated text (e.g. a port number) isn't mistaken for an HTTP 403 curation
+// block. Only the actual "Response Code: 403" shape yarn emits should match.
+func TestCurationNoLockfileErrorDoesNotMatchBare403InUnrelatedText(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("connect ECONNREFUSED 127.0.0.1:8403")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unrelated to a curation block",
+		"a bare '403' inside a port number must not be mistaken for an HTTP 403 curation block")
+}
+
+func TestCurationNoLockfileErrorDoesNotMatchBareForbiddenInUnrelatedText(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("fatal: unable to access 'https://github.com/example/repo.git/': remote: Forbidden")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unrelated to a curation block",
+		"the word 'forbidden' alone, without a 'Response Code: 403' curation signal, must not be mistaken for a curation block")
 }
 
 func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
