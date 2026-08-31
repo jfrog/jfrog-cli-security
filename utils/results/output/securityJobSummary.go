@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -73,13 +74,52 @@ type SecurityJobSummary struct{}
 func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary, err error) {
 	summary.ResultType = cmdResults.CmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
-	summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+	if summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: vulnerabilitiesRequested,
 		HasViolationContext:    violationsRequested,
 		Pretty:                 true,
-	}).ConvertToSummary(cmdResults)
+	}).ConvertToSummary(cmdResults); err != nil {
+		return
+	}
+	setScaScanReferences(&summary.Summary, cmdResults)
 	return
+}
+
+// Xray provides the link to the scan results as part of the SCA scan response.
+// It describes the scan and not the issues, so it is attached to every issue type the scan reported.
+func setScaScanReferences(summary *formats.ResultsSummary, cmdResults *results.SecurityCommandResults) {
+	for _, target := range cmdResults.Targets {
+		if target.ScaResults == nil {
+			continue
+		}
+		for i := range summary.Scans {
+			if summary.Scans[i].Target != target.Target || summary.Scans[i].Name != target.Name {
+				continue
+			}
+			for _, scaResponse := range target.ScaResults.DeprecatedXrayResults {
+				addScaScanReference(summary.Scans[i].Vulnerabilities, scaResponse)
+				if summary.Scans[i].Violations != nil {
+					addScaScanReference(&summary.Scans[i].Violations.ScanResultSummary, scaResponse)
+				}
+			}
+		}
+	}
+}
+
+func addScaScanReference(issues *formats.ScanResultSummary, scaResponse services.ScanResponse) {
+	if issues == nil {
+		return
+	}
+	if issues.ScaResults == nil {
+		issues.ScaResults = &formats.ScaScanResultSummary{}
+	}
+	if scaResponse.ScanId != "" {
+		issues.ScaResults.ScanIds = utils.UniqueUnion(issues.ScaResults.ScanIds, scaResponse.ScanId)
+	}
+	if scaResponse.XrayDataUrl != "" {
+		issues.ScaResults.MoreInfoUrls = utils.UniqueUnion(issues.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
+	}
 }
 
 func NewBuildScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary, err error) {
