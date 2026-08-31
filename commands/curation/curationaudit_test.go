@@ -4497,7 +4497,7 @@ url = "https://pypi.org/simple"
 }
 
 func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		t.Run(tech.String(), func(t *testing.T) {
 			var outsideRequested atomic.Bool
 			var requests atomic.Int32
@@ -4554,7 +4554,7 @@ func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 			},
 		},
 	}
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		for _, test := range tests {
 			t.Run(tech.String()+"/"+test.name, func(t *testing.T) {
 				var outsideRequested atomic.Bool
@@ -4594,7 +4594,7 @@ func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 // tech-branch in fetchNodeStatus (not sendBoundedRequest directly) to guard against a
 // regression that silently narrows the bounded-redirect condition back to Pipenv only.
 func TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects(t *testing.T) {
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		t.Run(tech.String(), func(t *testing.T) {
 			var outsideRequested atomic.Bool
 			var requests atomic.Int32
@@ -5046,7 +5046,7 @@ func TestFetchCvsBlockedStatusUv(t *testing.T) {
 	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -5062,6 +5062,9 @@ func TestFetchCvsBlockedStatusUv(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
@@ -5120,7 +5123,7 @@ func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
 	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -5139,6 +5142,9 @@ func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
