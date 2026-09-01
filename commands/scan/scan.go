@@ -46,6 +46,7 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayClientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -217,7 +218,32 @@ func (scanCmd *ScanCommand) SetScansToPerform(scansToPerform []utils.SubScanType
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
+	scanCmd.multiScanId, scanCmd.startTime = xsc.SendNewScanEvent(
+		scanCmd.xrayVersion,
+		scanCmd.xscVersion,
+		scanCmd.serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, scanCmd.serverDetails, scanCmd.getAnalyticsProjectPath()),
+		scanCmd.resultsContext.ProjectKey,
+	)
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *results.SecurityCommandResults) (err error) {
+		if scanResults == nil {
+			return
+		}
+		xsc.SendScanEndedWithResults(scanCmd.serverDetails, scanResults)
+		return scanCmd.recordResults(scanResults)
+	})
+}
+
+// Returns a single descriptive string of the scan's targets. Multiple targets are joined since jf scan may have multiple working-directory
+func (scanCmd *ScanCommand) getAnalyticsProjectPath() string {
+	if scanCmd.spec == nil {
+		return ""
+	}
+	patterns := make([]string, 0, len(scanCmd.spec.Files))
+	for _, file := range scanCmd.spec.Files {
+		patterns = append(patterns, file.Pattern)
+	}
+	return strings.Join(patterns, ", ")
 }
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
