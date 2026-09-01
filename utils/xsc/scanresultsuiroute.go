@@ -4,8 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
+	xrayutils "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"

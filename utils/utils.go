@@ -62,9 +62,9 @@ const (
 
 var (
 	// Exclude pattern for files.
-	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
+	DefaultJasExcludePatterns = []string{"**/*.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
 	// Exclude pattern for directories.
-	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
+	DefaultScaExcludePatterns = []string{"*.git", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
 )
 
 const (
@@ -73,6 +73,7 @@ const (
 	IacScan                   SubScanType = "iac"
 	SastScan                  SubScanType = "sast"
 	SecretsScan               SubScanType = "secrets"
+	ServicesScan              SubScanType = "services"
 	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 	MaliciousCodeScan         SubScanType = "malicious_code"
 )
@@ -83,6 +84,7 @@ var subScanTypeToText = map[SubScanType]string{
 	IacScan:                "IaC",
 	SastScan:               "SAST",
 	SecretsScan:            "Secrets",
+	ServicesScan:           "Services",
 	MaliciousCodeScan:      "Malicious Code",
 }
 
@@ -126,7 +128,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, ServicesScan, SecretTokenValidationScan, MaliciousCodeScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
@@ -134,7 +136,7 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, centralConfigRequ
 	if centralConfigRequestedParam != nil {
 		return *centralConfigRequestedParam
 	}
-	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
+	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan || subScan == ServicesScan) {
 		return false
 	}
 	if subScan == MaliciousCodeScan {
@@ -145,7 +147,7 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, centralConfigRequ
 }
 
 func getScanFindingName(scanType SubScanType) string {
-	if scanType == SecretsScan {
+	if scanType == SecretsScan || scanType == ServicesScan {
 		return fmt.Sprintf("%s exposures", subScanTypeToText[scanType])
 	}
 	return fmt.Sprintf("%s vulnerabilities", subScanTypeToText[scanType])
