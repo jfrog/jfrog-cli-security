@@ -98,7 +98,9 @@ func setScaScanReferences(summary *formats.ResultsSummary, cmdResults *results.S
 				continue
 			}
 			for _, scaResponse := range target.ScaResults.DeprecatedXrayResults {
-				addScaScanReference(summary.Scans[i].Vulnerabilities, scaResponse)
+				if summary.Scans[i].Vulnerabilities != nil {
+					addScaScanReference(summary.Scans[i].Vulnerabilities, scaResponse)
+				}
 				if summary.Scans[i].Violations != nil {
 					addScaScanReference(&summary.Scans[i].Violations.ScanResultSummary, scaResponse)
 				}
@@ -108,9 +110,6 @@ func setScaScanReferences(summary *formats.ResultsSummary, cmdResults *results.S
 }
 
 func addScaScanReference(issues *formats.ScanResultSummary, scaResponse services.ScanResponse) {
-	if issues == nil {
-		return
-	}
 	if issues.ScaResults == nil {
 		issues.ScaResults = &formats.ScaScanResultSummary{}
 	}
