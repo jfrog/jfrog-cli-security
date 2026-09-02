@@ -539,8 +539,10 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 	// Create the server details config file
 	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
 
-	// Gem has no 'jf ruby-config'/ruby.yaml — it always resolves natively from a
-	// gemrc-style ':sources:' list.
+	// Every Gem test case gets a ~/.gemrc with an Artifactory-shaped source, whether or not the
+	// fixture project also has a ruby.yaml. ruby.yaml takes priority when present (see
+	// setRepoFromGemrc), so this also exercises the both-present-yaml-wins case for fixtures
+	// that ship one, e.g. curation-project.
 	var callbackGemrc func()
 	if testCase.tech == techutils.Gem {
 		gemrcPath := filepath.Join(tempHomeDirPath, "gemrc")
@@ -834,6 +836,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			// curation-project ships a ruby.yaml, and createTempHomeDirWithConfig auto-generates
+			// a ~/.gemrc for every Gem test case too — so this also proves ruby.yaml takes
+			// priority over ~/.gemrc when both are present (see setRepoFromGemrc). The
+			// yaml-absent / ~/.gemrc-fallback / no-config-error paths are covered at the unit
+			// level (TestSetRepoFromGemrc_*), matching how pip's single yaml-based integration
+			// fixture pairs with its own unit tests for the fallback/error paths.
 			name:          "gem tree - one blocked package",
 			tech:          techutils.Gem,
 			pathToProject: filepath.Join("projects", "package-managers", "gem", "curation-project"),
@@ -853,9 +861,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Gemfile": filepath.Join("tests", "testdata", "projects", "package-managers", "gem", "curation-project", "Gemfile"),
 			},
 
-			// Block a package that your logs confirm is being requested.
+			// Block a package that your logs confirm is being requested. The repo name
+			// (ruby-yaml-repo) is intentionally distinct from the ~/.gemrc source that
+			// createTempHomeDirWithConfig auto-generates for every Gem test (ruby-remote),
+			// so this test can actually distinguish ruby.yaml winning from ~/.gemrc winning.
 			requestToFail: map[string]bool{
-				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+				"/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem": true,
 			},
 
 			// Expect a report containing the exact blocked package.
@@ -866,7 +877,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "actionview",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -883,7 +894,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "activesupport",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "direct",
@@ -900,7 +911,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "rails-dom-testing",
 							ParentVersion:     "2.3.0",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -4846,8 +4857,8 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
 	})
-	// gem has no 'jf ruby-config' either; it always resolves natively from ~/.gemrc,
-	// so --run-native has nothing to switch between — accepted as a no-op.
+	// gem already resolves automatically (ruby.yaml, then ~/.gemrc); --run-native has
+	// nothing to switch between here — accepted as a no-op.
 	t.Run("gem accepts --run-native as a redundant no-op", func(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Gem, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Gem, false))
@@ -5856,6 +5867,26 @@ func TestSetRepoFromGemrc_NoYamlNoGemrc_ReturnsGenericConfigError(t *testing.T) 
 	assert.Contains(t, err.Error(), "no config file was found")
 	assert.Contains(t, err.Error(), "'jf ruby c'")
 	assert.NotContains(t, err.Error(), "gemrc")
+}
+
+// A ~/.gemrc that exists but fails to parse (malformed YAML) is a real misconfiguration, not
+// "nothing set up yet" -- the specific parse failure must be surfaced directly instead of being
+// collapsed into the generic "no config file was found" message, which wouldn't fix it.
+func TestSetRepoFromGemrc_MalformedGemrcYaml_ReturnsSpecificParseError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	require.NoError(t, os.WriteFile(filepath.Join(tempHomeDir, ".gemrc"), []byte(":sources: [unterminated"), 0600))
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse", "the real parse error must be surfaced")
+	assert.NotContains(t, err.Error(), "no config file was found",
+		"a real parse failure must not be masked as 'nothing configured'")
 }
 
 func TestHasCargoProject(t *testing.T) {

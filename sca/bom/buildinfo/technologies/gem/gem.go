@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/jfrog/gofrog/io"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"gopkg.in/yaml.v3"
@@ -30,8 +31,9 @@ const (
 	stateSearchGEM        = iota
 	stateSearchSpecsKeyword
 	stateInSpecsSection
-	artifactoryApiGemsPath = "/api/gems/"
 )
+
+const artifactoryApiGemsPath = "/api/gems/"
 
 var sectionTerminators = map[string]bool{
 	"DEPENDENCIES":  true,
@@ -482,15 +484,16 @@ func calculateUniqueDependencies(trees []*xrayUtils.GraphNode) []string {
 }
 
 // GetNativeGemRegistryConfig reads gemrc's ':sources:' list and returns the first
-// Artifactory gems source found. Gem has no 'jf ruby-config' command, so this is
-// always how it resolves the curation repository.
+// Artifactory gems source found. This is the ~/.gemrc fallback consulted only when no
+// ruby.yaml ('jf ruby-config') is present -- see setRepoFromGemrc in the curation package
+// for the full priority.
 func GetNativeGemRegistryConfig() (*GemrcRegistryConfig, error) {
 	sources, sourcePath, err := readEffectiveGemSources(DefaultGemrcPaths()...)
 	if err != nil {
 		return nil, err
 	}
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("no ':sources:' configured in %s -- run 'gem sources --add <artifactory-gems-url>' "+
+		return nil, newNotConfiguredError("no ':sources:' configured in %s -- run 'gem sources --add <artifactory-gems-url>' "+
 			"(see Artifactory's 'Set Me Up' instructions for your Gems repository)", sourcePath)
 	}
 	for _, source := range sources {
@@ -499,13 +502,21 @@ func GetNativeGemRegistryConfig() (*GemrcRegistryConfig, error) {
 			return cfg, nil
 		}
 	}
-	return nil, fmt.Errorf(
+	return nil, newNotConfiguredError(
 		"none of the sources configured in %s point at an Artifactory Gems repository (expected %q in the URL) -- "+
 			"run 'gem sources --add <artifactory-gems-url>' (see Artifactory's 'Set Me Up' instructions for your Gems repository)",
 		sourcePath, artifactoryApiGemsPath)
 }
 
-// DefaultGemrcPaths returns gemrc file candidates in RubyGems' load order:
+type NotConfiguredError struct{ msg string }
+
+func (e *NotConfiguredError) Error() string { return e.msg }
+
+func newNotConfiguredError(format string, args ...any) error {
+	return errorutils.CheckError(&NotConfiguredError{msg: fmt.Sprintf(format, args...)})
+}
+
+// DefaultGemrcPaths returns the gemrc file candidates this feature consults:
 // ~/.gemrc, followed by any files listed in GEMRC. A later file's ':sources:' overrides an earlier one.
 func DefaultGemrcPaths() []string {
 	var paths []string
@@ -522,11 +533,8 @@ func DefaultGemrcPaths() []string {
 		}
 	}
 	if envGemrc := os.Getenv("GEMRC"); envGemrc != "" {
-		separator := ":"
-		if runtime.GOOS == "windows" {
-			separator = ";"
-		}
-		for _, path := range strings.Split(envGemrc, separator) {
+		isSeparator := func(r rune) bool { return r == ';' || (r == ':' && runtime.GOOS != "windows") }
+		for _, path := range strings.FieldsFunc(envGemrc, isSeparator) {
 			if path = strings.TrimSpace(path); path != "" {
 				paths = append(paths, path)
 			}
@@ -608,7 +616,13 @@ func parseArtifactoryGemSourceUrl(sourceUrl string) (*GemrcRegistryConfig, bool)
 	}
 	if parsed.User != nil {
 		cfg.AuthUser = parsed.User.Username()
-		cfg.AuthToken, _ = parsed.User.Password()
+		if token, hasPassword := parsed.User.Password(); hasPassword {
+			cfg.AuthToken = token
+		} else if cfg.AuthUser != "" {
+			log.Warn(fmt.Sprintf("gem: ~/.gemrc source for repo %q has a single-segment credential "+
+				"(%q@%s) with no password; RubyGems 'Set Me Up' always uses user:token@host — "+
+				"falling back to the 'jf c' server's credentials instead", repoName, cfg.AuthUser, parsed.Host))
+		}
 	}
 	return cfg, true
 }

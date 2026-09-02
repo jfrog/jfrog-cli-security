@@ -2,11 +2,14 @@ package gem
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -145,6 +148,38 @@ func TestParseArtifactoryGemSourceUrl(t *testing.T) {
 			assert.Equal(t, tc.expectedToken, cfg.AuthToken)
 		})
 	}
+}
+
+// Regression test: a gemrc source with a single-segment (username-only, no colon) userinfo used
+// to be silently discarded -- AuthToken stayed empty and the caller fell back to the 'jf c'
+// server's credentials while logging "no credentials embedded", which is inaccurate. It's now
+// warned about instead, since it's a credential-shaped value that's actually being ignored.
+func TestParseArtifactoryGemSourceUrl_UsernameOnlyCredentialWarns(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cfg, ok := parseArtifactoryGemSourceUrl("https://sometoken@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/") // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+	require.True(t, ok)
+	assert.Equal(t, "sometoken", cfg.AuthUser)
+	assert.Empty(t, cfg.AuthToken, "a single-segment userinfo has no password to extract")
+	assert.Contains(t, buf.String(), "single-segment credential",
+		"a credential-shaped-but-unusable userinfo must be warned about, not silently discarded")
+}
+
+// A normal two-segment user:token@host credential (the documented "Set Me Up" convention)
+// must not trigger the single-segment warning.
+func TestParseArtifactoryGemSourceUrl_TwoSegmentCredentialDoesNotWarn(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cfg, ok := parseArtifactoryGemSourceUrl("https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/") // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+	require.True(t, ok)
+	assert.Equal(t, "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET", cfg.AuthToken)
+	assert.Empty(t, buf.String(), "a well-formed two-segment credential must not be warned about")
 }
 
 func TestExtractGemSourcesList(t *testing.T) {
@@ -325,6 +360,26 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 		assert.NotContains(t, err.Error(), "~/.gemrc")
 	})
 
+	t.Run("GEMRC accepts ';' as a separator on non-Windows too", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("';' is the only separator on Windows regardless of this fix")
+		}
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+
+		firstGemrc := filepath.Join(t.TempDir(), "first-gemrc")
+		require.NoError(t, os.WriteFile(firstGemrc, []byte(":sources:\n- https://rubygems.org/\n"), 0600))
+		secondGemrc := filepath.Join(t.TempDir(), "second-gemrc")
+		require.NoError(t, os.WriteFile(secondGemrc,
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+		t.Setenv("GEMRC", firstGemrc+";"+secondGemrc)
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
 	t.Run("falls back to $XDG_CONFIG_HOME/gem/gemrc when ~/.gemrc doesn't exist", func(t *testing.T) {
 		tempHome := t.TempDir()
 		xdgConfigHome := t.TempDir()
@@ -376,5 +431,44 @@ func TestGetNativeGemRegistryConfig(t *testing.T) {
 			"gemrc source credentials must never be written to the log")
 		assert.NotContains(t, buf.String(), "admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
 			"gemrc source credentials must never be written to the log")
+	})
+
+	t.Run("a malformed gemrc file is not classified as NotConfiguredError", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"), []byte(":sources: [unterminated"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse")
+
+		var notConfigured *NotConfiguredError
+		assert.False(t, errors.As(err, &notConfigured),
+			"a real parse failure must not be classified as 'not configured'")
+	})
+
+	t.Run("not-configured errors are routed through errorutils.CheckError", func(t *testing.T) {
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+		t.Setenv("XDG_CONFIG_HOME", "")
+
+		var checkedErr error
+		origCheckError := errorutils.CheckError
+		errorutils.CheckError = func(err error) error {
+			checkedErr = err
+			return err
+		}
+		defer func() { errorutils.CheckError = origCheckError }()
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Same(t, err, checkedErr, "the not-configured error must be passed through errorutils.CheckError")
+
+		var notConfigured *NotConfiguredError
+		assert.True(t, errors.As(err, &notConfigured), "must be classifiable as NotConfiguredError")
 	})
 }

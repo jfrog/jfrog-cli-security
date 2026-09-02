@@ -2088,6 +2088,10 @@ func (ca *CurationAuditCommand) setRepoFromGemrc() error {
 
 	registryConfig, err := gemtech.GetNativeGemRegistryConfig()
 	if err != nil {
+		var notConfigured *gemtech.NotConfiguredError
+		if !errors.As(err, &notConfigured) {
+			return fmt.Errorf("gem: failed to read Artifactory details from ~/.gemrc: %w", err)
+		}
 		log.Debug(fmt.Sprintf("gem: failed to read Artifactory details from ~/.gemrc: %s", err.Error()))
 		_, noConfigErr := ca.getRepoParams(projectType)
 		return noConfigErr

@@ -1,0 +1,5 @@
+version: 1
+type: ruby
+resolver:
+    repo: ruby-yaml-repo
+    serverId: test
