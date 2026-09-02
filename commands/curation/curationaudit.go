@@ -1149,8 +1149,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Usually already resolved by checkSupportByVersionOrEnv's earlier GetAuth call;
-	// only re-read ~/.gemrc here if that didn't happen.
+	// Usually already resolved by checkSupportByVersionOrEnv's earlier GetAuth call; only
+	// re-resolve here if that didn't happen. setRepoFromGemrc() prefers ruby.yaml when
+	// present, falling back to ~/.gemrc.
 	if tech == techutils.Gem && ca.PackageManagerConfig == nil {
 		if err := ca.setRepoFromGemrc(); err != nil {
 			return err
@@ -1184,7 +1185,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			}
 		}
 	}
-	// gem has no jf ruby-config yaml; use server details from ~/.gemrc instead.
+	// gem's repo/server were already resolved above by setRepoFromGemrc() (from ruby.yaml or
+	// ~/.gemrc); skip the generic yaml lookup and use those resolved server details.
 	if tech == techutils.Gem {
 		params.IgnoreConfigFile = true
 		if ca.PackageManagerConfig != nil {
@@ -1229,9 +1231,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
-	// gem has no 'jf ruby-config' either; --run-native is a no-op here too.
+	// gem has nothing to switch between here; --run-native is a no-op.
 	if ca.RunNative() && tech == techutils.Gem {
-		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for gem; gem always resolves natively from the Artifactory-shaped entry in ~/.gemrc's ':sources:' list")
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for gem; the repository is resolved automatically from 'jf ruby-config' or ~/.gemrc")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1679,7 +1681,7 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromCargoConfig()
 	}
 
-	// Gem has no 'jf ruby-config' command; read the registry from ~/.gemrc instead.
+	// Gem prefers ruby.yaml if configured, falling back to ~/.gemrc otherwise.
 	if tech == techutils.Gem {
 		return ca.setRepoFromGemrc()
 	}
@@ -1828,9 +1830,8 @@ func (ca *CurationAuditCommand) setRepoFromPipConf() error {
 		return nil
 	}
 
-	return errorutils.CheckErrorf(
-		"curation-audit for pip requires an Artifactory PyPI resolver. " +
-			"Either run 'jf pip-config' or configure index-url in your user pip.conf via Artifactory 'Set me up'.")
+	_, noConfigErr := ca.getRepoParams(projectType)
+	return noConfigErr
 }
 
 // setRepoFromPyproject detects the Artifactory PyPI source for poetry curation. Poetry has no
@@ -1895,8 +1896,8 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// pipenv has no 'jf pipenv-config' either — always resolves automatically
 		// from pip.conf, then the Pipfile [[source]].
 		techutils.Pipenv: {},
-		// gem has no 'jf ruby-config' either — always resolves natively from the
-		// Artifactory-shaped entry in ~/.gemrc's ':sources:' list.
+		// gem resolves automatically from 'jf ruby-config' (ruby.yaml) if configured,
+		// falling back to ~/.gemrc otherwise.
 		techutils.Gem: {},
 	}
 	if _, ok := supported[tech]; ok {
@@ -2081,15 +2082,37 @@ func (ca *CurationAuditCommand) setRepoFromCargoConfig() error {
 	return nil
 }
 
-// setRepoFromGemrc reads the Artifactory gems repository from ~/.gemrc. Gem has no
-// 'jf ruby-config' command, so this is always how it resolves.
+// setRepoFromGemrc detects the Artifactory Gems source for gem curation.
 //
-// Auth priority: credentials embedded in the ~/.gemrc source URL, falling back to
-// the 'jf c' server config if the source has none.
+// Detection priority:
+//  1. ruby.yaml — explicit 'jf ruby-config' (or a manually configured project resolver).
+//  2. ~/.gemrc's ':sources:' — Artifactory "Set me up" for gem.
+//
+// For case 2, auth priority: credentials embedded in the ~/.gemrc source URL, falling
+// back to the 'jf c' server config if the source has none.
 func (ca *CurationAuditCommand) setRepoFromGemrc() error {
+	projectType := techutils.Gem.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, resolverErr := ca.getRepoParams(projectType)
+		if resolverErr != nil {
+			return resolverErr
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("gem: using Artifactory repository %q from ruby.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
 	registryConfig, err := gemtech.GetNativeGemRegistryConfig()
 	if err != nil {
-		return fmt.Errorf("gem: failed to read Artifactory details from ~/.gemrc: %w", err)
+		log.Debug(fmt.Sprintf("gem: failed to read Artifactory details from ~/.gemrc: %s", err.Error()))
+		_, noConfigErr := ca.getRepoParams(projectType)
+		return noConfigErr
 	}
 
 	var serverDetails *config.ServerDetails

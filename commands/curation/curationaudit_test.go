@@ -4366,8 +4366,8 @@ func TestSetRepoFromPipConf_ErrorsWhenNeitherResolves(t *testing.T) {
 	ca := NewCurationAuditCommand()
 	err := ca.setRepoFromPipConf()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf pip-config")
-	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
@@ -4395,8 +4395,8 @@ func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.
 	ca := NewCurationAuditCommand()
 	err := ca.setRepoFromPipConf()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf pip-config")
-	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
@@ -5731,6 +5731,67 @@ func TestSetRepoFromGemrcUsesEmbeddedCredentialsWithoutServerConfigured(t *testi
 	require.NoError(t, sdErr)
 	assert.Equal(t, "admin", serverDetails.User)
 	assert.Equal(t, "mytoken", serverDetails.Password)
+}
+
+// ruby.yaml (an explicit 'jf ruby-config') must win over ~/.gemrc when both are present.
+func TestSetRepoFromGemrc_RubyYamlPresent_TakesPriorityOverGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://acme.jfrog.io/artifactory/api/gems/gemrc-repo/")
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "ruby.yaml"), []byte(`version: 1
+type: ruby
+resolver:
+    repo: yaml-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "yaml-repo", ca.PackageManagerConfig.TargetRepo(), "ruby.yaml must take priority over ~/.gemrc")
+}
+
+// With no ruby.yaml, ~/.gemrc must still be used as the fallback.
+func TestSetRepoFromGemrc_NoRubyYaml_FallsBackToGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+}
+
+// With neither ruby.yaml nor a usable ~/.gemrc source, the same generic "no config file was
+// found" error used by every other unconfigured tech is returned — not a gemrc-specific one.
+func TestSetRepoFromGemrc_NoYamlNoGemrc_ReturnsGenericConfigError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "'jf ruby c'")
+	assert.NotContains(t, err.Error(), "gemrc")
 }
 
 func TestHasCargoProject(t *testing.T) {
