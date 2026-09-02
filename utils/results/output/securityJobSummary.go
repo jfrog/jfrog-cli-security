@@ -113,6 +113,15 @@ func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandRe
 	return
 }
 
+// NewCurationActionsSummary wraps a GitHub Actions curation report for the job-summary
+// pipeline. It's recorded through the same "security" command-summary manager as
+// NewCurationSummary, not a separate one - see GenerateActionsCurationSectionMarkdown for why.
+func NewCurationActionsSummary(actions []formats.CuratedAction, target string) (summary ScanCommandResultSummary) {
+	summary.ResultType = utils.CurationActions
+	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{Target: target, CuratedActions: &formats.CuratedActions{Actions: actions}}}}
+	return
+}
+
 type ResultSummaryArgs struct {
 	BaseJfrogUrl string `json:"base_jfrog_url,omitempty"`
 	// Args to id the result
@@ -355,13 +364,25 @@ func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGene
 	return EmptyMarkdownGenerator{}
 }
 
-// Generate the Security section (Curation)
+// Generate the Security section (Curation, GitHub Actions Curation)
 func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
 	curationData, _, err := loadContent(dataFilePaths, utils.Curation)
 	if err != nil {
 		return
 	}
-	return GenerateSecuritySectionMarkdown(curationData)
+	if markdown, err = GenerateSecuritySectionMarkdown(curationData); err != nil {
+		return
+	}
+	actionsData, _, err := loadContent(dataFilePaths, utils.CurationActions)
+	if err != nil {
+		return
+	}
+	actionsMarkdown, err := GenerateActionsCurationSectionMarkdown(actionsData)
+	if err != nil {
+		return
+	}
+	markdown += actionsMarkdown
+	return
 }
 
 func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (markdown string, err error) {
@@ -381,6 +402,40 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 	}
 	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 Curation Audit", markdown)
 	return
+}
+
+// GenerateActionsCurationSectionMarkdown renders the GitHub Actions curation report as its own
+// collapsible details block, sibling to (not merged with) the package-curation table above -
+// the two report different things (actions vs. resolved dependency packages) with different
+// columns, so a shared table would lose information rather than simplify anything.
+func GenerateActionsCurationSectionMarkdown(actionsData []formats.ResultsSummary) (markdown string, err error) {
+	if !hasCurationActionsCommand(actionsData) {
+		return
+	}
+	markdown += "\n\n| Action | Ref | Parent | Status | Notes |\n|--------|-----|--------|--------|-------|"
+	for i := range actionsData {
+		for _, summary := range actionsData[i].Scans {
+			if !summary.HasCuratedActions() {
+				continue
+			}
+			for _, action := range summary.CuratedActions.Actions {
+				markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", action.Action, action.Ref, action.Parent, action.Status, action.Notes)
+			}
+		}
+	}
+	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 GitHub Actions Curation", markdown)
+	return
+}
+
+func hasCurationActionsCommand(data []formats.ResultsSummary) bool {
+	for _, summary := range data {
+		for _, scan := range summary.Scans {
+			if scan.HasCuratedActions() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func hasCurationCommand(data []formats.ResultsSummary) bool {
