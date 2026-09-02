@@ -384,7 +384,10 @@ func listNativeNuGetSources(toolName string) ([]nugetSource, error) {
 	// #nosec G204 -- executable and args are hardcoded above, restricted to dotnet/nuget.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed running '%s' to list the configured NuGet sources: %s", cmd.String(), strings.TrimSpace(string(output)))
+		if trimmedOutput := strings.TrimSpace(string(output)); trimmedOutput != "" {
+			return nil, fmt.Errorf("failed running '%s' to list the configured NuGet sources: %s", cmd.String(), trimmedOutput)
+		}
+		return nil, fmt.Errorf("failed running '%s' to list the configured NuGet sources: %w", cmd.String(), err)
 	}
 	return parseNuGetSourcesOutput(string(output)), nil
 }
@@ -418,13 +421,13 @@ func parseNuGetSourcesOutput(output string) []nugetSource {
 // Artifactory server's host, parsed into its Artifactory base URL and repository name.
 // Returns a clear error when no configured source matches.
 func selectMatchingNuGetSource(sources []nugetSource, artifactoryUrl, toolName string) (*NuGetRegistrySourceConfig, error) {
-	artifactoryHost, err := hostOf(artifactoryUrl)
+	artifactoryHost, err := schemeAndHostOf(artifactoryUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse the configured Artifactory URL %q: %w", artifactoryUrl, err)
 	}
 
 	for _, source := range sources {
-		sourceHost, hostErr := hostOf(source.url)
+		sourceHost, hostErr := schemeAndHostOf(source.url)
 		if hostErr != nil || !strings.EqualFold(sourceHost, artifactoryHost) {
 			continue
 		}
@@ -479,16 +482,16 @@ func parseArtifactoryNugetSourceUrl(sourceUrl string) (rtBaseUrl, repoName strin
 	return rtBaseUrl, repoName, nil
 }
 
-// hostOf returns the hostname (without port) of the given URL.
-func hostOf(rawUrl string) (string, error) {
+// schemeAndHostOf returns "scheme://host[:port]" of the given URL.
+func schemeAndHostOf(rawUrl string) (string, error) {
 	parsed, err := url.Parse(rawUrl)
 	if err != nil {
 		return "", err
 	}
-	if parsed.Hostname() == "" {
+	if parsed.Host == "" {
 		return "", fmt.Errorf("no host found in URL %q", rawUrl)
 	}
-	return parsed.Hostname(), nil
+	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
 func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils.GraphNode, allUniqueDeps []string) {

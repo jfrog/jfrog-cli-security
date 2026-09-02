@@ -522,21 +522,22 @@ func TestParseArtifactoryNugetSourceUrl(t *testing.T) {
 	}
 }
 
-func TestHostOf(t *testing.T) {
+func TestSchemeAndHostOf(t *testing.T) {
 	testCases := []struct {
 		name         string
 		rawUrl       string
 		expectedHost string
 		expectErr    bool
 	}{
-		{name: "standard https URL", rawUrl: "https://artifactory.example.com/artifactory/api/nuget/v3/repo/index.json", expectedHost: "artifactory.example.com"},
-		{name: "URL with port", rawUrl: "https://artifactory.example.com:8081/artifactory/api/nuget/repo", expectedHost: "artifactory.example.com"},
+		{name: "standard https URL", rawUrl: "https://artifactory.example.com/artifactory/api/nuget/v3/repo/index.json", expectedHost: "https://artifactory.example.com"},
+		{name: "URL with port", rawUrl: "https://artifactory.example.com:8081/artifactory/api/nuget/repo", expectedHost: "https://artifactory.example.com:8081"},
+		{name: "http URL — scheme is part of the match key, not stripped", rawUrl: "http://artifactory.example.com/artifactory/api/nuget/v3/repo/index.json", expectedHost: "http://artifactory.example.com"},
 		{name: "no host in URL", rawUrl: "/just/a/path", expectErr: true},
 		{name: "empty URL", rawUrl: "", expectErr: true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			host, err := hostOf(tc.rawUrl)
+			host, err := schemeAndHostOf(tc.rawUrl)
 			if tc.expectErr {
 				assert.Error(t, err)
 				return
@@ -545,6 +546,18 @@ func TestHostOf(t *testing.T) {
 			assert.Equal(t, tc.expectedHost, host)
 		})
 	}
+}
+
+// TestSelectMatchingNuGetSource_SchemeMismatch_NotTreatedAsMatch verifies a same-host
+// http:// native source is never matched against a https:// configured Artifactory server —
+// otherwise https credentials from 'jf c' would be attached to a plaintext source.
+func TestSelectMatchingNuGetSource_SchemeMismatch_NotTreatedAsMatch(t *testing.T) {
+	sources := []nugetSource{
+		{name: "Artifactory", url: "http://artifactory.example.com/artifactory/api/nuget/v3/repo/index.json"},
+	}
+	_, err := selectMatchingNuGetSource(sources, "https://artifactory.example.com/artifactory/", dotnetToolType)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not find a NuGet source configured")
 }
 
 func TestSelectMatchingNuGetSource(t *testing.T) {

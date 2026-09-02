@@ -778,6 +778,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 		techs = promoteYarnWorkspaceMember(techs)
 		techs = promotePipToUv(techs)
+		techs = slices.DeleteFunc(techs, func(t string) bool { return t == techutils.Dotnet.String() })
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
 			hfTech := techutils.HuggingFaceML.String()
@@ -1911,8 +1912,9 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 //     host matches the 'jf c' server — Artifactory "Set me up". Credentials still come from
 //     the 'jf c' server, never from the native config.
 //
-// If neither resolves, the specific native error is logged at Debug level and the generic
-// "no config file was found" error is returned.
+// If neither resolves, the generic "no config file was found" error is returned, wrapped
+// together with the specific native-source detection failure so the user isn't left
+// guessing why the native fallback didn't work either.
 func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
 	projectType := techutils.Nuget.GetProjectType()
 	_, configExists, err := project.GetProjectConfFilePath(projectType)
@@ -1941,9 +1943,8 @@ func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
 
 	registryConfig, err := nugettech.GetNativeNuGetRegistryConfig(serverDetails)
 	if err != nil {
-		log.Debug(fmt.Sprintf("NuGet: failed to read Artifactory details from native NuGet/.NET CLI sources: %s", err.Error()))
 		_, noConfigErr := ca.getRepoParams(projectType)
-		return noConfigErr
+		return fmt.Errorf("%w; additionally, native NuGet/.NET CLI source detection failed: %w", noConfigErr, err)
 	}
 
 	resolvedServerDetails := *serverDetails

@@ -4877,7 +4877,8 @@ func TestSetRepoFromNuGetSourceAcceptsMatchingHost(t *testing.T) {
 
 // TestSetRepoFromNuGetSourceNoMatchingHost verifies that when none of the configured NuGet
 // sources match the 'jf c' server's host, setRepoFromNuGetSource falls back to the generic
-// "no config file was found" error and never attaches credentials.
+// "no config file was found" error, wrapped with the native-source detection failure so the
+// user still sees why the native fallback didn't resolve either, and never attaches credentials.
 func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
 	toolDir := t.TempDir()
 	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
@@ -4901,6 +4902,8 @@ func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
 	setErr := ca.setRepoFromNuGetSource()
 	require.Error(t, setErr)
 	assert.Contains(t, setErr.Error(), "no config file was found")
+	assert.Contains(t, setErr.Error(), "native NuGet/.NET CLI source detection failed")
+	assert.Contains(t, setErr.Error(), "could not find a NuGet source configured")
 	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when no source matches")
 }
 
@@ -4977,112 +4980,6 @@ func TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative(t *testing.T) {
 			require.NoError(t, ca.SetRepo(techutils.Nuget))
 			require.NotNil(t, ca.PackageManagerConfig)
 			assert.Equal(t, "nuget-test-repo", ca.PackageManagerConfig.TargetRepo())
-		})
-	}
-}
-
-// TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
-// fallback for the resolver-config lookup in auditTree. The exact
-// reason this fallback has to live here, separate from the existing
-// SetRepo fallback, is that auditTree calls
-// SetResolutionRepoInParamsIfExists *before* it reaches SetRepo — and
-// that earlier call is what populates params.DependenciesRepository,
-// which in turn decides whether configureYarnResolutionServerAndRunInstall
-// performs the .yarnrc.yml backup/replace/restore round-trip. Without
-// the round-trip, a 'yarn install' against curation that hits a 403
-// can leave the workspace install state inconsistent and the
-// downstream 'yarn info' enumeration fails with a workspace-assertion
-// error. So the contract under test is twofold:
-//
-//  1. For tech=Yarn with only npm.yaml present, return Npm so the
-//     resolver lookup reads npm.yaml (npm and yarn share the same
-//     Artifactory npm API, so the same repo serves both ecosystems).
-//  2. For any other input (yarn.yaml present, both present, neither
-//     present, or tech≠Yarn) return the input tech unchanged.
-//
-// The Npm-detected case is intentionally not exercised here because
-// resolveNpmYarnTech already upgrades that case to Yarn at the
-// detection layer (see TestResolveNpmYarnTech-style coverage in
-// resolveNpmYarnTech consumers); by the time auditTree sees tech=Npm
-// a matching npm.yaml is guaranteed to exist.
-//
-// Each subtest builds a hermetic .jfrog/projects/ directory, chdirs
-// into it, and isolates JFROG_CLI_HOME_DIR so a real config on the
-// developer's machine can't leak in.
-func TestResolveResolverTechForCuration(t *testing.T) {
-	type setup struct {
-		writeYarnYaml bool
-		writeNpmYaml  bool
-	}
-	testCases := []struct {
-		name string
-		tech techutils.Technology
-		setup
-		want techutils.Technology
-	}{
-		{
-			name:  "yarn with yarn.yaml present — no fallback, lookup must use yarn.yaml directly",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name:  "yarn with only npm.yaml — falls back to npm so the resolver lookup reads npm.yaml",
-			tech:  techutils.Yarn,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "yarn with both configs — yarn.yaml wins; fallback only triggers when primary is missing",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name: "yarn with neither config — no fallback target; return Yarn so the downstream lookup no-ops cleanly",
-			tech: techutils.Yarn,
-			want: techutils.Yarn,
-		},
-		{
-			name:  "npm input — never rewritten by this helper (resolveNpmYarnTech owns the inverse direction at the detection layer)",
-			tech:  techutils.Npm,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "non-npm/yarn tech is passed through untouched even when npm.yaml exists",
-			tech:  techutils.Maven,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Maven,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempProjectDir := t.TempDir()
-			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
-			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-			if tc.writeYarnYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
-			}
-			if tc.writeNpmYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
-			}
-			// Isolate JFROG_CLI_HOME_DIR so a real ~/.jfrog/projects/*.yaml
-			// on the developer's machine can't leak into the fallback
-			// (GetProjectConfFilePath falls back to JFROG_CLI_HOME_DIR
-			// when nothing matches walking up from CWD).
-			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
-			defer restoreHome()
-			// Defensive: isolate the OS home too so a real ~/.yarnrc.yml can't leak
-			// in if this code path ever starts probing os.UserHomeDir().
-			dummyHome := t.TempDir()
-			t.Setenv("HOME", dummyHome)
-			t.Setenv("USERPROFILE", dummyHome)
-			restoreCwd := changeDirForTest(t, tempProjectDir)
-			defer restoreCwd()
-
-			got := resolveResolverTechForCuration(tc.tech)
-			assert.Equal(t, tc.want, got)
 		})
 	}
 }
@@ -5917,13 +5814,13 @@ func TestHasCargoProject(t *testing.T) {
 }
 
 // TestDoCurationAudit_Nuget is a full integration test: it runs a real 'dotnet restore' against
-// the mock Artifactory server. NuGet has no 'jf nuget-config'; the registry is discovered by
-// matching the mock server's dynamic URL against a real, generated NuGet.Config (own harness,
-// like TestDoCurationAudit_Cargo, since the URL/port isn't known until the mock server starts).
+// the mock Artifactory server. This exercises the native-fallback path (no nuget.yaml present —
+// see TestDoCurationAudit_Nuget_YamlConfigured for the 'jf nuget-config' priority-1 path); the
+// registry is discovered by matching the mock server's dynamic URL against a real, generated
+// NuGet.Config (own harness, like TestDoCurationAudit_Cargo, since the URL/port isn't known
+// until the mock server starts).
 func TestDoCurationAudit_Nuget(t *testing.T) {
-	if err := exec.Command("dotnet", "--version").Run(); err != nil {
-		t.Skip("dotnet SDK not available")
-	}
+	skipIfDotnetNet6RuntimeUnavailable(t)
 	cleanUpFlags := setCurationFlagsForTest(t)
 	defer cleanUpFlags()
 
@@ -5948,8 +5845,8 @@ func TestDoCurationAudit_Nuget(t *testing.T) {
 	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
 	defer cleanUpTestPathDir()
 
-	// NuGet has no 'jf nuget-config'; wire the registry via a real NuGet.Config pointing at the
-	// mock server's dynamic URL, the same way a user's machine/project would be configured.
+	require.NoError(t, os.Remove(filepath.Join(testDirPath, ".jfrog", "projects", "nuget.yaml")))
+
 	nugetConfig := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -5990,12 +5887,88 @@ func TestDoCurationAudit_Nuget(t *testing.T) {
 	assert.Equal(t, expected, results)
 }
 
+// TestDoCurationAudit_Nuget_YamlConfigured is a full integration test for NuGet's priority-1
+// path: the fixture's checked-in .jfrog/projects/nuget.yaml (an explicit 'jf nuget-config')
+// resolves the repo directly, with no NuGet.Config file or native CLI probe involved at all.
+// Restores the end-to-end yaml route coverage that existed before this PR (formerly the
+// "dotnet tree" case in the old shared testCase table), which the switch to a dedicated
+// native-fallback test dropped.
+//
+// TestDoCurationAudit_Nuget deliberately removes this same fixture's nuget.yaml from its own
+// temp copy so it can exercise the no-yaml native-fallback path instead — see its comment.
+func TestDoCurationAudit_Nuget_YamlConfigured(t *testing.T) {
+	skipIfDotnetNet6RuntimeUnavailable(t)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation")
+
+	requestToFail := map[string]bool{
+		"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"curated-nuget/index.json": filepath.Join(basePathToTests, pathToProject, "resources", "feed.json"),
+		"index.json":               filepath.Join(basePathToTests, pathToProject, "resources", "index.json"),
+		"13.0.3":                   filepath.Join(basePathToTests, pathToProject, "resources", "newtonsoft.json.13.0.3.nupkg"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject, allowInsecureTls: true}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	_, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"dotnet-curation": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action:            "blocked",
+					ParentName:        "Newtonsoft.Json",
+					ParentVersion:     "13.0.3",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+					PackageName:       "Newtonsoft.Json",
+					PackageVersion:    "13.0.3",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "nuget",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
+}
+
 // skipIfCargoUnavailable skips t if cargo can't actually run -- exec.LookPath alone isn't enough,
 // since a rustup shim can exist on PATH with no default toolchain configured (e.g. some CI images).
 func skipIfCargoUnavailable(t *testing.T) {
 	t.Helper()
 	if exec.Command("cargo", "--version").Run() != nil {
 		t.Skip("cargo not available")
+	}
+}
+
+func skipIfDotnetNet6RuntimeUnavailable(t *testing.T) {
+	t.Helper()
+	output, err := exec.Command("dotnet", "--list-runtimes").CombinedOutput()
+	if err != nil {
+		t.Skip("dotnet SDK not available")
+	}
+	if !strings.Contains(string(output), "Microsoft.NETCore.App 6.") {
+		t.Skip("dotnet 6.x runtime/targeting pack not installed; test fixture pins net6.0")
 	}
 }
 
