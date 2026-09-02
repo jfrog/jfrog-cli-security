@@ -19,9 +19,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
+	xrayUtils "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 )
 
@@ -75,6 +75,11 @@ type BuildInfoBomGeneratorParams struct {
 	// YarnOverwriteYarnLock refreshes yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 	// Curation sets this to true; audit/scan leave it false to trust the existing lockfile.
 	YarnOverwriteYarnLock bool
+	// YarnCredentialsFromFallback is true when .yarnrc.yml had no token of its own and
+	// ServerDetails' credentials came from the 'jf c' server config instead. When false, the
+	// same token is already in use by .yarnrc.yml's native resolution, so injecting it into
+	// the subprocess env would just add a redundant network call.
+	YarnCredentialsFromFallback bool
 	// Pnpm params
 	MaxTreeDepth string
 	// Docker params
@@ -125,7 +130,7 @@ func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive 
 func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
 	technology := scanGraphParams.Technology()
-	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
+	xrayManager, err := xrayUtils.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xrayUtils.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		return nil, err
 	}

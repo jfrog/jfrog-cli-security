@@ -5,19 +5,22 @@ import "strings"
 // ActionReportRow is one row of the curation report, already resolved from an ActionRef and
 // its ActionCurationResult.
 type ActionReportRow struct {
-	Action string // "owner/repo" (+ "/subpath" if Subpath != "")
+	Action string // "owner/repo" (+ " (subpath[, subpath...])" if the action was invoked via one or more subpaths)
 	Ref    string // literal, uninterpreted
-	Parent string // "" if directly referenced in the job's workflow
+	Parent string // "" if directly referenced in the job's workflow or parent can not be determined
 	Status string
 	Notes  string
 }
 
 // NewActionReportRow builds a report row from a discovered/cross-referenced ActionRef and its
-// curation decision.
+// curation decision. A monorepo action invoked via more than one subpath (e.g.
+// github/codeql-action's init@v3 and analyze@v3) still resolves to a single ActionRef - and
+// therefore a single row here - since both invocations share one directory entry in the cache
+// and one curation decision; every distinct subpath used is listed so neither is silently lost.
 func NewActionReportRow(ref ActionRef, result ActionCurationResult) ActionReportRow {
 	action := ref.Owner + "/" + ref.Repo
-	if ref.Subpath != "" {
-		action += "/" + ref.Subpath
+	if len(ref.Subpaths) > 0 {
+		action += " (" + strings.Join(ref.Subpaths, ", ") + ")"
 	}
 	return ActionReportRow{
 		Action: action,

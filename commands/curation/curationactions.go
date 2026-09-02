@@ -38,7 +38,7 @@ func (c *CurationActionsCommand) SetWorkingDir(dir string) *CurationActionsComma
 }
 
 // SetActionsCacheDir overrides the runner's action cache directory; defaults to
-// githubactions.DefaultActionsCacheDir() (derived from GITHUB_WORKSPACE). Mainly useful for
+// githubactions.DefaultActionsCacheDir() (derived from RUNNER_WORKSPACE). Mainly useful for
 // local/test runs outside an actual GitHub Actions runner.
 func (c *CurationActionsCommand) SetActionsCacheDir(dir string) *CurationActionsCommand {
 	c.actionsCacheDir = dir

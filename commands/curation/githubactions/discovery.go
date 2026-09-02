@@ -8,38 +8,36 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-// GithubWorkspaceEnvVar is the env var GitHub Actions sets to the checked-out repo's root
-// (e.g. /home/runner/work/<repo>/<repo>).
-const GithubWorkspaceEnvVar = "GITHUB_WORKSPACE"
+// RunnerWorkspaceEnvVar is the env var GitHub Actions sets to the runner's workspace directory
+// (e.g. /home/runner/work/<repo>). _actions is a sibling of this directory.
+const RunnerWorkspaceEnvVar = "RUNNER_WORKSPACE"
 
 // ActionRef is one resolved action instance found in the runner's action cache.
 type ActionRef struct {
 	Owner string
 	Repo  string
 	// Ref is the literal ref string taken verbatim from the cache directory name.
-	// It is intentionally uninterpreted here - classifying it as a SHA or a mutable
-	// tag/branch can't be done reliably from the string alone, so that responsibility
-	// belongs to whatever calls the real decision service.
+	// It could be SHA, tag or branch.
 	Ref string
 	// Path is the absolute path to _work/_actions/<Owner>/<Repo>/<Ref>.
 	Path string
-	// Subpath and Parent are filled in by CrossReference, not by DiscoverActionCache.
-	Subpath string
-	Parent  string
+	// Subpaths is filled from the job's workflow YAML uses: lines. A monorepo action (e.g.
+	// github/codeql-action) can be invoked via more than one subpath from the same owner/repo/ref
+	// - all distinct subpaths used are collected here
+	// Parent is filled from the composite action's own action.yml when the action was pulled in transitively.
+	Subpaths []string
+	Parent   string
 }
 
 // DiscoverActionCache walks actionsCacheDir (the runner's _work/_actions root) exactly three
 // levels deep (owner/repo/ref) and returns one ActionRef per leaf directory found.
 //
-// GitHub's runner downloads every referenced action into this directory before any job step
-// runs, including transitive actions pulled in by another action's own action.yml that never
-// appear in the job's own workflow file - so this directory, not the workflow YAML, is the
-// authoritative source of which actions actually resolved.
+// GitHub's runner downloads every referenced action into this directory before any job step runs, including
+// transitive actions pulled in by another action's own action.yml that never appear in the job's own workflow file -
+// so this directory is the authoritative source of which actions actually resolved.
 //
-// A missing actionsCacheDir returns an empty (non-nil) slice and no error - the caller decides
-// whether that's fatal (e.g. not running under a GitHub Actions runner at all). Entries that
-// don't match the expected owner/repo/ref shape at any level are skipped, not treated as errors,
-// since this walks a directory this code doesn't control the contents of.
+// Entries that don't match the expected owner/repo/ref shape at any level are skipped, not
+// treated as errors, since this walks a directory this code doesn't control the contents of.
 func DiscoverActionCache(actionsCacheDir string) ([]ActionRef, error) {
 	refs := []ActionRef{}
 
@@ -94,13 +92,12 @@ func DiscoverActionCache(actionsCacheDir string) ([]ActionRef, error) {
 	return refs, nil
 }
 
-// DefaultActionsCacheDir derives the runner's _work/_actions path from GITHUB_WORKSPACE.
-// GitHub Actions' documented layout is <_work>/<repo>/<repo> for the workspace and
-// <_work>/_actions for the actions cache - one level up from the workspace, then into _actions.
+// DefaultActionsCacheDir derives the runner's _actions cache path from RUNNER_WORKSPACE
+// (<_work>/<repo>) - _actions is its sibling, i.e. dirname(RUNNER_WORKSPACE)/_actions.
 func DefaultActionsCacheDir() (string, error) {
-	workspace := os.Getenv(GithubWorkspaceEnvVar)
-	if workspace == "" {
-		return "", fmt.Errorf("%s is not set - cannot derive the actions cache directory", GithubWorkspaceEnvVar)
+	runnerWorkspace := os.Getenv(RunnerWorkspaceEnvVar)
+	if runnerWorkspace == "" {
+		return "", fmt.Errorf("%s is not set - cannot derive the actions cache directory", RunnerWorkspaceEnvVar)
 	}
-	return filepath.Join(workspace, "..", "_actions"), nil
+	return filepath.Join(runnerWorkspace, "..", "_actions"), nil
 }

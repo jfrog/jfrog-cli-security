@@ -16,9 +16,9 @@ Prerequisites:
 - No live Artifactory/Catalog decision service exists for GitHub Actions yet - the curation decision is currently a stand-in that will be replaced once one does.
 
 Common patterns:
-  $ jf curation-actions
-  $ jf curation-actions --actions-cache-dir=/path/to/_actions
-  $ jf curation-actions --workflow-file=.github/workflows/ci.yml
+  $ jf curate-gh-actions
+  $ jf curate-gh-actions --actions-cache-dir=/path/to/_actions
+  $ jf curate-gh-actions --workflow-file=.github/workflows/ci.yml
 
 Gotchas:
 - If the runner's action cache directory can't be found (e.g. not running under GitHub Actions and no override given), the command reports an error rather than guessing a path.
@@ -28,9 +28,9 @@ Related: jf curation-audit
 
 QA:
 Q: What's the command to curate the GitHub Actions used in this job?
-A: jf curation-actions
+A: jf curate-gh-actions
 
 Q: How do I run GitHub Actions curation against a specific workflow file?
-A: jf curation-actions --workflow-file=.github/workflows/ci.yml
+A: jf curate-gh-actions --workflow-file=.github/workflows/ci.yml
 `
 }

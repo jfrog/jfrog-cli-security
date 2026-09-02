@@ -85,7 +85,7 @@ type CuratedActions struct {
 type CuratedAction struct {
 	Action string `json:"action"`           // "owner/repo" (+ "/subpath" if present)
 	Ref    string `json:"ref"`              // literal, uninterpreted
-	Parent string `json:"parent,omitempty"` // "" if directly referenced in the job's workflow
+	Parent string `json:"parent,omitempty"` // "" if directly referenced in the job's workflow or parent can not be determined
 	Status string `json:"status"`
 	Notes  string `json:"notes,omitempty"`
 }

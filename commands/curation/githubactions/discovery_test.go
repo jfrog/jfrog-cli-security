@@ -36,7 +36,7 @@ func TestDiscoverActionCache_GoodFixture(t *testing.T) {
 	}
 
 	for _, ref := range refs {
-		assert.Empty(t, ref.Subpath, "DiscoverActionCache must not set Subpath - that's CrossReference's job")
+		assert.Empty(t, ref.Subpaths, "DiscoverActionCache must not set Subpaths - that's CrossReference's job")
 		assert.Empty(t, ref.Parent, "DiscoverActionCache must not set Parent - that's CrossReference's job")
 	}
 }
@@ -63,4 +63,23 @@ func TestDiscoverActionCache_MalformedTreeSkipsDefensively(t *testing.T) {
 		assert.Equal(t, "checkout", refs[0].Repo)
 		assert.Equal(t, "v4", refs[0].Ref)
 	}
+}
+
+func TestDefaultActionsCacheDir(t *testing.T) {
+	// RUNNER_WORKSPACE is <_work>/<repo> (one segment) - _actions is its sibling under
+	// <_work>. Matches the layout used by working reference scripts added under
+	// ~/Downloads/github-actions (poc-github-action/action.yml, demo-workflows/action.yml):
+	// dirname(RUNNER_WORKSPACE)/_actions.
+	t.Setenv(RunnerWorkspaceEnvVar, "/home/runner/work/my-repo")
+
+	dir, err := DefaultActionsCacheDir()
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Clean("/home/runner/work/_actions"), dir)
+}
+
+func TestDefaultActionsCacheDir_NotSet(t *testing.T) {
+	t.Setenv(RunnerWorkspaceEnvVar, "")
+
+	_, err := DefaultActionsCacheDir()
+	assert.Error(t, err)
 }
