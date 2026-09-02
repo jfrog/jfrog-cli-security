@@ -90,13 +90,6 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []stri
 	if sc.currentScan.Vulnerabilities.ScaResults == nil {
 		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 	}
-	// Parse general SCA results
-	if scaResponse.ScanId != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.ScanId)
-	}
-	if scaResponse.XrayDataUrl != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
-	}
 	if sc.status.IsScanFailed(results.CmdStepSca) {
 		return
 	}
@@ -224,6 +217,7 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.
 		sc.parseScaViolations(violations),
 		sc.parseSecretsViolations(violations.Secrets),
 		sc.parseIacViolations(violations.Iac),
+		sc.parseServicesViolations(violations.Services),
 		sc.parseSastViolations(violations.Sast),
 	)
 }
@@ -241,6 +235,20 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
 	return results.ForEachJasIssue(results.CollectRuns(secrets...), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
+}
+
+func (sc *CmdResultsSummaryConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
+		// JAS results are only supported as vulnerabilities for now
+		return
+	}
+	if err = sc.validateBeforeParse(); err != nil {
+		return
+	}
+	if sc.currentScan.Vulnerabilities.ServicesResults == nil {
+		sc.currentScan.Vulnerabilities.ServicesResults = &formats.ResultSummary{}
+	}
+	return results.ForEachJasIssue(results.CollectRuns(services...), sc.entitledForJas, sc.getJasHandler(jasutils.Services))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
@@ -297,6 +305,8 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 				resultStatus = tokenStatus
 			}
 			count = sc.currentScan.Vulnerabilities.SecretsResults
+		case jasutils.Services:
+			count = sc.currentScan.Vulnerabilities.ServicesResults
 		case jasutils.IaC:
 			count = sc.currentScan.Vulnerabilities.IacResults
 		case jasutils.Sast:
@@ -349,6 +359,20 @@ func (sc *CmdResultsSummaryConverter) parseIacViolations(iacViolations []violati
 	for _, iacViolation := range iacViolations {
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, iacViolation.Watch)
 		countJasIssues(sc.currentScan.Violations.IacResults, iacViolation.Location, iacViolation.Severity, formats.NoStatus)
+	}
+	return
+}
+
+func (sc *CmdResultsSummaryConverter) parseServicesViolations(servicesViolations []violationutils.JasViolation) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
+		return
+	}
+	if sc.currentScan.Violations.ServicesResults == nil {
+		sc.currentScan.Violations.ServicesResults = &formats.ResultSummary{}
+	}
+	for _, servicesViolation := range servicesViolations {
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, servicesViolation.Watch)
+		countJasIssues(sc.currentScan.Violations.ServicesResults, servicesViolation.Location, servicesViolation.Severity, formats.NoStatus)
 	}
 	return
 }

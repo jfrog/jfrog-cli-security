@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -43,7 +44,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/sast_server"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
