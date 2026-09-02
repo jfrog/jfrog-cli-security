@@ -31,15 +31,33 @@ type rawStep struct {
 	Uses string `yaml:"uses"`
 }
 
+// parseUsesString parses a single `uses:` value into owner/repo/ref, plus an optional subpath
+// (empty for most actions - only present for monorepo-style actions like
+// github/codeql-action/analyze@v3). Returns false for shapes that don't resolve to at least an
+// owner/repo/ref triple
+func parseUsesString(raw string) (WorkflowUse, bool) {
+	if raw == "" || strings.HasPrefix(raw, "./") || strings.HasPrefix(raw, "docker://") {
+		return WorkflowUse{}, false
+	}
+	atIdx := strings.LastIndex(raw, "@")
+	if atIdx < 0 || atIdx == len(raw)-1 {
+		return WorkflowUse{}, false
+	}
+	path, ref := raw[:atIdx], raw[atIdx+1:]
+	segments := strings.Split(path, "/")
+	if len(segments) < 2 || segments[0] == "" || segments[1] == "" {
+		return WorkflowUse{}, false
+	}
+	subpath := ""
+	if len(segments) > 2 {
+		subpath = strings.Join(segments[2:], "/")
+	}
+	return WorkflowUse{Owner: segments[0], Repo: segments[1], Subpath: subpath, Ref: ref, Raw: raw}, true
+}
+
 // ParseWorkflowUses parses every step-level `uses:` value out of one workflow YAML file.
-// Local actions (uses: ./path) and Docker-URI actions (uses: docker://...) are skipped -
-// neither has an owner/repo/ref shape and neither appears under the runner's _actions cache.
-//
-// A job's own top-level `uses:` (calling a reusable workflow, e.g.
-// org/repo/.github/workflows/x.yml@ref) is intentionally not parsed here: such a job has no
-// steps: of its own to instrument, and the called workflow's actions are a structurally
-// different problem (see the design deck's "third-party reusable workflows" limitation) -
-// out of scope for this cross-reference step.
+// Local actions (uses: ./path) and Docker-URI actions (uses: docker://...) are skipped
+// Reusable workflows are also ignored.
 func ParseWorkflowUses(workflowPath string) ([]WorkflowUse, error) {
 	data, err := os.ReadFile(workflowPath)
 	if err != nil {
@@ -62,8 +80,7 @@ func ParseWorkflowUses(workflowPath string) ([]WorkflowUse, error) {
 
 // ParseWorkflowsDir aggregates ParseWorkflowUses over every *.yml/*.yaml file directly under
 // workflowsDir (typically <repo>/.github/workflows). A malformed individual workflow file is
-// logged and skipped rather than failing the whole aggregation - best effort, matching
-// DiscoverActionCache's defensive-skip behavior.
+// logged and skipped - best effort, matching DiscoverActionCache's defensive-skip behavior.
 func ParseWorkflowsDir(workflowsDir string) ([]WorkflowUse, error) {
 	entries, err := os.ReadDir(workflowsDir)
 	if err != nil {
@@ -91,29 +108,6 @@ func ParseWorkflowsDir(workflowsDir string) ([]WorkflowUse, error) {
 	return uses, nil
 }
 
-// parseUsesString parses a single `uses:` value into owner/repo/subpath/ref.
-// Returns ok=false for shapes that don't resolve to an owner/repo/ref triple:
-// local actions (./path), Docker-URI actions (docker://...), or a malformed value with no @ref.
-func parseUsesString(raw string) (WorkflowUse, bool) {
-	if raw == "" || strings.HasPrefix(raw, "./") || strings.HasPrefix(raw, "docker://") {
-		return WorkflowUse{}, false
-	}
-	atIdx := strings.LastIndex(raw, "@")
-	if atIdx < 0 || atIdx == len(raw)-1 {
-		return WorkflowUse{}, false
-	}
-	path, ref := raw[:atIdx], raw[atIdx+1:]
-	segments := strings.Split(path, "/")
-	if len(segments) < 2 || segments[0] == "" || segments[1] == "" {
-		return WorkflowUse{}, false
-	}
-	subpath := ""
-	if len(segments) > 2 {
-		subpath = strings.Join(segments[2:], "/")
-	}
-	return WorkflowUse{Owner: segments[0], Repo: segments[1], Subpath: subpath, Ref: ref, Raw: raw}, true
-}
-
 type rawActionFile struct {
 	Runs rawActionRuns `yaml:"runs"`
 }
@@ -125,9 +119,7 @@ type rawActionRuns struct {
 
 // parseCompositeActionUses reads <actionPath>/action.yml (or action.yaml) and, if it's a
 // composite action, returns every owner/repo/ref its own steps reference. Returns (nil, nil)
-// if the action isn't composite, and (nil, nil) rather than an error if the file is missing or
-// unreadable - this is a best-effort, one-level-deep lookup for Parent attribution, not a hard
-// requirement (see CrossReference's known limitation).
+// if the action isn't composite - this is a best-effort, one-level-deep lookup for Parent attribution
 func parseCompositeActionUses(actionPath string) ([]WorkflowUse, error) {
 	for _, name := range []string{"action.yml", "action.yaml"} {
 		data, err := os.ReadFile(filepath.Join(actionPath, name))
@@ -152,62 +144,115 @@ func parseCompositeActionUses(actionPath string) ([]WorkflowUse, error) {
 	return nil, nil
 }
 
-// CrossReference enriches discovered entries (from DiscoverActionCache) with Subpath and
+// CrossReference enriches discovered entries (from DiscoverActionCache) with Subpaths and
 // best-effort Parent metadata, and returns the enriched slice.
 //
-// Subpath comes from a direct owner/repo/ref match against used (the job's own workflow
-// uses: lines). For any discovered entry with no direct match, Parent is attributed via a
-// one-level-deep read of each *directly-used* action's own action.yml: if that action is a
-// composite action whose own steps reference the unmatched entry, Parent is set to
-// "<owner>/<repo>@<ref>" of that composite action.
+// Subpaths for a directly-used entry comes from every owner/repo/ref match against used (the
+// job's own workflow uses: lines). For any entry with no direct match, Parent/Subpaths are
+// attributed by reading the action.yml of every composite action already resolved at the
+// current depth (starting with the directly-used ones) and walking outward one level at a time:
+// if a composite action's own steps reference an unresolved entry, that entry's Parent becomes
+// "<owner>/<repo>@<ref>" of the composite action, and its own action.yml (if also composite)
+// becomes a source for the next level.
 //
-// KNOWN LIMITATION: nesting deeper than one level (a composite action pulling in another
-// composite action pulling in a third), or an action that pulls in others via a run: step
-// instead of its own action.yml uses:, is not attributed. Such entries are left with
-// Parent == "" - never guessed.
+// The walk has no fixed depth limit: it terminates when the frontier runs dry, which it always
+// does within len(discovered) rounds at most, since each round strictly attributes at least one
+// previously-unattributed entry (visited/attributed dedup means no entry is ever re-processed).
+// A cycle (action pulling in an ancestor of itself) can't loop forever either way, for the same
+// reason - each action.yml is read at most once. That per-round-progress guarantee is also used
+// as a second, independent bound below (maxRounds), so a bug that broke the dedup logic would
+// still hit a hard stop instead of spinning.
+//
+// KNOWN LIMITATION: an action that pulls in others via a run: step instead of its own action.yml
+// uses: is not attributed - such entries are left with Parent == "" - never guessed.
 func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
-	directMatch := make(map[string]WorkflowUse, len(used))
+	byKey := make(map[string]int, len(discovered))
+	for i := range discovered {
+		byKey[refKey(discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)] = i
+	}
+
+	isDirect := make(map[string]bool, len(used))
 	for _, u := range used {
-		directMatch[refKey(u.Owner, u.Repo, u.Ref)] = u
+		isDirect[refKey(u.Owner, u.Repo, u.Ref)] = true
 	}
+	subpathsByKey := collectSubpaths(used)
 
-	unmatched := make([]int, 0, len(discovered))
-	for i := range discovered {
-		if u, ok := directMatch[refKey(discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)]; ok {
-			discovered[i].Subpath = u.Subpath
-		} else {
-			unmatched = append(unmatched, i)
+	// attributed marks every key that already has its Parent/Subpaths resolved (directly, or
+	// transitively by an earlier/shallower round) - a source for the next level's walk, and a
+	// guard against a deeper round overwriting an already-settled (shallower) attribution.
+	attributed := map[string]bool{}
+	frontier := make([]string, 0, len(used))
+	for key := range isDirect {
+		attributed[key] = true
+		if idx, ok := byKey[key]; ok {
+			discovered[idx].Subpaths = subpathsByKey[key]
 		}
-	}
-	if len(unmatched) == 0 {
-		return discovered
+		frontier = append(frontier, key)
 	}
 
-	// Build a lookup of transitive owner/repo/ref -> parent "owner/repo@ref", by reading the
-	// action.yml of every directly-used, directly-discovered top-level action.
-	transitiveParent := map[string]string{}
-	for i := range discovered {
-		if discovered[i].Subpath == "" {
-			if _, isDirect := directMatch[refKey(discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)]; !isDirect {
+	// maxRounds bounds the loop below: at most len(discovered) entries can ever be newly
+	// attributed in total, so this many rounds is always enough. It's a safety net against a
+	// regression in the visited/attributed dedup above, not a limit on legitimate nesting depth -
+	// a round that attributes nothing new leaves the frontier empty and stops the loop anyway.
+	maxRounds := len(discovered) + 1
+	visited := map[string]bool{}
+	for depth := 0; depth < maxRounds && len(frontier) > 0; depth++ {
+		var nextFrontier []string
+		for _, parentKey := range frontier {
+			if visited[parentKey] {
 				continue
 			}
+			visited[parentKey] = true
+			parentIdx, ok := byKey[parentKey]
+			if !ok {
+				continue
+			}
+			compositeUses, err := parseCompositeActionUses(discovered[parentIdx].Path)
+			if err != nil || len(compositeUses) == 0 {
+				continue
+			}
+			parentIdentity := fmt.Sprintf("%s/%s@%s", discovered[parentIdx].Owner, discovered[parentIdx].Repo, discovered[parentIdx].Ref)
+			childSubpaths := collectSubpaths(compositeUses)
+			for _, cu := range compositeUses {
+				childKey := refKey(cu.Owner, cu.Repo, cu.Ref)
+				if attributed[childKey] {
+					continue
+				}
+				childIdx, ok := byKey[childKey]
+				if !ok {
+					continue
+				}
+				discovered[childIdx].Parent = parentIdentity
+				discovered[childIdx].Subpaths = childSubpaths[childKey]
+				attributed[childKey] = true
+				nextFrontier = append(nextFrontier, childKey)
+			}
 		}
-		compositeUses, err := parseCompositeActionUses(discovered[i].Path)
-		if err != nil || len(compositeUses) == 0 {
-			continue
-		}
-		parent := fmt.Sprintf("%s/%s@%s", discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)
-		for _, cu := range compositeUses {
-			transitiveParent[refKey(cu.Owner, cu.Repo, cu.Ref)] = parent
-		}
-	}
-
-	for _, i := range unmatched {
-		if parent, ok := transitiveParent[refKey(discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)]; ok {
-			discovered[i].Parent = parent
-		}
+		frontier = nextFrontier
 	}
 	return discovered
+}
+
+// collectSubpaths deduplicates the Subpath of every use by its owner/repo/ref key, preserving
+// first-seen order. Uses with an empty Subpath contribute nothing (most actions have none).
+func collectSubpaths(uses []WorkflowUse) map[string][]string {
+	seen := map[string]map[string]bool{}
+	result := map[string][]string{}
+	for _, u := range uses {
+		if u.Subpath == "" {
+			continue
+		}
+		key := refKey(u.Owner, u.Repo, u.Ref)
+		if seen[key] == nil {
+			seen[key] = map[string]bool{}
+		}
+		if seen[key][u.Subpath] {
+			continue
+		}
+		seen[key][u.Subpath] = true
+		result[key] = append(result[key], u.Subpath)
+	}
+	return result
 }
 
 func refKey(owner, repo, ref string) string {

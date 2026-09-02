@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -4078,6 +4079,169 @@ url = "http://configured-server.example.com/artifactory/api/pypi/uv-test-repo/si
 	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
 }
 
+// yarnBerryExecutableForTest returns a "yarn" wrapper that resolves via Corepack to the
+// Berry version pinned in the target project's package.json. This avoids relying on
+// whatever "yarn" happens to be on PATH (which may be Classic/V1). Skips if corepack is
+// missing.
+func yarnBerryExecutableForTest(t *testing.T) string {
+	corepackPath, err := exec.LookPath("corepack")
+	if err != nil {
+		t.Skip("corepack not found on PATH; skipping test that requires Yarn Berry (.yarnrc.yml) support")
+	}
+	return writeYarnWrapperScript(t, t.TempDir(),
+		fmt.Sprintf("exec %q yarn \"$@\"\n", corepackPath),
+		fmt.Sprintf("\"%s\" yarn %%*\n", corepackPath))
+}
+
+// writeYarnWrapperScript writes a "yarn" wrapper executable in dir that runs unixBody
+// on Unix (via a #!/bin/sh script) or windowsBody on Windows (via a yarn.cmd batch
+// file, since exec.Command needs a recognized extension to run a file directly on
+// Windows — a plain extensionless file is neither found by LookPath nor executable
+// by CreateProcess). Returns the wrapper's path.
+func writeYarnWrapperScript(t *testing.T, dir, unixBody, windowsBody string) string {
+	if runtime.GOOS == "windows" {
+		wrapperPath := filepath.Join(dir, "yarn.cmd")
+		script := "@echo off\r\n" + windowsBody
+		require.NoError(t, os.WriteFile(wrapperPath, []byte(script), 0o755))
+		return wrapperPath
+	}
+	wrapperPath := filepath.Join(dir, "yarn")
+	script := "#!/bin/sh\n" + unixBody
+	require.NoError(t, os.WriteFile(wrapperPath, []byte(script), 0o755))
+	return wrapperPath
+}
+
+// TestSetRepoFromYarnrcRejectsHostMismatch verifies that a .yarnrc.yml pointing at a
+// different host than the configured 'jf c' server never gets that server's credentials.
+func TestSetRepoFromYarnrcRejectsHostMismatch(t *testing.T) {
+	yarnExecPath := yarnBerryExecutableForTest(t)
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-hostcheck-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://attacker.example.com/artifactory/api/npm/yarn-test-repo/\"\n"), 0644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromYarnrc(yarnExecPath, projectDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromYarnrcAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case, where .yarnrc.yml has no token of its own and falls back to the configured
+// 'jf c' server's credentials for the same Artifactory host.
+func TestSetRepoFromYarnrcAcceptsMatchingHost(t *testing.T) {
+	yarnExecPath := yarnBerryExecutableForTest(t)
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-hostcheck-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarn-test-repo/\"\n"), 0644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	require.NoError(t, ca.setRepoFromYarnrc(yarnExecPath, projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
+// so tests don't need a real Yarn V1 install.
+func fakeYarnV1ExecutableForTest(t *testing.T) string {
+	return writeYarnWrapperScript(t, t.TempDir(), "echo 1.22.19\n", "echo 1.22.19\n")
+}
+
+// TestSetRepoRejectsYarnV1BeforeBerryResolution verifies a Yarn V1 project gets the clear
+// "Yarn V1 is not supported" error, not a confusing .yarnrc.yml error.
+func TestSetRepoRejectsYarnV1BeforeBerryResolution(t *testing.T) {
+	yarnExecPath := fakeYarnV1ExecutableForTest(t)
+	yarnDir := filepath.Dir(yarnExecPath)
+	t.Setenv("PATH", yarnDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origWd)) }()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.SetRepo(techutils.Yarn)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "not supported for Yarn V1",
+		"must surface the actionable V1 message instead of a Berry-config error")
+	assert.NotContains(t, setErr.Error(), ".yarnrc.yml",
+		"must not fall through to the confusing Berry-config error for a V1 project")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoIgnoresYarnYamlWhenYarnrcPresent verifies that a stale yarn.yaml is ignored
+// once a real .yarnrc.yml exists — SetRepo must resolve strictly from .yarnrc.yml.
+func TestSetRepoIgnoresYarnYamlWhenYarnrcPresent(t *testing.T) {
+	corepackPath, err := exec.LookPath("corepack")
+	if err != nil {
+		t.Skip("corepack not found on PATH; skipping test that requires Yarn Berry (.yarnrc.yml) support")
+	}
+	yarnDir := t.TempDir()
+	writeYarnWrapperScript(t, yarnDir,
+		fmt.Sprintf("exec %q yarn \"$@\"\n", corepackPath),
+		fmt.Sprintf("\"%s\" yarn %%*\n", corepackPath))
+	t.Setenv("PATH", yarnDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("HOME", t.TempDir())
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-yaml-precedence-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarnrc-repo/\"\n"), 0644))
+
+	// Legacy 'jf yarn-config' output, still on disk. If SetRepo ever read this instead of (or
+	// in addition to) .yarnrc.yml, the resolved repo would be "stale-yaml-repo", not "yarnrc-repo".
+	projectsDir := filepath.Join(projectDir, ".jfrog", "projects")
+	require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"),
+		[]byte("resolver:\n  serverId: some-other-server\n  repo: stale-yaml-repo\n"), 0o644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	require.NoError(t, ca.SetRepo(techutils.Yarn))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "yarnrc-repo", ca.PackageManagerConfig.TargetRepo(),
+		"repo must come from .yarnrc.yml, not the stale yarn.yaml")
+	assert.Equal(t, "yarnrc-repo", ca.DepsRepo(),
+		"SetDepsRepo (consumed by curation probes) must also reflect .yarnrc.yml, not yarn.yaml")
+}
+
 // TestPipWinsOverStrayUvLock verifies promotePipToUv's "pip-exclusive files win over
 // uv.lock" rule: requirements.txt plus a stray leftover uv.lock must still audit as pip.
 func TestPipWinsOverStrayUvLock(t *testing.T) {
@@ -4497,7 +4661,7 @@ url = "https://pypi.org/simple"
 }
 
 func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		t.Run(tech.String(), func(t *testing.T) {
 			var outsideRequested atomic.Bool
 			var requests atomic.Int32
@@ -4554,7 +4718,7 @@ func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 			},
 		},
 	}
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		for _, test := range tests {
 			t.Run(tech.String()+"/"+test.name, func(t *testing.T) {
 				var outsideRequested atomic.Bool
@@ -4594,7 +4758,7 @@ func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 // tech-branch in fetchNodeStatus (not sendBoundedRequest directly) to guard against a
 // regression that silently narrows the bounded-redirect condition back to Pipenv only.
 func TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects(t *testing.T) {
-	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv} {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		t.Run(tech.String(), func(t *testing.T) {
 			var outsideRequested atomic.Bool
 			var requests atomic.Int32
@@ -4695,112 +4859,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		})
 	}
 
-}
-
-// TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
-// fallback for the resolver-config lookup in auditTree. The exact
-// reason this fallback has to live here, separate from the existing
-// SetRepo fallback, is that auditTree calls
-// SetResolutionRepoInParamsIfExists *before* it reaches SetRepo — and
-// that earlier call is what populates params.DependenciesRepository,
-// which in turn decides whether configureYarnResolutionServerAndRunInstall
-// performs the .yarnrc.yml backup/replace/restore round-trip. Without
-// the round-trip, a 'yarn install' against curation that hits a 403
-// can leave the workspace install state inconsistent and the
-// downstream 'yarn info' enumeration fails with a workspace-assertion
-// error. So the contract under test is twofold:
-//
-//  1. For tech=Yarn with only npm.yaml present, return Npm so the
-//     resolver lookup reads npm.yaml (npm and yarn share the same
-//     Artifactory npm API, so the same repo serves both ecosystems).
-//  2. For any other input (yarn.yaml present, both present, neither
-//     present, or tech≠Yarn) return the input tech unchanged.
-//
-// The Npm-detected case is intentionally not exercised here because
-// resolveNpmYarnTech already upgrades that case to Yarn at the
-// detection layer (see TestResolveNpmYarnTech-style coverage in
-// resolveNpmYarnTech consumers); by the time auditTree sees tech=Npm
-// a matching npm.yaml is guaranteed to exist.
-//
-// Each subtest builds a hermetic .jfrog/projects/ directory, chdirs
-// into it, and isolates JFROG_CLI_HOME_DIR so a real config on the
-// developer's machine can't leak in.
-func TestResolveResolverTechForCuration(t *testing.T) {
-	type setup struct {
-		writeYarnYaml bool
-		writeNpmYaml  bool
-	}
-	testCases := []struct {
-		name string
-		tech techutils.Technology
-		setup
-		want techutils.Technology
-	}{
-		{
-			name:  "yarn with yarn.yaml present — no fallback, lookup must use yarn.yaml directly",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name:  "yarn with only npm.yaml — falls back to npm so the resolver lookup reads npm.yaml",
-			tech:  techutils.Yarn,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "yarn with both configs — yarn.yaml wins; fallback only triggers when primary is missing",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name: "yarn with neither config — no fallback target; return Yarn so the downstream lookup no-ops cleanly",
-			tech: techutils.Yarn,
-			want: techutils.Yarn,
-		},
-		{
-			name:  "npm input — never rewritten by this helper (resolveNpmYarnTech owns the inverse direction at the detection layer)",
-			tech:  techutils.Npm,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "non-npm/yarn tech is passed through untouched even when npm.yaml exists",
-			tech:  techutils.Maven,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Maven,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempProjectDir := t.TempDir()
-			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
-			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-			if tc.writeYarnYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
-			}
-			if tc.writeNpmYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
-			}
-			// Isolate JFROG_CLI_HOME_DIR so a real ~/.jfrog/projects/*.yaml
-			// on the developer's machine can't leak into the fallback
-			// (GetProjectConfFilePath falls back to JFROG_CLI_HOME_DIR
-			// when nothing matches walking up from CWD).
-			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
-			defer restoreHome()
-			// Defensive: isolate the OS home too so a real ~/.yarnrc.yml can't leak
-			// in if this code path ever starts probing os.UserHomeDir().
-			dummyHome := t.TempDir()
-			t.Setenv("HOME", dummyHome)
-			t.Setenv("USERPROFILE", dummyHome)
-			restoreCwd := changeDirForTest(t, tempProjectDir)
-			defer restoreCwd()
-
-			got := resolveResolverTechForCuration(tc.tech)
-			assert.Equal(t, tc.want, got)
-		})
-	}
 }
 
 func TestResolveNpmYarnTech(t *testing.T) {
@@ -5046,7 +5104,7 @@ func TestFetchCvsBlockedStatusUv(t *testing.T) {
 	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -5062,6 +5120,9 @@ func TestFetchCvsBlockedStatusUv(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
@@ -5120,7 +5181,7 @@ func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
 	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -5139,6 +5200,9 @@ func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 

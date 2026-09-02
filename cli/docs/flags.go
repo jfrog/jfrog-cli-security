@@ -22,7 +22,7 @@ const (
 	DockerScan           = "docker scan"
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
-	CurationActions      = "curation-actions"
+	CurationActions      = "curate-gh-actions"
 	GitAudit             = "git-audit"
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
@@ -385,7 +385,7 @@ var flagsMap = map[string]components.Flag{
 	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to false to override config profile for the audit.", components.WithBoolDefaultValue(true), components.SetHiddenBoolFlag()),
 	Workspace:        components.NewStringFlag(Workspace, "Optional workspace name for repositories with multiple config profiles. Used with the repository URL to fetch the matching config profile from the JFrog Platform."),
 
-	ActionsCacheDir: components.NewStringFlag(ActionsCacheDir, "Overrides the runner's GitHub Actions cache directory (defaults to the _actions directory derived from GITHUB_WORKSPACE). Mainly useful for local runs outside an actual GitHub Actions runner."),
+	ActionsCacheDir: components.NewStringFlag(ActionsCacheDir, "Overrides the runner's GitHub Actions cache directory (defaults to the _actions directory derived from RUNNER_WORKSPACE). Mainly useful for local runs outside an actual GitHub Actions runner."),
 	WorkflowFile:    components.NewStringFlag(WorkflowFile, "Restricts curation to a single workflow YAML file instead of scanning every file under .github/workflows."),
 
 	// Docker flags

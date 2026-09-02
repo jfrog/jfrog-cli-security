@@ -19,7 +19,7 @@ type ActionCurationResult struct {
 // No real implementation exists yet - there is no Artifactory/Catalog package type for
 // GitHub Actions today - so only the mock in decision_mock.go exists for now.
 type ActionCurationDecider interface {
-	// Decide returns the curation outcome for a single action reference. ref.Subpath and
+	// Decide returns the curation outcome for a single action reference. ref.Subpaths and
 	// ref.Parent are irrelevant to the decision itself - only Owner/Repo/Ref matter.
 	Decide(ref ActionRef) (ActionCurationResult, error)
 }

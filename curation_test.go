@@ -88,10 +88,8 @@ func TestCurationAudit(t *testing.T) {
 // HEAD-walker probes the same /api/npm/<repo>/<pkg>/-/<pkg>-<ver>.tgz URLs as npm and
 // reports the blocked package with PkgType "yarn" (curation rejects Yarn V1).
 //
-// V3 and V4 differ ONLY in how the resolution registry is read; everything else (the
-// resolve-only plugin and the HEAD-walker) is identical:
-//   - V3: from yarn.yaml written by the build config ('jf yarn-config' style).
-//   - V4: natively from .yarnrc.yml (npmRegistryServer), with no 'jf yarn-config'.
+// V3 and V4 resolve the registry identically: natively from .yarnrc.yml
+// (npmRegistryServer) — no 'jf yarn-config' required for either version.
 func TestYarnCurationAudit(t *testing.T) {
 	integration.InitCurationTest(t)
 	testCases := []struct {
@@ -101,26 +99,22 @@ func TestYarnCurationAudit(t *testing.T) {
 		configureRegistry func(t *testing.T, tempDirPath string, config *config.ServerDetails)
 	}{
 		{
-			name:    "Yarn V3 (registry from yarn.yaml)",
+			name:    "Yarn V3 (registry from .yarnrc.yml)",
 			project: "yarn-v3",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// npm and yarn share the Artifactory npm API; resolve via the build config.
-				assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, project.Yarn,
-					commonCommands.WithResolverServerId(config.ServerId),
-					commonCommands.WithResolverRepo("npms"),
-					commonCommands.WithDeployerServerId(config.ServerId),
-					commonCommands.WithDeployerRepo("npm-local"),
-				))
-				// jf ca injects this http mock registry into the temp .yarnrc.yml; Yarn Berry
-				// only accepts a plain-http registry when its host is whitelisted.
-				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), "\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n")
+				// Native mode: the registry lives in .yarnrc.yml. jf ca injects this
+				// http mock registry directly; Yarn Berry only accepts a plain-http
+				// registry when its host is whitelisted.
+				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf(
+					"\nnpmRegistryServer: \"%sapi/npm/npms/\"\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n",
+					config.ArtifactoryUrl))
 			},
 		},
 		{
 			name:    "Yarn V4 (registry from .yarnrc.yml)",
 			project: "yarn-v4",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// V4 native mode: the registry lives in .yarnrc.yml (the http whitelist is
+				// Native mode: the registry lives in .yarnrc.yml (the http whitelist is
 				// already committed in the yarn-v4 fixture).
 				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
 			},
@@ -197,15 +191,11 @@ func TestYarnV2CurationAudit(t *testing.T) {
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, config.ServerId).SetDetails(config).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
 
-	// V2 resolves the registry via the build config, like V3 (only V4 reads .yarnrc.yml natively).
-	assert.NoError(t, commonCommands.CreateBuildConfigWithOptions(false, project.Yarn,
-		commonCommands.WithResolverServerId(config.ServerId),
-		commonCommands.WithResolverRepo("npms"),
-		commonCommands.WithDeployerServerId(config.ServerId),
-		commonCommands.WithDeployerRepo("npm-local"),
-	))
+	// V2 resolves the registry natively from .yarnrc.yml, like V3/V4 — no 'jf yarn-config' required.
 	// Yarn Berry only accepts a plain-http registry when its host is whitelisted.
-	appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), "\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n")
+	appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf(
+		"\nnpmRegistryServer: \"%sapi/npm/npms/\"\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n",
+		config.ArtifactoryUrl))
 
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
@@ -374,14 +364,14 @@ func yarnCurationServer(t *testing.T, expectedRequest, requestToFail map[string]
 				_, err := w.Write([]byte(`{"xray_version": "3.92.0"}`))
 				require.NoError(t, err)
 				return
-			// Yarn V2/V3 resolve the registry via GetYarnAuthDetails, which queries
-			// these two Artifactory endpoints before the resolve-only plugin runs.
-			// (Yarn V4 reads the registry natively from .yarnrc.yml and skips them.)
 			case "/api/npm/auth":
+				// Hit by GetYarnAuthDetails when curation falls back to 'jf c' server
+				// credentials (no token in .yarnrc.yml) to inject auth into the yarn subprocess.
 				_, err := w.Write([]byte("_auth = YWRtaW46cGFzc3dvcmQ=\nalways-auth = true\n"))
 				require.NoError(t, err)
 				return
 			case "/api/repositories/npms":
+				// Hit by GetYarnAuthDetails's repo-exists check, same fallback-auth path as above.
 				_, err := w.Write([]byte(`{"key":"npms","rclass":"remote","packageType":"npm"}`))
 				require.NoError(t, err)
 				return

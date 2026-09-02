@@ -7,12 +7,30 @@ import (
 )
 
 func TestNewActionReportRow(t *testing.T) {
-	ref := ActionRef{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze", Parent: ""}
+	ref := ActionRef{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpaths: []string{"analyze"}, Parent: ""}
 	result := ActionCurationResult{Status: ActionApproved}
 
 	row := NewActionReportRow(ref, result)
 
-	assert.Equal(t, ActionReportRow{Action: "github/codeql-action/analyze", Ref: "v3", Status: "Approved"}, row)
+	assert.Equal(t, ActionReportRow{Action: "github/codeql-action (analyze)", Ref: "v3", Status: "Approved"}, row)
+}
+
+func TestNewActionReportRow_MultipleSubpathsAllListed(t *testing.T) {
+	ref := ActionRef{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpaths: []string{"init", "analyze"}}
+	result := ActionCurationResult{Status: ActionApproved}
+
+	row := NewActionReportRow(ref, result)
+
+	assert.Equal(t, "github/codeql-action (init, analyze)", row.Action)
+}
+
+func TestNewActionReportRow_NoSubpath(t *testing.T) {
+	ref := ActionRef{Owner: "actions", Repo: "checkout", Ref: "v4"}
+	result := ActionCurationResult{Status: ActionApproved}
+
+	row := NewActionReportRow(ref, result)
+
+	assert.Equal(t, "actions/checkout", row.Action)
 }
 
 func TestRenderMarkdownTable(t *testing.T) {

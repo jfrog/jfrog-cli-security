@@ -1,7 +1,12 @@
 package xray
 
 import (
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	xray "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 const MaxUniqueAppearances = 10
@@ -12,6 +17,14 @@ type DepTreeNode struct {
 	Children       []string  `json:"children"`
 	Unresolved     bool      `json:"unresolved,omitempty"`
 	Configurations *[]string `json:"configurations,omitempty"`
+}
+
+func IsEntitled(xrayManager *xray.XrayServicesManager, xrayVersion, featureId string) (entitled bool, err error) {
+	if e := clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+		log.Debug(e)
+		return
+	}
+	return xrayManager.IsEntitled(featureId)
 }
 
 func toNodeTypesMap(depMap map[string]DepTreeNode) map[string]*DepTreeNode {
