@@ -234,16 +234,12 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	})
 }
 
-// Returns a single descriptive string of the scan's targets. Multiple targets are joined since jf scan may have multiple working-directory
 func (scanCmd *ScanCommand) getAnalyticsProjectPath() string {
-	if scanCmd.spec == nil {
+	currentDir, err := coreutils.GetWorkingDirectory()
+	if err != nil {
 		return ""
 	}
-	patterns := make([]string, 0, len(scanCmd.spec.Files))
-	for _, file := range scanCmd.spec.Files {
-		patterns = append(patterns, file.Pattern)
-	}
-	return strings.Join(patterns, ", ")
+	return currentDir
 }
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
