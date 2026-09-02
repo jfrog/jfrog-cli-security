@@ -66,6 +66,11 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS IaC violations for target %s: %w", target.Target, e))
 				}
 			}
+			if len(target.JasResults.JasViolations.ServicesScanResults) > 0 {
+				if e := results.ForEachJasIssue(target.JasResults.JasViolations.ServicesScanResults, cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Services)); e != nil {
+					err = errors.Join(err, fmt.Errorf("failed to convert JAS Services violations for target %s: %w", target.Target, e))
+				}
+			}
 			if len(target.JasResults.JasViolations.SastScanResults) > 0 {
 				if e := results.ForEachJasIssue(sarifutils.GroupResultsByLocation(target.JasResults.JasViolations.SastScanResults), cmdResults.Entitlements.Jas, convertJasViolationsToPolicyViolations(&convertedViolations, jasutils.Sast)); e != nil {
 					err = errors.Join(err, fmt.Errorf("failed to convert JAS SAST violations for target %s: %w", target.Target, e))
@@ -163,6 +168,13 @@ func convertJasViolationsToPolicyViolations(convertedViolations *violationutils.
 		case jasutils.Secrets:
 			convertedViolations.Secrets = append(convertedViolations.Secrets, violationutils.JasViolation{
 				Violation: convertToBasicJasViolation(violationutils.SecretsViolationType, result, severity),
+				Rule:      rule,
+				Result:    result,
+				Location:  location,
+			})
+		case jasutils.Services:
+			convertedViolations.Services = append(convertedViolations.Services, violationutils.JasViolation{
+				Violation: convertToBasicJasViolation(violationutils.ServicesViolationType, result, severity),
 				Rule:      rule,
 				Result:    result,
 				Location:  location,

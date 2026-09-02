@@ -262,6 +262,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
 		return
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.ServicesScan, jasutils.Services); err != nil {
+		return
+	}
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
 		return
 	}
@@ -409,6 +412,14 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 		} else {
 			return coreutils.PrintTable(tables.IacVulnerabilitiesTable, "Infrastructure as Code Vulnerabilities",
 				"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
+		}
+	case jasutils.Services:
+		if violations {
+			return coreutils.PrintTable(tables.ServicesViolationsTable, "Services Violations",
+				"✨ No services violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.ServicesVulnerabilitiesTable, "Services Detection",
+				"✨ No services were found ✨", false)
 		}
 	case jasutils.Sast:
 		if violations {

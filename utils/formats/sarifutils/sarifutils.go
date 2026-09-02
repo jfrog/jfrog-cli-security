@@ -50,6 +50,10 @@ func GetResultViolationType(result *sarif.Result) (violationType string) {
 	return GetResultProperty(ViolationTypeSarifPropertyKey, result)
 }
 
+func GetRuleViolationType(rule *sarif.ReportingDescriptor) string {
+	return GetRuleProperty(ViolationTypeSarifPropertyKey, rule)
+}
+
 func GetResultPropertyTokenValidation(result *sarif.Result) string {
 	return GetResultProperty(TokenValidationStatusSarifPropertyKey, result)
 }
@@ -116,7 +120,7 @@ func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
 	return
 }
 
-func GetSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
+func GetExposureScannerRuleId(rule *sarif.ReportingDescriptor) string {
 	ruleId := GetRuleScannerId(rule)
 	if ruleId == "" {
 		return ""

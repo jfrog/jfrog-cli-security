@@ -13,6 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -26,7 +27,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/sync/errgroup"

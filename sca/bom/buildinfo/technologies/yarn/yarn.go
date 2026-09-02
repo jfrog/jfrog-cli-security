@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/yarn"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -47,8 +48,15 @@ const (
 	v3UpdateLockfileFlag = "--mode=update-lockfile"
 	// Ignores any build scripts
 	v3SkipBuildFlag = "--mode=skip-build"
-	yarnV2Version   = "2.0.0"
-	yarnV3Version   = "3.0.0"
+	// Env vars yarn reads for npm auth, used to inject curation's fallback credential
+	// (see injectCurationFallbackAuthEnv) without touching YARN_NPM_REGISTRY_SERVER.
+	//#nosec G101
+	yarnNpmAuthIdentEnv = "YARN_NPM_AUTH_IDENT"
+	//#nosec G101
+	yarnNpmAuthTokenEnv  = "YARN_NPM_AUTH_TOKEN"
+	yarnNpmAlwaysAuthEnv = "YARN_NPM_ALWAYS_AUTH"
+	yarnV2Version        = "2.0.0"
+	yarnV3Version        = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -105,7 +113,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	// V2/V3/V4; only V1 (classic) silently bypasses it and produces unreliable
 	// curation results, so reject V1 up front.
 	if params.IsCurationCmd {
-		if err = verifyYarnVersionSupportedForCuration(executablePath, currentDir); err != nil {
+		if err = VerifyYarnVersionSupportedForCuration(executablePath, currentDir); err != nil {
 			return
 		}
 	}
@@ -238,10 +246,9 @@ func logYarnLockEntryCount(yarnLockPath string) {
 	log.Debug(fmt.Sprintf("yarn curation: '%s' contains %d resolved package entries; the curation walker will HEAD-check this set", yarnLockPath, count))
 }
 
-// verifyYarnVersionSupportedForCuration returns an error for Yarn V1,
-// which cannot be routed through Artifactory for curation.
-// V2/V3 use configured-registry mode (jf yarn-config); V4 uses native mode (.yarnrc.yml).
-func verifyYarnVersionSupportedForCuration(yarnExecPath, curWd string) error {
+// VerifyYarnVersionSupportedForCuration rejects Yarn V1 — curation only supports
+// V2/V3/V4, which resolve the registry from .yarnrc.yml.
+func VerifyYarnVersionSupportedForCuration(yarnExecPath, curWd string) error {
 	versionStr, err := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if err != nil {
 		return err
@@ -296,6 +303,17 @@ func lockfileMtime(yarnLockPath string) time.Time {
 	return info.ModTime()
 }
 
+// installErrCarriesCurationBlockSignal reports whether installErr looks like a curation
+// block (HTTP 403), as opposed to an unrelated failure (e.g. an auth error). Yarn echoes
+// curation's HTTP response verbatim, e.g. "YN0035: ... Response Code: 403 (Forbidden)".
+func installErrCarriesCurationBlockSignal(installErr error) bool {
+	if installErr == nil {
+		return false
+	}
+	errText := strings.ToLower(installErr.Error())
+	return strings.Contains(errText, "response code: 403")
+}
+
 // curationNoLockfileError builds an actionable error for when 'yarn install'
 // did not produce yarn.lock. Probes declared direct deps against the curation
 // repo and renders blocked ones in a table. Error text is version-specific:
@@ -303,6 +321,13 @@ func lockfileMtime(yarnLockPath string) time.Time {
 // blocking manifests (not just tarballs).
 func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath, workspaceMemberRel string, installErr error) error {
 	probed, totalProbed := probeBlockedDirectDeps(params, curWd, workspaceMemberRel)
+	// Only blame curation when there's actual evidence of a block: a rejected direct dep
+	// from the probe, or a curation-block signal in installErr. Otherwise installErr is
+	// unrelated, and blaming curation would misdirect engineers into removing packages
+	// curation never evaluated.
+	if len(probed) == 0 && !installErrCarriesCurationBlockSignal(installErr) {
+		return errorutils.CheckErrorf("'jf curation-audit' against curation repo '%s' could not produce '%s' — 'yarn install' failed for a reason unrelated to a curation block (no HTTP 403/rejected-package evidence found). Check the debug log for the underlying 'yarn install' output. Underlying yarn error: %s", params.DependenciesRepository, yarn.YarnLockFileName, installErr.Error())
+	}
 	outputRef := string(outFormat.Table)
 	if params.OutputFormat == outFormat.Json {
 		outputRef = "JSON output"
@@ -546,25 +571,40 @@ func resolveCurationLockfileDir(
 // Executes the user's 'install' command or a default 'install' command if none was specified.
 func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
 	depsRepo := params.DependenciesRepository
-	if depsRepo == "" {
-		// Run install without configuring an Artifactory server
-		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
+
+	// Skip credential injection when no repo was resolved, or for curation (native
+	// .yarnrc.yml resolution already has it, for V2/V3/V4 alike). Only non-curation
+	// V2/V3 with a repo from --deps-repo or 'jf yarn-config' still needs it below.
+	useNativeInstall := depsRepo == "" || params.IsCurationCmd
+	if !useNativeInstall {
+		executableYarnVersion, versionErr := bibuildutils.GetVersion(yarnExecPath, curWd)
+		if versionErr != nil {
+			return versionErr
+		}
+		useNativeInstall = version.NewVersion(executableYarnVersion).Compare(YarnV4Version) <= 0
+	}
+	if useNativeInstall {
+		if params.IsCurationCmd && depsRepo != "" && params.YarnCredentialsFromFallback {
+			// .yarnrc.yml had no token, so curation resolved a fallback credential into
+			// params.ServerDetails. Inject it into the subprocess env — the native install
+			// path above skips the GetYarnAuthDetails+ModifyYarnConfigurations injection
+			// below (which also sets YARN_NPM_REGISTRY_SERVER, unwanted here). Gated on
+			// YarnCredentialsFromFallback to avoid a redundant call when .yarnrc.yml
+			// already has its own token.
+			restoreAuthEnv, authErr := injectCurationFallbackAuthEnv(params.ServerDetails, depsRepo)
+			if authErr != nil {
+				return authErr
+			}
+			defer func() {
+				err = errors.Join(err, restoreAuthEnv())
+			}()
+		}
+		err = runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
+		return
 	}
 
-	executableYarnVersion, err := bibuildutils.GetVersion(yarnExecPath, curWd)
-	if err != nil {
-		return err
-	}
-	yarnVersion := version.NewVersion(executableYarnVersion)
-
-	// V4 always uses native mode (.yarnrc.yml); --deps-repo / yarn.yaml are not applicable.
-	// If depsRepo is somehow non-empty for V4, skip credential injection and install as-is.
-	if yarnVersion.Compare(YarnV4Version) <= 0 {
-		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
-	}
-
-	// V2/V3: inject Artifactory credentials via GetYarnAuthDetails + ModifyYarnConfigurations.
-	// V1 is rejected earlier by verifyYarnVersionSupportedForCuration (curation) or is unsupported
+	// V2/V3 (non-curation): inject Artifactory credentials via GetYarnAuthDetails + ModifyYarnConfigurations.
+	// V1 is rejected earlier by VerifyYarnVersionSupportedForCuration (curation) or is unsupported
 	// by the jfrog-cli-artifactory yarn integration (non-curation).
 	restoreYarnrcFunc, err := ioutils.BackupFile(filepath.Join(curWd, yarn.YarnrcFileName), yarn.YarnrcBackupFileName)
 	if err != nil {
@@ -594,6 +634,52 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", params.ServerDetails.Url, depsRepo))
 	err = runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
 	return err
+}
+
+// injectCurationFallbackAuthEnv sets YARN_NPM_AUTH_IDENT/YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH
+// from serverDetails for the yarn subprocess, without setting YARN_NPM_REGISTRY_SERVER — the
+// registry must keep coming from .yarnrc.yml. No-op (returns a no-op restore) when serverDetails
+// has no usable credentials, so the anonymous case is unchanged.
+func injectCurationFallbackAuthEnv(serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
+	noOpRestore := func() error { return nil }
+	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "") {
+		return noOpRestore, nil
+	}
+	_, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
+	if err != nil {
+		return noOpRestore, err
+	}
+	if npmAuthIdent == "" && npmAuthToken == "" {
+		return noOpRestore, nil
+	}
+
+	envUpdates := map[string]string{
+		yarnNpmAuthIdentEnv:  npmAuthIdent,
+		yarnNpmAuthTokenEnv:  npmAuthToken,
+		yarnNpmAlwaysAuthEnv: "true",
+	}
+	backup := make(map[string]*string, len(envUpdates))
+	for key, value := range envUpdates {
+		if oldVal, existed := os.LookupEnv(key); existed {
+			backup[key] = &oldVal
+		} else {
+			backup[key] = nil
+		}
+		if setErr := os.Setenv(key, value); setErr != nil {
+			return noOpRestore, setErr
+		}
+	}
+	return func() error {
+		var restoreErrs []error
+		for key, oldVal := range backup {
+			if oldVal == nil {
+				restoreErrs = append(restoreErrs, os.Unsetenv(key))
+				continue
+			}
+			restoreErrs = append(restoreErrs, os.Setenv(key, *oldVal))
+		}
+		return errors.Join(restoreErrs...)
+	}, nil
 }
 
 // isInstallRequired reports whether 'yarn install' must run before enumerating
@@ -1045,12 +1131,13 @@ func filterYarnDepMapToWorkspaceMember(
 	return filtered, memberRoot, nil
 }
 
-// GetNativeYarnV4RegistryConfig reads the Artifactory registry URL and auth
-// token from the project's .yarnrc.yml via the Yarn CLI. Yarn V4 uses native
-// mode — credentials are already stored in .yarnrc.yml, no jf yarn-config step
-// is required. The URL must contain /api/npm/<repo>/ so that ParseArtifactoryNpmRegistryUrl
+// GetNativeYarnRegistryConfig reads the Artifactory registry URL and auth
+// token from the project's .yarnrc.yml via the Yarn CLI. Yarn V2, V3, and V4
+// all use the same Berry .yarnrc.yml format, so curation-audit resolves the
+// registry natively for every version — no jf yarn-config step is required.
+// The URL must contain /api/npm/<repo>/ so that ParseArtifactoryNpmRegistryUrl
 // can extract the Artifactory base URL and repository name.
-func GetNativeYarnV4RegistryConfig(yarnExecPath, workingDir string) (*npm.NpmrcRegistryConfig, error) {
+func GetNativeYarnRegistryConfig(yarnExecPath, workingDir string) (*npm.NpmrcRegistryConfig, error) {
 	registryURL, err := runYarnConfigGet(yarnExecPath, workingDir, "npmRegistryServer")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read npmRegistryServer from .yarnrc.yml: %w", err)
@@ -1116,17 +1203,17 @@ func readNpmAuthTokenFromYarnrcFiles(registryURL, workingDir string) string {
 		}
 		var rc yarnrcFile
 		if err := yaml.Unmarshal(data, &rc); err != nil {
-			log.Debug(fmt.Sprintf("yarn V4: could not parse %s: %s", path, err))
+			log.Debug(fmt.Sprintf("yarn: could not parse %s: %s", path, err))
 			continue
 		}
 		// Scoped registry entry takes priority (trailing-slash tolerant).
 		if entry, ok := lookupNpmRegistryEntry(rc.NpmRegistries, registryURL); ok && entry.NpmAuthToken != "" {
-			log.Debug(fmt.Sprintf("yarn V4: using auth token from scoped npmRegistries entry in %s", path))
+			log.Debug(fmt.Sprintf("yarn: using auth token from scoped npmRegistries entry in %s", path))
 			return entry.NpmAuthToken
 		}
 		// Fall back to top-level npmAuthToken in the same file.
 		if rc.NpmAuthToken != "" {
-			log.Debug(fmt.Sprintf("yarn V4: using top-level npmAuthToken from %s", path))
+			log.Debug(fmt.Sprintf("yarn: using top-level npmAuthToken from %s", path))
 			return rc.NpmAuthToken
 		}
 	}

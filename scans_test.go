@@ -65,6 +65,8 @@ func subScansToFlags(subScans []utils.SubScanType) (flags []string) {
 			flags = append(flags, "--secrets")
 		case utils.IacScan:
 			flags = append(flags, "--iac")
+		case utils.ServicesScan:
+			flags = append(flags, "--services")
 		case utils.SastScan:
 			flags = append(flags, "--sast")
 		}

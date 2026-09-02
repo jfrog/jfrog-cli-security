@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -41,7 +42,7 @@ func (mcpCmd *McpCommand) Run() (err error) {
 }
 
 func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -156,7 +157,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		return
 	}
 	// Get the defined and active watches from the platform.
-	manager, err := xsc.CreateXscService(serverDetails, xrayutils.WithScopedProjectKey(projectKey))
+	manager, err := xsc.CreateXscService(serverDetails, corexray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to create Xray services manager: %s", err.Error()))
 		return
@@ -293,14 +294,14 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.Entitlements.Jas {
-		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', 'Services', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
 	if cmdResults.Entitlements.Jas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
-		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
+		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Services (Misconfiguration)\n- Static Application Security Testing (SAST)"}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -422,7 +423,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		return cmdResults.AddGeneralError(err, false)
 	}
 	// Send entitlement requests
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
@@ -1042,7 +1043,7 @@ func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to get server details: %s", err.Error())
 	}
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to create Xray service manager: %s", err.Error())
 	}
