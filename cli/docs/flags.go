@@ -22,6 +22,7 @@ const (
 	DockerScan           = "docker scan"
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
+	CurationActions      = "curation-actions"
 	GitAudit             = "git-audit"
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
@@ -170,6 +171,10 @@ const (
 	MvnIncludePluginDeps  = "mvn-include-plugin-deps"
 	Script                = "script"
 
+	// Unique curation-actions flags
+	ActionsCacheDir = "actions-cache-dir"
+	WorkflowFile    = "workflow-file"
+
 	// Unique git flags
 	gitPrefix       = "git-"
 	InputFile       = "input-file"
@@ -234,6 +239,9 @@ var commandFlags = map[string][]string{
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
+	},
+	CurationActions: {
+		WorkingDirs, ActionsCacheDir, WorkflowFile,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
@@ -376,6 +384,9 @@ var flagsMap = map[string]components.Flag{
 
 	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to false to override config profile for the audit.", components.WithBoolDefaultValue(true), components.SetHiddenBoolFlag()),
 	Workspace:        components.NewStringFlag(Workspace, "Optional workspace name for repositories with multiple config profiles. Used with the repository URL to fetch the matching config profile from the JFrog Platform."),
+
+	ActionsCacheDir: components.NewStringFlag(ActionsCacheDir, "Overrides the runner's GitHub Actions cache directory (defaults to the _actions directory derived from GITHUB_WORKSPACE). Mainly useful for local runs outside an actual GitHub Actions runner."),
+	WorkflowFile:    components.NewStringFlag(WorkflowFile, "Restricts curation to a single workflow YAML file instead of scanning every file under .github/workflows."),
 
 	// Docker flags
 	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
