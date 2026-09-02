@@ -58,12 +58,14 @@ const (
 	Iac       = "iac"
 	Sast      = "sast"
 	Secrets   = "secrets"
+	Services  = "services"
 	WithoutCA = "without-contextual-analysis"
 
 	auditSca        = auditPrefix + Sca
 	auditIac        = auditPrefix + Iac
 	auditSast       = auditPrefix + Sast
 	auditSecrets    = auditPrefix + Secrets
+	auditServices   = auditPrefix + Services
 	auditWithoutCA  = auditPrefix + WithoutCA
 	binarySca       = scanPrefix + Sca
 	binarySecrets   = scanPrefix + Secrets
@@ -211,7 +213,7 @@ var commandFlags = map[string][]string{
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Snippet, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
+		auditSca, auditIac, auditSast, auditSecrets, auditServices, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds, AddSastRules,
 	},
 	UploadCdx: {
@@ -224,7 +226,7 @@ var commandFlags = map[string][]string{
 		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit, WorkingDirs, Workspace,
-		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
+		auditSca, auditIac, auditSast, auditSecrets, auditServices, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
 		// Output params
 		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params
@@ -361,10 +363,11 @@ var flagsMap = map[string]components.Flag{
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
-	auditSca:                      components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
-	auditIac:                      components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
-	auditSast:                     components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
-	auditSecrets:                  components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
+	auditSca:                      components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s and --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac, Services)),
+	auditIac:                      components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Sast, Services)),
+	auditSast:                     components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Iac, Services)),
+	auditSecrets:                  components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Sast, Iac, Services)),
+	auditServices:                 components.NewBoolFlag(Services, fmt.Sprintf("Selective scanners mode: Execute Services sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Sast, Iac)),
 	auditWithoutCA:                components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 

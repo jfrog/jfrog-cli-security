@@ -28,6 +28,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
@@ -59,7 +60,6 @@ import (
 	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
-	"github.com/jfrog/gofrog/version"
 	uvtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/uv"
 	yarntech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
@@ -204,7 +204,7 @@ func (ca *CurationAuditCommand) getXrayVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return "", err
 	}
@@ -309,6 +309,11 @@ type CurationAuditCommand struct {
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
 	scriptPath            string
+	// yarnCredentialsFromFallback is true when .yarnrc.yml had no token of its own and
+	// setRepoFromYarnrc fell back to the 'jf c' server's credentials. Threaded into
+	// params.YarnCredentialsFromFallback so the subprocess only gets fallback auth injected
+	// when it's actually needed.
+	yarnCredentialsFromFallback bool
 	// pendingWarnings collects log.Warn messages that must be emitted after the
 	// progress spinner stops; otherwise the spinner's ANSI clear codes overwrite them.
 	pendingWarnings []string
@@ -938,7 +943,7 @@ func validateCurationAuditFlags(ca *CurationAuditCommand) error {
 // resolveNpmYarnTech upgrades npm→yarn when the project has yarn.yaml but no npm.yaml
 // (the developer ran 'jf yarn-config' but the file-system detector fell back to npm),
 // or when the project has a yarn indicator file (.yarnrc.yml / yarn.lock / .yarnrc / .yarn)
-// without a yarn.yaml — which is the V4 native mode case where no jf yarn-config is needed.
+// without a yarn.yaml — which is the native .yarnrc.yml mode case where no jf yarn-config is needed.
 func resolveNpmYarnTech(tech string) string {
 	if techutils.Technology(tech) != techutils.Npm {
 		return tech
@@ -952,7 +957,7 @@ func resolveNpmYarnTech(tech string) string {
 		log.Info("No npm.yaml config found but yarn.yaml detected — treating project as yarn.")
 		return techutils.Yarn.String()
 	}
-	// V4 native mode: no yarn.yaml, but project may have a local yarn indicator
+	// Native .yarnrc.yml mode: no yarn.yaml, but project may have a local yarn indicator
 	// (.yarnrc.yml / yarn.lock / .yarnrc / .yarn) OR only a global ~/.yarnrc.yml
 	// (set via 'yarn config set --home', as the Artifactory "Set Up" page instructs).
 	// Guard against false-positives: if package-lock.json exists the project is npm.
@@ -974,7 +979,7 @@ func resolveNpmYarnTech(tech string) string {
 		if projectPinsYarnPackageManager(workingDir) {
 			if homeDir, err := os.UserHomeDir(); err == nil {
 				if _, err := os.Stat(filepath.Join(homeDir, ".yarnrc.yml")); err == nil {
-					log.Info("No npm.yaml or yarn.yaml found but package.json pins yarn and global ~/.yarnrc.yml detected — treating project as yarn (V4 native mode).")
+					log.Info("No npm.yaml or yarn.yaml found but package.json pins yarn and global ~/.yarnrc.yml detected — treating project as yarn (native .yarnrc.yml mode).")
 					return techutils.Yarn.String()
 				}
 			}
@@ -997,23 +1002,6 @@ func projectPinsYarnPackageManager(workingDir string) bool {
 		return false
 	}
 	return strings.HasPrefix(strings.TrimSpace(pkg.PackageManager), "yarn@")
-}
-
-// resolveResolverTechForCuration returns the tech whose *.yaml config drives
-// SetResolutionRepoInParamsIfExists. For yarn with no yarn.yaml, falls back to
-// npm.yaml — npm and yarn share the same Artifactory npm API.
-func resolveResolverTechForCuration(tech techutils.Technology) techutils.Technology {
-	if tech != techutils.Yarn {
-		return tech
-	}
-	if _, yarnConfigExists, _ := project.GetProjectConfFilePath(techutils.Yarn.GetProjectType()); yarnConfigExists {
-		return tech
-	}
-	if _, npmConfigExists, _ := project.GetProjectConfFilePath(techutils.Npm.GetProjectType()); !npmConfigExists {
-		return tech
-	}
-	log.Info("No yarn.yaml found; using npm.yaml for resolver configuration (npm and yarn share the same Artifactory npm API).")
-	return techutils.Npm
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
@@ -1047,14 +1035,14 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry, prefers an
+// getBuildInfoParamsByTech resolves install-time server details. For Pipenv/Pip/Poetry/Yarn, prefers an
 // already-set ca.PackageManagerConfig (native detection) over the generic server so install
 // and the later GetAuth-based probes hit the same endpoint. Other techs keep using the
 // generic server, matching their pre-existing behavior.
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Nuget) && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn || tech == techutils.Nuget) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1087,6 +1075,9 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		NpmLegacyPeerDeps:       ca.LegacyPeerDeps(),
 		// Yarn: always refresh yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
 		YarnOverwriteYarnLock: true,
+		// Set only when setRepoFromYarnrc actually fell back to 'jf c' credentials — see the
+		// field doc on yarnCredentialsFromFallback for why this must stay conditional.
+		YarnCredentialsFromFallback: ca.yarnCredentialsFromFallback,
 		// Pnpm params
 		MaxTreeDepth: ca.MaxTreeDepth(),
 		// Python params
@@ -1135,11 +1126,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv/Pip/Poetry/NuGet's native repo/server before getBuildInfoParamsByTech so
-	// install and the later probes share an endpoint. Other techs resolve later via
-	// SetResolutionRepoInParamsIfExists and must not be forced through SetRepo this early
-	// (they tolerate having no config file yet).
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Nuget) && ca.PackageManagerConfig == nil {
+	// Resolve Pipenv/Pip/Poetry/Yarn/NuGet's native repo/server early, before getBuildInfoParamsByTech,
+	// so install and the later probes share an endpoint. Other techs resolve later via
+	// SetResolutionRepoInParamsIfExists.
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn || tech == techutils.Nuget) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
@@ -1183,8 +1173,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pnpm {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pnpm; pnpm always resolves natively from .npmrc")
 	}
-	// --run-native has no effect for yarn regardless of version; the registry is
-	// always read from the yarn-specific config (yarn.yaml for V2/V3, .yarnrc.yml for V4).
+	// --run-native has no effect for yarn; the registry is always read natively from .yarnrc.yml.
 	// Deferred: emitted after the spinner stops so the message is not overwritten.
 	if ca.RunNative() && tech == techutils.Yarn {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for yarn")
@@ -1219,9 +1208,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Nuget {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically from 'jf nuget-config', or by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
 	}
-	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
-	resolverTech := resolveResolverTechForCuration(tech)
-	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, resolverTech)
+	// Pipenv/Pip/Poetry/Yarn already resolved above — a no-op for them here.
+	// Still applies to every other tech that resolves via a *.yaml config file (jf <tech>-config).
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
 		return err
 	}
@@ -1308,7 +1297,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return err
 	}
-	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv || tech == techutils.Uv {
 		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return err
@@ -1675,10 +1664,8 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromPyproject()
 	}
 
-	// Yarn V4 uses native mode: no jf yarn-config / yarn.yaml required.
-	// Detect the running yarn version and route to the appropriate path.
-	// Version detection failures are fatal — silently falling through to the
-	// V2/V3 path would use different flags and break the audit.
+	// Yarn V2, V3, and V4 all store registry config in the same .yarnrc.yml
+	// (Berry) format, so curation-audit resolves it natively.
 	if tech == techutils.Yarn {
 		yarnExecPath, yarnExecErr := bibuildutils.GetYarnExecutable()
 		if yarnExecErr != nil {
@@ -1686,39 +1673,26 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		}
 		workingDir, wdErr := coreutils.GetWorkingDirectory()
 		if wdErr != nil {
-			return fmt.Errorf("could not determine working directory for yarn version detection: %w", wdErr)
+			return fmt.Errorf("could not determine working directory for yarn native config resolution: %w", wdErr)
 		}
-		versionStr, versionErr := bibuildutils.GetVersion(yarnExecPath, workingDir)
-		if versionErr != nil {
-			return fmt.Errorf("could not detect yarn version: %w. Ensure the yarn binary at %q is functional (try 'yarn --version') before running 'jf ca'", versionErr, yarnExecPath)
+		// Reject V1 first, or it would hit a confusing .yarnrc.yml error instead of
+		// the clear "Yarn V1 is not supported" message.
+		if err := yarntech.VerifyYarnVersionSupportedForCuration(yarnExecPath, workingDir); err != nil {
+			return err
 		}
-		yarnVersion := version.NewVersion(versionStr)
-		if yarnVersion.Compare(yarntech.YarnV4Version) <= 0 {
-			return ca.setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir)
-		}
-		// V2/V3: fall through to getRepoParams (yarn.yaml / npm.yaml).
+		return ca.setRepoFromYarnrc(yarnExecPath, workingDir)
 	}
 
 	resolverParams, err := ca.getRepoParams(tech.GetProjectType())
 	if err != nil {
-		// npm and yarn share the same Artifactory npm API for curation, so their
-		// repository configs are interchangeable. Fall back to the sibling tech's
-		// config when the primary one is missing (e.g. the project was configured
-		// with 'jf yarn-config' but is detected as npm because yarn.lock is absent).
-		primaryErr := err
-		switch tech {
-		case techutils.Npm:
-			resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType())
-		case techutils.Yarn:
-			resolverParams, err = ca.getRepoParams(techutils.Npm.GetProjectType())
-		}
-		if err != nil {
-			// Return the primary tech's error so the user sees the correct command.
-			// Yarn's CLI config command is 'jf yarn-config', not 'jf yarn c'.
-			if tech == techutils.Yarn {
-				return errorutils.CheckErrorf("no config file was found! Before running jf ca on a yarn project for the first time, the project should be configured using the 'jf yarn-config' command")
+		// npm and yarn share the same Artifactory npm API for curation.
+		if tech == techutils.Npm {
+			primaryErr := err
+			if resolverParams, err = ca.getRepoParams(techutils.Yarn.GetProjectType()); err != nil {
+				return primaryErr
 			}
-			return primaryErr
+		} else {
+			return err
 		}
 	}
 	ca.setPackageManagerConfig(resolverParams)
@@ -2026,39 +2000,41 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 	return nil
 }
 
-// setRepoFromYarnrcForYarnV4 reads Artifactory connection details from the
-// project's .yarnrc.yml via the Yarn CLI. Yarn V4 uses native mode — no
+// setRepoFromYarnrc reads Artifactory connection details from the project's
+// .yarnrc.yml via the Yarn CLI. Yarn V2, V3, and V4 all use native mode — no
 // jf yarn-config step is required; the registry URL and auth token live in
-// .yarnrc.yml already. This is always called for Yarn V4 curation.
+// .yarnrc.yml already. This is always called for Yarn curation.
 //
 // Auth priority:
 //  1. Token from .yarnrc.yml — preferred, scoped to the exact registry URL.
 //  2. Token from 'jf c' server config — fallback when .yarnrc.yml carries no token.
-func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, workingDir string) error {
-	registryConfig, err := yarntech.GetNativeYarnV4RegistryConfig(yarnExecPath, workingDir)
+func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir string) error {
+	registryConfig, err := yarntech.GetNativeYarnRegistryConfig(yarnExecPath, workingDir)
 	if err != nil {
 		log.Warn("Ensure npmRegistryServer is configured in .yarnrc.yml (e.g. npmRegistryServer: \"https://<host>/artifactory/api/npm/<repo>/\")")
-		return fmt.Errorf("yarn V4: failed to read Artifactory details from .yarnrc.yml: %w", err)
+		return fmt.Errorf("yarn: failed to read Artifactory details from .yarnrc.yml: %w", err)
 	}
 
 	var serverDetails *config.ServerDetails
 	if registryConfig.AuthToken != "" {
-		log.Debug("yarn V4: using auth token from .yarnrc.yml")
+		log.Debug("yarn: using auth token from .yarnrc.yml")
 		serverDetails = &config.ServerDetails{
 			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 			AccessToken:    registryConfig.AuthToken,
 		}
+		ca.yarnCredentialsFromFallback = false
 	} else {
-		log.Debug("yarn V4: no token in .yarnrc.yml — using 'jf c' server credentials")
-		base, sdErr := ca.ServerDetails()
-		if sdErr != nil || base == nil {
-			return fmt.Errorf("yarn V4: no auth token found in .yarnrc.yml and no 'jf c' server configured: %w", sdErr)
+		log.Debug("yarn: no token in .yarnrc.yml — using 'jf c' server credentials")
+		// .yarnrc.yml carries no token, so we're about to attach the configured 'jf c'
+		// server's real credentials to whatever host it declares. credentialFallbackServerDetails
+		// refuses that unless the declared host matches the configured server, same as
+		// pip/poetry/uv, so a project-controlled .yarnrc.yml can't redirect our credentials
+		// to an unrelated/attacker host.
+		serverDetails, err = ca.credentialFallbackServerDetails("yarn", ".yarnrc.yml", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
 		}
-		// Copy before mutating: ca.ServerDetails() returns the shared struct, and
-		// overwriting its URL would leak to other techs in a multi-tech audit.
-		copied := *base
-		copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
-		serverDetails = &copied
+		ca.yarnCredentialsFromFallback = true
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).
@@ -2066,12 +2042,11 @@ func (ca *CurationAuditCommand) setRepoFromYarnrcForYarnV4(yarnExecPath, working
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	// Populate depsRepo on the audit-params interface so getBuildInfoParamsByTech
-	// returns the correct repository name. For V4 native mode the user never passes
+	// returns the correct repository name. In native mode the user never passes
 	// --deps-repo, so ca.DepsRepo() would otherwise be "". The repo name is consumed
-	// downstream by the curation error messages and probeBlockedDirectDeps HEAD checks
-	// (V4 does not route installs through the curation endpoint).
+	// downstream by the curation error messages and probeBlockedDirectDeps HEAD checks.
 	ca.SetDepsRepo(registryConfig.RepoName)
-	log.Info(fmt.Sprintf("yarn V4: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	log.Info(fmt.Sprintf("yarn: using Artifactory URL %q and repository %q from .yarnrc.yml", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
@@ -2279,7 +2254,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 		requestDetails := nc.httpClientDetails.Clone()
 		var resp *http.Response
 		var err error
-		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 			resp, _, err = nc.sendBoundedRequest(http.MethodHead, packageUrl, requestDetails)
 		} else {
 			resp, _, err = nc.rtManager.Client().SendHead(packageUrl, requestDetails)
@@ -2360,7 +2335,7 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	if err != nil {
 		return fmt.Errorf("curation-blocked resolution fallback: failed to get Artifactory manager (%w); %s error: %w", err, tech, cvsErr)
 	}
-	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv {
+	if tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Pipenv || tech == techutils.Uv {
 		rtManager, err = boundedRedirectManager(serverDetails)
 		if err != nil {
 			return fmt.Errorf("curation-blocked resolution fallback: failed to create bounded HTTP manager: %w", err)
@@ -2641,7 +2616,7 @@ func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
@@ -2681,7 +2656,7 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 	var resp *http.Response
 	var body []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
@@ -2782,7 +2757,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		headDetails := nc.httpClientDetails.Clone()
 		var headResp *http.Response
 		var headErr error
-		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+		if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 			headResp, _, headErr = nc.sendBoundedRequest(http.MethodHead, dlURL, headDetails)
 		} else {
 			headResp, _, headErr = nc.rtManager.Client().SendHead(dlURL, headDetails)
@@ -2882,7 +2857,7 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 	var getResp *http.Response
 	var respBody []byte
 	var err error
-	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv {
+	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		getResp, respBody, err = nc.sendBoundedRequest(http.MethodGet, packageUrl, requestDetails)
 	} else {
 		getResp, respBody, _, err = nc.rtManager.Client().SendGet(packageUrl, true, requestDetails)

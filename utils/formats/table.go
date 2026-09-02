@@ -15,11 +15,14 @@ type ResultsTables struct {
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow
 	// Iac tables
-	IacVulnerabilitiesTable []iacOrSastTableRow
-	IacViolationsTable      []iacOrSastTableRow
+	IacVulnerabilitiesTable []basicJasTableRow
+	IacViolationsTable      []basicJasTableRow
 	// Sast tables
-	SastVulnerabilitiesTable []iacOrSastTableRow
-	SastViolationsTable      []iacOrSastTableRow
+	SastVulnerabilitiesTable []basicJasTableRow
+	SastViolationsTable      []basicJasTableRow
+	// Services
+	ServicesVulnerabilitiesTable []basicJasTableRow
+	ServicesViolationsTable      []basicJasTableRow
 	// Secrets
 	SecretsVulnerabilitiesTable []secretsTableRow
 	SecretsViolationsTable      []secretsTableRow
@@ -169,7 +172,7 @@ type secretsTableRow struct {
 	watch           string `col-name:"Watch Name" omitempty:"true"`
 }
 
-type iacOrSastTableRow struct {
+type basicJasTableRow struct {
 	severity   string `col-name:"Severity"`
 	file       string `col-name:"File"`
 	lineColumn string `col-name:"Line:Column"`

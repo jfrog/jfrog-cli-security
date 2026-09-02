@@ -64,3 +64,14 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 		})
 	}
 }
+
+func TestViolations_Services(t *testing.T) {
+	violations := Violations{
+		Services: []JasViolation{{
+			Violation: Violation{ViolationType: ServicesViolationType},
+		}},
+	}
+	assert.True(t, violations.HasViolations())
+	assert.Equal(t, 1, violations.Count())
+	assert.Contains(t, violations.String(), "1 Services")
+}

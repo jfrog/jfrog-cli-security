@@ -13,11 +13,11 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
+	xrayUtils "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 )
 
@@ -102,7 +102,7 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 }
 
 func (ucc *UploadCycloneDxCommand) waitForUploadCompletion() error {
-	xrayManager, err := xray.CreateXrayServiceManager(ucc.serverDetails, xray.WithScopedProjectKey(ucc.projectKey))
+	xrayManager, err := xrayUtils.CreateXrayServiceManager(ucc.serverDetails, xrayUtils.WithScopedProjectKey(ucc.projectKey))
 	if err != nil {
 		return err
 	}
