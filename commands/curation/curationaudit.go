@@ -1155,8 +1155,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
 	// Artifactory details are already populated for --run-native npm, and always for
-	// pnpm/NuGet (native-only, no yaml config). Skip the yaml config file lookup for these.
-	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm || tech == techutils.Nuget {
+	// pnpm (native-only, no yaml config). Skip the yaml config file lookup for these.
+	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
 		params.IgnoreConfigFile = true
 	}
 	// uv has no jf uv-config yaml; skip config file lookup and use server details
@@ -1214,10 +1214,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
-	// NuGet always resolves natively from the NuGet/.NET CLI's configured sources,
-	// so --run-native is a no-op here too.
+	// NuGet already resolves automatically (nuget.yaml, then native NuGet/.NET CLI
+	// sources); --run-native has nothing to switch between here.
 	if ca.RunNative() && tech == techutils.Nuget {
-		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically from 'jf nuget-config', or by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
 	}
 	// For yarn with no yarn.yaml, fall back to npm.yaml — npm and yarn share the same Artifactory npm API.
 	resolverTech := resolveResolverTechForCuration(tech)
@@ -1641,8 +1641,8 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrc()
 	}
 
-	// NuGet always resolves natively from the NuGet/.NET CLI's configured sources,
-	// regardless of --run-native (no yaml config equivalent exists).
+	// NuGet resolves nuget.yaml first, falling back to the native NuGet/.NET CLI's
+	// configured sources when no yaml exists. --run-native has no effect on this order.
 	if tech == techutils.Nuget {
 		return ca.setRepoFromNuGetSource()
 	}
@@ -1862,8 +1862,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	// both 'jf <tech>' and 'jf ca'.
 	supported := map[techutils.Technology]struct{}{
 		techutils.Npm: {},
-		// NuGet always resolves natively from the NuGet/.NET CLI's configured
-		// sources, so --run-native is a redundant no-op.
+		// NuGet already resolves automatically (nuget.yaml, then native NuGet/.NET
+		// CLI sources), so --run-native has nothing to switch between; a warning
+		// is emitted in auditTree rather than an error.
 		techutils.Nuget: {},
 		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
 		// rather than an error (a warning is emitted in auditTree).
@@ -1928,10 +1929,34 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 	return nil
 }
 
-// setRepoFromNuGetSource finds the native NuGet/.NET CLI source whose host matches the
-// 'jf c' server, and builds PackageManagerConfig from its Artifactory URL and repo name.
-// Credentials always come from the 'jf c' server, never from the native config.
+// setRepoFromNuGetSource detects the Artifactory NuGet source for NuGet/.NET curation.
+//
+// Detection priority:
+//  1. nuget.yaml — explicit 'jf nuget-config'.
+//  2. Native NuGet/.NET CLI source ('dotnet nuget list source' / 'nuget sources List') whose
+//     host matches the 'jf c' server — Artifactory "Set me up". Credentials still come from
+//     the 'jf c' server, never from the native config.
+//
+// If neither resolves, the specific native error is logged at Debug level and the generic
+// "no config file was found" error is returned.
 func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
+	projectType := techutils.Nuget.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("NuGet: using Artifactory repository %q from nuget.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
 	serverDetails, err := ca.ServerDetails()
 	if err != nil {
 		return err
@@ -1942,7 +1967,9 @@ func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
 
 	registryConfig, err := nugettech.GetNativeNuGetRegistryConfig(serverDetails)
 	if err != nil {
-		return fmt.Errorf("NuGet: %w", err)
+		log.Debug(fmt.Sprintf("NuGet: failed to read Artifactory details from native NuGet/.NET CLI sources: %s", err.Error()))
+		_, noConfigErr := ca.getRepoParams(projectType)
+		return noConfigErr
 	}
 
 	resolvedServerDetails := *serverDetails

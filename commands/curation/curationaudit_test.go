@@ -4713,8 +4713,8 @@ func TestSetRepoFromNuGetSourceAcceptsMatchingHost(t *testing.T) {
 }
 
 // TestSetRepoFromNuGetSourceNoMatchingHost verifies that when none of the configured NuGet
-// sources match the 'jf c' server's host, setRepoFromNuGetSource returns a clear, actionable
-// error and never attaches credentials.
+// sources match the 'jf c' server's host, setRepoFromNuGetSource falls back to the generic
+// "no config file was found" error and never attaches credentials.
 func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
 	toolDir := t.TempDir()
 	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
@@ -4737,7 +4737,7 @@ func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
 
 	setErr := ca.setRepoFromNuGetSource()
 	require.Error(t, setErr)
-	assert.Contains(t, setErr.Error(), "could not find a NuGet source")
+	assert.Contains(t, setErr.Error(), "no config file was found")
 	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when no source matches")
 }
 
@@ -4756,9 +4756,36 @@ func TestSetRepoFromNuGetSourceNoServerConfigured(t *testing.T) {
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
+// TestSetRepoFromNuGetSource_YamlPresent_Succeeds verifies nuget.yaml (explicit
+// 'jf nuget-config') takes priority over the native NuGet/.NET CLI source list when present.
+func TestSetRepoFromNuGetSource_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "nuget.yaml"), []byte(`version: 1
+type: nuget
+resolver:
+    repo: nuget-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromNuGetSource()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "nuget-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
 // TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative is an integration-style check
-// that SetRepo(Nuget) always dispatches to setRepoFromNuGetSource — NuGet has no
-// 'jf nuget-config'/nuget.yaml equivalent, so unlike npm this must not depend on --run-native.
+// that SetRepo(Nuget) dispatches to setRepoFromNuGetSource, which falls back to the native
+// NuGet/.NET CLI source list when no nuget.yaml is present — regardless of --run-native.
 func TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative(t *testing.T) {
 	for _, runNative := range []bool{true, false} {
 		t.Run(fmt.Sprintf("run-native=%v", runNative), func(t *testing.T) {
