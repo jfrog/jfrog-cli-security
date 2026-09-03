@@ -90,13 +90,6 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []stri
 	if sc.currentScan.Vulnerabilities.ScaResults == nil {
 		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 	}
-	// Parse general SCA results
-	if scaResponse.ScanId != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.ScanId)
-	}
-	if scaResponse.XrayDataUrl != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
-	}
 	if sc.status.IsScanFailed(results.CmdStepSca) {
 		return
 	}

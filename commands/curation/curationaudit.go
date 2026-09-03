@@ -45,9 +45,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	cargotech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cargo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	gemtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	nugettech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/nuget"
 	pnpmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -748,6 +750,11 @@ func promotePipToUv(techs []string) []string {
 	return techs
 }
 
+// dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.
+func dedupeDotnetFromNuget(techs []string) []string {
+	return removeTech(techs, techutils.Dotnet.String())
+}
+
 // removeTech returns techs without any entry equal to tech.
 func removeTech(techs []string, tech string) []string {
 	filtered := make([]string, 0, len(techs))
@@ -777,6 +784,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 		techs = promoteYarnWorkspaceMember(techs)
 		techs = promotePipToUv(techs)
+		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
 			hfTech := techutils.HuggingFaceML.String()
@@ -1041,7 +1049,7 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	var serverDetails *config.ServerDetails
 	var err error
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn) && ca.PackageManagerConfig != nil {
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn || tech == techutils.Nuget) && ca.PackageManagerConfig != nil {
 		serverDetails, err = ca.PackageManagerConfig.ServerDetails()
 	} else {
 		serverDetails, err = ca.ServerDetails()
@@ -1125,12 +1133,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
-	// Resolve Pipenv/Pip/Poetry/Yarn's native repo/server early, before getBuildInfoParamsByTech,
+	// Resolve Pipenv/Pip/Poetry/Yarn/NuGet's native repo/server early, before getBuildInfoParamsByTech,
 	// so install and the later probes share an endpoint. Other techs resolve later via
-	// SetResolutionRepoInParamsIfExists. A failure here is fatal for all four — none has a further
-	// fallback: pip already checked pip.yaml internally, pipenv/poetry never had one,
-	// and yarn deliberately skips yarn.yaml too.
-	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn) && ca.PackageManagerConfig == nil {
+	// SetResolutionRepoInParamsIfExists.
+	if (tech == techutils.Pipenv || tech == techutils.Pip || tech == techutils.Poetry || tech == techutils.Yarn || tech == techutils.Nuget) && ca.PackageManagerConfig == nil {
 		if err := ca.SetRepo(tech); err != nil {
 			return err
 		}
@@ -1141,12 +1147,20 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
+	// Usually already resolved by checkSupportByVersionOrEnv's earlier GetAuth call; only
+	// re-resolve here if that didn't happen. setRepoFromGemrc() prefers ruby.yaml when
+	// present, falling back to ~/.gemrc.
+	if tech == techutils.Gem && ca.PackageManagerConfig == nil {
+		if err := ca.setRepoFromGemrc(); err != nil {
+			return err
+		}
+	}
 	params, err := ca.getBuildInfoParamsByTech(tech)
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
-	// When --run-native is set for npm, or for pnpm (always .npmrc-based), the Artifactory
-	// details are already populated from .npmrc. Skip the yaml config file lookup.
+	// Artifactory details are already populated for --run-native npm, and always for
+	// pnpm (native-only, no yaml config). Skip the yaml config file lookup for these.
 	if (ca.RunNative() && tech == techutils.Npm) || tech == techutils.Pnpm {
 		params.IgnoreConfigFile = true
 	}
@@ -1166,6 +1180,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		if ca.PackageManagerConfig != nil {
 			if cargoSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && cargoSD != nil {
 				params.ServerDetails = cargoSD
+			}
+		}
+	}
+	// gem's repo/server were already resolved above by setRepoFromGemrc() (from ruby.yaml or
+	// ~/.gemrc); skip the generic yaml lookup and use those resolved server details.
+	if tech == techutils.Gem {
+		params.IgnoreConfigFile = true
+		if ca.PackageManagerConfig != nil {
+			if gemSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && gemSD != nil {
+				params.ServerDetails = gemSD
 			}
 		}
 	}
@@ -1204,7 +1228,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
-	// Pipenv/Pip/Poetry/Yarn already resolved above — a no-op for them here.
+	// NuGet already resolves automatically (nuget.yaml, then native NuGet/.NET CLI
+	// sources); --run-native has nothing to switch between here.
+	if ca.RunNative() && tech == techutils.Nuget {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically from 'jf nuget-config', or by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
+	}
+	// gem has nothing to switch between here; --run-native is a no-op.
+	if ca.RunNative() && tech == techutils.Gem {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for gem; the repository is resolved automatically from 'jf ruby-config' or ~/.gemrc")
+	}
+	// Pipenv/Pip/Poetry/Yarn/Gem/NuGet already resolved above — a no-op for them here.
 	// Still applies to every other tech that resolves via a *.yaml config file (jf <tech>-config).
 	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
@@ -1626,6 +1659,12 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromNpmrc()
 	}
 
+	// NuGet resolves nuget.yaml first, falling back to the native NuGet/.NET CLI's
+	// configured sources when no yaml exists. --run-native has no effect on this order.
+	if tech == techutils.Nuget {
+		return ca.setRepoFromNuGetSource()
+	}
+
 	// Pnpm always reads from .npmrc — there is no 'jf pnpm-config' command.
 	// pnpm shares the npm registry protocol, so the same .npmrc key/URL format applies.
 	if tech == techutils.Pnpm {
@@ -1648,6 +1687,11 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	// Cargo has no 'jf cargo-config' command; read the registry from .cargo/config.toml instead.
 	if tech == techutils.Cargo {
 		return ca.setRepoFromCargoConfig()
+	}
+
+	// Gem prefers ruby.yaml if configured, falling back to ~/.gemrc otherwise.
+	if tech == techutils.Gem {
+		return ca.setRepoFromGemrc()
 	}
 
 	if tech == techutils.Poetry {
@@ -1779,9 +1823,8 @@ func (ca *CurationAuditCommand) setRepoFromPipConf() error {
 		return nil
 	}
 
-	return errorutils.CheckErrorf(
-		"curation-audit for pip requires an Artifactory PyPI resolver. " +
-			"Either run 'jf pip-config' or configure index-url in your user pip.conf via Artifactory 'Set me up'.")
+	_, noConfigErr := ca.getRepoParams(projectType)
+	return noConfigErr
 }
 
 // setRepoFromPyproject detects the Artifactory PyPI source for poetry curation. Poetry has no
@@ -1815,10 +1858,9 @@ func (ca *CurationAuditCommand) setRepoFromPyproject() error {
 
 // validateRunNativeForTech rejects --run-native for techs that don't implement
 // native-config semantics. npm uses it to read Artifactory details from .npmrc;
-// pnpm/yarn/uv/pip/pipenv/poetry accept it as a no-op (a warning is emitted in auditTree)
-// since their resolution is already automatic and has nothing for the flag to
-// switch between. Extend the allow-list below when a new tech adds the
-// matching native-config flow.
+// pnpm/yarn/uv/pip/pipenv/poetry/NuGet accept it as a no-op (auditTree emits a warning)
+// since their resolution is already automatic. Extend the allow-list below when a new
+// tech adds a matching native-config flow.
 func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	if !runNative {
 		return nil
@@ -1827,6 +1869,10 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 	// both 'jf <tech>' and 'jf ca'.
 	supported := map[techutils.Technology]struct{}{
 		techutils.Npm: {},
+		// NuGet already resolves automatically (nuget.yaml, then native NuGet/.NET
+		// CLI sources), so --run-native has nothing to switch between; a warning
+		// is emitted in auditTree rather than an error.
+		techutils.Nuget: {},
 		// pnpm always resolves from .npmrc, so --run-native is a redundant no-op
 		// rather than an error (a warning is emitted in auditTree).
 		techutils.Pnpm: {},
@@ -1846,6 +1892,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// pipenv has no 'jf pipenv-config' either — always resolves automatically
 		// from pip.conf, then the Pipfile [[source]].
 		techutils.Pipenv: {},
+		// gem resolves automatically from 'jf ruby-config' (ruby.yaml) if configured,
+		// falling back to ~/.gemrc otherwise.
+		techutils.Gem: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
@@ -1887,6 +1936,61 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	return nil
+}
+
+// setRepoFromNuGetSource detects the Artifactory NuGet source for NuGet/.NET curation.
+//
+// Detection priority:
+//  1. nuget.yaml — explicit 'jf nuget-config'.
+//  2. Native NuGet/.NET CLI source ('dotnet nuget list source' / 'nuget sources List') whose
+//     host matches the 'jf c' server — Artifactory "Set me up". Credentials still come from
+//     the 'jf c' server, never from the native config.
+//
+// If neither resolves, the generic "no config file was found" error is returned, wrapped
+// together with the specific native-source detection failure so the user isn't left
+// guessing why the native fallback didn't work either.
+func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
+	projectType := techutils.Nuget.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, err := ca.getRepoParams(projectType)
+		if err != nil {
+			return err
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("NuGet: using Artifactory repository %q from nuget.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
+	serverDetails, err := ca.ServerDetails()
+	if err != nil {
+		return err
+	}
+	if serverDetails == nil || serverDetails.GetArtifactoryUrl() == "" {
+		return errorutils.CheckErrorf("curation-audit for NuGet requires a configured Artifactory server. Run 'jf c add' to configure a server")
+	}
+
+	registryConfig, err := nugettech.GetNativeNuGetRegistryConfig(serverDetails)
+	if err != nil {
+		_, noConfigErr := ca.getRepoParams(projectType)
+		return fmt.Errorf("%w; additionally, native NuGet/.NET CLI source detection failed: %w", noConfigErr, err)
+	}
+
+	resolvedServerDetails := *serverDetails
+	resolvedServerDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(&resolvedServerDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("NuGet: using native source %q (Artifactory URL %q, repository %q)", registryConfig.SourceName, registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
@@ -2027,6 +2131,68 @@ func (ca *CurationAuditCommand) setRepoFromCargoConfig() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	ca.SetDepsRepo(registryConfig.RepoName)
+	return nil
+}
+
+// setRepoFromGemrc detects the Artifactory Gems source for gem curation.
+//
+// Detection priority:
+//  1. ruby.yaml — explicit 'jf ruby-config' (or a manually configured project resolver).
+//  2. ~/.gemrc's ':sources:' — Artifactory "Set me up" for gem.
+//
+// For case 2, auth priority: credentials embedded in the ~/.gemrc source URL, falling
+// back to the 'jf c' server config if the source has none.
+func (ca *CurationAuditCommand) setRepoFromGemrc() error {
+	projectType := techutils.Gem.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, resolverErr := ca.getRepoParams(projectType)
+		if resolverErr != nil {
+			return resolverErr
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("gem: using Artifactory repository %q from ruby.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
+	registryConfig, err := gemtech.GetNativeGemRegistryConfig()
+	if err != nil {
+		var notConfigured *gemtech.NotConfiguredError
+		if !errors.As(err, &notConfigured) {
+			return fmt.Errorf("gem: failed to read Artifactory details from ~/.gemrc: %w", err)
+		}
+		log.Debug(fmt.Sprintf("gem: failed to read Artifactory details from ~/.gemrc: %s", err.Error()))
+		_, noConfigErr := ca.getRepoParams(projectType)
+		return noConfigErr
+	}
+
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
+		log.Debug("gem: using auth credentials embedded in the ~/.gemrc source URL")
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			User:           registryConfig.AuthUser,
+			Password:       registryConfig.AuthToken,
+		}
+	} else {
+		log.Debug("gem: no credentials embedded in the ~/.gemrc source URL — using 'jf c' server credentials")
+		serverDetails, err = ca.credentialFallbackServerDetails("gem", "~/.gemrc", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
+		}
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("gem: using Artifactory URL %q and repository %q from ~/.gemrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 

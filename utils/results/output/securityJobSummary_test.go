@@ -14,11 +14,14 @@ import (
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -549,4 +552,41 @@ func getOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
 	return strings.ReplaceAll(string(content), "\r\n", "\n")
+}
+
+func TestScaScanReference(t *testing.T) {
+	const xrayDataUrl = "https://myserver.com/ui/scans-list/builds-scans/build-name/scan-descendants/1"
+	testCases := []struct {
+		name                   string
+		includeVulnerabilities bool
+	}{
+		{name: "Violations only"},
+		{name: "Violations and vulnerabilities", includeVulnerabilities: true},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cmdResults := results.NewCommandResults(utils.Build)
+			cmdResults.Violations = &violationutils.Violations{Sca: []violationutils.CveViolation{{
+				ScaViolation: violationutils.ScaViolation{Violation: violationutils.Violation{
+					ViolationType: violationutils.CveViolationType,
+					Severity:      severityutils.High,
+					Watch:         "watch-name",
+				}},
+			}}}
+			cmdResults.NewScanResults(results.ScanTarget{Name: "build-name (1)"}).ScaScanResults(0, services.ScanResponse{
+				ScanId:      validations.TestScaScanId,
+				XrayDataUrl: xrayDataUrl,
+			})
+
+			summary, err := NewBuildScanSummary(cmdResults, &config.ServerDetails{Url: validations.TestPlatformUrl}, testCase.includeVulnerabilities, "build-name", "1")
+			assert.NoError(t, err)
+			assert.Len(t, summary.Summary.Scans, 1)
+			assert.Equal(t, []string{validations.TestScaScanId}, summary.Summary.Scans[0].Violations.ScaResults.ScanIds)
+			assert.Equal(t, []string{xrayDataUrl}, summary.Summary.Scans[0].Violations.ScaResults.MoreInfoUrls)
+			if testCase.includeVulnerabilities {
+				assert.Equal(t, []string{validations.TestScaScanId}, summary.Summary.Scans[0].Vulnerabilities.ScaResults.ScanIds)
+				assert.Equal(t, []string{xrayDataUrl}, summary.Summary.Scans[0].Vulnerabilities.ScaResults.MoreInfoUrls)
+			}
+		})
+	}
 }
