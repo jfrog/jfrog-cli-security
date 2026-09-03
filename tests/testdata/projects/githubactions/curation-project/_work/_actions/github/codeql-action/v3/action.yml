@@ -1,0 +1,8 @@
+name: 'CodeQL: init'
+description: 'Composite action bundling init/analyze/upload-sarif'
+runs:
+  using: 'composite'
+  steps:
+    - uses: some-org/transitive-action@v1
+    - run: echo "init"
+      shell: bash

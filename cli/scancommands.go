@@ -30,6 +30,7 @@ import (
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
+	curationActionsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curationactions"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
@@ -130,6 +131,14 @@ func getAuditAndScansCommands() []components.Command {
 			AIDescription: curationDocs.GetAIDescription(),
 			Category:      securityCategory,
 			Action:        CurationCmd,
+		},
+		{
+			Name:          "curate-gh-actions",
+			Flags:         flags.GetCommandFlags(flags.CurationActions),
+			Description:   curationActionsDocs.GetDescription(),
+			AIDescription: curationActionsDocs.GetAIDescription(),
+			Category:      securityCategory,
+			Action:        CurationActionsCmd,
 		},
 		{
 			Name:          "source-mcp",
@@ -644,6 +653,23 @@ func CurationCmd(c *components.Context) error {
 		return err
 	}
 	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+// CurationActionsCmd curates the GitHub Actions resolved on this job's runner. Unlike
+// CurationCmd, this doesn't audit a dependency tree, so there's no long-running operation to
+// wrap with a progress bar - Run() is called directly.
+func CurationActionsCmd(c *components.Context) error {
+	curationActionsCommand := curation.NewCurationActionsCommand()
+	if workingDirs := splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)); len(workingDirs) > 0 {
+		curationActionsCommand.SetWorkingDir(workingDirs[0])
+	}
+	if c.IsFlagSet(flags.ActionsCacheDir) {
+		curationActionsCommand.SetActionsCacheDir(c.GetStringFlagValue(flags.ActionsCacheDir))
+	}
+	if c.IsFlagSet(flags.WorkflowFile) {
+		curationActionsCommand.SetWorkflowFile(c.GetStringFlagValue(flags.WorkflowFile))
+	}
+	return curationActionsCommand.Run()
 }
 
 var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](

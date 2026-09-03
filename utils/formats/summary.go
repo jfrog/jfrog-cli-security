@@ -34,6 +34,7 @@ type ScanSummary struct {
 	Vulnerabilities *ScanResultSummary     `json:"vulnerabilities,omitempty"`
 	Violations      *ScanViolationsSummary `json:"violations,omitempty"`
 	CuratedPackages *CuratedPackages       `json:"curated,omitempty"`
+	CuratedActions  *CuratedActions        `json:"curated_actions,omitempty"`
 }
 
 type ScanResultSummary struct {
@@ -73,6 +74,20 @@ type BlockedPackages struct {
 	Policy    string         `json:"policy,omitempty"`
 	Condition string         `json:"condition,omitempty"`
 	Packages  map[string]int `json:"packages"`
+}
+
+// CuratedActions holds the GitHub Actions curation result for one job's workflow.
+type CuratedActions struct {
+	Actions []CuratedAction `json:"actions,omitempty"`
+}
+
+// CuratedAction is the curation outcome for one resolved GitHub Action.
+type CuratedAction struct {
+	Action string `json:"action"`           // "owner/repo" (+ "/subpath" if present)
+	Ref    string `json:"ref"`              // literal, uninterpreted
+	Parent string `json:"parent,omitempty"` // "" if directly referenced in the job's workflow or parent can not be determined
+	Status string `json:"status"`
+	Notes  string `json:"notes,omitempty"`
 }
 
 func (cp *CuratedPackages) GetApprovedCount() int {
@@ -140,6 +155,22 @@ func (sc *ScanSummary) HasCuratedPackages() bool {
 
 func (sc *ScanSummary) HasBlockedPackages() bool {
 	return sc.CuratedPackages != nil && len(sc.CuratedPackages.Blocked) > 0
+}
+
+func (sc *ScanSummary) HasCuratedActions() bool {
+	return sc.CuratedActions != nil && len(sc.CuratedActions.Actions) > 0
+}
+
+func (sc *ScanSummary) HasRejectedActions() bool {
+	if sc.CuratedActions == nil {
+		return false
+	}
+	for _, action := range sc.CuratedActions.Actions {
+		if action.Status == "Rejected" {
+			return true
+		}
+	}
+	return false
 }
 
 func (sc *ScanSummary) HasViolations() bool {
