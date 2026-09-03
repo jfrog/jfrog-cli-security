@@ -4823,6 +4823,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	t.Run("NuGet accepts --run-native as a redundant no-op", func(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, false))
+	})
 	// gem already resolves automatically (ruby.yaml, then ~/.gemrc); --run-native has
 	// nothing to switch between here — accepted as a no-op.
 	t.Run("gem accepts --run-native as a redundant no-op", func(t *testing.T) {

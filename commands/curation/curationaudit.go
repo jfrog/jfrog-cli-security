@@ -1233,12 +1233,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Nuget {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for NuGet; the repository is resolved automatically from 'jf nuget-config', or by matching the configured Artifactory server against the sources listed by 'dotnet nuget list source' or 'nuget sources List'")
 	}
-	// Pipenv/Pip/Poetry/Yarn already resolved above — a no-op for them here.
 	// gem has nothing to switch between here; --run-native is a no-op.
 	if ca.RunNative() && tech == techutils.Gem {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for gem; the repository is resolved automatically from 'jf ruby-config' or ~/.gemrc")
 	}
-	// Pipenv/Pip/Poetry/Yarn/Gem already resolved above — a no-op for them here.
+	// Pipenv/Pip/Poetry/Yarn/Gem/NuGet already resolved above — a no-op for them here.
 	// Still applies to every other tech that resolves via a *.yaml config file (jf <tech>-config).
 	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
