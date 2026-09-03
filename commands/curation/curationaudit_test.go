@@ -5611,6 +5611,52 @@ func TestPromotePipToUv(t *testing.T) {
 	}
 }
 
+// TestDedupeDotnetFromNuget pins the behavior of dedupeDotnetFromNuget: Dotnet is always
+// dropped when present, since Dotnet and Nuget are detected from the same project indicators
+// and auditTree's setRepoFromNuGetSource already handles both .NET CLI and legacy NuGet CLI
+// projects under techutils.Nuget alone. Without this dedup, Dotnet would also surface as an
+// unsupported technology alongside Nuget.
+func TestDedupeDotnetFromNuget(t *testing.T) {
+	nuget := techutils.Nuget.String()
+	dotnet := techutils.Dotnet.String()
+	other := "maven"
+
+	tests := []struct {
+		name     string
+		techs    []string
+		expected []string
+	}{
+		{
+			name:     "nuget + dotnet both detected — dotnet dropped",
+			techs:    []string{nuget, dotnet},
+			expected: []string{nuget},
+		},
+		{
+			name:     "dotnet alone — still dropped",
+			techs:    []string{dotnet},
+			expected: []string{},
+		},
+		{
+			name:     "no dotnet present — unchanged",
+			techs:    []string{nuget, other},
+			expected: []string{nuget, other},
+		},
+		{
+			name:     "empty techs — unchanged",
+			techs:    []string{},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := dedupeDotnetFromNuget(tc.techs)
+			assert.Equal(t, tc.expected, result)
+			assert.NotContains(t, result, dotnet, "dotnet must never remain after dedupeDotnetFromNuget")
+		})
+	}
+}
+
 // =============================================================================
 // Tests for Pipenv support added to curationaudit.go.
 // =============================================================================

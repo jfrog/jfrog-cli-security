@@ -749,6 +749,11 @@ func promotePipToUv(techs []string) []string {
 	return techs
 }
 
+// dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.
+func dedupeDotnetFromNuget(techs []string) []string {
+	return removeTech(techs, techutils.Dotnet.String())
+}
+
 // removeTech returns techs without any entry equal to tech.
 func removeTech(techs []string, tech string) []string {
 	filtered := make([]string, 0, len(techs))
@@ -778,7 +783,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 		techs = promoteYarnWorkspaceMember(techs)
 		techs = promotePipToUv(techs)
-		techs = slices.DeleteFunc(techs, func(t string) bool { return t == techutils.Dotnet.String() })
+		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
 			hfTech := techutils.HuggingFaceML.String()
