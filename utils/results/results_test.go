@@ -118,6 +118,54 @@ func TestScanTarget_String(t *testing.T) {
 	}
 }
 
+func TestTargetResults_GetDescriptors(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   *TargetResults
+		rootDir  string
+		expected []string
+	}{
+		{
+			name:     "No sca results",
+			target:   &TargetResults{ScanTarget: ScanTarget{Target: "/repo/Server"}},
+			rootDir:  "/repo",
+			expected: nil,
+		},
+		{
+			name: "Descriptor in a subdirectory, relative to repo root",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo/Server"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/Server/package.json"}},
+			},
+			rootDir:  "/repo",
+			expected: []string{"Server/package.json"},
+		},
+		{
+			name: "No root dir provided, falls back to the target's own directory",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo/Server"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/Server/package.json"}},
+			},
+			rootDir:  "",
+			expected: []string{"package.json"},
+		},
+		{
+			name: "Descriptor at the repo root",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/package.json"}},
+			},
+			rootDir:  "/repo",
+			expected: []string{"package.json"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tt.expected, tt.target.GetDescriptors(tt.rootDir))
+		})
+	}
+}
+
 func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 	enabledModule := xscServices.Module{
 		ScanConfig: xscServices.ScanConfig{

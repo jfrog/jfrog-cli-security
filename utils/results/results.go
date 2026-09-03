@@ -769,13 +769,17 @@ func (sr *TargetResults) GetErrors() (err error) {
 	return
 }
 
-func (sr *TargetResults) GetDescriptors() []string {
+func (sr *TargetResults) GetDescriptors(rootDir string) []string {
 	if sr.ScaResults == nil {
 		return nil
 	}
+	if rootDir == "" {
+		// Fall back to the target's own directory if no root directory is provided.
+		rootDir = sr.Target
+	}
 	descriptors := datastructures.MakeSet[string]()
 	for _, descriptor := range sr.ScaResults.Descriptors {
-		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(sr.Target)))
+		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(rootDir)))
 	}
 	return descriptors.ToSlice()
 }
