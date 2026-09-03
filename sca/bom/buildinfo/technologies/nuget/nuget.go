@@ -426,16 +426,28 @@ func selectMatchingNuGetSource(sources []nugetSource, artifactoryUrl, toolName s
 		return nil, fmt.Errorf("failed to parse the configured Artifactory URL %q: %w", artifactoryUrl, err)
 	}
 
+	var matched []nugetSource
 	for _, source := range sources {
 		sourceHost, hostErr := schemeAndHostOf(source.url)
 		if hostErr != nil || !strings.EqualFold(sourceHost, artifactoryHost) {
 			continue
 		}
-		rtBaseUrl, repoName, parseErr := parseArtifactoryNugetSourceUrl(source.url)
-		if parseErr != nil {
-			return nil, fmt.Errorf("NuGet source %q (%s) matches the configured Artifactory host %q but is not a recognizable Artifactory NuGet repository URL: %w", source.name, source.url, artifactoryHost, parseErr)
+		matched = append(matched, source)
+	}
+	if len(matched) > 1 {
+		names := make([]string, len(matched))
+		for i, source := range matched {
+			names[i] = source.name
 		}
-		return &NuGetRegistrySourceConfig{SourceName: source.name, ArtifactoryUrl: rtBaseUrl, RepoName: repoName}, nil
+		log.Warn(fmt.Sprintf("Multiple configured NuGet sources match the Artifactory host %q: %s. Using %q; remove or rename the unused sources to avoid ambiguity.",
+			artifactoryHost, strings.Join(names, ", "), matched[0].name))
+	}
+	if len(matched) > 0 {
+		rtBaseUrl, repoName, parseErr := parseArtifactoryNugetSourceUrl(matched[0].url)
+		if parseErr != nil {
+			return nil, fmt.Errorf("NuGet source %q (%s) matches the configured Artifactory host %q but is not a recognizable Artifactory NuGet repository URL: %w", matched[0].name, matched[0].url, artifactoryHost, parseErr)
+		}
+		return &NuGetRegistrySourceConfig{SourceName: matched[0].name, ArtifactoryUrl: rtBaseUrl, RepoName: repoName}, nil
 	}
 
 	return nil, errorutils.CheckErrorf(

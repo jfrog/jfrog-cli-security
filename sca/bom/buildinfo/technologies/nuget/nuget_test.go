@@ -1,6 +1,7 @@
 package nuget
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -602,6 +603,50 @@ func TestSelectMatchingNuGetSource(t *testing.T) {
 		_, err := selectMatchingNuGetSource(sources, "not-a-valid-url-%", dotnetToolType)
 		require.Error(t, err)
 	})
+}
+
+// TestSelectMatchingNuGetSource_MultipleMatches_WarnsAndUsesFirst verifies that when more than
+// one configured source matches the Artifactory host (e.g. a leftover 'Set me up' source plus a
+// newly added one), the first match is still used for backward compatibility, but a Warn is
+// logged naming all the ambiguous sources so the user can clean them up.
+func TestSelectMatchingNuGetSource_MultipleMatches_WarnsAndUsesFirst(t *testing.T) {
+	sources := []nugetSource{
+		{name: "OldArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/old-repo/index.json"},
+		{name: "NewArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/new-repo/index.json"},
+	}
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
+	result, err := selectMatchingNuGetSource(sources, "https://artifactory.example.com/artifactory/", dotnetToolType)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "OldArtifactory", result.SourceName)
+	assert.Equal(t, "old-repo", result.RepoName)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "Multiple configured NuGet sources match")
+	assert.Contains(t, logOutput, "OldArtifactory")
+	assert.Contains(t, logOutput, "NewArtifactory")
+}
+
+// TestSelectMatchingNuGetSource_SingleMatch_NoWarning is a regression test: the common case of
+// exactly one matching source must not trigger the ambiguity warning.
+func TestSelectMatchingNuGetSource_SingleMatch_NoWarning(t *testing.T) {
+	sources := []nugetSource{
+		{name: "MyArtifactory", url: "https://artifactory.example.com/artifactory/api/nuget/v3/nuget-remote/index.json"},
+	}
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
+	_, err := selectMatchingNuGetSource(sources, "https://artifactory.example.com/artifactory/", dotnetToolType)
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "Multiple configured NuGet sources match")
 }
 
 // writeFakeToolExecutable writes an executable in dir named toolName that echoes the given
