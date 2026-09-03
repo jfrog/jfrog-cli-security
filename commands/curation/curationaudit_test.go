@@ -538,7 +538,23 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
 	// Create the server details config file
 	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
+
+	// Every Gem test case gets a ~/.gemrc with an Artifactory-shaped source, whether or not the
+	// fixture project also has a ruby.yaml. ruby.yaml takes priority when present (see
+	// setRepoFromGemrc), so this also exercises the both-present-yaml-wins case for fixtures
+	// that ship one, e.g. curation-project.
+	var callbackGemrc func()
+	if testCase.tech == techutils.Gem {
+		gemrcPath := filepath.Join(tempHomeDirPath, "gemrc")
+		gemSource := strings.TrimSuffix(config.ArtifactoryUrl, "/") + "/api/gems/ruby-remote/"
+		assert.NoError(t, os.WriteFile(gemrcPath, []byte(":sources:\n- "+gemSource+"\n"), 0600))
+		callbackGemrc = clienttestutils.SetEnvWithCallbackAndAssert(t, "GEMRC", gemrcPath)
+	}
+
 	return func() {
+		if callbackGemrc != nil {
+			callbackGemrc()
+		}
 		callbackHomeDir()
 		err := fileutils.RemoveTempDir(tempHomeDirPath)
 		if err != nil {
@@ -820,6 +836,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			// curation-project ships a ruby.yaml, and createTempHomeDirWithConfig auto-generates
+			// a ~/.gemrc for every Gem test case too — so this also proves ruby.yaml takes
+			// priority over ~/.gemrc when both are present (see setRepoFromGemrc). The
+			// yaml-absent / ~/.gemrc-fallback / no-config-error paths are covered at the unit
+			// level (TestSetRepoFromGemrc_*), matching how pip's single yaml-based integration
+			// fixture pairs with its own unit tests for the fallback/error paths.
 			name:          "gem tree - one blocked package",
 			tech:          techutils.Gem,
 			pathToProject: filepath.Join("projects", "package-managers", "gem", "curation-project"),
@@ -839,9 +861,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Gemfile": filepath.Join("tests", "testdata", "projects", "package-managers", "gem", "curation-project", "Gemfile"),
 			},
 
-			// Block a package that your logs confirm is being requested.
+			// Block a package that your logs confirm is being requested. The repo name
+			// (ruby-yaml-repo) is intentionally distinct from the ~/.gemrc source that
+			// createTempHomeDirWithConfig auto-generates for every Gem test (ruby-remote),
+			// so this test can actually distinguish ruby.yaml winning from ~/.gemrc winning.
 			requestToFail: map[string]bool{
-				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+				"/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem": true,
 			},
 
 			// Expect a report containing the exact blocked package.
@@ -852,7 +877,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "actionview",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -869,7 +894,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "activesupport",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "direct",
@@ -886,7 +911,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "rails-dom-testing",
 							ParentVersion:     "2.3.0",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -4516,8 +4541,8 @@ func TestSetRepoFromPipConf_ErrorsWhenNeitherResolves(t *testing.T) {
 	ca := NewCurationAuditCommand()
 	err := ca.setRepoFromPipConf()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf pip-config")
-	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
@@ -4545,8 +4570,8 @@ func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.
 	ca := NewCurationAuditCommand()
 	err := ca.setRepoFromPipConf()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf pip-config")
-	assert.Contains(t, err.Error(), "pip.conf")
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
 	assert.Nil(t, ca.PackageManagerConfig)
 }
 
@@ -4832,6 +4857,12 @@ func TestValidateRunNativeForTech(t *testing.T) {
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
 	})
+	// gem already resolves automatically (ruby.yaml, then ~/.gemrc); --run-native has
+	// nothing to switch between here — accepted as a no-op.
+	t.Run("gem accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, false))
+	})
 
 	// Every other supported tech follows the same contract. Catch silent
 	// acceptance for any tech that's in the doc-table-of-supported but
@@ -4839,7 +4870,6 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	otherTechs := []techutils.Technology{
 		techutils.Gradle,
 		techutils.Maven,
-		techutils.Gem,
 		techutils.Go,
 		techutils.Nuget,
 		techutils.Dotnet,
@@ -5670,6 +5700,193 @@ func TestSetRepoFromCargoConfigRejectsSchemeDowngrade(t *testing.T) {
 	require.Error(t, setErr)
 	assert.Contains(t, setErr.Error(), "does not match")
 	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+func writeGemrcWithSource(t *testing.T, homeDir, sourceUrl string) {
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".gemrc"), []byte(":sources:\n- "+sourceUrl+"\n"), 0600))
+}
+
+func TestSetRepoFromGemrcNoServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://host/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// A ~/.gemrc source pointing at a different host must not receive the configured server's credentials.
+func TestSetRepoFromGemrcRejectsHostMismatch(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://attacker.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// The host check must not block the legitimate same-host case, and must fall back to the
+// configured 'jf c' server's credentials when the ~/.gemrc source has none of its own.
+func TestSetRepoFromGemrcAcceptsMatchingHost(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "fallback-token",
+	})
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "fallback-token", serverDetails.AccessToken, "must fall back to the configured server's credentials")
+}
+
+// The same host over http instead of https must not receive credentials -- a host-only check would allow this downgrade.
+func TestSetRepoFromGemrcRejectsSchemeDowngrade(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "http://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+// Embedded credentials in the ~/.gemrc source URL must be used as-is, with no 'jf c' server required at all.
+func TestSetRepoFromGemrcUsesEmbeddedCredentialsWithoutServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "admin", serverDetails.User)
+	assert.Equal(t, "mytoken", serverDetails.Password)
+}
+
+// ruby.yaml (an explicit 'jf ruby-config') must win over ~/.gemrc when both are present.
+func TestSetRepoFromGemrc_RubyYamlPresent_TakesPriorityOverGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://acme.jfrog.io/artifactory/api/gems/gemrc-repo/")
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "ruby.yaml"), []byte(`version: 1
+type: ruby
+resolver:
+    repo: yaml-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "yaml-repo", ca.PackageManagerConfig.TargetRepo(), "ruby.yaml must take priority over ~/.gemrc")
+}
+
+// With no ruby.yaml, ~/.gemrc must still be used as the fallback.
+func TestSetRepoFromGemrc_NoRubyYaml_FallsBackToGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+}
+
+// With neither ruby.yaml nor a usable ~/.gemrc source, the same generic "no config file was
+// found" error used by every other unconfigured tech is returned — not a gemrc-specific one.
+func TestSetRepoFromGemrc_NoYamlNoGemrc_ReturnsGenericConfigError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "'jf ruby c'")
+	assert.NotContains(t, err.Error(), "gemrc")
+}
+
+// A ~/.gemrc that exists but fails to parse (malformed YAML) is a real misconfiguration, not
+// "nothing set up yet" -- the specific parse failure must be surfaced directly instead of being
+// collapsed into the generic "no config file was found" message, which wouldn't fix it.
+func TestSetRepoFromGemrc_MalformedGemrcYaml_ReturnsSpecificParseError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	require.NoError(t, os.WriteFile(filepath.Join(tempHomeDir, ".gemrc"), []byte(":sources: [unterminated"), 0600))
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse", "the real parse error must be surfaced")
+	assert.NotContains(t, err.Error(), "no config file was found",
+		"a real parse failure must not be masked as 'nothing configured'")
 }
 
 func TestHasCargoProject(t *testing.T) {

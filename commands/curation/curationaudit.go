@@ -45,6 +45,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	cargotech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cargo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	gemtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
@@ -1141,6 +1142,14 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 			return err
 		}
 	}
+	// Usually already resolved by checkSupportByVersionOrEnv's earlier GetAuth call; only
+	// re-resolve here if that didn't happen. setRepoFromGemrc() prefers ruby.yaml when
+	// present, falling back to ~/.gemrc.
+	if tech == techutils.Gem && ca.PackageManagerConfig == nil {
+		if err := ca.setRepoFromGemrc(); err != nil {
+			return err
+		}
+	}
 	params, err := ca.getBuildInfoParamsByTech(tech)
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
@@ -1166,6 +1175,16 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		if ca.PackageManagerConfig != nil {
 			if cargoSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && cargoSD != nil {
 				params.ServerDetails = cargoSD
+			}
+		}
+	}
+	// gem's repo/server were already resolved above by setRepoFromGemrc() (from ruby.yaml or
+	// ~/.gemrc); skip the generic yaml lookup and use those resolved server details.
+	if tech == techutils.Gem {
+		params.IgnoreConfigFile = true
+		if ca.PackageManagerConfig != nil {
+			if gemSD, sdErr := ca.PackageManagerConfig.ServerDetails(); sdErr == nil && gemSD != nil {
+				params.ServerDetails = gemSD
 			}
 		}
 	}
@@ -1204,7 +1223,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if ca.RunNative() && tech == techutils.Pipenv {
 		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for pipenv; the repository is resolved automatically from ~/.pip/pip.conf, or the Artifactory [[source]] entry in your Pipfile")
 	}
-	// Pipenv/Pip/Poetry/Yarn already resolved above — a no-op for them here.
+	// gem has nothing to switch between here; --run-native is a no-op.
+	if ca.RunNative() && tech == techutils.Gem {
+		ca.pendingWarnings = append(ca.pendingWarnings, "--run-native has no effect for gem; the repository is resolved automatically from 'jf ruby-config' or ~/.gemrc")
+	}
+	// Pipenv/Pip/Poetry/Yarn/Gem already resolved above — a no-op for them here.
 	// Still applies to every other tech that resolves via a *.yaml config file (jf <tech>-config).
 	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
@@ -1650,6 +1673,11 @@ func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 		return ca.setRepoFromCargoConfig()
 	}
 
+	// Gem prefers ruby.yaml if configured, falling back to ~/.gemrc otherwise.
+	if tech == techutils.Gem {
+		return ca.setRepoFromGemrc()
+	}
+
 	if tech == techutils.Poetry {
 		return ca.setRepoFromPyproject()
 	}
@@ -1779,9 +1807,8 @@ func (ca *CurationAuditCommand) setRepoFromPipConf() error {
 		return nil
 	}
 
-	return errorutils.CheckErrorf(
-		"curation-audit for pip requires an Artifactory PyPI resolver. " +
-			"Either run 'jf pip-config' or configure index-url in your user pip.conf via Artifactory 'Set me up'.")
+	_, noConfigErr := ca.getRepoParams(projectType)
+	return noConfigErr
 }
 
 // setRepoFromPyproject detects the Artifactory PyPI source for poetry curation. Poetry has no
@@ -1846,6 +1873,9 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		// pipenv has no 'jf pipenv-config' either — always resolves automatically
 		// from pip.conf, then the Pipfile [[source]].
 		techutils.Pipenv: {},
+		// gem resolves automatically from 'jf ruby-config' (ruby.yaml) if configured,
+		// falling back to ~/.gemrc otherwise.
+		techutils.Gem: {},
 	}
 	if _, ok := supported[tech]; ok {
 		return nil
@@ -2027,6 +2057,68 @@ func (ca *CurationAuditCommand) setRepoFromCargoConfig() error {
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
 	ca.SetDepsRepo(registryConfig.RepoName)
+	return nil
+}
+
+// setRepoFromGemrc detects the Artifactory Gems source for gem curation.
+//
+// Detection priority:
+//  1. ruby.yaml — explicit 'jf ruby-config' (or a manually configured project resolver).
+//  2. ~/.gemrc's ':sources:' — Artifactory "Set me up" for gem.
+//
+// For case 2, auth priority: credentials embedded in the ~/.gemrc source URL, falling
+// back to the 'jf c' server config if the source has none.
+func (ca *CurationAuditCommand) setRepoFromGemrc() error {
+	projectType := techutils.Gem.GetProjectType()
+	_, configExists, err := project.GetProjectConfFilePath(projectType)
+	if err != nil {
+		return err
+	}
+
+	if configExists {
+		resolverParams, resolverErr := ca.getRepoParams(projectType)
+		if resolverErr != nil {
+			return resolverErr
+		}
+		ca.setPackageManagerConfig(resolverParams)
+		ca.SetDepsRepo(resolverParams.TargetRepo())
+		log.Info(fmt.Sprintf("gem: using Artifactory repository %q from ruby.yaml", resolverParams.TargetRepo()))
+		return nil
+	}
+
+	registryConfig, err := gemtech.GetNativeGemRegistryConfig()
+	if err != nil {
+		var notConfigured *gemtech.NotConfiguredError
+		if !errors.As(err, &notConfigured) {
+			return fmt.Errorf("gem: failed to read Artifactory details from ~/.gemrc: %w", err)
+		}
+		log.Debug(fmt.Sprintf("gem: failed to read Artifactory details from ~/.gemrc: %s", err.Error()))
+		_, noConfigErr := ca.getRepoParams(projectType)
+		return noConfigErr
+	}
+
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
+		log.Debug("gem: using auth credentials embedded in the ~/.gemrc source URL")
+		serverDetails = &config.ServerDetails{
+			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
+			User:           registryConfig.AuthUser,
+			Password:       registryConfig.AuthToken,
+		}
+	} else {
+		log.Debug("gem: no credentials embedded in the ~/.gemrc source URL — using 'jf c' server credentials")
+		serverDetails, err = ca.credentialFallbackServerDetails("gem", "~/.gemrc", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
+		}
+	}
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(registryConfig.RepoName).
+		SetServerDetails(serverDetails)
+	ca.setPackageManagerConfig(repoConfig)
+	ca.SetDepsRepo(registryConfig.RepoName)
+	log.Info(fmt.Sprintf("gem: using Artifactory URL %q and repository %q from ~/.gemrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
 	return nil
 }
 
