@@ -9,17 +9,14 @@ import (
 	"testing"
 
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/stretchr/testify/assert"
 )
 
-// writeFakeDotnetRestore stands in for the real dotnet CLI: it writes lockFileContent next to the
-// .csproj passed as its second argument (mirroring where 'dotnet restore' would write
-// packages.lock.json), then exits with exitCode - letting the regeneration/rollback paths be
-// tested deterministically without a real .NET SDK.
 func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileContent string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake tool executable is a POSIX shell script")
@@ -62,7 +59,7 @@ func TestNugetUpdateDependency(t *testing.T) {
 
 	testCases := []struct {
 		name               string
-		customCsproj       string // if non-empty, overwrites Project.csproj after copying testdata
+		customCsproj       string
 		fixDetails         *FixDetails
 		expectedContains   []string
 		expectedNotContain []string
@@ -153,9 +150,6 @@ func TestNugetUpdateDependency(t *testing.T) {
 	}
 }
 
-// TestNugetUpdateDependencyPartialSuccess verifies that when the same vulnerable package is
-// evidenced in multiple .csproj files and only some are fixable, the fixable ones are still
-// updated - a CPM-governed sibling failing must not abort fixes to the others.
 func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -200,9 +194,6 @@ func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
 	assert.Contains(t, string(cpmSibling), `Include="Newtonsoft.Json" />`)
 }
 
-// TestNugetUpdateDependencyRegeneratesLockFile verifies that when a packages.lock.json exists
-// next to the fixed .csproj, it gets regenerated via 'dotnet restore --force-evaluate
-// --no-dependencies' after the descriptor edit.
 func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -246,9 +237,6 @@ func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
 }
 
-// TestNugetUpdateDependencyRollsBackOnRestoreFailure verifies that when 'dotnet restore' fails
-// after the descriptor edit, both the .csproj and the lock file are restored to their original
-// content - never leaving the project in a half-fixed state.
 func TestNugetUpdateDependencyRollsBackOnRestoreFailure(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -272,8 +260,6 @@ func TestNugetUpdateDependencyRollsBackOnRestoreFailure(t *testing.T) {
 	assert.NoError(t, err)
 
 	toolDir := t.TempDir()
-	// Simulate a restore that partially writes a bad lock file before failing, so the rollback
-	// is proven to actually restore the original content rather than trivially no-op.
 	writeFakeDotnetRestore(t, toolDir, 1, `{"corrupted": true}`)
 	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -377,7 +363,7 @@ func TestNugetUpdateDependencyErrors(t *testing.T) {
 				}()
 			}
 			updater := &NugetPackageUpdater{}
-			err := updater.UpdateDependency(tc.fixDetails)
+			err = updater.UpdateDependency(tc.fixDetails)
 			tc.assertErr(t, err)
 		})
 	}
