@@ -20,16 +20,11 @@ const (
 	nugetVersionAttrPattern             = `(?is)(\bVersion\s*=\s*["'])[^"']*(["'])`
 	nugetVersionElementPattern          = `(?is)(<Version>)[^<]*(</Version>)`
 
-	nugetLockFileName             = "packages.lock.json"
-	nugetRestoreForceEvaluateFlag = "--force-evaluate"
-	// Deliberately narrower than what Renovate/Dependabot pass: --no-dependencies keeps a fix scoped
-	// to the touched project's own lock file, instead of also restoring (and diffing) every project
-	// it references via ProjectReference.
+	nugetLockFileName              = "packages.lock.json"
+	nugetRestoreForceEvaluateFlag  = "--force-evaluate"
 	nugetRestoreNoDependenciesFlag = "--no-dependencies"
 )
 
-// NugetRestoreEnvVars suppresses first-run banner noise and telemetry prompts observed when
-// invoking a freshly-installed dotnet CLI, on top of the inherited environment.
 var NugetRestoreEnvVars = map[string]string{
 	"DOTNET_NOLOGO":                     "1",
 	"DOTNET_CLI_TELEMETRY_OPTOUT":       "1",
@@ -148,8 +143,6 @@ func (n *NugetPackageUpdater) runDotnetRestore(csprojPath string) error {
 	return nil
 }
 
-// rollbackCsproj restores the descriptor to its pre-fix content and returns origErr, or a wrapped
-// error if the rollback itself fails.
 func rollbackCsproj(csprojPath string, originalCsproj []byte, origErr error) error {
 	//#nosec G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(csprojPath, originalCsproj, 0644); rollbackErr != nil {
@@ -158,8 +151,6 @@ func rollbackCsproj(csprojPath string, originalCsproj []byte, origErr error) err
 	return origErr
 }
 
-// rollbackCsprojAndLock restores both the descriptor and the lock file to their pre-fix content,
-// so a failed restore never leaves the project in a half-fixed state.
 func rollbackCsprojAndLock(csprojPath string, originalCsproj []byte, lockFilePath string, originalLockFile []byte, origErr error) error {
 	//#nosec G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(csprojPath, originalCsproj, 0644); rollbackErr != nil {
