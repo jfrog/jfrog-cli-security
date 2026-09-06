@@ -59,8 +59,6 @@ func (sgp *ScanGraphParams) Technology() techutils.Technology {
 	return sgp.technology
 }
 
-// Clone returns a copy that can be mutated per scan without racing other concurrent scans
-// that share the original params (DependenciesGraph and Technology are set per target).
 func (sgp ScanGraphParams) Clone() ScanGraphParams {
 	cloned := sgp
 	if sgp.xrayGraphScanParams != nil {
