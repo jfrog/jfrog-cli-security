@@ -69,7 +69,7 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 		return services.ScanResponse{}, nil
 	}
 	// Copy params so concurrent SCA tasks do not overwrite each other's graph or technology.
-	scanParams := sg.ScanGraphParams.Clone()
+	scanParams := sg.Clone()
 	scanParams.XrayGraphScanParams().DependenciesGraph = flatTree
 	if targetTechnology := resolveTechnologyFromBOM(target); targetTechnology != techutils.NoTech {
 		// Report the technology to Xray.
