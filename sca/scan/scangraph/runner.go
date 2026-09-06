@@ -68,14 +68,16 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 		// If there is no tree, or a tree without any non-root dependencies - we don't need to scan it
 		return services.ScanResponse{}, nil
 	}
-	sg.XrayGraphScanParams().DependenciesGraph = flatTree
+	// Copy params so concurrent SCA tasks do not overwrite each other's graph or technology.
+	scanParams := sg.ScanGraphParams.Clone()
+	scanParams.XrayGraphScanParams().DependenciesGraph = flatTree
 	if targetTechnology := resolveTechnologyFromBOM(target); targetTechnology != techutils.NoTech {
 		// Report the technology to Xray.
-		sg.SetTechnology(targetTechnology)
-		sg.XrayGraphScanParams().Technology = targetTechnology.String()
+		scanParams.SetTechnology(targetTechnology)
+		scanParams.XrayGraphScanParams().Technology = targetTechnology.String()
 	}
 	// Send the scan graph params to run the scan.
-	return runXrayDependenciesTreeScanGraph(&sg.ScanGraphParams, fullTree)
+	return runXrayDependenciesTreeScanGraph(&scanParams, fullTree)
 }
 
 func resolveTechnologyFromBOM(target *cyclonedx.BOM) (tech techutils.Technology) {
