@@ -44,6 +44,7 @@ const (
 	ExternalAnalyticsMinXrayVersion   = "3.152.3"
 	StaticScanMinVersion              = "3.133.0"
 	XrayCdxUploadMinVersion           = "3.154.0" // TODO eran: confirm this is the correct final version once the companion
+	DefaultXrayCdxUploadRepoName      = "cli-scan-results"
 
 	XrayToolName = "JFrog Xray Scanner"
 

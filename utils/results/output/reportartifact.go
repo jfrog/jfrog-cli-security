@@ -78,8 +78,8 @@ func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, a
 	return resp.Path, nil
 }
 
-// Used for direct upload only through upload-cdx command.
-// This flow still required an access token with necessary permission to upload an artifact directly to Artifactory and permission to create a repo in Artifactory if doeant exist.
+// Used for direct upload only through upload-cdx command and older xray versions.
+// This flow still required an access token with necessary permission to upload an artifact directly to Artifactory and permission to create a repo in Artifactory if it doesn't exist.
 func uploadViaArtifactoryDirect(serverDetails *config.ServerDetails, rtResultRepository, artifactFinalRepoPath string, cmdType utils.CommandType, projectKey string, cdxResults *cdxutils.FullBOM) (artifactPath string, err error) {
 	uploadCmd := upload.NewUploadCycloneDxCommand().
 		SetContentToUpload(cdxResults).
