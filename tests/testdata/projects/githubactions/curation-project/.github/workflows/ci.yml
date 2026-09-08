@@ -1,0 +1,10 @@
+name: CI Pipeline
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/analyze@v3
+      - uses: ./.github/actions/build-prep
+      - run: echo "build"
