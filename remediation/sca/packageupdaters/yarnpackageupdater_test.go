@@ -19,7 +19,7 @@ func TestFindYarnLockfileRoot(t *testing.T) {
 		root := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(root, yarnLockFileName), []byte(""), 0644))
 
-		found, err := FindYarnLockfileRoot(root)
+		found, err := findYarnLockfileRoot(root)
 		require.NoError(t, err)
 		assert.Equal(t, root, found)
 	})
@@ -31,7 +31,7 @@ func TestFindYarnLockfileRoot(t *testing.T) {
 		memberDir := filepath.Join(root, "packages", "member-a")
 		require.NoError(t, os.MkdirAll(memberDir, 0755))
 
-		found, err := FindYarnLockfileRoot(memberDir)
+		found, err := findYarnLockfileRoot(memberDir)
 		require.NoError(t, err)
 		assert.Equal(t, root, found)
 	})
@@ -39,12 +39,12 @@ func TestFindYarnLockfileRoot(t *testing.T) {
 	t.Run("no marker anywhere up to the filesystem root", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		_, err := FindYarnLockfileRoot(dir)
+		_, err := findYarnLockfileRoot(dir)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), yarnLockFileName)
 	})
 
-	t.Run("alternate markers are also recognized", func(t *testing.T) {
+	t.Run("other yarn markers alone are not sufficient", func(t *testing.T) {
 		t.Parallel()
 		for _, marker := range []string{".yarnrc.yml", ".yarnrc", ".yarn"} {
 			t.Run(marker, func(t *testing.T) {
@@ -52,11 +52,93 @@ func TestFindYarnLockfileRoot(t *testing.T) {
 				root := t.TempDir()
 				require.NoError(t, os.WriteFile(filepath.Join(root, marker), []byte(""), 0644))
 
-				found, err := FindYarnLockfileRoot(root)
-				require.NoError(t, err)
-				assert.Equal(t, root, found)
+				_, err := findYarnLockfileRoot(root)
+				require.Error(t, err)
 			})
 		}
+	})
+
+	t.Run("member's own non-lockfile marker does not stop the walk early", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, yarnLockFileName), []byte(""), 0644))
+		memberDir := filepath.Join(root, "packages", "member-a")
+		require.NoError(t, os.MkdirAll(memberDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(memberDir, ".yarnrc.yml"), []byte(""), 0644))
+
+		found, err := findYarnLockfileRoot(memberDir)
+		require.NoError(t, err)
+		assert.Equal(t, root, found)
+	})
+}
+
+func TestCleanupYarnInstallArtifacts(t *testing.T) {
+	integration.InitUnitTest(t)
+
+	t.Run("removes artifacts that did not exist before", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, yarnDirName), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, yarnDirName, yarnInstallStateFileName), []byte(""), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(root, yarnPnpFileName), []byte(""), 0644))
+
+		cleanupYarnInstallArtifacts(root, yarnInstallArtifactSnapshot{})
+
+		assert.NoFileExists(t, filepath.Join(root, yarnDirName, yarnInstallStateFileName))
+		assert.NoFileExists(t, filepath.Join(root, yarnPnpFileName))
+	})
+
+	t.Run("leaves install-state.gz alone when it already existed before this install", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, yarnDirName), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, yarnDirName, yarnInstallStateFileName), []byte("pre-existing"), 0644))
+
+		cleanupYarnInstallArtifacts(root, yarnInstallArtifactSnapshot{installStateExisted: true})
+
+		assert.FileExists(t, filepath.Join(root, yarnDirName, yarnInstallStateFileName))
+	})
+
+	t.Run("leaves a pre-existing .pnp.cjs alone", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, yarnPnpFileName), []byte("pre-existing"), 0644))
+
+		cleanupYarnInstallArtifacts(root, yarnInstallArtifactSnapshot{pnpCjsExisted: true})
+
+		assert.FileExists(t, filepath.Join(root, yarnPnpFileName))
+	})
+}
+
+func TestRestoreOptionalFile(t *testing.T) {
+	integration.InitUnitTest(t)
+
+	t.Run("restores original content when the file existed before", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "yarn.lock")
+		require.NoError(t, os.WriteFile(path, []byte("partially-written-by-a-failed-install"), 0644))
+
+		require.NoError(t, restoreOptionalFile(path, []byte("original content"), true))
+
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "original content", string(content))
+	})
+
+	t.Run("removes a file that did not exist before", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "yarn.lock")
+		require.NoError(t, os.WriteFile(path, []byte("newly-created-by-a-failed-install"), 0644))
+
+		require.NoError(t, restoreOptionalFile(path, nil, false))
+
+		assert.NoFileExists(t, path)
+	})
+
+	t.Run("removing a non-existent file is not an error", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "yarn.lock")
+		require.NoError(t, restoreOptionalFile(path, nil, false))
 	})
 }
 

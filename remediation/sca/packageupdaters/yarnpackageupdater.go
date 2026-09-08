@@ -11,7 +11,6 @@ import (
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
@@ -79,7 +78,7 @@ func (yarn *YarnPackageUpdater) updateDirectDependency(fixDetails *FixDetails) e
 
 func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *FixDetails, descriptorPath string, originalWd string) error {
 	descriptorDir := filepath.Dir(descriptorPath)
-	rootDir, err := FindYarnLockfileRoot(descriptorDir)
+	rootDir, err := findYarnLockfileRoot(descriptorDir)
 	if err != nil {
 		return fmt.Errorf("failed to locate the yarn workspace root for descriptor '%s': %w", descriptorPath, err)
 	}
@@ -103,7 +102,7 @@ func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *Fi
 			Reason:       fmt.Sprintf("no usable yarn was found for the project at '%s': %s", rootDir, err.Error()),
 		}
 	}
-	if version.NewVersion(yarnVersionStr).Compare(yarnMinFixableVersion) > 0 {
+	if !yarnVersionAtLeast(yarnVersionStr, yarnMinFixableVersion) {
 		return &ErrUnsupportedFix{
 			PackageName:  fixDetails.ImpactedDependencyName,
 			FixedVersion: fixDetails.SuggestedFixedVersion,
@@ -112,25 +111,28 @@ func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *Fi
 		}
 	}
 
-	backupContent, err := yarn.UpdatePackageJSONDescriptor(descriptorPath, fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion)
-	if err != nil {
-		return err
-	}
-
 	lockFilePath := filepath.Join(rootDir, yarnLockFileName)
-
 	lockFileTracked, checkErr := IsFileTrackedByGit(lockFilePath, originalWd)
 	if checkErr != nil {
 		log.Debug(fmt.Sprintf("Failed to check if lock file is tracked in git: %s. Proceeding with lock file regeneration.", checkErr.Error()))
 		lockFileTracked = true
 	}
-
 	if !lockFileTracked {
 		log.Debug(fmt.Sprintf("Lock file '%s' is not tracked in git, skipping lock file regeneration", lockFilePath))
 		return nil
 	}
 
-	if err = yarn.regenerateLockfile(fixDetails, descriptorPath, rootDir, originalWd, executablePath, backupContent); err != nil {
+	lockBackup, lockBackupExisted, err := readOptionalFile(lockFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read '%s' before regenerating it: %w", lockFilePath, err)
+	}
+
+	descriptorBackup, err := yarn.UpdatePackageJSONDescriptor(descriptorPath, fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion)
+	if err != nil {
+		return err
+	}
+
+	if err = yarn.regenerateLockfile(fixDetails, descriptorPath, lockFilePath, rootDir, executablePath, descriptorBackup, lockBackup, lockBackupExisted); err != nil {
 		return err
 	}
 
@@ -138,31 +140,61 @@ func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *Fi
 	return nil
 }
 
-func (yarn *YarnPackageUpdater) regenerateLockfile(fixDetails *FixDetails, descriptorPath, rootDir, originalWd, executablePath string, backupContent []byte) error {
+// regenerateLockfile runs the lockfile-only yarn install with cmd.Dir set to the workspace
+// root (a workspace member's package.json is not where yarn.lock lives, and yarn must be
+// invoked from the root) instead of os.Chdir, so a failure here can never leave the process
+// stranded outside originalWd or skip rolling back an already-rewritten package.json.
+// On failure both package.json and yarn.lock are restored to their pre-fix state.
+func (yarn *YarnPackageUpdater) regenerateLockfile(fixDetails *FixDetails, descriptorPath, lockFilePath, rootDir, executablePath string, descriptorBackup, lockBackup []byte, lockBackupExisted bool) error {
 	preExisting := snapshotYarnInstallArtifacts(rootDir)
-	if err := os.Chdir(rootDir); err != nil {
-		return fmt.Errorf("failed to change directory to '%s': %w", rootDir, err)
-	}
-	installErr := yarn.runYarnInstallUpdateLockfile(executablePath)
-	if chErr := os.Chdir(originalWd); chErr != nil {
-		return errors.Join(installErr, fmt.Errorf("failed to return to original directory: %w", chErr))
-	}
+	installErr := yarn.runYarnInstallUpdateLockfile(executablePath, rootDir)
 	cleanupYarnInstallArtifacts(rootDir, preExisting)
-	if installErr != nil {
-		log.Warn(fmt.Sprintf("Failed to regenerate lock file after updating '%s' to version '%s': %s. Rolling back...", fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion, installErr.Error()))
-		//#nosec G306 -- 0644 is correct for a checked-out source file.
-		if rollbackErr := os.WriteFile(descriptorPath, backupContent, 0644); rollbackErr != nil {
-			return fmt.Errorf("failed to rollback descriptor after lock file regeneration failure: %w (original error: %v)", rollbackErr, installErr)
-		}
-		return installErr
+	if installErr == nil {
+		return nil
 	}
-	return nil
+
+	log.Warn(fmt.Sprintf("Failed to regenerate lock file after updating '%s' to version '%s': %s. Rolling back...", fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion, installErr.Error()))
+	var rollbackErr error
+	//#nosec G306 -- 0644 is correct for a checked-out source file.
+	if err := os.WriteFile(descriptorPath, descriptorBackup, 0644); err != nil {
+		rollbackErr = errors.Join(rollbackErr, fmt.Errorf("failed to rollback '%s': %w", descriptorPath, err))
+	}
+	if err := restoreOptionalFile(lockFilePath, lockBackup, lockBackupExisted); err != nil {
+		rollbackErr = errors.Join(rollbackErr, fmt.Errorf("failed to rollback '%s': %w", lockFilePath, err))
+	}
+	if rollbackErr != nil {
+		return fmt.Errorf("failed to rollback after lock file regeneration failure: %w (original error: %v)", rollbackErr, installErr)
+	}
+	return installErr
+}
+
+func readOptionalFile(path string) (content []byte, existed bool, err error) {
+	content, err = os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("failed to read '%s': %w", path, err)
+	}
+	return content, true, nil
+}
+
+func restoreOptionalFile(path string, backup []byte, existed bool) error {
+	if !existed {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	//#nosec G306 -- 0644 is correct for a checked-out source file.
+	return os.WriteFile(path, backup, 0644)
 }
 
 type yarnInstallArtifactSnapshot struct {
-	pnpCjsExisted      bool
-	pnpDataJSONExisted bool
-	cacheDirExisted    bool
+	installStateExisted bool
+	pnpCjsExisted       bool
+	pnpDataJSONExisted  bool
+	cacheDirExisted     bool
 }
 
 func snapshotYarnInstallArtifacts(rootDir string) yarnInstallArtifactSnapshot {
@@ -171,14 +203,17 @@ func snapshotYarnInstallArtifacts(rootDir string) yarnInstallArtifactSnapshot {
 		return err == nil
 	}
 	return yarnInstallArtifactSnapshot{
-		pnpCjsExisted:      exists(filepath.Join(rootDir, yarnPnpFileName)),
-		pnpDataJSONExisted: exists(filepath.Join(rootDir, yarnPnpDataFileName)),
-		cacheDirExisted:    exists(filepath.Join(rootDir, yarnDirName, yarnCacheDirName)),
+		installStateExisted: exists(filepath.Join(rootDir, yarnDirName, yarnInstallStateFileName)),
+		pnpCjsExisted:       exists(filepath.Join(rootDir, yarnPnpFileName)),
+		pnpDataJSONExisted:  exists(filepath.Join(rootDir, yarnPnpDataFileName)),
+		cacheDirExisted:     exists(filepath.Join(rootDir, yarnDirName, yarnCacheDirName)),
 	}
 }
 
 func cleanupYarnInstallArtifacts(rootDir string, preExisting yarnInstallArtifactSnapshot) {
-	_ = os.Remove(filepath.Join(rootDir, yarnDirName, yarnInstallStateFileName))
+	if !preExisting.installStateExisted {
+		_ = os.Remove(filepath.Join(rootDir, yarnDirName, yarnInstallStateFileName))
+	}
 	if !preExisting.pnpCjsExisted {
 		_ = os.Remove(filepath.Join(rootDir, yarnPnpFileName))
 	}
@@ -190,16 +225,17 @@ func cleanupYarnInstallArtifacts(rootDir string, preExisting yarnInstallArtifact
 	}
 }
 
-func (yarn *YarnPackageUpdater) runYarnInstallUpdateLockfile(executablePath string) error {
+func (yarn *YarnPackageUpdater) runYarnInstallUpdateLockfile(executablePath, rootDir string) error {
 	args := []string{"install", yarnUpdateLockfileModeFlag}
 	fullCommand := "yarn " + strings.Join(args, " ")
-	log.Debug(fmt.Sprintf("Running '%s'", fullCommand))
+	log.Debug(fmt.Sprintf("Running '%s' in '%s'", fullCommand, rootDir))
 
 	ctx, cancel := context.WithTimeout(context.Background(), nodePackageManagerInstallTimeout)
 	defer cancel()
 
 	//#nosec G204 -- False positive - the subprocess only runs after the user's approval
 	cmd := exec.CommandContext(ctx, executablePath, args...)
+	cmd.Dir = rootDir
 	cmd.Env = EnvWithCorepackIntegrityWorkaround(yarn.BuildEnvWithOverrides(YarnInstallEnvOverrides))
 	output, err := cmd.CombinedOutput()
 
@@ -214,18 +250,22 @@ func (yarn *YarnPackageUpdater) runYarnInstallUpdateLockfile(executablePath stri
 	return nil
 }
 
-func FindYarnLockfileRoot(startDir string) (string, error) {
+func yarnVersionAtLeast(actual, min string) bool {
+	return version.NewVersion(actual).Compare(min) <= 0
+}
+
+func findYarnLockfileRoot(startDir string) (string, error) {
 	absDir, err := filepath.Abs(startDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve absolute path for '%s': %w", startDir, err)
 	}
 	for cur := absDir; ; {
-		if techutils.DirectoryHasYarnIndicator(cur) {
+		if _, statErr := os.Stat(filepath.Join(cur, yarnLockFileName)); statErr == nil {
 			return cur, nil
 		}
 		parent := filepath.Dir(cur)
 		if parent == cur {
-			return "", fmt.Errorf("no yarn.lock/.yarnrc.yml/.yarnrc/.yarn found in '%s' or any parent directory", startDir)
+			return "", fmt.Errorf("no %s found in '%s' or any parent directory", yarnLockFileName, startDir)
 		}
 		cur = parent
 	}
