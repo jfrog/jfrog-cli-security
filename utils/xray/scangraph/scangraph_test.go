@@ -4,9 +4,31 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestScanGraphParamsCloneDoesNotShareMutableGraph(t *testing.T) {
+	original := NewScanGraphParams().
+		SetXrayGraphScanParams(&services.XrayGraphScanParams{
+			ProjectKey: "proj",
+			Technology: "npm",
+		}).
+		SetTechnology(techutils.Npm)
+	cloned := original.Clone()
+
+	cloned.XrayGraphScanParams().DependenciesGraph = &xrayUtils.GraphNode{Id: "cloned-root"}
+	cloned.XrayGraphScanParams().Technology = techutils.Yarn.String()
+	cloned.SetTechnology(techutils.Yarn)
+
+	assert.Nil(t, original.XrayGraphScanParams().DependenciesGraph)
+	assert.Equal(t, techutils.Npm, original.Technology())
+	assert.Equal(t, "npm", original.XrayGraphScanParams().Technology)
+	assert.Equal(t, "proj", cloned.XrayGraphScanParams().ProjectKey)
+	assert.Equal(t, "cloned-root", cloned.XrayGraphScanParams().DependenciesGraph.Id)
+}
 
 func TestFilterResultIfNeeded(t *testing.T) {
 	// Define test cases
