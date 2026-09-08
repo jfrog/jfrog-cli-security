@@ -574,7 +574,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy).SetViolationGenerator(violationGenerator).SetIncludeSbom(shouldIncludeSbom(c, format))
-	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
+	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(utils.DefaultXrayCdxUploadRepoName)
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
