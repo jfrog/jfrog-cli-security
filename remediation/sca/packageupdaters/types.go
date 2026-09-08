@@ -24,19 +24,25 @@ type UnsupportedErrorType string
 
 const (
 	IndirectDependencyFixNotSupported UnsupportedErrorType = "IndirectDependencyFixNotSupported"
+	UnsupportedFixReason              UnsupportedErrorType = "UnsupportedFixReason"
 )
 
 type ErrUnsupportedFix struct {
 	PackageName  string
 	FixedVersion string
 	ErrorType    UnsupportedErrorType
+	Reason       string
 }
 
 func (err *ErrUnsupportedFix) Error() string {
-	if err.ErrorType == IndirectDependencyFixNotSupported {
+	switch err.ErrorType {
+	case IndirectDependencyFixNotSupported:
 		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - indirect dependency fix is not supported", err.PackageName, err.FixedVersion)
+	case UnsupportedFixReason:
+		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - %s", err.PackageName, err.FixedVersion, err.Reason)
+	default:
+		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - build tools dependency fix is not supported", err.PackageName, err.FixedVersion)
 	}
-	return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - build tools dependency fix is not supported", err.PackageName, err.FixedVersion)
 }
 
 type PackageUpdater interface {

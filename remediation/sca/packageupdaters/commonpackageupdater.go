@@ -47,6 +47,7 @@ var SupportedFixTechnologies = []techutils.Technology{
 	techutils.Go,
 	techutils.Pnpm,
 	techutils.Docker,
+	techutils.Yarn,
 }
 
 func GetCompatiblePackageUpdater(fixDetails *FixDetails) (PackageUpdater, bool) {
@@ -63,6 +64,8 @@ func GetCompatiblePackageUpdater(fixDetails *FixDetails) (PackageUpdater, bool) 
 		return &PnpmPackageUpdater{}, true
 	case techutils.Docker:
 		return &DockerPackageUpdater{}, true
+	case techutils.Yarn:
+		return &YarnPackageUpdater{}, true
 	default:
 		return nil, false
 	}

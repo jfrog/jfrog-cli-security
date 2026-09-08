@@ -122,13 +122,111 @@ func TestRemediationGo(t *testing.T) {
 	assert.NotEqual(t, goSumBefore, goSumAfter, "go.sum should be regenerated")
 }
 
+// TestRemediationYarn verifies that the yarn package updater applies a direct-dependency fix to package.json and regenerates yarn.lock.
+func TestRemediationYarn(t *testing.T) {
+	integrationUtils.InitRemediationTest(t)
+
+	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation"))
+	defer cleanup()
+
+	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, "package.json")
+	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
+	require.True(t, supported)
+
+	lockBefore, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+
+	require.NoError(t, updater.UpdateDependency(fix))
+
+	descriptor, err := os.ReadFile("package.json")
+	require.NoError(t, err)
+	assert.Contains(t, string(descriptor), "1.2.6", "package.json should contain the fixed version")
+
+	lockAfter, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+	assert.NotEqual(t, lockBefore, lockAfter, "yarn.lock should be regenerated")
+
+	assert.NoDirExists(t, filepath.Join(tmpDir, "node_modules"))
+	assert.NoFileExists(t, filepath.Join(tmpDir, ".pnp.cjs"))
+	assert.NoFileExists(t, filepath.Join(tmpDir, ".yarn", "install-state.gz"))
+}
+
+// TestRemediationYarnWorkspace verifies that fixing a violation in a yarn workspace member updates
+// that member's package.json and the single root yarn.lock.
+func TestRemediationYarnWorkspace(t *testing.T) {
+	integrationUtils.InitRemediationTest(t)
+
+	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation-workspace"))
+	defer cleanup()
+
+	memberDescriptor := filepath.Join("packages", "member-a", "package.json")
+	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, memberDescriptor)
+	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
+	require.True(t, supported)
+
+	rootLockBefore, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+
+	require.NoError(t, updater.UpdateDependency(fix))
+
+	memberContent, err := os.ReadFile(memberDescriptor)
+	require.NoError(t, err)
+	assert.Contains(t, string(memberContent), "1.2.6", "member package.json should contain the fixed version")
+
+	rootLockAfter, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+	assert.NotEqual(t, rootLockBefore, rootLockAfter, "the single root yarn.lock should be regenerated")
+
+	assert.NoFileExists(t, filepath.Join(tmpDir, "packages", "member-a", "yarn.lock"), "no yarn.lock should be created inside the workspace member")
+}
+
+// TestRemediationYarnRollback verifies that the yarn package updater rolls back package.json
+// when yarn install fails (e.g. an unresolvable dependency in the rollback test project).
+func TestRemediationYarnRollback(t *testing.T) {
+	integrationUtils.InitRemediationTest(t)
+
+	_, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation-rollback"))
+	defer cleanup()
+
+	descriptorBefore, err := os.ReadFile("package.json")
+	require.NoError(t, err)
+
+	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, "package.json")
+	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
+	require.True(t, supported)
+
+	err = updater.UpdateDependency(fix)
+	require.Error(t, err, "expected an error from the rollback project")
+
+	descriptorAfter, err := os.ReadFile("package.json")
+	require.NoError(t, err)
+	assert.Equal(t, descriptorBefore, descriptorAfter, "package.json should be rolled back to its original state")
+}
+
+// TestRemediationYarnUnsupportedVersion verifies that a Yarn 2.x project returns ErrUnsupportedFix.
+func TestRemediationYarnUnsupportedVersion(t *testing.T) {
+	integrationUtils.InitRemediationTest(t)
+
+	_, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "yarn-v2"))
+	defer cleanup()
+
+	fix := newFixDetails(techutils.Yarn, "xml", "1.0.1", "1.0.2", true, "package.json")
+	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
+	require.True(t, supported)
+
+	err := updater.UpdateDependency(fix)
+	require.Error(t, err)
+	var unsupported *packageupdaters.ErrUnsupportedFix
+	assert.ErrorAs(t, err, &unsupported, "expected ErrUnsupportedFix for a yarn 2.x project")
+}
+
 // TestRemediationUnsupportedIndirect verifies that indirect dependency fix attempts return
 // ErrUnsupportedFix for package managers that do not support it.
 func TestRemediationUnsupportedIndirect(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
 	// Go supports indirect updates via `go get` and does not return ErrUnsupportedFix for indirect deps.
-	for _, tech := range []techutils.Technology{techutils.Npm, techutils.Maven} {
+	for _, tech := range []techutils.Technology{techutils.Npm, techutils.Maven, techutils.Yarn} {
 		t.Run(tech.String(), func(t *testing.T) {
 			fix := newFixDetails(tech, "some-package", "1.0.0", "1.0.1", false)
 			updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)

@@ -1,0 +1,11 @@
+{
+  "name": "yarn-remediation-workspace-root",
+  "version": "1.0.0",
+  "description": "test workspace root",
+  "packageManager": "yarn@3.2.1",
+  "private": true,
+  "license": "ISC",
+  "workspaces": [
+    "packages/*"
+  ]
+}

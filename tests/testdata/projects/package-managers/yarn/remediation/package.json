@@ -1,0 +1,11 @@
+{
+  "name": "yarn-remediation",
+  "version": "1.0.0",
+  "description": "test package",
+  "packageManager": "yarn@3.2.1",
+  "main": "index.js",
+  "license": "ISC",
+  "dependencies": {
+    "minimist": "1.2.5"
+  }
+}
