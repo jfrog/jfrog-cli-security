@@ -94,7 +94,7 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(csprojPath, packageName
 		return fmt.Errorf("%w in %s", err, csprojPath)
 	}
 
-	//#nosec G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
+	//#nosec G703 G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
 	if err = os.WriteFile(csprojPath, updatedCsproj, 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", csprojPath, err)
 	}
@@ -144,7 +144,7 @@ func (n *NugetPackageUpdater) runDotnetRestore(csprojPath string) error {
 }
 
 func rollbackCsproj(csprojPath string, originalCsproj []byte, origErr error) error {
-	//#nosec G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
+	//#nosec G703 G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(csprojPath, originalCsproj, 0644); rollbackErr != nil {
 		return fmt.Errorf("failed to rollback '%s': %w (original error: %v)", csprojPath, rollbackErr, origErr)
 	}
@@ -152,11 +152,11 @@ func rollbackCsproj(csprojPath string, originalCsproj []byte, origErr error) err
 }
 
 func rollbackCsprojAndLock(csprojPath string, originalCsproj []byte, lockFilePath string, originalLockFile []byte, origErr error) error {
-	//#nosec G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
+	//#nosec G703 G306 -- csprojPath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(csprojPath, originalCsproj, 0644); rollbackErr != nil {
 		return fmt.Errorf("failed to rollback '%s': %w (original error: %v)", csprojPath, rollbackErr, origErr)
 	}
-	//#nosec G306 -- lockFilePath derived from csprojPath, from the same scan workflow.
+	//#nosec G703 G306 -- lockFilePath derived from csprojPath, from the same scan workflow.
 	if rollbackErr := os.WriteFile(lockFilePath, originalLockFile, 0644); rollbackErr != nil {
 		return fmt.Errorf("failed to rollback '%s': %w (original error: %v)", lockFilePath, rollbackErr, origErr)
 	}
