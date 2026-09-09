@@ -32,11 +32,14 @@ const (
 	nugetVersionOverrideAttrPattern    = `(?is)(\bVersionOverride\s*=\s*["'])[^"']*(["'])`
 	nugetVersionOverrideElementPattern = `(?is)(<VersionOverride>)[^<]*(</VersionOverride>)`
 
-	nugetPackageVersionElementPattern = `(?s)<PackageVersion\b[^>]*/>|<PackageVersion\b[^>]*[^/]>.*?</PackageVersion>`
-	nugetPackageVersionKeyAttrPattern = `(?i)\bInclude\s*=\s*["']%s["']`
-	nugetDirectoryPackagesPropsName   = "Directory.Packages.props"
-	nugetImportProjectAttrPattern     = `(?i)<Import\b[^>]*\bProject\s*=\s*["']([^"']+)["']`
-	nugetManageCpmFalsePattern        = `(?is)<ManagePackageVersionsCentrally>\s*false\s*</ManagePackageVersionsCentrally>`
+	nugetPackageVersionElementPattern  = `(?s)<PackageVersion\b[^>]*/>|<PackageVersion\b[^>]*[^/]>.*?</PackageVersion>`
+	nugetPackageVersionKeyAttrPattern  = `(?i)\bInclude\s*=\s*["']%s["']`
+	nugetDirectoryPackagesPropsName    = "Directory.Packages.props"
+	nugetDirectoryBuildPropsName       = "Directory.Build.props"
+	nugetDirectoryBuildTargetsName     = "Directory.Build.targets"
+	nugetImportProjectAttrPattern      = `(?i)<Import\b[^>]*\bProject\s*=\s*["']([^"']+)["']`
+	nugetManageCpmFalsePattern         = `(?is)<ManagePackageVersionsCentrally>\s*false\s*</ManagePackageVersionsCentrally>`
+	nugetMSBuildThisFileDirectoryMacro = "$(MSBuildThisFileDirectory)"
 
 	nugetLockFileName = "packages.lock.json"
 	nugetObjDirName   = "obj"
@@ -104,13 +107,46 @@ func (n *NugetPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 }
 
 func collectProjectFilePaths(fixDetails *FixDetails) []string {
+	seen := make(map[string]struct{})
 	var paths []string
+	add := func(path string) {
+		if path == "" {
+			return
+		}
+		if _, ok := seen[path]; ok {
+			return
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+
 	for _, path := range GetVulnerabilityLocations(fixDetails, []string{}, []string{}) {
-		if hasNugetProjectFileSuffix(path) {
-			paths = append(paths, path)
+		switch {
+		case hasNugetProjectFileSuffix(path):
+			add(path)
+		case strings.EqualFold(filepath.Base(path), nugetLockFileName):
+			projectPath, err := findProjectFileInDir(filepath.Dir(path))
+			if err != nil {
+				log.Debug(fmt.Sprintf("Failed to resolve project file next to '%s': %s", path, err.Error()))
+				continue
+			}
+			add(projectPath)
 		}
 	}
 	return paths
+}
+
+func findProjectFileInDir(dir string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && hasNugetProjectFileSuffix(entry.Name()) {
+			return filepath.Join(dir, entry.Name()), nil
+		}
+	}
+	return "", nil
 }
 
 func hasNugetProjectFileSuffix(path string) bool {
@@ -132,11 +168,7 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 
 	updatedProjectFile, fixErr := updatePackageReferenceVersion(originalProjectFile, packageName, fixedVersion)
 	if fixErr != nil {
-		var unsupportedErr *ErrUnsupportedFix
-		if errors.As(fixErr, &unsupportedErr) && unsupportedErr.ErrorType == NoInlineVersionFixNotSupported {
-			return n.fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd)
-		}
-		return fmt.Errorf("%w in %s", fixErr, projectFilePath)
+		return n.fixViaVersionSource(projectFilePath, packageName, fixedVersion, originalWd)
 	}
 
 	//#nosec G703 G306 -- projectFilePath from scan workflow; 0644 for VCS-tracked sources.
@@ -147,6 +179,19 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 	return n.restoreLockFileAfterWrite(projectFilePath, projectFilePath, originalProjectFile, originalWd, packageName, fixedVersion)
 }
 
+func (n *NugetPackageUpdater) fixViaVersionSource(projectFilePath, packageName, fixedVersion, originalWd string) error {
+	err := n.fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd)
+	if !isUnsupportedNoInlineVersion(err) {
+		return err
+	}
+	return n.fixViaDirectoryBuildProps(projectFilePath, packageName, fixedVersion, originalWd)
+}
+
+func isUnsupportedNoInlineVersion(err error) bool {
+	var unsupportedErr *ErrUnsupportedFix
+	return errors.As(err, &unsupportedErr) && unsupportedErr.ErrorType == NoInlineVersionFixNotSupported
+}
+
 func (n *NugetPackageUpdater) fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd string) error {
 	unsupported := &ErrUnsupportedFix{
 		PackageName:  packageName,
@@ -154,7 +199,7 @@ func (n *NugetPackageUpdater) fixViaDirectoryPackagesProps(projectFilePath, pack
 		ErrorType:    NoInlineVersionFixNotSupported,
 	}
 
-	propsPath, originalProps, err := resolveDirectoryPackagesProps(filepath.Dir(projectFilePath), originalWd)
+	propsPath, originalProps, err := resolveDirectoryFile(filepath.Dir(projectFilePath), originalWd, nugetDirectoryPackagesPropsName)
 	if err != nil {
 		return fmt.Errorf("%w in %s", err, projectFilePath)
 	}
@@ -181,6 +226,44 @@ func (n *NugetPackageUpdater) fixViaDirectoryPackagesProps(projectFilePath, pack
 	}
 
 	return n.restoreLockFileAfterWrite(projectFilePath, targetPath, originalContent, originalWd, packageName, fixedVersion)
+}
+
+func (n *NugetPackageUpdater) fixViaDirectoryBuildProps(projectFilePath, packageName, fixedVersion, originalWd string) error {
+	unsupported := &ErrUnsupportedFix{
+		PackageName:  packageName,
+		FixedVersion: fixedVersion,
+		ErrorType:    NoInlineVersionFixNotSupported,
+	}
+
+	absRepoRoot, err := filepath.Abs(originalWd)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path for %s: %w", originalWd, err)
+	}
+
+	for _, fileName := range []string{nugetDirectoryBuildPropsName, nugetDirectoryBuildTargetsName} {
+		buildFilePath, buildFileContent, resolveErr := resolveDirectoryFile(filepath.Dir(projectFilePath), originalWd, fileName)
+		if resolveErr != nil {
+			return fmt.Errorf("%w in %s", resolveErr, projectFilePath)
+		}
+		if buildFilePath == "" {
+			continue
+		}
+
+		targetPath, originalContent, updatedContent, fixedAny, searchErr := searchVersionUpdate(buildFilePath, buildFileContent, packageName, fixedVersion, absRepoRoot, tryFixPackageReference, map[string]struct{}{})
+		if searchErr != nil {
+			return fmt.Errorf("%w in %s", searchErr, projectFilePath)
+		}
+		if !fixedAny {
+			continue
+		}
+
+		//#nosec G703 G306 -- targetPath resolved from descriptor discovery in the scanned repository.
+		if err = os.WriteFile(targetPath, updatedContent, 0644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", targetPath, err)
+		}
+		return n.restoreLockFileAfterWrite(projectFilePath, targetPath, originalContent, originalWd, packageName, fixedVersion)
+	}
+	return unsupported
 }
 
 func (n *NugetPackageUpdater) restoreLockFileAfterWrite(projectFilePath, writtenPath string, originalWritten []byte, originalWd, packageName, fixedVersion string) error {
@@ -347,17 +430,22 @@ func resolvePackageVersionUpdate(propsPath string, propsContent []byte, packageN
 	if isCentralPackageManagementDisabled(propsContent) {
 		return "", nil, nil, false, nil
 	}
-	return searchPackageVersionUpdate(propsPath, propsContent, packageName, fixedVersion, repoRoot, map[string]struct{}{})
+	return searchVersionUpdate(propsPath, propsContent, packageName, fixedVersion, repoRoot, updatePackageVersionEntry, map[string]struct{}{})
 }
 
 func isCentralPackageManagementDisabled(content []byte) bool {
 	return regexp.MustCompile(nugetManageCpmFalsePattern).Match(content)
 }
 
-func searchPackageVersionUpdate(propsPath string, propsContent []byte, packageName, fixedVersion, repoRoot string, visited map[string]struct{}) (string, []byte, []byte, bool, error) {
-	absPath, err := filepath.Abs(propsPath)
+func tryFixPackageReference(content []byte, packageName, fixedVersion string) ([]byte, bool) {
+	updated, err := updatePackageReferenceVersion(content, packageName, fixedVersion)
+	return updated, err == nil
+}
+
+func searchVersionUpdate(path string, content []byte, packageName, fixedVersion, repoRoot string, tryFix func([]byte, string, string) ([]byte, bool), visited map[string]struct{}) (string, []byte, []byte, bool, error) {
+	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return "", nil, nil, false, fmt.Errorf("failed to resolve absolute path for %s: %w", propsPath, err)
+		return "", nil, nil, false, fmt.Errorf("failed to resolve absolute path for %s: %w", path, err)
 	}
 	if !isPathInsideRoot(repoRoot, absPath) {
 		return "", nil, nil, false, nil
@@ -367,14 +455,18 @@ func searchPackageVersionUpdate(propsPath string, propsContent []byte, packageNa
 	}
 	visited[absPath] = struct{}{}
 
-	updated, fixedAny := updatePackageVersionEntry(propsContent, packageName, fixedVersion)
+	updated, fixedAny := tryFix(content, packageName, fixedVersion)
 	if fixedAny {
-		return absPath, propsContent, updated, true, nil
+		return absPath, content, updated, true, nil
 	}
 
 	importAttr := regexp.MustCompile(nugetImportProjectAttrPattern)
-	for _, match := range importAttr.FindAllSubmatch(propsContent, -1) {
+	for _, match := range importAttr.FindAllSubmatch(content, -1) {
 		projectRef := string(match[1])
+		if strings.HasPrefix(projectRef, nugetMSBuildThisFileDirectoryMacro) {
+			suffix := filepath.FromSlash(strings.TrimPrefix(projectRef, nugetMSBuildThisFileDirectoryMacro))
+			projectRef = filepath.Join(filepath.Dir(absPath), suffix)
+		}
 		if strings.Contains(projectRef, "$") {
 			continue
 		}
@@ -394,7 +486,7 @@ func searchPackageVersionUpdate(propsPath string, propsContent []byte, packageNa
 			}
 			return "", nil, nil, false, fmt.Errorf("failed to read %s: %w", nextAbs, readErr)
 		}
-		foundPath, original, updatedImported, ok, searchErr := searchPackageVersionUpdate(nextAbs, nextContent, packageName, fixedVersion, repoRoot, visited)
+		foundPath, original, updatedImported, ok, searchErr := searchVersionUpdate(nextAbs, nextContent, packageName, fixedVersion, repoRoot, tryFix, visited)
 		if searchErr != nil || ok {
 			return foundPath, original, updatedImported, ok, searchErr
 		}
@@ -402,22 +494,22 @@ func searchPackageVersionUpdate(propsPath string, propsContent []byte, packageNa
 	return "", nil, nil, false, nil
 }
 
-func resolveDirectoryPackagesProps(projectDir, repoRoot string) (path string, content []byte, err error) {
+func resolveDirectoryFile(startDir, repoRoot, fileName string) (path string, content []byte, err error) {
 	absRepoRoot, err := filepath.Abs(repoRoot)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to resolve absolute path for %s: %w", repoRoot, err)
 	}
-	dir, err := filepath.Abs(projectDir)
+	dir, err := filepath.Abs(startDir)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to resolve absolute path for %s: %w", projectDir, err)
+		return "", nil, fmt.Errorf("failed to resolve absolute path for %s: %w", startDir, err)
 	}
 
 	for {
 		if !isPathInsideRoot(absRepoRoot, dir) {
 			return "", nil, nil
 		}
-		candidate := filepath.Join(dir, nugetDirectoryPackagesPropsName)
-		//#nosec G304 -- candidate is built from projectDir/repoRoot, from descriptor discovery.
+		candidate := filepath.Join(dir, fileName)
+		//#nosec G304 -- candidate is built from startDir/repoRoot, from descriptor discovery.
 		candidateContent, readErr := os.ReadFile(candidate)
 		if readErr == nil {
 			return candidate, candidateContent, nil
