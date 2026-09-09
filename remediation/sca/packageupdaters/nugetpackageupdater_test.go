@@ -56,6 +56,34 @@ func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileCont
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet"), []byte(script), 0o755))
 }
 
+// writeFakeDotnetRestoreFailingForPath behaves like writeFakeDotnetRestore, except it fails
+// (without touching the lock file) only when the project file path it's invoked with contains
+// pathMarker - letting one project's restore fail while a sibling's succeeds in the same test run.
+func writeFakeDotnetRestoreFailingForPath(t *testing.T, dir string, pathMarker string, lockFileContent string) {
+	lockContentPath := filepath.Join(dir, "lockfile-content.json")
+	assert.NoError(t, os.WriteFile(lockContentPath, []byte(lockFileContent), 0o644))
+
+	if runtime.GOOS == "windows" {
+		script := "@echo off\r\n" +
+			"echo %2 | findstr /C:\"" + pathMarker + "\" >nul\r\n" +
+			"if %errorlevel%==0 exit /b 1\r\n" +
+			"for %%F in (\"%2\") do set projdir=%%~dpF\r\n" +
+			"copy /Y \"" + lockContentPath + "\" \"%projdir%packages.lock.json\">nul\r\n" +
+			"exit /b 0\r\n"
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet.cmd"), []byte(script), 0o755))
+		return
+	}
+
+	script := "#!/bin/sh\n" +
+		"case \"$2\" in\n" +
+		"  *" + pathMarker + "*) exit 1 ;;\n" +
+		"esac\n" +
+		"projdir=$(dirname \"$2\")\n" +
+		"cp \"" + lockContentPath + "\" \"$projdir/packages.lock.json\"\n" +
+		"exit 0\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet"), []byte(script), 0o755))
+}
+
 func TestNugetUpdateDependency(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -306,6 +334,114 @@ func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	lockFile, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
 	assert.NoError(t, err)
 	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
+}
+
+// TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile verifies that when the same
+// vulnerable package is evidenced in two independent projects, each with its own lock file, both
+// lock files are regenerated - not just the first one, or a shared/leaked state across loop
+// iterations that only ends up applying to one of them.
+func TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: filepath.Join("WithLockFile", "WithLockFile.csproj")},
+			{File: filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	for _, dir := range []string{"WithLockFile", "FailProjectLockFile"} {
+		lockFile, readErr := os.ReadFile(filepath.Join(dir, "packages.lock.json"))
+		assert.NoError(t, readErr)
+		assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`, "lock file in %s should have been regenerated", dir)
+	}
+}
+
+// TestNugetUpdateDependencyRestoreFailureIsolatedPerProject verifies that when restore fails for
+// one of several independent projects but succeeds for another, only the failing project is
+// rolled back - a successful sibling's fix and regenerated lock file must survive.
+func TestNugetUpdateDependencyRestoreFailureIsolatedPerProject(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalFailProjectCsproj, err := os.ReadFile(filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj"))
+	assert.NoError(t, err)
+	originalFailProjectLock, err := os.ReadFile(filepath.Join("FailProjectLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	writeFakeDotnetRestoreFailingForPath(t, toolDir, "FailProjectLockFile", `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: filepath.Join("WithLockFile", "WithLockFile.csproj")},
+			{File: filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	// The failing project must not turn the successful sibling's fix into a reported error.
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(filepath.Join("WithLockFile", "WithLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedCsproj), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	fixedLock, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedLock), `"resolved":"13.0.1"`)
+
+	rolledBackCsproj, err := os.ReadFile(filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalFailProjectCsproj, rolledBackCsproj)
+	rolledBackLock, err := os.ReadFile(filepath.Join("FailProjectLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalFailProjectLock, rolledBackLock)
 }
 
 func TestNugetUpdateDependencyRollsBackOnRestoreFailure(t *testing.T) {
