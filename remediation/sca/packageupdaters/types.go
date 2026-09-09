@@ -25,9 +25,8 @@ type UnsupportedErrorType string
 const (
 	IndirectDependencyFixNotSupported UnsupportedErrorType = "IndirectDependencyFixNotSupported"
 	// NoInlineVersionFixNotSupported covers a PackageReference with no inline version, no
-	// VersionOverride, and no resolvable entry in the nearest Directory.Packages.props (or no such
-	// file at all) - it may still be supplied via Directory.Build.props, a farther/unrelated
-	// centrally-managed file, or be an SDK-implicit reference.
+	// VersionOverride, and no resolvable PackageVersion in the nearest Directory.Packages.props
+	// or a file it Imports - including when that props file disables Central Package Management.
 	NoInlineVersionFixNotSupported UnsupportedErrorType = "NoInlineVersionFixNotSupported"
 	UnsupportedFixReason           UnsupportedErrorType = "UnsupportedFixReason"
 )
