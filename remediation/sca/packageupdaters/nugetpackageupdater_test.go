@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -282,6 +283,61 @@ func TestNugetUpdateDependencyMultipleIndependentProjects(t *testing.T) {
 	assert.Contains(t, siblingContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
 	assert.NotContains(t, siblingContent, `Version="11.0.2"`)
 	assert.Contains(t, siblingContent, `Include="NUnit" Version="3.13.3"`)
+}
+
+func TestNugetUpdateDependencyMixedLockFilePresence(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: "Project.csproj"},
+			{File: filepath.Join("WithLockFile", "WithLockFile.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedProject, err := os.ReadFile("Project.csproj")
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedProject), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	_, statErr := os.Stat("packages.lock.json")
+	assert.True(t, os.IsNotExist(statErr), "no lock file should appear next to a project that never had one")
+
+	fixedWithLock, err := os.ReadFile(filepath.Join("WithLockFile", "WithLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedWithLock), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	lockFile, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
+
+	argsLog, err := os.ReadFile(filepath.Join(toolDir, "args.log"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(argsLog), "\n"), "restore should only run once, for the project that actually has a lock file")
 }
 
 func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
