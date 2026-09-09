@@ -18,6 +18,10 @@ type PinnedRequirement struct {
 	VersionRange  string
 	ParentName    string
 	ParentVersion string
+	// ConfirmedDirect is true when the tool's output explicitly confirms this is a
+	// direct dependency (e.g. uv's "your project depends on X"), even with no
+	// Version/VersionRange recovered. Prevents misclassifying it as transitive.
+	ConfirmedDirect bool
 }
 
 // CvsBlockedError is returned when CVS hides a pinned version from the simple index.
@@ -93,6 +97,11 @@ var uvCvsBlockedReqRegex = regexp.MustCompile(
 var uvNotFoundInRegistryRegex = regexp.MustCompile(
 	`([A-Za-z0-9][A-Za-z0-9._-]*) was not found in the package registry`)
 
+// uvProjectDependsOnRegex matches uv's "your project depends on <name>" — its explicit
+// marker that a package is a direct dependency, even when no version/range text follows.
+var uvProjectDependsOnRegex = regexp.MustCompile(
+	`your\s+project\s+depends\s+on\s+([A-Za-z0-9][A-Za-z0-9._-]*)`)
+
 // uvDependsOnPinnedRegex extracts name==version from uv's "depends on name==version" clause,
 // used to recover the pinned version when paired with uvNotFoundInRegistryRegex.
 var uvDependsOnPinnedRegex = regexp.MustCompile(
@@ -106,6 +115,20 @@ var uvDependsOnPinnedRegex = regexp.MustCompile(
 var uvDependsOnParentRegex = regexp.MustCompile(
 	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)\s+depends on\s+` +
 		`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)`)
+
+// looseDependsOnParentRegex is a fallback for "parent==version depends on child" clauses
+// where the child has no exact version (constrained by a range, not a pin). Applied last,
+// after tool-specific parsing, to attribute otherwise self-attributed blockers.
+var looseDependsOnParentRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][0-9A-Za-z._+\-]*)\s+depends on\s+` +
+		`([A-Za-z0-9][A-Za-z0-9._-]*)`)
+
+// pipDependsOnParentRegex matches pip/pipenv's "parent version depends on child" phrasing
+// (space-separated, no "=="), e.g. "requests 2.31.0 depends on charset-normalizer<4".
+// Same purpose as looseDependsOnParentRegex, for pip's different wording.
+var pipDependsOnParentRegex = regexp.MustCompile(
+	`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+([0-9][0-9A-Za-z._+\-]*)\s+depends on\s+` +
+		`([A-Za-z0-9][A-Za-z0-9._-]*)`)
 
 // parseCvsFailedPackages extracts blockers from pip, poetry, and uv failure output.
 // Only packages that caused the failure are returned, not every requirements entry.
@@ -276,6 +299,42 @@ func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 				pr.ParentName, pr.ParentVersion = parent.Name, parent.Version
 			}
 			failed = append(failed, pr)
+		}
+	}
+
+	// Last resort: attribute any still-self-attributed entry to a real parent found via
+	// the loose "depends on" patterns above (keyed by child name, across all tools).
+	looseParentByChild := map[string]PinnedRequirement{}
+	for _, m := range looseDependsOnParentRegex.FindAllStringSubmatch(pipOutput, -1) {
+		n := normalizePyPIName(m[3])
+		if _, already := looseParentByChild[n]; !already {
+			looseParentByChild[n] = PinnedRequirement{Name: normalizePyPIName(m[1]), Version: m[2]}
+		}
+	}
+	for _, m := range pipDependsOnParentRegex.FindAllStringSubmatch(pipOutput, -1) {
+		n := normalizePyPIName(m[3])
+		if _, already := looseParentByChild[n]; !already {
+			looseParentByChild[n] = PinnedRequirement{Name: normalizePyPIName(m[1]), Version: m[2]}
+		}
+	}
+	for i := range failed {
+		if failed[i].ParentName != "" && failed[i].ParentName != failed[i].Name {
+			continue // already correctly attributed to a real, different parent
+		}
+		if parent, ok := looseParentByChild[normalizePyPIName(failed[i].Name)]; ok && parent.Name != failed[i].Name {
+			failed[i].ParentName, failed[i].ParentVersion = parent.Name, parent.Version
+		}
+	}
+
+	// uv explicitly confirms direct dependencies via "your project depends on X" —
+	// trust it even when no Version/VersionRange could be parsed.
+	directConfirmedByName := map[string]bool{}
+	for _, m := range uvProjectDependsOnRegex.FindAllStringSubmatch(pipOutput, -1) {
+		directConfirmedByName[normalizePyPIName(m[1])] = true
+	}
+	for i := range failed {
+		if directConfirmedByName[normalizePyPIName(failed[i].Name)] {
+			failed[i].ConfirmedDirect = true
 		}
 	}
 
