@@ -218,6 +218,53 @@ func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
 	assert.Contains(t, string(cpmSibling), `Include="Newtonsoft.Json" />`)
 }
 
+func TestNugetUpdateDependencyMultipleIndependentProjects(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: "Project.csproj"},
+			{File: filepath.Join("IndependentSibling", "IndependentSibling.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedProject, err := os.ReadFile("Project.csproj")
+	assert.NoError(t, err)
+	projectContent := string(fixedProject)
+	assert.Contains(t, projectContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.NotContains(t, projectContent, `Version="12.0.3"`)
+	assert.Contains(t, projectContent, `Version="2.10.0" Include="Serilog"`)
+
+	fixedSibling, err := os.ReadFile(filepath.Join("IndependentSibling", "IndependentSibling.csproj"))
+	assert.NoError(t, err)
+	siblingContent := string(fixedSibling)
+	assert.Contains(t, siblingContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.NotContains(t, siblingContent, `Version="11.0.2"`)
+	assert.Contains(t, siblingContent, `Include="NUnit" Version="3.13.3"`)
+}
+
 func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
