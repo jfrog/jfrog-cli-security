@@ -14,13 +14,13 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260828071122-bb92ab7ba69b
+	github.com/jfrog/build-info-go v1.13.1-0.20260902120316-b325d342b210
 	github.com/jfrog/froggit-go v1.23.1
-	github.com/jfrog/gofrog v1.7.6
+	github.com/jfrog/gofrog v1.7.7
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260828154930-3b7d100d5390
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260830114241-c7c8ec3528f8
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260827094947-e7a90ebc8049
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260908080306-193c9302d3ed
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260831061529-c6dd293bccca
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260908141255-cbf686ec1698
 	github.com/magiconair/properties v1.18.11
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -90,7 +90,7 @@ require (
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.8.3 // indirect
-	github.com/jfrog/archiver/v3 v3.6.4 // indirect
+	github.com/jfrog/archiver/v3 v3.6.5 // indirect
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
