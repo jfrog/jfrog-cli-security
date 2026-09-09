@@ -17,12 +17,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-// writeFakeDotnetRestore stands in for the real dotnet CLI: it writes lockFileContent next to the
-// project file passed as its second argument (mirroring where 'dotnet restore' would write
-// packages.lock.json), appends the received arguments to <dir>/args.log, optionally creates an
-// obj/ directory alongside the project (mirroring dotnet restore's own build-artifact output),
-// then exits with exitCode - letting the regeneration/rollback/cleanup paths, and the exact flags
-// used, be tested deterministically without a real .NET SDK, on POSIX and Windows alike.
 func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileContent string, createObjDir bool) {
 	lockContentPath := filepath.Join(dir, "lockfile-content.json")
 	assert.NoError(t, os.WriteFile(lockContentPath, []byte(lockFileContent), 0o644))
@@ -56,9 +50,6 @@ func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileCont
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet"), []byte(script), 0o755))
 }
 
-// writeFakeDotnetRestoreFailingForPath behaves like writeFakeDotnetRestore, except it fails
-// (without touching the lock file) only when the project file path it's invoked with contains
-// pathMarker - letting one project's restore fail while a sibling's succeeds in the same test run.
 func writeFakeDotnetRestoreFailingForPath(t *testing.T, dir string, pathMarker string, lockFileContent string) {
 	lockContentPath := filepath.Join(dir, "lockfile-content.json")
 	assert.NoError(t, os.WriteFile(lockContentPath, []byte(lockFileContent), 0o644))
@@ -336,10 +327,6 @@ func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
 }
 
-// TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile verifies that when the same
-// vulnerable package is evidenced in two independent projects, each with its own lock file, both
-// lock files are regenerated - not just the first one, or a shared/leaked state across loop
-// iterations that only ends up applying to one of them.
 func TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -384,9 +371,6 @@ func TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile(t *testi
 	}
 }
 
-// TestNugetUpdateDependencyRestoreFailureIsolatedPerProject verifies that when restore fails for
-// one of several independent projects but succeeds for another, only the failing project is
-// rolled back - a successful sibling's fix and regenerated lock file must survive.
 func TestNugetUpdateDependencyRestoreFailureIsolatedPerProject(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -600,11 +584,6 @@ func TestHasNugetProjectFileSuffix(t *testing.T) {
 	}
 }
 
-// TestNugetUpdateDependencyRestoreScopedFlags documents the exact restore invocation: both
-// --force-evaluate and --no-dependencies must always be passed. --no-dependencies is what keeps a
-// fix scoped to the touched project's own lock file - and is also the source of a known
-// limitation (a bumped package's transitives living in a referenced project can leave that
-// project's own lock file stale), so this test doubles as a marker for that tradeoff.
 func TestNugetUpdateDependencyRestoreScopedFlags(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -644,10 +623,6 @@ func TestNugetUpdateDependencyRestoreScopedFlags(t *testing.T) {
 	assert.Contains(t, string(argsLog), "--no-dependencies")
 }
 
-// TestNugetUpdateDependencyCleansUpGeneratedObjDir verifies that an obj/ directory created by
-// restore (dotnet writes project.assets.json and other build artifacts there) is removed
-// afterward, so a fix PR doesn't pick up unrelated build output alongside the intended
-// descriptor/lock file changes.
 func TestNugetUpdateDependencyCleansUpGeneratedObjDir(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -689,9 +664,6 @@ func TestNugetUpdateDependencyCleansUpGeneratedObjDir(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "obj/ created by restore should be cleaned up afterward")
 }
 
-// TestNugetUpdateDependencyPreservesPreexistingObjDir verifies that an obj/ directory that
-// already existed before the fix (e.g. from a prior local build) is left alone, even though
-// restore also touches it.
 func TestNugetUpdateDependencyPreservesPreexistingObjDir(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")

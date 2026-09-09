@@ -103,9 +103,6 @@ func (n *NugetPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 	return fmt.Errorf("encountered errors while fixing '%s' vulnerability in descriptors [%s]: %w", fixDetails.ImpactedDependencyName, strings.Join(failingDescriptors, ", "), fixErrors)
 }
 
-// GetVulnerabilityLocations matches by exact file name, which doesn't work here since a project
-// file's base name varies per project - so collect every known descriptor location and filter by
-// suffix instead.
 func collectProjectFilePaths(fixDetails *FixDetails) []string {
 	var paths []string
 	for _, path := range GetVulnerabilityLocations(fixDetails, []string{}, []string{}) {
@@ -171,11 +168,6 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 	return nil
 }
 
-// runDotnetRestore regenerates the lock file next to projectFilePath. It also removes the obj/
-// directory if restore created it (dotnet restore writes project.assets.json and other build
-// artifacts there), so a fix PR doesn't pick up unrelated build output alongside the intended
-// descriptor/lock file changes - mirroring the cleanup other updaters already do for their own
-// install artifacts.
 func (n *NugetPackageUpdater) runDotnetRestore(projectFilePath string) error {
 	objDir := filepath.Join(filepath.Dir(projectFilePath), nugetObjDirName)
 	objDirExisted := dirExists(objDir)
@@ -214,8 +206,6 @@ func dirExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// rollbackProjectFile restores the descriptor to its pre-fix content and returns origErr, or a
-// wrapped error if the rollback itself fails.
 func rollbackProjectFile(projectFilePath string, originalProjectFile []byte, origErr error) error {
 	//#nosec G703 G306 -- projectFilePath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(projectFilePath, originalProjectFile, 0644); rollbackErr != nil {
@@ -224,8 +214,6 @@ func rollbackProjectFile(projectFilePath string, originalProjectFile []byte, ori
 	return origErr
 }
 
-// rollbackProjectFileAndLock restores both the descriptor and the lock file to their pre-fix
-// content, so a failed restore never leaves the project in a half-fixed state.
 func rollbackProjectFileAndLock(projectFilePath string, originalProjectFile []byte, lockFilePath string, originalLockFile []byte, origErr error) error {
 	//#nosec G703 G306 -- projectFilePath from scan workflow; 0644 for VCS-tracked sources.
 	if rollbackErr := os.WriteFile(projectFilePath, originalProjectFile, 0644); rollbackErr != nil {
@@ -238,12 +226,6 @@ func rollbackProjectFileAndLock(projectFilePath string, originalProjectFile []by
 	return origErr
 }
 
-// updatePackageReferenceVersion patches the Version on the <PackageReference> element matching
-// packageName, in place, without re-serializing the surrounding XML. If no inline version is
-// found - as an attribute or a child element - the package may be centrally managed (Directory.
-// Packages.props), version-supplied via Directory.Build.props, overridden elsewhere, or an
-// SDK-implicit reference; none of those are resolved here, so this is reported distinctly from
-// "not found" rather than guessing which one applies.
 func updatePackageReferenceVersion(content []byte, packageName, fixedVersion string) ([]byte, error) {
 	element := regexp.MustCompile(nugetPackageReferenceElementPattern)
 	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetKeyAttrPattern, regexp.QuoteMeta(packageName)))
