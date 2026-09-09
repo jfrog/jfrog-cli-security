@@ -428,6 +428,63 @@ func TestNugetUpdateDependencyRestoreFailureIsolatedPerProject(t *testing.T) {
 	assert.Equal(t, originalFailProjectLock, rolledBackLock)
 }
 
+func TestNugetUpdateDependencyDoesNotTouchReferencedProject(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalReferencedCsproj, err := os.ReadFile(filepath.Join("ReferencedProject", "ReferencedProject.csproj"))
+	assert.NoError(t, err)
+	originalReferencedLock, err := os.ReadFile(filepath.Join("ReferencedProject", "packages.lock.json"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("WithProjectReference", "WithProjectReference.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(filepath.Join("WithProjectReference", "WithProjectReference.csproj"))
+	assert.NoError(t, err)
+	fixedContent := string(fixedCsproj)
+	assert.Contains(t, fixedContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.Contains(t, fixedContent, `<ProjectReference Include="..\ReferencedProject\ReferencedProject.csproj" />`)
+
+	fixedLock, err := os.ReadFile(filepath.Join("WithProjectReference", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedLock), `"resolved":"13.0.1"`)
+
+	referencedCsproj, err := os.ReadFile(filepath.Join("ReferencedProject", "ReferencedProject.csproj"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalReferencedCsproj, referencedCsproj)
+	referencedLock, err := os.ReadFile(filepath.Join("ReferencedProject", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalReferencedLock, referencedLock)
+}
+
 func TestNugetUpdateDependencyRollsBackOnRestoreFailure(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
