@@ -27,8 +27,13 @@ const (
 	// literal fixed version rather than resolved and updated at its property definition. That's a
 	// deliberate simplification, and a real behavior change versus how MSBuild itself would resolve
 	// it; Maven's updater handles the analogous ${property} case by updating the definition instead.
-	nugetVersionAttrPattern    = `(?is)(\bVersion\s*=\s*["'])[^"']*(["'])`
-	nugetVersionElementPattern = `(?is)(<Version>)[^<]*(</Version>)`
+	nugetVersionAttrPattern         = `(?is)(\bVersion\s*=\s*["'])[^"']*(["'])`
+	nugetVersionElementPattern      = `(?is)(<Version>)[^<]*(</Version>)`
+	nugetVersionOverrideAttrPattern = `(?is)(\bVersionOverride\s*=\s*["'])[^"']*(["'])`
+
+	nugetPackageVersionElementPattern = `(?s)<PackageVersion\b[^>]*/>|<PackageVersion\b[^>]*[^/]>.*?</PackageVersion>`
+	nugetPackageVersionKeyAttrPattern = `(?i)\bInclude\s*=\s*["']%s["']`
+	nugetDirectoryPackagesPropsName   = "Directory.Packages.props"
 
 	nugetLockFileName = "packages.lock.json"
 	nugetObjDirName   = "obj"
@@ -122,9 +127,13 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 		return fmt.Errorf("failed to read %s: %w", projectFilePath, err)
 	}
 
-	updatedProjectFile, err := updatePackageReferenceVersion(originalProjectFile, packageName, fixedVersion)
-	if err != nil {
-		return fmt.Errorf("%w in %s", err, projectFilePath)
+	updatedProjectFile, fixErr := updatePackageReferenceVersion(originalProjectFile, packageName, fixedVersion)
+	if fixErr != nil {
+		var unsupportedErr *ErrUnsupportedFix
+		if errors.As(fixErr, &unsupportedErr) && unsupportedErr.ErrorType == NoInlineVersionFixNotSupported {
+			return n.fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd)
+		}
+		return fmt.Errorf("%w in %s", fixErr, projectFilePath)
 	}
 
 	//#nosec G703 G306 -- projectFilePath from scan workflow; 0644 for VCS-tracked sources.
@@ -160,6 +169,59 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 	if err = n.runDotnetRestore(projectFilePath); err != nil {
 		log.Warn(fmt.Sprintf("Failed to regenerate lock file after updating '%s' to version '%s': %s. Rolling back...", packageName, fixedVersion, err.Error()))
 		return rollbackProjectFileAndLock(projectFilePath, originalProjectFile, lockFilePath, originalLockFile, err)
+	}
+	return nil
+}
+
+func (n *NugetPackageUpdater) fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd string) error {
+	unsupported := &ErrUnsupportedFix{
+		PackageName:  packageName,
+		FixedVersion: fixedVersion,
+		ErrorType:    NoInlineVersionFixNotSupported,
+	}
+
+	propsPath, originalProps, err := resolveDirectoryPackagesProps(filepath.Dir(projectFilePath), originalWd)
+	if err != nil {
+		return fmt.Errorf("%w in %s", err, projectFilePath)
+	}
+	if propsPath == "" {
+		return unsupported
+	}
+
+	updatedProps, fixedAny := updatePackageVersionEntry(originalProps, packageName, fixedVersion)
+	if !fixedAny {
+		return unsupported
+	}
+
+	//#nosec G703 G306 -- propsPath resolved from descriptor discovery in the scanned repository.
+	if err = os.WriteFile(propsPath, updatedProps, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", propsPath, err)
+	}
+
+	projectDir := filepath.Dir(projectFilePath)
+	lockFilePath := filepath.Join(projectDir, nugetLockFileName)
+	//#nosec G304 -- lockFilePath is derived from projectFilePath, itself from descriptor discovery.
+	originalLockFile, err := os.ReadFile(lockFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return rollbackProjectFile(propsPath, originalProps, fmt.Errorf("failed to read %s: %w", lockFilePath, err))
+	}
+
+	lockFileTracked, checkErr := IsFileTrackedByGit(lockFilePath, originalWd)
+	if checkErr != nil {
+		log.Debug(fmt.Sprintf("Failed to check if lock file is tracked in git: %s. Proceeding with lock file regeneration.", checkErr.Error()))
+		lockFileTracked = true
+	}
+	if !lockFileTracked {
+		log.Debug(fmt.Sprintf("Lock file '%s' is not tracked in git, skipping lock file regeneration", lockFilePath))
+		return nil
+	}
+
+	if err = n.runDotnetRestore(projectFilePath); err != nil {
+		log.Warn(fmt.Sprintf("Failed to regenerate lock file after updating '%s' to version '%s': %s. Rolling back...", packageName, fixedVersion, err.Error()))
+		return rollbackProjectFileAndLock(propsPath, originalProps, lockFilePath, originalLockFile, err)
 	}
 	return nil
 }
@@ -227,6 +289,7 @@ func updatePackageReferenceVersion(content []byte, packageName, fixedVersion str
 	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetKeyAttrPattern, regexp.QuoteMeta(packageName)))
 	versionAttr := regexp.MustCompile(nugetVersionAttrPattern)
 	versionElement := regexp.MustCompile(nugetVersionElementPattern)
+	versionOverrideAttr := regexp.MustCompile(nugetVersionOverrideAttrPattern)
 
 	var fixedAny, foundWithoutVersion bool
 	updatedContent := element.ReplaceAllFunc(content, func(match []byte) []byte {
@@ -240,6 +303,9 @@ func updatePackageReferenceVersion(content []byte, packageName, fixedVersion str
 		case versionElement.Match(match):
 			fixedAny = true
 			return versionElement.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case versionOverrideAttr.Match(match):
+			fixedAny = true
+			return versionOverrideAttr.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
 		default:
 			foundWithoutVersion = true
 			return match
@@ -257,4 +323,60 @@ func updatePackageReferenceVersion(content []byte, packageName, fixedVersion str
 		return updatedContent, nil
 	}
 	return nil, fmt.Errorf("dependency %s not found", packageName)
+}
+
+func updatePackageVersionEntry(content []byte, packageName, fixedVersion string) ([]byte, bool) {
+	element := regexp.MustCompile(nugetPackageVersionElementPattern)
+	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetPackageVersionKeyAttrPattern, regexp.QuoteMeta(packageName)))
+	versionAttr := regexp.MustCompile(nugetVersionAttrPattern)
+	versionElement := regexp.MustCompile(nugetVersionElementPattern)
+
+	var fixedAny bool
+	updatedContent := element.ReplaceAllFunc(content, func(match []byte) []byte {
+		if !keyAttr.Match(match) {
+			return match
+		}
+		switch {
+		case versionAttr.Match(match):
+			fixedAny = true
+			return versionAttr.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case versionElement.Match(match):
+			fixedAny = true
+			return versionElement.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		default:
+			return match
+		}
+	})
+	return updatedContent, fixedAny
+}
+
+func resolveDirectoryPackagesProps(projectDir, repoRoot string) (path string, content []byte, err error) {
+	absRepoRoot, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to resolve absolute path for %s: %w", repoRoot, err)
+	}
+	dir, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to resolve absolute path for %s: %w", projectDir, err)
+	}
+
+	for {
+		candidate := filepath.Join(dir, nugetDirectoryPackagesPropsName)
+		//#nosec G304 -- candidate is built from projectDir/repoRoot, from descriptor discovery.
+		candidateContent, readErr := os.ReadFile(candidate)
+		if readErr == nil {
+			return candidate, candidateContent, nil
+		}
+		if !os.IsNotExist(readErr) {
+			return "", nil, fmt.Errorf("failed to read %s: %w", candidate, readErr)
+		}
+		if dir == absRepoRoot {
+			return "", nil, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", nil, nil
+		}
+		dir = parent
+	}
 }

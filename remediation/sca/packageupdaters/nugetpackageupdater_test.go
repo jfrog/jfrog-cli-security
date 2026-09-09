@@ -922,3 +922,184 @@ func TestUpdatePackageReferenceVersionRejectsMixedInlineAndNonInline(t *testing.
 	assert.True(t, errors.As(err, &unsupportedErr))
 	assert.Equal(t, NoInlineVersionFixNotSupported, unsupportedErr.ErrorType)
 }
+
+func TestNugetUpdateDependencyResolvesSingleDirectoryPackagesProps(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("Cpm", "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	propsContent, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(propsContent), `Include="Newtonsoft.Json" Version="13.0.1"`)
+
+	csprojContent, err := os.ReadFile(filepath.Join("Cpm", "Proj", "Proj.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(csprojContent), `<PackageReference Include="Newtonsoft.Json" />`)
+
+	lockContent, err := os.ReadFile(filepath.Join("Cpm", "Proj", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(lockContent), `"resolved":"13.0.1"`)
+}
+
+func TestNugetUpdateDependencyVersionOverrideTakesPrecedenceOverCpm(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalProps, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("Cpm", "ProjWithOverride", "ProjWithOverride.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	csprojContent, err := os.ReadFile(filepath.Join("Cpm", "ProjWithOverride", "ProjWithOverride.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(csprojContent), `VersionOverride="13.0.1"`)
+	assert.NotContains(t, string(csprojContent), `VersionOverride="11.0.1"`)
+
+	propsContent, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalProps, propsContent)
+
+	lockContent, err := os.ReadFile(filepath.Join("Cpm", "ProjWithOverride", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(lockContent), `"resolved":"13.0.1"`)
+}
+
+func TestNugetUpdateDependencyNestedDirectoryPackagesPropsClosestWins(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalRootProps, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("Cpm", "Nested", "NestedProj", "NestedProj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	nestedProps, err := os.ReadFile(filepath.Join("Cpm", "Nested", "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(nestedProps), `Include="Newtonsoft.Json" Version="13.0.1"`)
+
+	rootProps, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalRootProps, rootProps)
+
+	lockContent, err := os.ReadFile(filepath.Join("Cpm", "Nested", "NestedProj", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(lockContent), `"resolved":"13.0.1"`)
+}
+
+func TestNugetUpdateDependencyDirectoryPackagesPropsWithoutMatchingEntry(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "1.0.0",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "NotInCpm.Package",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("Cpm", "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.Error(t, err)
+	var unsupportedErr *ErrUnsupportedFix
+	assert.True(t, errors.As(err, &unsupportedErr))
+	assert.Equal(t, NoInlineVersionFixNotSupported, unsupportedErr.ErrorType)
+}
