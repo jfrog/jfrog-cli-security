@@ -17,12 +17,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-// writeFakeDotnetRestore stands in for the real dotnet CLI: it writes lockFileContent next to the
-// project file passed as its second argument (mirroring where 'dotnet restore' would write
-// packages.lock.json), appends the received arguments to <dir>/args.log, optionally creates an
-// obj/ directory alongside the project (mirroring dotnet restore's own build-artifact output),
-// then exits with exitCode - letting the regeneration/rollback/cleanup paths, and the exact flags
-// used, be tested deterministically without a real .NET SDK, on POSIX and Windows alike.
 func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileContent string, createObjDir bool) {
 	lockContentPath := filepath.Join(dir, "lockfile-content.json")
 	assert.NoError(t, os.WriteFile(lockContentPath, []byte(lockFileContent), 0o644))
@@ -53,6 +47,31 @@ func writeFakeDotnetRestore(t *testing.T, dir string, exitCode int, lockFileCont
 		"cp \"" + lockContentPath + "\" \"$projdir/packages.lock.json\"\n" +
 		mkObjLine +
 		"exit " + strconv.Itoa(exitCode) + "\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet"), []byte(script), 0o755))
+}
+
+func writeFakeDotnetRestoreFailingForPath(t *testing.T, dir string, pathMarker string, lockFileContent string) {
+	lockContentPath := filepath.Join(dir, "lockfile-content.json")
+	assert.NoError(t, os.WriteFile(lockContentPath, []byte(lockFileContent), 0o644))
+
+	if runtime.GOOS == "windows" {
+		script := "@echo off\r\n" +
+			"echo %2 | findstr /C:\"" + pathMarker + "\" >nul\r\n" +
+			"if %errorlevel%==0 exit /b 1\r\n" +
+			"for %%F in (\"%2\") do set projdir=%%~dpF\r\n" +
+			"copy /Y \"" + lockContentPath + "\" \"%projdir%packages.lock.json\">nul\r\n" +
+			"exit /b 0\r\n"
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet.cmd"), []byte(script), 0o755))
+		return
+	}
+
+	script := "#!/bin/sh\n" +
+		"case \"$2\" in\n" +
+		"  *" + pathMarker + "*) exit 1 ;;\n" +
+		"esac\n" +
+		"projdir=$(dirname \"$2\")\n" +
+		"cp \"" + lockContentPath + "\" \"$projdir/packages.lock.json\"\n" +
+		"exit 0\n"
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "dotnet"), []byte(script), 0o755))
 }
 
@@ -218,6 +237,53 @@ func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
 	assert.Contains(t, string(cpmSibling), `Include="Newtonsoft.Json" />`)
 }
 
+func TestNugetUpdateDependencyMultipleIndependentProjects(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: "Project.csproj"},
+			{File: filepath.Join("IndependentSibling", "IndependentSibling.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedProject, err := os.ReadFile("Project.csproj")
+	assert.NoError(t, err)
+	projectContent := string(fixedProject)
+	assert.Contains(t, projectContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.NotContains(t, projectContent, `Version="12.0.3"`)
+	assert.Contains(t, projectContent, `Version="2.10.0" Include="Serilog"`)
+
+	fixedSibling, err := os.ReadFile(filepath.Join("IndependentSibling", "IndependentSibling.csproj"))
+	assert.NoError(t, err)
+	siblingContent := string(fixedSibling)
+	assert.Contains(t, siblingContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.NotContains(t, siblingContent, `Version="11.0.2"`)
+	assert.Contains(t, siblingContent, `Include="NUnit" Version="3.13.3"`)
+}
+
 func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -259,6 +325,164 @@ func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	lockFile, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
 	assert.NoError(t, err)
 	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
+}
+
+func TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: filepath.Join("WithLockFile", "WithLockFile.csproj")},
+			{File: filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	for _, dir := range []string{"WithLockFile", "FailProjectLockFile"} {
+		lockFile, readErr := os.ReadFile(filepath.Join(dir, "packages.lock.json"))
+		assert.NoError(t, readErr)
+		assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`, "lock file in %s should have been regenerated", dir)
+	}
+}
+
+func TestNugetUpdateDependencyRestoreFailureIsolatedPerProject(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalFailProjectCsproj, err := os.ReadFile(filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj"))
+	assert.NoError(t, err)
+	originalFailProjectLock, err := os.ReadFile(filepath.Join("FailProjectLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	writeFakeDotnetRestoreFailingForPath(t, toolDir, "FailProjectLockFile", `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components: []formats.ComponentRow{{Evidences: []formats.Location{
+			{File: filepath.Join("WithLockFile", "WithLockFile.csproj")},
+			{File: filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj")},
+		}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	// The failing project must not turn the successful sibling's fix into a reported error.
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(filepath.Join("WithLockFile", "WithLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedCsproj), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	fixedLock, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedLock), `"resolved":"13.0.1"`)
+
+	rolledBackCsproj, err := os.ReadFile(filepath.Join("FailProjectLockFile", "FailProjectLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalFailProjectCsproj, rolledBackCsproj)
+	rolledBackLock, err := os.ReadFile(filepath.Join("FailProjectLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalFailProjectLock, rolledBackLock)
+}
+
+func TestNugetUpdateDependencyDoesNotTouchReferencedProject(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	originalReferencedCsproj, err := os.ReadFile(filepath.Join("ReferencedProject", "ReferencedProject.csproj"))
+	assert.NoError(t, err)
+	originalReferencedLock, err := os.ReadFile(filepath.Join("ReferencedProject", "packages.lock.json"))
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("WithProjectReference", "WithProjectReference.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(filepath.Join("WithProjectReference", "WithProjectReference.csproj"))
+	assert.NoError(t, err)
+	fixedContent := string(fixedCsproj)
+	assert.Contains(t, fixedContent, `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.Contains(t, fixedContent, `<ProjectReference Include="..\ReferencedProject\ReferencedProject.csproj" />`)
+
+	fixedLock, err := os.ReadFile(filepath.Join("WithProjectReference", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedLock), `"resolved":"13.0.1"`)
+
+	referencedCsproj, err := os.ReadFile(filepath.Join("ReferencedProject", "ReferencedProject.csproj"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalReferencedCsproj, referencedCsproj)
+	referencedLock, err := os.ReadFile(filepath.Join("ReferencedProject", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalReferencedLock, referencedLock)
 }
 
 func TestNugetUpdateDependencyRollsBackOnRestoreFailure(t *testing.T) {
@@ -417,11 +641,6 @@ func TestHasNugetProjectFileSuffix(t *testing.T) {
 	}
 }
 
-// TestNugetUpdateDependencyRestoreScopedFlags documents the exact restore invocation: both
-// --force-evaluate and --no-dependencies must always be passed. --no-dependencies is what keeps a
-// fix scoped to the touched project's own lock file - and is also the source of a known
-// limitation (a bumped package's transitives living in a referenced project can leave that
-// project's own lock file stale), so this test doubles as a marker for that tradeoff.
 func TestNugetUpdateDependencyRestoreScopedFlags(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -461,10 +680,6 @@ func TestNugetUpdateDependencyRestoreScopedFlags(t *testing.T) {
 	assert.Contains(t, string(argsLog), "--no-dependencies")
 }
 
-// TestNugetUpdateDependencyCleansUpGeneratedObjDir verifies that an obj/ directory created by
-// restore (dotnet writes project.assets.json and other build artifacts there) is removed
-// afterward, so a fix PR doesn't pick up unrelated build output alongside the intended
-// descriptor/lock file changes.
 func TestNugetUpdateDependencyCleansUpGeneratedObjDir(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -506,9 +721,6 @@ func TestNugetUpdateDependencyCleansUpGeneratedObjDir(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "obj/ created by restore should be cleaned up afterward")
 }
 
-// TestNugetUpdateDependencyPreservesPreexistingObjDir verifies that an obj/ directory that
-// already existed before the fix (e.g. from a prior local build) is left alone, even though
-// restore also touches it.
 func TestNugetUpdateDependencyPreservesPreexistingObjDir(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
