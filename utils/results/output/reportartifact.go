@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -17,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
+	xscUtils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
 func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults, xrayVersion string) (artifactPath string, err error) {
@@ -142,11 +144,18 @@ func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, 
 }
 
 func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
-	// Parse the URL to handle different formats (with or without protocol)
-	gitUrlParsed, err := url.Parse(gitCloneUrl)
-	if err != nil {
-		return "", err
+	lower := strings.ToLower(gitCloneUrl)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		parsed, err := url.Parse(gitCloneUrl)
+		if err != nil || parsed.Host == "" {
+			return "", fmt.Errorf("failed to parse git clone URL %q", gitCloneUrl)
+		}
+		repoPath := strings.TrimSuffix(parsed.EscapedPath(), filepath.Ext(parsed.EscapedPath()))
+		return parsed.Host + repoPath + "/" + sourceBranchName, nil
 	}
-	// Extract the host and path, removing any .git suffix
-	return gitUrlParsed.Host + "/" + gitUrlParsed.Path[:len(gitUrlParsed.Path)-len(filepath.Ext(gitUrlParsed.Path))] + "/" + sourceBranchName, nil
+	gitRepoKey := xscUtils.GetGitRepoUrlKey(gitCloneUrl)
+	if gitRepoKey == "" {
+		return "", fmt.Errorf("failed to parse git clone URL %q", gitCloneUrl)
+	}
+	return strings.TrimSuffix(gitRepoKey, ".git") + "/" + sourceBranchName, nil
 }

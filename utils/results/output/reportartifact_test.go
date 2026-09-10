@@ -74,3 +74,44 @@ func TestUploadViaXrayApi_ServerError_ReturnsError(t *testing.T) {
 	_, err := uploadViaXrayApi(newTestServerDetails(server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
 	assert.Error(t, err)
 }
+
+func TestExtractBaseGitPath(t *testing.T) {
+	testCases := []struct {
+		name   string
+		url    string
+		branch string
+		want   string
+	}{
+		{
+			name:   "HTTPS",
+			url:    "https://github.com/jfrog/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "HTTPS credentials and port",
+			url:    "https://user:token@git.example.com:8443/jfrog/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "git.example.com:8443/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "SCP",
+			url:    "git@github.com:JFROG/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/JFROG/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "SSH with port",
+			url:    "ssh://git@github.com:22/jfrog/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/jfrog/xray-url-canonical-e2e/main",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := extractBaseGitPath(testCase.url, testCase.branch)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.want, got)
+		})
+	}
+}
