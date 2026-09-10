@@ -225,7 +225,7 @@ var technologiesData = map[Technology]TechData{
 		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
 		validators:         map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
 		packageDescriptors: []string{"setup.py", "requirements.txt", "pyproject.toml"},
-		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
+		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock", "uv.lock"},
 		projectType:        project.Pip,
 		language:           Python,
 	},
