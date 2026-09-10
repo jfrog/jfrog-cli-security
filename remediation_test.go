@@ -5,7 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/remediation/sca/packageupdaters"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -23,9 +26,31 @@ func remediationProjectDir(tech, subdir string) string {
 	return filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", tech, subdir)
 }
 
-func copyYarnRelease(t *testing.T, destDir, canonicalFixture string) {
-	src := filepath.Join(remediationProjectDir("yarn", canonicalFixture), ".yarn")
-	require.NoError(t, biutils.CopyDir(src, filepath.Join(destDir, ".yarn"), true, nil))
+func setupYarnRemediationProject(t *testing.T, projectSubdir, canonicalFixture string) (tmpDir string, cleanup func()) {
+	t.Helper()
+	releaseSrc, err := filepath.Abs(filepath.Join(remediationProjectDir("yarn", canonicalFixture), ".yarn"))
+	require.NoError(t, err)
+	require.DirExists(t, releaseSrc, "yarn release fixture %q is missing under testdata", canonicalFixture)
+
+	tmpDir, cleanup = testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", projectSubdir))
+	require.NoError(t, biutils.CopyDir(releaseSrc, filepath.Join(tmpDir, ".yarn"), true, nil))
+	return tmpDir, cleanup
+}
+
+func commitTrackedFiles(t *testing.T, dir string, files ...string) {
+	t.Helper()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	for _, file := range files {
+		_, err = worktree.Add(file)
+		require.NoError(t, err)
+	}
+	_, err = worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: "tester", Email: "tester@example.com", When: time.Now()},
+	})
+	require.NoError(t, err)
 }
 
 // newFixDetails builds a FixDetails value for use in remediation integration tests.
@@ -132,9 +157,8 @@ func TestRemediationGo(t *testing.T) {
 func TestRemediationYarn(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation"))
+	tmpDir, cleanup := setupYarnRemediationProject(t, "remediation", "yarn-v3")
 	defer cleanup()
-	copyYarnRelease(t, tmpDir, "yarn-v3")
 
 	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, "package.json")
 	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
@@ -162,9 +186,8 @@ func TestRemediationYarn(t *testing.T) {
 func TestRemediationYarnV4(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation-v4"))
+	tmpDir, cleanup := setupYarnRemediationProject(t, "remediation-v4", "yarn-v4")
 	defer cleanup()
-	copyYarnRelease(t, tmpDir, "yarn-v4")
 
 	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, "package.json")
 	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
@@ -192,9 +215,8 @@ func TestRemediationYarnV4(t *testing.T) {
 func TestRemediationYarnWorkspace(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation-workspace"))
+	tmpDir, cleanup := setupYarnRemediationProject(t, "remediation-workspace", "yarn-v3")
 	defer cleanup()
-	copyYarnRelease(t, tmpDir, "yarn-v3")
 
 	memberDescriptor := filepath.Join("packages", "member-a", "package.json")
 	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, memberDescriptor)
@@ -222,9 +244,8 @@ func TestRemediationYarnWorkspace(t *testing.T) {
 func TestRemediationYarnRollback(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	tmpDir, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "remediation-rollback"))
+	_, cleanup := setupYarnRemediationProject(t, "remediation-rollback", "yarn-v3")
 	defer cleanup()
-	copyYarnRelease(t, tmpDir, "yarn-v3")
 
 	descriptorBefore, err := os.ReadFile("package.json")
 	require.NoError(t, err)
@@ -241,11 +262,39 @@ func TestRemediationYarnRollback(t *testing.T) {
 	assert.Equal(t, descriptorBefore, descriptorAfter, "package.json should be rolled back to its original state")
 }
 
+// TestRemediationYarnUntrackedLockfile verifies that a tracked package.json is still updated
+// when yarn.lock exists on disk but is not tracked in git.
+func TestRemediationYarnUntrackedLockfile(t *testing.T) {
+	integrationUtils.InitRemediationTest(t)
+
+	tmpDir, cleanup := setupYarnRemediationProject(t, "remediation", "yarn-v3")
+	defer cleanup()
+
+	lockBefore, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+
+	commitTrackedFiles(t, tmpDir, "package.json")
+
+	fix := newFixDetails(techutils.Yarn, "minimist", "1.2.5", "1.2.6", true, "package.json")
+	updater, supported := packageupdaters.GetCompatiblePackageUpdater(fix)
+	require.True(t, supported)
+
+	require.NoError(t, updater.UpdateDependency(fix))
+
+	descriptor, err := os.ReadFile("package.json")
+	require.NoError(t, err)
+	assert.Contains(t, string(descriptor), "1.2.6", "package.json should contain the fixed version even when yarn.lock is untracked")
+
+	lockAfter, err := os.ReadFile("yarn.lock")
+	require.NoError(t, err)
+	assert.Equal(t, lockBefore, lockAfter, "untracked yarn.lock should not be regenerated")
+}
+
 // TestRemediationYarnUnsupportedVersion verifies that a Yarn 2.x project returns ErrUnsupportedFix.
 func TestRemediationYarnUnsupportedVersion(t *testing.T) {
 	integrationUtils.InitRemediationTest(t)
 
-	_, cleanup := testutils.CreateTestProjectEnvAndChdir(t, remediationProjectDir("yarn", "yarn-v2"))
+	_, cleanup := setupYarnRemediationProject(t, "remediation-v2", "yarn-v2")
 	defer cleanup()
 
 	fix := newFixDetails(techutils.Yarn, "xml", "1.0.1", "1.0.2", true, "package.json")

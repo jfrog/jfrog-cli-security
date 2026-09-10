@@ -117,6 +117,12 @@ func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *Fi
 		log.Debug(fmt.Sprintf("Failed to check if lock file is tracked in git: %s. Proceeding with lock file regeneration.", checkErr.Error()))
 		lockFileTracked = true
 	}
+
+	descriptorBackup, err := yarn.UpdatePackageJSONDescriptor(descriptorPath, fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion)
+	if err != nil {
+		return err
+	}
+
 	if !lockFileTracked {
 		log.Debug(fmt.Sprintf("Lock file '%s' is not tracked in git, skipping lock file regeneration", lockFilePath))
 		return nil
@@ -125,11 +131,6 @@ func (yarn *YarnPackageUpdater) fixVulnerabilityAndRegenerateLock(fixDetails *Fi
 	lockBackup, lockBackupExisted, err := readOptionalFile(lockFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read '%s' before regenerating it: %w", lockFilePath, err)
-	}
-
-	descriptorBackup, err := yarn.UpdatePackageJSONDescriptor(descriptorPath, fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion)
-	if err != nil {
-		return err
 	}
 
 	if err = yarn.regenerateLockfile(fixDetails, descriptorPath, lockFilePath, rootDir, executablePath, descriptorBackup, lockBackup, lockBackupExisted); err != nil {
