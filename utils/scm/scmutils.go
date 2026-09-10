@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
+	xscUtils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
 const (
@@ -71,13 +72,9 @@ func isScmProject(projectPath string, scmData ScmTypeData) (bool, error) {
 	return fileutils.IsDirExists(path.Join(projectPath, scmData.indicator), false)
 }
 
-// Normalize the URL by removing protocol prefix and any trailing ".git"
-func normalizeGitUrl(url string) string {
-	// jfrog-ignore - false positive, not used for communication
-	url = strings.TrimPrefix(url, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "ssh://")
-	return strings.TrimSuffix(url, ".git")
+// Normalize the URL for local repository metadata extraction.
+func normalizeGitUrl(raw string) string {
+	return strings.TrimSuffix(xscUtils.GetGitRepoUrlKey(raw), ".git")
 }
 
 func getGitRepoName(url string) string {

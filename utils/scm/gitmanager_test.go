@@ -229,7 +229,12 @@ func TestGetGitProject(t *testing.T) {
 		{
 			name:    "SSH",
 			url:     "git@github.com:jfrog/jfrog-cli-security.git",
-			project: "jfrog-cli-security",
+			project: "jfrog",
+		},
+		{
+			name:    "SSH with clone port",
+			url:     "ssh://git@github.com:22/jfrog/jfrog-cli-security.git",
+			project: "jfrog",
 		},
 		{
 			name:    "Bitbucket Https",
