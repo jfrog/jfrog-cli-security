@@ -672,6 +672,12 @@ func CurationActionsCmd(c *components.Context) error {
 	if c.IsFlagSet(flags.WorkflowFile) {
 		curationActionsCommand.SetWorkflowFile(c.GetStringFlagValue(flags.WorkflowFile))
 	}
+	if c.IsFlagSet(flags.WorkflowJob) {
+		curationActionsCommand.SetJobID(c.GetStringFlagValue(flags.WorkflowJob))
+	}
+	if c.IsFlagSet(flags.GithubRepo) {
+		curationActionsCommand.SetGithubRepo(c.GetStringFlagValue(flags.GithubRepo))
+	}
 	return curationActionsCommand.Run()
 }
 

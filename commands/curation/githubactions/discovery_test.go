@@ -83,3 +83,104 @@ func TestDefaultActionsCacheDir_NotSet(t *testing.T) {
 	_, err := DefaultActionsCacheDir()
 	assert.Error(t, err)
 }
+
+func TestDefaultWorkflowFile(t *testing.T) {
+	tests := []struct {
+		name        string
+		workflowRef string
+		want        string
+	}{
+		{"standard ref", "octocat/hello-world/.github/workflows/ci.yml@refs/heads/main", ".github/workflows/ci.yml"},
+		{"ref containing slashes", "octocat/hello-world/.github/workflows/ci.yml@refs/heads/my/feature", ".github/workflows/ci.yml"},
+		{"tag ref", "octocat/hello-world/.github/workflows/release.yaml@refs/tags/v1.2.3", ".github/workflows/release.yaml"},
+		{"unset", "", ""},
+		{"owner and repo only", "octocat/hello-world@refs/heads/main", ""},
+		{"no ref suffix still yields the path", "octocat/hello-world/.github/workflows/ci.yml", ".github/workflows/ci.yml"},
+		{"malformed is not an error, just unusable", "nonsense", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(WorkflowRefEnvVar, tt.workflowRef)
+			assert.Equal(t, tt.want, DefaultWorkflowFile())
+		})
+	}
+}
+
+func TestDefaultJobID(t *testing.T) {
+	t.Setenv(JobIDEnvVar, "build")
+	assert.Equal(t, "build", DefaultJobID())
+
+	t.Setenv(JobIDEnvVar, "")
+	assert.Empty(t, DefaultJobID())
+}
+
+func TestExcludeDeliveryAction(t *testing.T) {
+	tests := []struct {
+		name      string
+		refs      []ActionRef
+		wantRepos []string
+	}{
+		{
+			name: "the delivery action is dropped at any ref",
+			refs: []ActionRef{
+				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
+				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "9a4c2881"},
+				{Owner: "actions", Repo: "checkout", Ref: "v4"},
+			},
+			wantRepos: []string{"checkout"},
+		},
+		{
+			name: "other jfrog actions are still curated",
+			refs: []ActionRef{
+				{Owner: "jfrog", Repo: "frogbot", Ref: "v2"},
+				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
+			},
+			wantRepos: []string{"frogbot"},
+		},
+		{
+			name: "a same-named action from another owner is still curated",
+			refs: []ActionRef{
+				{Owner: "not-jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
+			},
+			wantRepos: []string{"setup-jfrog-cli"},
+		},
+		{
+			name:      "a cache holding only the delivery action leaves nothing to curate",
+			refs:      []ActionRef{{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"}},
+			wantRepos: nil,
+		},
+		{
+			name:      "no refs stays empty",
+			refs:      nil,
+			wantRepos: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kept := ExcludeDeliveryAction(tt.refs)
+			repos := make([]string, len(kept))
+			for i, ref := range kept {
+				repos[i] = ref.Repo
+			}
+			if tt.wantRepos == nil {
+				assert.Empty(t, repos)
+				return
+			}
+			assert.Equal(t, tt.wantRepos, repos)
+		})
+	}
+}
+
+func TestExcludeDeliveryAction_PreservesTransitiveAttribution(t *testing.T) {
+	// Excluding the delivery action must not orphan anything it pulled in: attribution runs
+	// before this filter, so a child keeps its Parent even though that parent is not reported.
+	kept := ExcludeDeliveryAction([]ActionRef{
+		{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
+		{Owner: "some-org", Repo: "pulled-in-by-delivery", Ref: "v1", Parent: "jfrog/setup-jfrog-cli@v4"},
+	})
+
+	if assert.Len(t, kept, 1) {
+		assert.Equal(t, "pulled-in-by-delivery", kept[0].Repo)
+		assert.Equal(t, "jfrog/setup-jfrog-cli@v4", kept[0].Parent, "attribution must survive the exclusion")
+	}
+}

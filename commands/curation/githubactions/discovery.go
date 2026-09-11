@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
@@ -11,6 +12,18 @@ import (
 // RunnerWorkspaceEnvVar is the env var GitHub Actions sets to the runner's workspace directory
 // (e.g. /home/runner/work/<repo>). _actions is a sibling of this directory.
 const RunnerWorkspaceEnvVar = "RUNNER_WORKSPACE"
+
+// WorkflowRefEnvVar is the env var GitHub Actions sets to the ref path of the running workflow,
+// e.g. "octocat/hello-world/.github/workflows/ci.yml@main".
+const WorkflowRefEnvVar = "GITHUB_WORKFLOW_REF"
+
+// JobIDEnvVar is the env var GitHub Actions sets to the job_id of the running job - the key
+// under `jobs:` in the workflow YAML.
+const JobIDEnvVar = "GITHUB_JOB"
+
+// GithubRepoEnvVar is the env var GitHub Actions sets to the repository running the job, in
+// "<owner>/<repo>" form.
+const GithubRepoEnvVar = "GITHUB_REPOSITORY"
 
 // ActionRef is one resolved action instance found in the runner's action cache.
 type ActionRef struct {
@@ -100,4 +113,58 @@ func DefaultActionsCacheDir() (string, error) {
 		return "", fmt.Errorf("%s is not set - cannot derive the actions cache directory", RunnerWorkspaceEnvVar)
 	}
 	return filepath.Join(runnerWorkspace, "..", "_actions"), nil
+}
+
+// DefaultWorkflowFile derives the repo-relative path of the running workflow from
+// GITHUB_WORKFLOW_REF, whose shape is "<owner>/<repo>/<path/to/workflow.yml>@<ref>".
+//
+// Returns "" - never an error - when the variable is unset or doesn't have that shape. An
+// unrecognized value must not fail the command: the caller falls back to curating the action
+// cache structure alone, without parent attribution.
+func DefaultWorkflowFile() string {
+	workflowRef := os.Getenv(WorkflowRefEnvVar)
+	if workflowRef == "" {
+		return ""
+	}
+	// The trailing "@<ref>" is a git ref and may itself contain "/" (refs/heads/my/branch).
+	if atIdx := strings.LastIndex(workflowRef, "@"); atIdx >= 0 {
+		workflowRef = workflowRef[:atIdx]
+	}
+	// Drop the leading "<owner>/<repo>/"; the rest is the path within the repository.
+	segments := strings.SplitN(workflowRef, "/", 3)
+	if len(segments) < 3 || segments[2] == "" {
+		log.Debug(fmt.Sprintf("github-actions curation: %s=%q is not in <owner>/<repo>/<path>@<ref> form - cannot derive the workflow file from it", WorkflowRefEnvVar, os.Getenv(WorkflowRefEnvVar)))
+		return ""
+	}
+	return segments[2]
+}
+
+// DefaultJobID returns the running job's job_id from GITHUB_JOB, or "" when unset.
+func DefaultJobID() string {
+	return os.Getenv(JobIDEnvVar)
+}
+
+// DefaultGithubRepo returns the running job's repository from GITHUB_REPOSITORY ("<owner>/<repo>"),
+// or "" when unset.
+func DefaultGithubRepo() string {
+	return os.Getenv(GithubRepoEnvVar)
+}
+
+const (
+	deliveryActionOwner = "jfrog"
+	deliveryActionRepo  = "setup-jfrog-cli"
+)
+
+// ExcludeDeliveryAction drops jfrog/setup-jfrog-cli from refs, at any ref, so it is neither
+// decided nor reported.
+func ExcludeDeliveryAction(refs []ActionRef) []ActionRef {
+	kept := make([]ActionRef, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Owner == deliveryActionOwner && ref.Repo == deliveryActionRepo {
+			log.Debug(fmt.Sprintf("github-actions curation: skipping %s/%s@%s - it delivers and invokes this check rather than being subject to it", ref.Owner, ref.Repo, ref.Ref))
+			continue
+		}
+		kept = append(kept, ref)
+	}
+	return kept
 }

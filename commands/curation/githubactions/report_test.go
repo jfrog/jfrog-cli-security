@@ -1,6 +1,7 @@
 package githubactions
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func TestNewActionReportRow_NoSubpath(t *testing.T) {
 	assert.Equal(t, "actions/checkout", row.Action)
 }
 
-func TestRenderMarkdownTable(t *testing.T) {
+func TestRenderMarkdownTable_Attributed(t *testing.T) {
 	rows := []ActionReportRow{
 		{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
 		{Action: "some-org/transitive-action", Ref: "v1", Parent: "github/codeql-action@v3", Status: "Rejected", Notes: "policy failure"},
@@ -45,7 +46,30 @@ func TestRenderMarkdownTable(t *testing.T) {
 		"| actions/checkout | v4 |  | Approved |  |\n" +
 		"| some-org/transitive-action | v1 | github/codeql-action@v3 | Rejected | policy failure |\n"
 
-	assert.Equal(t, want, RenderMarkdownTable(rows))
+	assert.Equal(t, want, RenderMarkdownTable(rows, true))
+}
+
+func TestRenderMarkdownTable_StructureOnlyOmitsParentColumn(t *testing.T) {
+	// No workflow file was available, so no Parent was attributed. The column must be gone
+	// rather than present-and-blank, which would read as "nothing pulled in transitively".
+	rows := []ActionReportRow{
+		{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
+		{Action: "some-org/some-action", Ref: "v1", Status: "Rejected", Notes: "policy failure"},
+	}
+
+	want := "" +
+		"| Action | Ref | Status | Notes |\n" +
+		"|--------|-----|--------|-------|\n" +
+		"| actions/checkout | v4 | Approved |  |\n" +
+		"| some-org/some-action | v1 | Rejected | policy failure |\n"
+
+	got := RenderMarkdownTable(rows, false)
+	assert.Equal(t, want, got)
+	assert.NotContains(t, got, "Parent")
+	// Header and every data row must agree on column count, or the table renders broken.
+	for _, line := range strings.Split(strings.TrimSuffix(got, "\n"), "\n") {
+		assert.Equal(t, 5, strings.Count(line, "|"), "row %q has the wrong cell count", line)
+	}
 }
 
 func TestAnyRejected(t *testing.T) {
