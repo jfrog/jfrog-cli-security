@@ -1,0 +1,5 @@
+name: 'Transitive Action'
+description: 'Only pulled in via codeql-action, not referenced directly in ci.yml'
+runs:
+  using: 'node20'
+  main: 'index.js'
