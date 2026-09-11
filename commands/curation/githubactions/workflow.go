@@ -1,12 +1,14 @@
 package githubactions
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,10 +57,27 @@ func parseUsesString(raw string) (WorkflowUse, bool) {
 	return WorkflowUse{Owner: segments[0], Repo: segments[1], Subpath: subpath, Ref: ref, Raw: raw}, true
 }
 
-// ParseWorkflowUses parses every step-level `uses:` value out of one workflow YAML file.
-// Local actions (uses: ./path) and Docker-URI actions (uses: docker://...) are skipped
-// Reusable workflows are also ignored.
-func ParseWorkflowUses(workflowPath string) ([]WorkflowUse, error) {
+// ErrJobUnknown reports that the job being curated could not be identified in this workflow
+// file - either no job id was given, or the file does not declare the one that was.
+//
+// It is not a failure of the run. Each job executes on its own runner with its own _actions
+// cache, so the cache already is this job's action list; the workflow file only ever adds
+// attribution on top of it. Callers treat this as "cannot attribute" and curate the cache as-is.
+var ErrJobUnknown = errors.New("cannot identify the job being curated in the workflow file")
+
+// ParseWorkflowUses parses the step-level `uses:` values of ONE job in a workflow YAML file.
+// Local actions (uses: ./path) and Docker-URI actions (uses: docker://...) are skipped.
+//
+// jobID must name a job the file declares; otherwise ParseWorkflowUses returns ErrJobUnknown and
+// parses nothing. It never falls back to the file's other jobs, and there is no "read them all"
+// mode: every other job in the file ran on its own runner with its own action cache, so what
+// they declare says nothing about what this job resolved. Attributing from them mislabels at
+// best, and - because the result also drives FilterRelevant - drops actions this job really
+// used at worst.
+//
+// So attribution needs both a workflow file and a job id. On a runner that is no constraint:
+// GITHUB_JOB is always set. Without one, the caller curates the action cache as-is.
+func ParseWorkflowUses(workflowPath, jobID string) ([]WorkflowUse, error) {
 	data, err := os.ReadFile(workflowPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading workflow file %q: %w", workflowPath, err)
@@ -67,43 +86,19 @@ func ParseWorkflowUses(workflowPath string) ([]WorkflowUse, error) {
 	if err = yaml.Unmarshal(data, &wf); err != nil {
 		return nil, fmt.Errorf("parsing workflow file %q: %w", workflowPath, err)
 	}
-	var uses []WorkflowUse
-	for _, job := range wf.Jobs {
-		for _, step := range job.Steps {
-			if parsed, ok := parseUsesString(step.Uses); ok {
-				uses = append(uses, parsed)
-			}
-		}
+	if jobID == "" {
+		return nil, fmt.Errorf("%w: no job id given for %q", ErrJobUnknown, workflowPath)
 	}
-	return uses, nil
-}
-
-// ParseWorkflowsDir aggregates ParseWorkflowUses over every *.yml/*.yaml file directly under
-// workflowsDir (typically <repo>/.github/workflows). A malformed individual workflow file is
-// logged and skipped - best effort, matching DiscoverActionCache's defensive-skip behavior.
-func ParseWorkflowsDir(workflowsDir string) ([]WorkflowUse, error) {
-	entries, err := os.ReadDir(workflowsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("reading workflows dir %q: %w", workflowsDir, err)
+	job, declared := wf.Jobs[jobID]
+	if !declared {
+		return nil, fmt.Errorf("%w: %q is not among %v in %q", ErrJobUnknown, jobID, slices.Sorted(maps.Keys(wf.Jobs)), workflowPath)
 	}
+	// One job's steps: a slice, so the order is the file's, with no map iteration to sort away.
 	var uses []WorkflowUse
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	for _, step := range job.Steps {
+		if parsed, ok := parseUsesString(step.Uses); ok {
+			uses = append(uses, parsed)
 		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
-			continue
-		}
-		parsed, err := ParseWorkflowUses(filepath.Join(workflowsDir, name))
-		if err != nil {
-			log.Debug(fmt.Sprintf("github-actions curation: skipping workflow file %q: %v", name, err))
-			continue
-		}
-		uses = append(uses, parsed...)
 	}
 	return uses, nil
 }
@@ -167,6 +162,8 @@ func parseCompositeActionUses(actionPath string) ([]WorkflowUse, error) {
 //
 // KNOWN LIMITATION: an action that pulls in others via a run: step instead of its own action.yml
 // uses: is not attributed - such entries are left with Parent == "" - never guessed.
+//
+// Actions used by a called reusable workflow (jobs.<id>.uses:) are never attributed here either
 func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
 	byKey := make(map[string]int, len(discovered))
 	for i := range discovered {

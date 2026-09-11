@@ -15,7 +15,7 @@ import (
 func TestParseWorkflowUses(t *testing.T) {
 	workflowPath := filepath.Join(fixturesRoot, "curation-project", ".github", "workflows", "ci.yml")
 
-	uses, err := ParseWorkflowUses(workflowPath)
+	uses, err := ParseWorkflowUses(workflowPath, "build")
 	assert.NoError(t, err)
 
 	sort.Slice(uses, func(i, j int) bool { return uses[i].Owner+uses[i].Repo < uses[j].Owner+uses[j].Repo })
@@ -232,7 +232,7 @@ func TestCrossReference_TransitiveParentAttributedFromCompositeActionYml(t *test
 	assert.NoError(t, err)
 
 	workflowPath := filepath.Join(fixturesRoot, "curation-project", ".github", "workflows", "ci.yml")
-	used, err := ParseWorkflowUses(workflowPath)
+	used, err := ParseWorkflowUses(workflowPath, "build")
 	assert.NoError(t, err)
 
 	got := CrossReference(discovered, used)
@@ -270,4 +270,117 @@ func TestFilterRelevant_DropsEntryUnrelatedToThisWorkflow(t *testing.T) {
 
 func TestFilterRelevant_EmptyDiscoveredStaysEmpty(t *testing.T) {
 	assert.Empty(t, FilterRelevant(nil, nil))
+}
+
+// writeWorkflows writes each name->content pair as a file in a fresh temp dir and returns it.
+func writeWorkflows(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0600))
+	}
+	return dir
+}
+
+// jobWithUses renders a minimal workflow job declaring one uses: step per ref.
+func jobWithUses(jobID string, refs ...string) string {
+	job := "  " + jobID + ":\n    steps:\n"
+	for _, ref := range refs {
+		job += "      - uses: " + ref + "\n"
+	}
+	return job
+}
+
+func TestParseWorkflowUses_ScopesToTheRunningJob(t *testing.T) {
+	// The command curates the job it runs in. An action referenced only by a sibling job in
+	// the same workflow file is not part of this job's dependency graph.
+	dir := writeWorkflows(t, map[string]string{
+		"ci.yml": "jobs:\n" +
+			jobWithUses("build", "actions/checkout@v4") +
+			jobWithUses("publish", "actions/upload-artifact@v4"),
+	})
+	workflowPath := filepath.Join(dir, "ci.yml")
+
+	tests := []struct {
+		name      string
+		jobID     string
+		wantRepos []string
+	}{
+		{"scoped to build", "build", []string{"checkout"}},
+		{"scoped to publish", "publish", []string{"upload-artifact"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uses, err := ParseWorkflowUses(workflowPath, tt.jobID)
+			require.NoError(t, err)
+			assert.ElementsMatch(t, tt.wantRepos, repoNames(uses))
+		})
+	}
+}
+
+func TestParseWorkflowUses_SubpathOrderIsStable(t *testing.T) {
+	// A monorepo action invoked twice in the same job collapses to one cache entry carrying both
+	// subpaths, and that order is rendered into the report's Action cell. Steps are a slice, so
+	// the order is the file's - this pins that nothing downstream reintroduces map iteration.
+	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
+		"ci.yml": "jobs:\n" + jobWithUses("build",
+			"github/codeql-action/init@v3", "github/codeql-action/analyze@v3"),
+	}), "ci.yml")
+
+	seen := map[string]bool{}
+	for range 200 {
+		used, err := ParseWorkflowUses(workflowPath, "build")
+		require.NoError(t, err)
+		got := CrossReference([]ActionRef{{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: "/nonexistent"}}, used)
+		seen[NewActionReportRow(got[0], ActionCurationResult{Status: ActionApproved}).Action] = true
+	}
+	assert.Equal(t, map[string]bool{"github/codeql-action (init, analyze)": true}, seen,
+		"the rendered report cell must follow the file's step order, every run")
+}
+
+func repoNames(uses []WorkflowUse) []string {
+	if len(uses) == 0 {
+		return nil
+	}
+	repos := make([]string, len(uses))
+	for i, u := range uses {
+		repos[i] = u.Repo
+	}
+	return repos
+}
+
+func TestParseWorkflowUses_UnknownJobIsNotSilentlyWidened(t *testing.T) {
+	// A job this file does not declare ran somewhere else, on its own runner. What the file's
+	// other jobs declare says nothing about it, so attributing from them is worse than not
+	// attributing at all - the caller is told it cannot attribute, and curates the cache as-is.
+	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
+		"ci.yml": "jobs:\n" +
+			jobWithUses("build", "actions/checkout@v4") +
+			jobWithUses("publish", "actions/upload-artifact@v4"),
+	}), "ci.yml")
+
+	uses, err := ParseWorkflowUses(workflowPath, "a-job-declared-somewhere-else")
+
+	assert.ErrorIs(t, err, ErrJobUnknown)
+	assert.Empty(t, uses, "no uses: may be returned from jobs that ran on other runners")
+	// The message names what was looked for and what the file actually has, so the mismatch is
+	// diagnosable from the log alone.
+	assert.ErrorContains(t, err, "a-job-declared-somewhere-else")
+	assert.ErrorContains(t, err, "build")
+	assert.ErrorContains(t, err, "publish")
+}
+
+func TestParseWorkflowUses_NoJobIdIsAlsoUnknown(t *testing.T) {
+	// Attribution needs to know which job it is describing. On a runner GITHUB_JOB is always
+	// set, so this is the local-invocation case - and reading every job in the file instead
+	// would attribute from jobs that ran on other runners, which is the same mistake as
+	// falling back on an undeclared job id.
+	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
+		"ci.yml": "jobs:\n" + jobWithUses("build", "actions/checkout@v4"),
+	}), "ci.yml")
+
+	uses, err := ParseWorkflowUses(workflowPath, "")
+
+	assert.ErrorIs(t, err, ErrJobUnknown)
+	assert.Empty(t, uses)
 }

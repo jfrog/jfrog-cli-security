@@ -1,6 +1,7 @@
 package githubactions
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -14,13 +15,13 @@ func TestMockActionCurationDecider_TimestampParity(t *testing.T) {
 	oddSecond := time.Unix(1001, 0)  // odd
 
 	approvedDecider := &mockActionCurationDecider{now: func() time.Time { return evenSecond }}
-	result, err := approvedDecider.Decide(ref)
+	result, err := approvedDecider.Decide(context.Background(), "vcs-repo", ref)
 	assert.NoError(t, err)
 	assert.Equal(t, ActionApproved, result.Status)
 	assert.Empty(t, result.Notes)
 
 	rejectedDecider := &mockActionCurationDecider{now: func() time.Time { return oddSecond }}
-	result, err = rejectedDecider.Decide(ref)
+	result, err = rejectedDecider.Decide(context.Background(), "vcs-repo", ref)
 	assert.NoError(t, err)
 	assert.Equal(t, ActionRejected, result.Status)
 	assert.NotEmpty(t, result.Notes)

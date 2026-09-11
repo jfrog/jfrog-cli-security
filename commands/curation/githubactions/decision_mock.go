@@ -1,6 +1,7 @@
 package githubactions
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -27,7 +28,7 @@ func NewMockActionCurationDecider() *mockActionCurationDecider {
 	return &mockActionCurationDecider{now: time.Now}
 }
 
-func (m *mockActionCurationDecider) Decide(ref ActionRef) (ActionCurationResult, error) {
+func (m *mockActionCurationDecider) Decide(_ context.Context, _ string, ref ActionRef) (ActionCurationResult, error) {
 	if m.now().Unix()%2 == 0 {
 		return ActionCurationResult{Status: ActionApproved}, nil
 	}

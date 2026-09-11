@@ -173,6 +173,8 @@ const (
 	// Unique curate-gh-actions flags
 	ActionsCacheDir = "actions-cache-dir"
 	WorkflowFile    = "workflow-file"
+	WorkflowJob     = "workflow-job"
+	GithubRepo      = "github-repo"
 
 	// Unique git flags
 	gitPrefix       = "git-"
@@ -240,7 +242,7 @@ var commandFlags = map[string][]string{
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
 	},
 	CurationActions: {
-		WorkingDirs, ActionsCacheDir, WorkflowFile,
+		WorkingDirs, ActionsCacheDir, WorkflowFile, WorkflowJob, GithubRepo,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
@@ -384,7 +386,9 @@ var flagsMap = map[string]components.Flag{
 	Workspace:        components.NewStringFlag(Workspace, "Optional workspace name for repositories with multiple config profiles. Used with the repository URL to fetch the matching config profile from the JFrog Platform."),
 
 	ActionsCacheDir: components.NewStringFlag(ActionsCacheDir, "Overrides the runner's GitHub Actions cache directory (defaults to the _actions directory derived from RUNNER_WORKSPACE). Mainly useful for local runs outside an actual GitHub Actions runner."),
-	WorkflowFile:    components.NewStringFlag(WorkflowFile, "Restricts curation to a single workflow YAML file instead of scanning every file under .github/workflows."),
+	WorkflowFile:    components.NewStringFlag(WorkflowFile, "Overrides the workflow YAML file to curate (defaults to the running workflow, derived from GITHUB_WORKFLOW_REF). A relative path resolves against the working directory."),
+	WorkflowJob:     components.NewStringFlag(WorkflowJob, "Overrides the workflow job to curate, as its job_id key under 'jobs:' (defaults to the running job, from GITHUB_JOB)."),
+	GithubRepo:      components.NewStringFlag(GithubRepo, "The GitHub repository whose curation policies apply, as '<owner>/<repo>' (defaults to the running repository, from GITHUB_REPOSITORY)."),
 
 	// Docker flags
 	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
