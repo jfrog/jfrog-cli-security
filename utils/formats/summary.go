@@ -79,6 +79,12 @@ type BlockedPackages struct {
 // CuratedActions holds the GitHub Actions curation result for one job's workflow.
 type CuratedActions struct {
 	Actions []CuratedAction `json:"actions,omitempty"`
+	// Attributed reports whether a workflow file supplied the direct uses: references, which
+	// is what makes CuratedAction.Parent meaningful. When false, curation ran against the
+	// runner's action cache structure alone: every Parent is empty because attribution was not
+	// attempted, not because nothing was pulled in transitively. Renderers omit the Parent
+	// column entirely in that case rather than showing a column of blanks.
+	Attributed bool `json:"attributed"`
 }
 
 // CuratedAction is the curation outcome for one resolved GitHub Action.

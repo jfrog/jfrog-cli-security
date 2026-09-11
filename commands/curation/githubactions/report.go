@@ -31,19 +31,31 @@ func NewActionReportRow(ref ActionRef, result ActionCurationResult) ActionReport
 	}
 }
 
-// RenderMarkdownTable renders rows as a GitHub-flavored markdown table:
-// Action | Ref | Parent | Status | Notes
-func RenderMarkdownTable(rows []ActionReportRow) string {
+// RenderMarkdownTable renders rows as a GitHub-flavored markdown table.
+// withParent controls whether the Parent column appears at all.
+//
+// Columns:
+//
+//	withParent:  Action | Ref | Parent | Status | Notes
+//	otherwise:   Action | Ref | Status | Notes
+func RenderMarkdownTable(rows []ActionReportRow, withParent bool) string {
 	var sb strings.Builder
-	sb.WriteString("| Action | Ref | Parent | Status | Notes |\n")
-	sb.WriteString("|--------|-----|--------|--------|-------|\n")
+	if withParent {
+		sb.WriteString("| Action | Ref | Parent | Status | Notes |\n")
+		sb.WriteString("|--------|-----|--------|--------|-------|\n")
+	} else {
+		sb.WriteString("| Action | Ref | Status | Notes |\n")
+		sb.WriteString("|--------|-----|--------|-------|\n")
+	}
 	for _, row := range rows {
 		sb.WriteString("| ")
 		sb.WriteString(row.Action)
 		sb.WriteString(" | ")
 		sb.WriteString(row.Ref)
-		sb.WriteString(" | ")
-		sb.WriteString(row.Parent)
+		if withParent {
+			sb.WriteString(" | ")
+			sb.WriteString(row.Parent)
+		}
 		sb.WriteString(" | ")
 		sb.WriteString(row.Status)
 		sb.WriteString(" | ")

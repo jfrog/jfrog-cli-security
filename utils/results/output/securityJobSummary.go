@@ -12,9 +12,15 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
+
 	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -23,10 +29,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 const (
@@ -155,9 +157,12 @@ func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandRe
 // NewCurationActionsSummary wraps a GitHub Actions curation report for the job-summary
 // pipeline. It's recorded through the same "security" command-summary manager as
 // NewCurationSummary, not a separate one - see GenerateActionsCurationSectionMarkdown for why.
-func NewCurationActionsSummary(actions []formats.CuratedAction, target string) (summary ScanCommandResultSummary) {
+func NewCurationActionsSummary(actions []formats.CuratedAction, target string, attributed bool) (summary ScanCommandResultSummary) {
 	summary.ResultType = utils.CurationActions
-	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{Target: target, CuratedActions: &formats.CuratedActions{Actions: actions}}}}
+	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{
+		Target:         target,
+		CuratedActions: &formats.CuratedActions{Actions: actions, Attributed: attributed},
+	}}}
 	return
 }
 
@@ -447,23 +452,52 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 // collapsible details block, sibling to (not merged with) the package-curation table above -
 // the two report different things (actions vs. resolved dependency packages) with different
 // columns, so a shared table would lose information rather than simplify anything.
+//
+// The Parent column appears only when every scan in the data was attributed against a workflow
+// file (formats.CuratedActions.Attributed). A run with no workflow file has no attribution to
+// show, and a column of blanks would read as "nothing transitive" rather than "not attempted".
+// Mixed data - some scans attributed, some not - drops the column, since one table cannot
+// honestly caption both.
 func GenerateActionsCurationSectionMarkdown(actionsData []formats.ResultsSummary) (markdown string, err error) {
 	if !hasCurationActionsCommand(actionsData) {
 		return
 	}
-	markdown += "\n\n| Action | Ref | Parent | Status | Notes |\n|--------|-----|--------|--------|-------|"
+	withParent := allCuratedActionsAttributed(actionsData)
+	if withParent {
+		markdown += "\n\n| Action | Ref | Parent | Status | Notes |\n|--------|-----|--------|--------|-------|"
+	} else {
+		markdown += "\n\n| Action | Ref | Status | Notes |\n|--------|-----|--------|-------|"
+	}
 	for i := range actionsData {
 		for _, summary := range actionsData[i].Scans {
 			if !summary.HasCuratedActions() {
 				continue
 			}
 			for _, action := range summary.CuratedActions.Actions {
-				markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", action.Action, action.Ref, action.Parent, action.Status, action.Notes)
+				if withParent {
+					markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", action.Action, action.Ref, action.Parent, action.Status, action.Notes)
+					continue
+				}
+				markdown += fmt.Sprintf("\n| %s | %s | %s | %s |", action.Action, action.Ref, action.Status, action.Notes)
 			}
 		}
 	}
-	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 GitHub Actions Curation", markdown)
+	markdown = "\n" + DetailsOpenWithSummary.Format("GitHub Actions Curation", markdown)
 	return
+}
+
+// allCuratedActionsAttributed reports whether every scan carrying curated actions was
+// attributed against a workflow file. One unattributed scan is enough to drop the Parent
+// column for the whole table.
+func allCuratedActionsAttributed(data []formats.ResultsSummary) bool {
+	for _, summary := range data {
+		for _, scan := range summary.Scans {
+			if scan.HasCuratedActions() && !scan.CuratedActions.Attributed {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func hasCurationActionsCommand(data []formats.ResultsSummary) bool {
