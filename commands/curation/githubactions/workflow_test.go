@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,14 +34,14 @@ func TestParseUsesString(t *testing.T) {
 		want WorkflowUse
 		ok   bool
 	}{
-		{"simple", "actions/checkout@v4", WorkflowUse{Owner: "actions", Repo: "checkout", Ref: "v4", Raw: "actions/checkout@v4"}, true},
-		{"subpath", "github/codeql-action/analyze@v3", WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "analyze", Ref: "v3", Raw: "github/codeql-action/analyze@v3"}, true},
-		{"real monorepo action, another subpath of the same repo", "github/codeql-action/init@v3", WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "init", Ref: "v3", Raw: "github/codeql-action/init@v3"}, true},
-		{"nested subpath", "a/b/c/d@v1", WorkflowUse{Owner: "a", Repo: "b", Subpath: "c/d", Ref: "v1", Raw: "a/b/c/d@v1"}, true},
-		{"local action skipped", "./.github/actions/build-prep", WorkflowUse{}, false},
-		{"docker uri skipped", "docker://alpine:3", WorkflowUse{}, false},
-		{"no ref skipped", "actions/checkout", WorkflowUse{}, false},
-		{"empty skipped", "", WorkflowUse{}, false},
+		{"verify when the reference is owner repo and ref then it parses", "actions/checkout@v4", WorkflowUse{Owner: "actions", Repo: "checkout", Ref: "v4", Raw: "actions/checkout@v4"}, true},
+		{"verify when the reference carries a subpath then the subpath is captured", "github/codeql-action/analyze@v3", WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "analyze", Ref: "v3", Raw: "github/codeql-action/analyze@v3"}, true},
+		{"verify when another subpath of the same repo is used then it parses independently", "github/codeql-action/init@v3", WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "init", Ref: "v3", Raw: "github/codeql-action/init@v3"}, true},
+		{"verify when the subpath is nested then the whole remainder is captured", "a/b/c/d@v1", WorkflowUse{Owner: "a", Repo: "b", Subpath: "c/d", Ref: "v1", Raw: "a/b/c/d@v1"}, true},
+		{"verify when the reference is a local action then it is skipped", "./.github/actions/build-prep", WorkflowUse{}, false},
+		{"verify when the reference is a docker uri then it is skipped", "docker://alpine:3", WorkflowUse{}, false},
+		{"verify when the reference has no ref then it is skipped", "actions/checkout", WorkflowUse{}, false},
+		{"verify when the reference is empty then it is skipped", "", WorkflowUse{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,25 +52,6 @@ func TestParseUsesString(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCrossReference_DirectMatchSetsSubpath(t *testing.T) {
-	discovered := []ActionRef{{Owner: "actions", Repo: "checkout", Ref: "v4", Path: "/tmp/nonexistent"}}
-	used := []WorkflowUse{{Owner: "actions", Repo: "checkout", Ref: "v4", Subpath: ""}}
-
-	got := CrossReference(discovered, used)
-
-	assert.Empty(t, got[0].Subpaths)
-	assert.Empty(t, got[0].Parent)
-}
-
-func TestCrossReference_UnmatchedWithoutParentStaysEmpty(t *testing.T) {
-	discovered := []ActionRef{{Owner: "some-org", Repo: "mystery-action", Ref: "v1", Path: "/tmp/nonexistent"}}
-
-	got := CrossReference(discovered, nil)
-
-	assert.Empty(t, got[0].Subpaths)
-	assert.Empty(t, got[0].Parent, "an unmatched entry with no attributable parent must never be guessed")
 }
 
 // writeCompositeAction writes a composite action.yml at dir referencing usesRaw (empty for a
@@ -99,6 +81,225 @@ func buildChain(t *testing.T, n int) []ActionRef {
 		}
 	}
 	return discovered
+}
+
+// discoveredAction is one entry in a cross-reference case's action cache: the triple the walk
+// would have found, plus the action.yml bodies to plant under it keyed by subpath ("" for the
+// cache root). Expressing the fixture this way keeps the cases data rather than per-row setup.
+type discoveredAction struct {
+	key   string            // "owner/repo@ref"
+	yamls map[string]string // subpath -> action.yml body
+}
+
+// compositeYAML is an action.yml for a composite action whose single step references uses.
+func compositeYAML(uses string) string {
+	return "runs:\n  using: composite\n  steps:\n    - uses: " + uses + "\n"
+}
+
+// unreadableYAML is accepted by GitHub's runner but rejected by yaml.v3 (duplicate mapping keys).
+const unreadableYAML = "name: w\nname: w\nruns:\n  using: composite\n  steps:\n    - uses: actions/setup-node@v4\n"
+
+// buildDiscovered materializes each action into its own directory and returns the []ActionRef
+// CrossReference would have been handed.
+func buildDiscovered(t *testing.T, actions []discoveredAction) []ActionRef {
+	t.Helper()
+	refs := make([]ActionRef, 0, len(actions))
+	for _, a := range actions {
+		owner, rest, _ := strings.Cut(a.key, "/")
+		repo, ref, _ := strings.Cut(rest, "@")
+		dir := t.TempDir()
+		for subpath, body := range a.yamls {
+			target := filepath.Join(dir, filepath.FromSlash(subpath))
+			require.NoError(t, os.MkdirAll(target, 0755))
+			require.NoError(t, os.WriteFile(filepath.Join(target, "action.yml"), []byte(body), 0600))
+		}
+		refs = append(refs, ActionRef{Owner: owner, Repo: repo, Ref: ref, Path: dir})
+	}
+	return refs
+}
+
+func TestCrossReference(t *testing.T) {
+	tests := []struct {
+		name         string
+		discovered   []discoveredAction
+		used         []WorkflowUse
+		wantRepos    []string            // every entry that must survive; attribution is additive
+		wantParents  map[string]string   // repo -> Parent ("" means none may be guessed)
+		wantSubpaths map[string][]string // repo -> Subpaths
+	}{
+		{
+			name:         "verify when an entry is used directly then it gets no parent and no unused subpath",
+			discovered:   []discoveredAction{{key: "actions/checkout@v4"}},
+			used:         []WorkflowUse{{Owner: "actions", Repo: "checkout", Ref: "v4"}},
+			wantRepos:    []string{"checkout"},
+			wantParents:  map[string]string{"checkout": ""},
+			wantSubpaths: map[string][]string{"checkout": nil},
+		},
+		{
+			name:         "verify when no workflow explains an entry then its parent stays empty rather than guessed",
+			discovered:   []discoveredAction{{key: "some-org/mystery-action@v1"}},
+			wantRepos:    []string{"mystery-action"},
+			wantParents:  map[string]string{"mystery-action": ""},
+			wantSubpaths: map[string][]string{"mystery-action": nil},
+		},
+		{
+			name: "verify when an entry cannot be attributed then it is still not dropped",
+			discovered: []discoveredAction{
+				{key: "actions/checkout@v4"},
+				{key: "some-other-org/unexplained@v9"},
+			},
+			used:        []WorkflowUse{{Owner: "actions", Repo: "checkout", Ref: "v4"}},
+			wantRepos:   []string{"checkout", "unexplained"},
+			wantParents: map[string]string{"unexplained": ""},
+		},
+		{
+			// codeql-action is commonly invoked twice in one job, init@v3 then analyze@v3.
+			name:       "verify when a monorepo action is invoked via several subpaths then all of them are collected",
+			discovered: []discoveredAction{{key: "github/codeql-action@v3"}},
+			used: []WorkflowUse{
+				{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
+				{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
+			},
+			wantRepos:    []string{"codeql-action"},
+			wantSubpaths: map[string][]string{"codeql-action": {"init", "analyze"}},
+		},
+		{
+			name: "verify when a transitive reference carries a subpath then the subpath survives",
+			discovered: []discoveredAction{
+				{key: "my-org/wrapper-action@v1", yamls: map[string]string{"": compositeYAML("github/codeql-action/analyze@v3")}},
+				{key: "github/codeql-action@v3"},
+			},
+			used:         []WorkflowUse{{Owner: "my-org", Repo: "wrapper-action", Ref: "v1"}},
+			wantRepos:    []string{"wrapper-action", "codeql-action"},
+			wantParents:  map[string]string{"codeql-action": "my-org/wrapper-action@v1"},
+			wantSubpaths: map[string][]string{"codeql-action": {"analyze"}},
+		},
+		{
+			// The cache root is deliberately non-composite, so falling back to it would leave both
+			// transitive entries unattributed.
+			name: "verify when subpaths have their own metadata then each is read rather than the cache root",
+			discovered: []discoveredAction{
+				{key: "github/codeql-action@v3", yamls: map[string]string{
+					"":        "runs:\n  using: node20\n",
+					"init":    compositeYAML("org/from-init@v1"),
+					"analyze": compositeYAML("org/from-analyze@v1"),
+				}},
+				{key: "org/from-init@v1"},
+				{key: "org/from-analyze@v1"},
+			},
+			used: []WorkflowUse{
+				{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
+				{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
+			},
+			wantRepos: []string{"codeql-action", "from-init", "from-analyze"},
+			wantParents: map[string]string{
+				"from-init":    "github/codeql-action@v3",
+				"from-analyze": "github/codeql-action@v3",
+			},
+		},
+		{
+			name: "verify when a composite action.yml cannot be read then its child survives unattributed",
+			discovered: []discoveredAction{
+				{key: "some-org/wrapper@v1", yamls: map[string]string{"": unreadableYAML}},
+				{key: "actions/setup-node@v4"},
+			},
+			used:        []WorkflowUse{{Owner: "some-org", Repo: "wrapper", Ref: "v1"}},
+			wantRepos:   []string{"wrapper", "setup-node"},
+			wantParents: map[string]string{"setup-node": ""},
+		},
+		{
+			name:      "verify when nothing was discovered then nothing is returned",
+			wantRepos: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CrossReference(buildDiscovered(t, tt.discovered), tt.used)
+
+			byRepo := make(map[string]ActionRef, len(got))
+			repos := make([]string, len(got))
+			for i, ref := range got {
+				byRepo[ref.Repo] = ref
+				repos[i] = ref.Repo
+			}
+			assert.ElementsMatch(t, tt.wantRepos, repos, "attribution is additive - it may never drop an entry")
+			for repo, wantParent := range tt.wantParents {
+				assert.Equal(t, wantParent, byRepo[repo].Parent, "parent of %s", repo)
+			}
+			for repo, wantSubpaths := range tt.wantSubpaths {
+				assert.Equal(t, wantSubpaths, byRepo[repo].Subpaths, "subpaths of %s", repo)
+			}
+		})
+	}
+}
+
+func TestParseCompositeActionUses(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		why  string
+	}{
+		{
+			name: "verify when the action.yml cannot be parsed then nothing is attributed and the run continues",
+			yaml: unreadableYAML,
+			why:  "a file this parser cannot read attributes nothing, and is not a failure of the run",
+		},
+		{
+			name: "verify when the action is not composite then nothing is referenced",
+			yaml: "runs:\n  using: node20\n",
+			why:  "only composite actions declare uses: steps of their own",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "action.yml"), []byte(tt.yaml), 0600))
+
+			assert.Empty(t, parseCompositeActionUses(dir), tt.why)
+		})
+	}
+}
+
+func TestParseWorkflowUses_JobMustBeIdentified(t *testing.T) {
+	// Attribution needs to know which job it is describing. Every other job in the file ran on
+	// its own runner with its own cache, so attributing from them is worse than not attributing:
+	// it would label an entry with a parent that never pulled it in.
+	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
+		"ci.yml": "jobs:\n" +
+			jobWithUses("build", "actions/checkout@v4") +
+			jobWithUses("publish", "actions/upload-artifact@v4"),
+	}), "ci.yml")
+
+	tests := []struct {
+		name string
+		// jobID is the job to attribute against; "" is the local-invocation case, since a runner
+		// always sets GITHUB_JOB.
+		jobID string
+		// wantErrContains names what the message must surface so the mismatch is diagnosable
+		// from the log alone.
+		wantErrContains []string
+	}{
+		{
+			name:            "verify when the file does not declare the job then the error names it and the jobs that exist",
+			jobID:           "a-job-declared-somewhere-else",
+			wantErrContains: []string{"a-job-declared-somewhere-else", "build", "publish"},
+		},
+		{
+			name:  "verify when no job id is given then attribution is refused",
+			jobID: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uses, err := ParseWorkflowUses(workflowPath, tt.jobID)
+
+			assert.ErrorIs(t, err, ErrJobUnknown)
+			assert.Empty(t, uses, "no uses: may be returned from jobs that ran on other runners")
+			for _, want := range tt.wantErrContains {
+				assert.ErrorContains(t, err, want)
+			}
+		})
+	}
 }
 
 func TestCrossReference_LongChainFullyAttributedWithNoFixedDepthLimit(t *testing.T) {
@@ -150,86 +351,63 @@ func TestCrossReference_CycleDoesNotHang(t *testing.T) {
 	}
 }
 
-func TestCrossReference_TransitiveMonorepoReferenceKeepsItsSubpath(t *testing.T) {
-	// A composite action's own action.yml can itself reference a monorepo-style action (e.g.
-	// github/codeql-action/analyze@v3) - that transitive reference's subpath must survive
-	// CrossReference, not just its Parent.
-	parentPath := t.TempDir()
-	require := assert.New(t)
-	require.NoError(os.WriteFile(filepath.Join(parentPath, "action.yml"), []byte(""+
-		"runs:\n"+
-		"  using: composite\n"+
-		"  steps:\n"+
-		"    - uses: github/codeql-action/analyze@v3\n"), 0600))
+func TestCrossReference_SharedChildParentFollowsWorkflowOrder(t *testing.T) {
+	pathA, pathB, pathChild := t.TempDir(), t.TempDir(), t.TempDir()
+	writeCompositeAction(t, pathA, "org/shared-child@v1")
+	writeCompositeAction(t, pathB, "org/shared-child@v1")
 
-	discovered := []ActionRef{
-		{Owner: "my-org", Repo: "wrapper-action", Ref: "v1", Path: parentPath},
-		{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: "/tmp/nonexistent"},
+	seen := map[string]bool{}
+	for range 200 {
+		got := CrossReference(
+			[]ActionRef{
+				{Owner: "org", Repo: "parent-a", Ref: "v1", Path: pathA},
+				{Owner: "org", Repo: "parent-b", Ref: "v1", Path: pathB},
+				{Owner: "org", Repo: "shared-child", Ref: "v1", Path: pathChild},
+			},
+			[]WorkflowUse{
+				{Owner: "org", Repo: "parent-a", Ref: "v1"},
+				{Owner: "org", Repo: "parent-b", Ref: "v1"},
+			})
+		for _, ref := range got {
+			if ref.Repo == "shared-child" {
+				seen[ref.Parent] = true
+			}
+		}
 	}
-	used := []WorkflowUse{{Owner: "my-org", Repo: "wrapper-action", Ref: "v1"}}
 
-	got := CrossReference(discovered, used)
-
-	byRepo := map[string]ActionRef{}
-	for _, ref := range got {
-		byRepo[ref.Repo] = ref
-	}
-	assert.Equal(t, "my-org/wrapper-action@v1", byRepo["codeql-action"].Parent)
-	assert.Equal(t, []string{"analyze"}, byRepo["codeql-action"].Subpaths, "the transitive reference's own subpath must not be dropped")
+	assert.Equal(t, map[string]bool{"org/parent-a@v1": true}, seen,
+		"when two parents pull in the same child, the first in the file's order must win, every run")
 }
 
-func TestCrossReference_MonorepoActionInvokedViaMultipleSubpathsCollectsAll(t *testing.T) {
-	// github/codeql-action is commonly invoked twice in the same job - init@v3 then analyze@v3 -
-	// both resolving to the same single _actions/github/codeql-action/v3/ directory entry.
-	discovered := []ActionRef{{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: "/tmp/nonexistent"}}
-	used := []WorkflowUse{
-		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
+// Two refs of one monorepo, each invoked through a different subpath - github/codeql-action
+// init@v2 and analyze@v3. Subpaths are keyed on owner/repo@ref, so this has its own test rather
+// than a table row: TestCrossReference keys its expectations by repo alone, which cannot tell the
+// two apart.
+func TestCrossReference_SubpathsDoNotBleedBetweenRefsOfOneRepo(t *testing.T) {
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "github/codeql-action@v2"},
+		{key: "github/codeql-action@v3"},
+	})
+
+	got := CrossReference(discovered, []WorkflowUse{
+		{Owner: "github", Repo: "codeql-action", Ref: "v2", Subpath: "init"},
 		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
-	}
+	})
 
-	got := CrossReference(discovered, used)
-
-	assert.ElementsMatch(t, []string{"init", "analyze"}, got[0].Subpaths, "neither subpath invocation should be silently dropped")
-}
-
-func TestCrossReference_DifferentSubpathsResolveIndependentMetadata(t *testing.T) {
-	// Each subpath of a monorepo action has its OWN action.yml (<cache>/.../<ref>/<subpath>/action.yml).
-	// init@v3 and analyze@v3 here reference two different transitive actions - resolution must
-	// read each subpath's own file, not the cache root, or one of the two would be missed
-	// (or both would incorrectly resolve to whatever happens to be at the root).
-	actionRoot := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(actionRoot, "init"), 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(actionRoot, "analyze"), 0755))
-	writeCompositeAction(t, filepath.Join(actionRoot, "init"), "org/from-init@v1")
-	writeCompositeAction(t, filepath.Join(actionRoot, "analyze"), "org/from-analyze@v1")
-	// The cache root itself is deliberately non-composite and references neither - if
-	// resolution fell back to it, both transitive entries would go unattributed.
-	writeCompositeAction(t, actionRoot, "")
-
-	discovered := []ActionRef{
-		{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: actionRoot},
-		{Owner: "org", Repo: "from-init", Ref: "v1", Path: t.TempDir()},
-		{Owner: "org", Repo: "from-analyze", Ref: "v1", Path: t.TempDir()},
-	}
-	used := []WorkflowUse{
-		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
-		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
-	}
-
-	got := CrossReference(discovered, used)
-
-	byRepo := map[string]ActionRef{}
+	byRef := map[string][]string{}
 	for _, ref := range got {
-		byRepo[ref.Repo] = ref
+		byRef[ref.Ref] = ref.Subpaths
 	}
-	assert.Equal(t, "github/codeql-action@v3", byRepo["from-init"].Parent, "must be attributed via init's own action.yml")
-	assert.Equal(t, "github/codeql-action@v3", byRepo["from-analyze"].Parent, "must be attributed via analyze's own action.yml")
+	assert.Equal(t, map[string][]string{"v2": {"init"}, "v3": {"analyze"}}, byRef,
+		"each ref must carry only the subpath it was invoked through")
 }
 
 func TestCrossReference_TransitiveParentAttributedFromCompositeActionYml(t *testing.T) {
 	actionsDir := filepath.Join(fixturesRoot, "curation-project", "_work", "_actions")
-	discovered, err := DiscoverActionCache(actionsDir)
+	scan, err := DiscoverActionCache(actionsDir)
 	assert.NoError(t, err)
+	require.Empty(t, scan.Unaccounted)
+	discovered := scan.Refs
 
 	workflowPath := filepath.Join(fixturesRoot, "curation-project", ".github", "workflows", "ci.yml")
 	used, err := ParseWorkflowUses(workflowPath, "build")
@@ -248,28 +426,57 @@ func TestCrossReference_TransitiveParentAttributedFromCompositeActionYml(t *test
 	assert.Equal(t, "github/codeql-action@v3", byRepo["transitive-action"].Parent, "pulled in only via codeql-action's own action.yml")
 }
 
-func TestFilterRelevant_DropsEntryUnrelatedToThisWorkflow(t *testing.T) {
-	// some-other-org/leftover-action is present in the cache (e.g. a previous job's leftover on
-	// a reused self-hosted runner) but is neither directly used nor attributed a parent by
-	// CrossReference - it must be dropped, not decided.
-	discovered := []ActionRef{
-		{Owner: "actions", Repo: "checkout", Ref: "v4"},
-		{Owner: "org", Repo: "transitive", Ref: "v1", Parent: "actions/checkout@v4"},
-		{Owner: "some-other-org", Repo: "leftover-action", Ref: "v9"},
-	}
-	used := []WorkflowUse{{Owner: "actions", Repo: "checkout", Ref: "v4"}}
+func TestCrossReference_RootAndSubpathBothUsed_BothMetadataLocationsAreRead(t *testing.T) {
+	// github/codeql-action is invoked once at its root and once through a subpath in the same
+	// job. Both locations carry their own action.yml with a different transitive child, so both
+	// must be read - not just the subpath, which is what collectSubpaths' root-drop bug left out.
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "github/codeql-action@v3", yamls: map[string]string{
+			"":     compositeYAML("org/from-root@v1"),
+			"init": compositeYAML("org/from-init@v1"),
+		}},
+		{key: "org/from-root@v1"},
+		{key: "org/from-init@v1"},
+	})
 
-	got := FilterRelevant(discovered, used)
+	got := CrossReference(discovered, []WorkflowUse{
+		{Owner: "github", Repo: "codeql-action", Ref: "v3"},
+		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
+	})
 
-	repos := make([]string, len(got))
-	for i, ref := range got {
-		repos[i] = ref.Repo
+	byRepo := map[string]ActionRef{}
+	for _, ref := range got {
+		byRepo[ref.Repo] = ref
 	}
-	assert.ElementsMatch(t, []string{"checkout", "transitive"}, repos, "leftover-action is unrelated to this workflow and must be dropped")
+	assert.Equal(t, []string{"init"}, byRepo["codeql-action"].Subpaths, "the root use itself is not a subpath")
+	assert.Equal(t, "github/codeql-action@v3", byRepo["from-root"].Parent, "the root's own action.yml must be read, not skipped")
+	assert.Equal(t, "github/codeql-action@v3", byRepo["from-init"].Parent)
 }
 
-func TestFilterRelevant_EmptyDiscoveredStaysEmpty(t *testing.T) {
-	assert.Empty(t, FilterRelevant(nil, nil))
+func TestCrossReference_ChildReferencedByTwoParentsAtDifferentSubpaths_BothAreScanned(t *testing.T) {
+	// parent-a references shared-child@v1 directly (root), parent-b references it via a subpath.
+	// The first parent in file order wins Parent, but shared-child's own subpath metadata (pulled
+	// in only through parent-b's reference) must still be scanned rather than dropped once
+	// shared-child is already attributed via parent-a.
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "org/parent-a@v1", yamls: map[string]string{"": compositeYAML("org/shared-child@v1")}},
+		{key: "org/parent-b@v1", yamls: map[string]string{"": compositeYAML("org/shared-child/sub@v1")}},
+		{key: "org/shared-child@v1", yamls: map[string]string{"sub": compositeYAML("org/from-sub@v1")}},
+		{key: "org/from-sub@v1"},
+	})
+
+	got := CrossReference(discovered, []WorkflowUse{
+		{Owner: "org", Repo: "parent-a", Ref: "v1"},
+		{Owner: "org", Repo: "parent-b", Ref: "v1"},
+	})
+
+	byRepo := map[string]ActionRef{}
+	for _, ref := range got {
+		byRepo[ref.Repo] = ref
+	}
+	assert.Equal(t, "org/parent-a@v1", byRepo["shared-child"].Parent, "first parent in file order still wins")
+	assert.Equal(t, []string{"sub"}, byRepo["shared-child"].Subpaths, "parent-b's subpath reference must still be merged in")
+	assert.Equal(t, "org/shared-child@v1", byRepo["from-sub"].Parent, "shared-child/sub's own metadata must still be scanned")
 }
 
 // writeWorkflows writes each name->content pair as a file in a fresh temp dir and returns it.
@@ -306,8 +513,8 @@ func TestParseWorkflowUses_ScopesToTheRunningJob(t *testing.T) {
 		jobID     string
 		wantRepos []string
 	}{
-		{"scoped to build", "build", []string{"checkout"}},
-		{"scoped to publish", "publish", []string{"upload-artifact"}},
+		{"verify when the job is build then only its own uses are returned", "build", []string{"checkout"}},
+		{"verify when the job is publish then only its own uses are returned", "publish", []string{"upload-artifact"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -347,40 +554,4 @@ func repoNames(uses []WorkflowUse) []string {
 		repos[i] = u.Repo
 	}
 	return repos
-}
-
-func TestParseWorkflowUses_UnknownJobIsNotSilentlyWidened(t *testing.T) {
-	// A job this file does not declare ran somewhere else, on its own runner. What the file's
-	// other jobs declare says nothing about it, so attributing from them is worse than not
-	// attributing at all - the caller is told it cannot attribute, and curates the cache as-is.
-	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
-		"ci.yml": "jobs:\n" +
-			jobWithUses("build", "actions/checkout@v4") +
-			jobWithUses("publish", "actions/upload-artifact@v4"),
-	}), "ci.yml")
-
-	uses, err := ParseWorkflowUses(workflowPath, "a-job-declared-somewhere-else")
-
-	assert.ErrorIs(t, err, ErrJobUnknown)
-	assert.Empty(t, uses, "no uses: may be returned from jobs that ran on other runners")
-	// The message names what was looked for and what the file actually has, so the mismatch is
-	// diagnosable from the log alone.
-	assert.ErrorContains(t, err, "a-job-declared-somewhere-else")
-	assert.ErrorContains(t, err, "build")
-	assert.ErrorContains(t, err, "publish")
-}
-
-func TestParseWorkflowUses_NoJobIdIsAlsoUnknown(t *testing.T) {
-	// Attribution needs to know which job it is describing. On a runner GITHUB_JOB is always
-	// set, so this is the local-invocation case - and reading every job in the file instead
-	// would attribute from jobs that ran on other runners, which is the same mistake as
-	// falling back on an undeclared job id.
-	workflowPath := filepath.Join(writeWorkflows(t, map[string]string{
-		"ci.yml": "jobs:\n" + jobWithUses("build", "actions/checkout@v4"),
-	}), "ci.yml")
-
-	uses, err := ParseWorkflowUses(workflowPath, "")
-
-	assert.ErrorIs(t, err, ErrJobUnknown)
-	assert.Empty(t, uses)
 }
