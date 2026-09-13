@@ -23,44 +23,94 @@ func writeSummaryDataFile(t *testing.T, content ScanCommandResultSummary) string
 	return filePath
 }
 
-func TestGenerateActionsCurationSectionMarkdown_NoData(t *testing.T) {
-	markdown, err := GenerateActionsCurationSectionMarkdown(nil)
-	assert.NoError(t, err)
-	assert.Empty(t, markdown)
-}
-
-func TestGenerateActionsCurationSectionMarkdown_ApprovedAndRejected(t *testing.T) {
-	data := []formats.ResultsSummary{
-		{Scans: []formats.ScanSummary{{
-			Target: ".github/workflows/ci.yml",
-			CuratedActions: &formats.CuratedActions{
-				Attributed: true,
-				Actions: []formats.CuratedAction{
-					{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
-					{Action: "some-org/transitive-action", Ref: "v1", Parent: "github/codeql-action@v3", Status: "Rejected", Notes: "policy failure"},
-				},
-			},
-		}}},
+func TestGenerateActionsCurationSectionMarkdown(t *testing.T) {
+	actions := func(attributed bool, entries ...formats.CuratedAction) *formats.CuratedActions {
+		return &formats.CuratedActions{Attributed: attributed, Actions: entries}
 	}
+	tests := []struct {
+		name string
+		data []formats.ResultsSummary
+		// wantEmpty covers the cases the append in GenerateMarkdownFromFiles depends on: they must
+		// return the empty string, not a newline and not an empty collapsible block.
+		wantEmpty       bool
+		wantContains    []string
+		wantNotContains []string
+	}{
+		{name: "verify when there is no data then nothing is rendered", data: nil, wantEmpty: true},
+		{name: "verify when the result set is empty then nothing is rendered", data: []formats.ResultsSummary{}, wantEmpty: true},
+		{
+			name: "verify when only package-curation data is present then nothing is rendered",
+			data: []formats.ResultsSummary{{Scans: []formats.ScanSummary{
+				{Target: "npm-project", CuratedPackages: &formats.CuratedPackages{PackageCount: 1}},
+			}}},
+			wantEmpty: true,
+		},
+		{
+			name: "verify when every scan was attributed then the Parent column is rendered",
+			data: []formats.ResultsSummary{{Scans: []formats.ScanSummary{{
+				Target: ".github/workflows/ci.yml",
+				CuratedActions: actions(true,
+					formats.CuratedAction{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
+					formats.CuratedAction{Action: "some-org/transitive-action", Ref: "v1", Parent: "github/codeql-action@v3", Status: "Rejected", Notes: "policy failure"},
+				),
+			}}}},
+			wantContains: []string{
+				"GitHub Actions Curation", "| Action | Ref | Parent | Status | Notes |",
+				"actions/checkout", "Approved",
+				"some-org/transitive-action", "github/codeql-action@v3", "Rejected", "policy failure",
+			},
+		},
+		{
+			name: "verify when no scan was attributed then the Parent column is omitted",
+			data: []formats.ResultsSummary{{Scans: []formats.ScanSummary{{
+				Target: "/home/runner/work/_actions",
+				CuratedActions: actions(false,
+					formats.CuratedAction{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
+					formats.CuratedAction{Action: "some-org/some-action", Ref: "v1", Status: "Rejected", Notes: "policy failure"},
+				),
+			}}}},
+			wantContains:    []string{"GitHub Actions Curation", "| Action | Ref | Status | Notes |", "actions/checkout", "policy failure"},
+			wantNotContains: []string{"Parent"},
+		},
+		{
+			// Two recorded runs, which is the shape loadContent produces - one summary per data
+			// file, each carrying the single scan NewCurationActionsSummary emits. One
+			// unattributed run is enough: a single table cannot honestly caption both.
+			name: "verify when attribution is mixed then the Parent column is dropped for the whole table",
+			data: []formats.ResultsSummary{
+				{Scans: []formats.ScanSummary{{Target: "ci.yml", CuratedActions: actions(true, formats.CuratedAction{Action: "a/b", Ref: "v1", Parent: "c/d@v2", Status: "Approved"})}}},
+				{Scans: []formats.ScanSummary{{Target: "_actions", CuratedActions: actions(false, formats.CuratedAction{Action: "e/f", Ref: "v3", Status: "Approved"})}}},
+			},
+			wantContains:    []string{"| Action | Ref | Status | Notes |"},
+			wantNotContains: []string{"c/d@v2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			markdown, err := GenerateActionsCurationSectionMarkdown(tt.data)
+			assert.NoError(t, err)
 
-	markdown, err := GenerateActionsCurationSectionMarkdown(data)
-	assert.NoError(t, err)
-	assert.Contains(t, markdown, "GitHub Actions Curation")
-	assert.Contains(t, markdown, "| Action | Ref | Parent | Status | Notes |")
-	assert.Contains(t, markdown, "actions/checkout")
-	assert.Contains(t, markdown, "Approved")
-	assert.Contains(t, markdown, "some-org/transitive-action")
-	assert.Contains(t, markdown, "github/codeql-action@v3")
-	assert.Contains(t, markdown, "Rejected")
-	assert.Contains(t, markdown, "policy failure")
+			if tt.wantEmpty {
+				assert.Equal(t, "", markdown)
+				return
+			}
+			for _, want := range tt.wantContains {
+				assert.Contains(t, markdown, want)
+			}
+			for _, notWant := range tt.wantNotContains {
+				assert.NotContains(t, markdown, notWant)
+			}
+		})
+	}
 }
 
 func TestNewCurationActionsSummary(t *testing.T) {
-	summary := NewCurationActionsSummary([]formats.CuratedAction{{Action: "actions/checkout", Ref: "v4", Status: "Approved"}}, "ci.yml", true)
+	summary := NewCurationActionsSummary([]formats.CuratedAction{{Action: "actions/checkout", Ref: "v4", Status: "Approved"}}, true)
 
 	assert.Equal(t, "curate_gh_actions", string(summary.ResultType))
 	if assert.Len(t, summary.Summary.Scans, 1) {
-		assert.Equal(t, "ci.yml", summary.Summary.Scans[0].Target)
+		assert.Empty(t, summary.Summary.Scans[0].Target,
+			"Target names a scanned path; this command curates the runner's action cache, which no renderer shows")
 		assert.True(t, summary.Summary.Scans[0].HasCuratedActions())
 	}
 }
@@ -70,7 +120,7 @@ func TestSecurityJobSummary_GenerateMarkdownFromFiles_CombinesCurationAndActions
 		Target:          "npm-project",
 		CuratedPackages: &formats.CuratedPackages{PackageCount: 1},
 	}}}))
-	actionsFile := writeSummaryDataFile(t, NewCurationActionsSummary([]formats.CuratedAction{{Action: "actions/checkout", Ref: "v4", Status: "Approved"}}, "ci.yml", true))
+	actionsFile := writeSummaryDataFile(t, NewCurationActionsSummary([]formats.CuratedAction{{Action: "actions/checkout", Ref: "v4", Status: "Approved"}}, true))
 
 	js := &SecurityJobSummary{}
 	markdown, err := js.GenerateMarkdownFromFiles([]string{curationFile, actionsFile})
@@ -78,59 +128,6 @@ func TestSecurityJobSummary_GenerateMarkdownFromFiles_CombinesCurationAndActions
 	assert.Contains(t, markdown, "Curation Audit")
 	assert.Contains(t, markdown, "GitHub Actions Curation")
 	assert.True(t, strings.Index(markdown, "Curation Audit") < strings.Index(markdown, "GitHub Actions Curation"))
-}
-
-func TestGenerateActionsCurationSectionMarkdown_StructureOnlyOmitsParentColumn(t *testing.T) {
-	// Attributed: false - curation ran against the action cache structure alone, so there is
-	// no parent attribution to render and the column must not appear.
-	data := []formats.ResultsSummary{
-		{Scans: []formats.ScanSummary{{
-			Target: "/home/runner/work/_actions",
-			CuratedActions: &formats.CuratedActions{
-				Attributed: false,
-				Actions: []formats.CuratedAction{
-					{Action: "actions/checkout", Ref: "v4", Status: "Approved"},
-					{Action: "some-org/some-action", Ref: "v1", Status: "Rejected", Notes: "policy failure"},
-				},
-			},
-		}}},
-	}
-
-	markdown, err := GenerateActionsCurationSectionMarkdown(data)
-	assert.NoError(t, err)
-	assert.Contains(t, markdown, "GitHub Actions Curation")
-	assert.Contains(t, markdown, "| Action | Ref | Status | Notes |")
-	assert.NotContains(t, markdown, "Parent")
-	assert.Contains(t, markdown, "actions/checkout")
-	assert.Contains(t, markdown, "policy failure")
-}
-
-func TestGenerateActionsCurationSectionMarkdown_MixedAttributionDropsParentColumn(t *testing.T) {
-	// One unattributed scan is enough: a single table cannot honestly caption both, so the
-	// column goes rather than showing blanks for the scans that were never attributed.
-	data := []formats.ResultsSummary{
-		{Scans: []formats.ScanSummary{
-			{
-				Target: "ci.yml",
-				CuratedActions: &formats.CuratedActions{
-					Attributed: true,
-					Actions:    []formats.CuratedAction{{Action: "a/b", Ref: "v1", Parent: "c/d@v2", Status: "Approved"}},
-				},
-			},
-			{
-				Target: "_actions",
-				CuratedActions: &formats.CuratedActions{
-					Attributed: false,
-					Actions:    []formats.CuratedAction{{Action: "e/f", Ref: "v3", Status: "Approved"}},
-				},
-			},
-		}},
-	}
-
-	markdown, err := GenerateActionsCurationSectionMarkdown(data)
-	assert.NoError(t, err)
-	assert.Contains(t, markdown, "| Action | Ref | Status | Notes |")
-	assert.NotContains(t, markdown, "c/d@v2", "an attributed parent must not leak into a table with no Parent column")
 }
 
 func TestSecurityJobSummary_GenerateMarkdownFromFiles_CurationAuditOnlyIsUnchanged(t *testing.T) {
@@ -157,16 +154,32 @@ func TestSecurityJobSummary_GenerateMarkdownFromFiles_CurationAuditOnlyIsUnchang
 	assert.NotContains(t, combined, "GitHub Actions Curation")
 }
 
-func TestGenerateActionsCurationSectionMarkdown_NoActionsDataAddsNothing(t *testing.T) {
-	// The append is only safe because this returns the empty string, not a newline or an empty
-	// collapsible block, when no curate-gh-actions run contributed data.
-	for _, data := range [][]formats.ResultsSummary{
-		nil,
-		{},
-		{{Scans: []formats.ScanSummary{{Target: "npm-project", CuratedPackages: &formats.CuratedPackages{PackageCount: 1}}}}},
-	} {
-		markdown, err := GenerateActionsCurationSectionMarkdown(data)
-		assert.NoError(t, err)
-		assert.Equal(t, "", markdown)
+func TestGenerateActionsCurationSectionMarkdown_CellsThatWouldReshapeTheTableAreEscaped(t *testing.T) {
+	// Same contract as RenderMarkdownTable's console output: the job summary is rendered by
+	// GitHub, so an unescaped "|" or newline reshapes the table a reviewer actually reads.
+	data := []formats.ResultsSummary{
+		{Scans: []formats.ScanSummary{{
+			Target: ".github/workflows/ci.yml",
+			CuratedActions: &formats.CuratedActions{
+				Attributed: true,
+				Actions: []formats.CuratedAction{
+					{Action: "some-org/some-action", Ref: "feature|v2", Parent: "org/wrap|per@v1", Status: "Rejected", Notes: "blocked:\nCVE-2024-0001"},
+				},
+			},
+		}}},
+	}
+
+	markdown, err := GenerateActionsCurationSectionMarkdown(data)
+	assert.NoError(t, err)
+
+	assert.Contains(t, markdown, `feature\|v2`)
+	assert.Contains(t, markdown, `org/wrap\|per@v1`)
+	assert.Contains(t, markdown, "blocked:<br>CVE-2024-0001")
+	for _, line := range strings.Split(markdown, "\n") {
+		if !strings.HasPrefix(line, "| some-org/some-action") {
+			continue
+		}
+		assert.Equal(t, 6, strings.Count(line, "|")-strings.Count(line, `\|`),
+			"the data row must keep the header's cell count")
 	}
 }

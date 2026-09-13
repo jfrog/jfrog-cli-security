@@ -12,14 +12,15 @@ const mockVcsRepoSuffix = "-github-remote-stand-in"
 // which does not exist yet.
 type mockArtifactoryVcsRepoResolver struct{}
 
-// NewMockArtifactoryVcsRepoResolver returns the owner-derived stand-in resolver described above.
+// NewMockArtifactoryVcsRepoResolver returns a resolver that derives the repository key from
+// the GitHub owner.
 func NewMockArtifactoryVcsRepoResolver() ArtifactoryVcsRepoResolver {
 	return mockArtifactoryVcsRepoResolver{}
 }
 
 func (mockArtifactoryVcsRepoResolver) Resolve(_ context.Context, githubRepo string) (string, error) {
 	owner, repo, found := strings.Cut(githubRepo, "/")
-	if !found || owner == "" || repo == "" {
+	if !found || owner == "" || repo == "" || strings.Contains(repo, "/") {
 		return "", fmt.Errorf("github repository %q is not in <owner>/<repo> form", githubRepo)
 	}
 	return owner + mockVcsRepoSuffix, nil

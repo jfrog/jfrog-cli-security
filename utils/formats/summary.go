@@ -76,22 +76,19 @@ type BlockedPackages struct {
 	Packages  map[string]int `json:"packages"`
 }
 
-// CuratedActions holds the GitHub Actions curation result for one job's workflow.
+// CuratedActions holds the GitHub Actions curation result for one job.
 type CuratedActions struct {
 	Actions []CuratedAction `json:"actions,omitempty"`
-	// Attributed reports whether a workflow file supplied the direct uses: references, which
-	// is what makes CuratedAction.Parent meaningful. When false, curation ran against the
-	// runner's action cache structure alone: every Parent is empty because attribution was not
-	// attempted, not because nothing was pulled in transitively. Renderers omit the Parent
-	// column entirely in that case rather than showing a column of blanks.
+	// Attributed reports whether a workflow file is present to do parent attribution.
+	// else Parent column is dropped in the report.
 	Attributed bool `json:"attributed"`
 }
 
 // CuratedAction is the curation outcome for one resolved GitHub Action.
 type CuratedAction struct {
-	Action string `json:"action"`           // "owner/repo" (+ " (subpath[, subpath...])" if invoked via one or more subpaths)
-	Ref    string `json:"ref"`              // literal, uninterpreted
-	Parent string `json:"parent,omitempty"` // "" if directly referenced in the job's workflow or parent can not be determined
+	Action string `json:"action"`           // "owner/repo", plus " (subpath[, subpath...])" when invoked via subpaths
+	Ref    string `json:"ref"`              // verbatim from the cache directory name, uninterpreted
+	Parent string `json:"parent,omitempty"` // "" when directly referenced, or when attribution could not place it
 	Status string `json:"status"`
 	Notes  string `json:"notes,omitempty"`
 }
@@ -165,18 +162,6 @@ func (sc *ScanSummary) HasBlockedPackages() bool {
 
 func (sc *ScanSummary) HasCuratedActions() bool {
 	return sc.CuratedActions != nil && len(sc.CuratedActions.Actions) > 0
-}
-
-func (sc *ScanSummary) HasRejectedActions() bool {
-	if sc.CuratedActions == nil {
-		return false
-	}
-	for _, action := range sc.CuratedActions.Actions {
-		if action.Status == "Rejected" {
-			return true
-		}
-	}
-	return false
 }
 
 func (sc *ScanSummary) HasViolations() bool {

@@ -133,7 +133,7 @@ func getAuditAndScansCommands() []components.Command {
 			Action:        CurationCmd,
 		},
 		{
-			// Hidden until Catalog/Artifactory expose a package type for GitHub Actions. Until then the
+			// Hidden until Catalog/Artifactory add support for VCS package type for GitHub Actions. Until then the
 			// curation decision is a stand-in, so the command must not be discoverable to users.
 			Name:          "curate-gh-actions",
 			Flags:         flags.GetCommandFlags(flags.CurationActions),
@@ -658,14 +658,9 @@ func CurationCmd(c *components.Context) error {
 	return progressbar.ExecWithProgress(curationAuditCommand)
 }
 
-// CurationActionsCmd curates the GitHub Actions resolved on this job's runner. Unlike
-// CurationCmd, this doesn't audit a dependency tree, so there's no long-running operation to
-// wrap with a progress bar - Run() is called directly.
+// CurationActionsCmd curates the GitHub Actions resolved on this job's runner.
 func CurationActionsCmd(c *components.Context) error {
 	curationActionsCommand := curation.NewCurationActionsCommand()
-	if workingDirs := splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)); len(workingDirs) > 0 {
-		curationActionsCommand.SetWorkingDir(workingDirs[0])
-	}
 	if c.IsFlagSet(flags.ActionsCacheDir) {
 		curationActionsCommand.SetActionsCacheDir(c.GetStringFlagValue(flags.ActionsCacheDir))
 	}
