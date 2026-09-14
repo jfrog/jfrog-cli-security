@@ -678,7 +678,11 @@ func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditPar
 			log.Warn(fmt.Sprintf("Couldn't detect technologies in '%s' directory: %s", included, err.Error()))
 			continue
 		}
+		dirTechs := make([]techutils.Technology, 0, len(techToWorkingDirs))
 		for tech := range techToWorkingDirs {
+			dirTechs = append(dirTechs, tech)
+		}
+		for _, tech := range techutils.PromotePipToUv(dirTechs, included) {
 			detectedTechnologies.Add(tech)
 		}
 	}
@@ -704,6 +708,38 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 }
 
 // Old flow: creates targets from technologies detected in the working directories.
+// filterAmbiguousPipUvTargets drops, per working directory, whichever of Pip/Uv
+// techutils.PromotePipToUv rejects for that directory - the same ambiguity
+// detectTechnologiesInTarget resolves for the new BOM-generator flow. Without this, a
+// uv-managed working directory that also matches Pip's generic pyproject.toml indicator
+// would be scanned twice, once mislabeled.
+func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[string][]string) map[techutils.Technology]map[string][]string {
+	pipDirs, hasPip := techToWorkingDirs[techutils.Pip]
+	uvDirs, hasUv := techToWorkingDirs[techutils.Uv]
+	if !hasPip || !hasUv {
+		return techToWorkingDirs
+	}
+	for dir := range pipDirs {
+		if _, ambiguous := uvDirs[dir]; !ambiguous {
+			continue
+		}
+		promoted := techutils.PromotePipToUv([]techutils.Technology{techutils.Pip, techutils.Uv}, dir)
+		if !slices.Contains(promoted, techutils.Pip) {
+			delete(pipDirs, dir)
+		}
+		if !slices.Contains(promoted, techutils.Uv) {
+			delete(uvDirs, dir)
+		}
+	}
+	if len(pipDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Pip)
+	}
+	if len(uvDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Uv)
+	}
+	return techToWorkingDirs
+}
+
 func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	exclusions := params.Exclusions()
 	if configProfile := params.GetConfigProfile(); configProfile != nil {
@@ -734,6 +770,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 		} else {
+			techToWorkingDirs = filterAmbiguousPipUvTargets(techToWorkingDirs)
 			// Create scans to perform
 			for tech, workingDirs := range techToWorkingDirs {
 				if tech == techutils.Dotnet {

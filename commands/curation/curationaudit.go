@@ -709,45 +709,19 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	}
 }
 
-// Rule, in order:
-//  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
-//     poetry.lock) → Pip wins, Uv is dropped.
-//  2. Otherwise, any uv signal (uv.lock, pyproject.toml [tool.uv]/[[tool.uv.index]], or
-//     ~/.config/uv/uv.toml) → Uv wins, Pip is dropped.
+// The rule itself lives in techutils.PromotePipToUv, shared with the general 'jf audit'/'jf
+// scan' detection flow so both commands resolve the same Pip/Uv ambiguity identically.
 func promotePipToUv(techs []string) []string {
-	if !slices.Contains(techs, techutils.Pip.String()) {
-		return techs
-	}
 	dir, err := os.Getwd()
 	if err != nil {
 		return techs
 	}
-	for _, pipOnlyFile := range []string{"requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"} {
-		if _, statErr := os.Stat(filepath.Join(dir, pipOnlyFile)); statErr == nil {
-			return removeTech(techs, techutils.Uv.String())
-		}
+	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), dir)
+	result := make([]string, 0, len(promoted))
+	for _, t := range promoted {
+		result = append(result, t.String())
 	}
-
-	uvSignal := ""
-	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
-		uvSignal = "uv.lock detected"
-	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
-		(strings.Contains(string(data), "[tool.uv]") || strings.Contains(string(data), "[[tool.uv.index]]")) {
-		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.index]])"
-	} else if home, homeErr := os.UserHomeDir(); homeErr == nil {
-		if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
-			uvSignal = "~/.config/uv/uv.toml detected"
-		}
-	}
-	if uvSignal == "" {
-		return techs
-	}
-	log.Info(uvSignal + " — treating project as uv.")
-	techs = removeTech(techs, techutils.Pip.String())
-	if !slices.Contains(techs, techutils.Uv.String()) {
-		techs = append(techs, techutils.Uv.String())
-	}
-	return techs
+	return result
 }
 
 // dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.

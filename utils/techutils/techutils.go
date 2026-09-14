@@ -225,7 +225,7 @@ var technologiesData = map[Technology]TechData{
 		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
 		validators:         map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
 		packageDescriptors: []string{"setup.py", "requirements.txt", "pyproject.toml"},
-		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock", "uv.lock"},
+		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
 		projectType:        project.Pip,
 		language:           Python,
 	},
@@ -874,6 +874,61 @@ func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string]
 	if len(npmDirs) == 0 {
 		delete(technologiesDetected, Npm)
 	}
+}
+
+// PromotePipToUv resolves the ambiguity between Pip and Uv for a single working directory:
+// Pip's generic "pyproject.toml" indicator also matches a uv-managed project, since a uv
+// pyproject.toml carries neither a [tool.poetry] section nor a hatch/flit/pdm build-backend.
+// Rule, in order:
+//  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
+//     poetry.lock) → Pip wins, Uv is dropped.
+//  2. Otherwise, any uv signal (uv.lock, pyproject.toml [tool.uv]/[[tool.uv.index]], or
+//     ~/.config/uv/uv.toml) → Uv wins, Pip is dropped.
+//
+// dir is the working directory being evaluated - callers must pass it explicitly rather
+// than relying on the process's current directory, since a single process may evaluate
+// several targets without changing it.
+func PromotePipToUv(techs []Technology, dir string) []Technology {
+	if !containsTechnology(techs, Pip) {
+		return techs
+	}
+	for _, pipOnlyFile := range []string{"requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"} {
+		if _, statErr := os.Stat(filepath.Join(dir, pipOnlyFile)); statErr == nil {
+			return removeTechnology(techs, Uv)
+		}
+	}
+
+	uvSignal := ""
+	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
+		uvSignal = "uv.lock detected"
+	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
+		(strings.Contains(string(data), "[tool.uv]") || strings.Contains(string(data), "[[tool.uv.index]]")) {
+		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.index]])"
+	} else if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
+			uvSignal = "~/.config/uv/uv.toml detected"
+		}
+	}
+	if uvSignal == "" {
+		return techs
+	}
+	log.Info(uvSignal + " — treating project as uv.")
+	techs = removeTechnology(techs, Pip)
+	if !containsTechnology(techs, Uv) {
+		techs = append(techs, Uv)
+	}
+	return techs
+}
+
+// removeTechnology returns techs without any entry equal to tech.
+func removeTechnology(techs []Technology, tech Technology) []Technology {
+	filtered := make([]Technology, 0, len(techs))
+	for _, t := range techs {
+		if t != tech {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
 }
 
 // isYarnWorkspaceMemberDir reports whether dir is a yarn workspace member —
