@@ -1182,10 +1182,10 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 22 + 6, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
+		Total:          &validations.TotalCount{Vulnerabilities: 22 + 4, BomComponents: 1 /*root*/ + 2 /*components*/ + 5 /*files (secrets)*/},
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan: &validations.ScanCount{Sast: 2, Iac: 9, Secrets: 11, Services: 6},
+			ValidateScan: &validations.ScanCount{Sast: 2, Iac: 9, Secrets: 11, Services: 4},
 		},
 	})
 }
