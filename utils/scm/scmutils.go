@@ -73,8 +73,21 @@ func isScmProject(projectPath string, scmData ScmTypeData) (bool, error) {
 }
 
 // Normalize the URL for local repository metadata extraction.
+// Converts HTTP(S), ssh://, and SCP clone URLs to host/path form without
+// applying Xray git-repo-key rewrites (Azure v3 → _git).
 func normalizeGitUrl(raw string) string {
-	return strings.TrimSuffix(xscUtils.GetGitRepoUrlKey(raw), ".git")
+	if host, repoPath, ok := xscUtils.GitCloneHostPath(raw); ok {
+		normalized := host
+		if repoPath != "" {
+			normalized += "/" + repoPath
+		}
+		return strings.TrimSuffix(normalized, ".git")
+	}
+	// jfrog-ignore - false positive, not used for communication
+	raw = strings.TrimPrefix(raw, "http://")
+	raw = strings.TrimPrefix(raw, "https://")
+	raw = strings.TrimPrefix(raw, "ssh://")
+	return strings.TrimSuffix(raw, ".git")
 }
 
 func getGitRepoName(url string) string {
@@ -94,6 +107,14 @@ func getGitProject(url string) string {
 	for i := 1; i < len(urlParts)-1; i++ {
 		if i == 1 && urlParts[i] == "scm" {
 			// In BB ssh clone url looks like this: https://git.id.info/scm/repo-name/repo-name.git --> ['git.id.info', 'scm', 'repo-name', 'repo-name']
+			continue
+		}
+		if i == 1 && strings.EqualFold(urlParts[i], "v3") {
+			// Azure SSH: git@ssh.dev.azure.com:v3/Org/Project/Repo --> ['ssh.dev.azure.com', 'v3', 'Org', 'Project', 'Repo']
+			continue
+		}
+		if strings.EqualFold(urlParts[i], "_git") {
+			// Azure HTTPS: https://dev.azure.com/Org/Project/_git/Repo --> ['dev.azure.com', 'Org', 'Project', '_git', 'Repo']
 			continue
 		}
 		// Aws code commit clone url looks like this: https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name} --> ['git-codecommit.{region}.amazonaws.com', 'v1', 'repos', '{repository_name}']

@@ -237,6 +237,16 @@ func TestGetGitProject(t *testing.T) {
 			project: "jfrog",
 		},
 		{
+			name:    "Azure SSH",
+			url:     "git@ssh.dev.azure.com:v3/Org/Project/Repo",
+			project: "Org/Project",
+		},
+		{
+			name:    "Azure HTTPS",
+			url:     "https://dev.azure.com/Org/Project/_git/Repo.git",
+			project: "Org/Project",
+		},
+		{
 			name:    "Bitbucket Https",
 			url:     "https://git.id.info/scm/repo-name/repo-name.git",
 			project: "repo-name",

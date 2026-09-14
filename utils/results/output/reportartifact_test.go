@@ -119,6 +119,18 @@ func TestExtractBaseGitPath(t *testing.T) {
 			branch: "main",
 			want:   "github.com/jfrog/xray-url-canonical-e2e/main",
 		},
+		{
+			name:    "Malformed SCP missing repository path",
+			url:     "git@github.com:",
+			branch:  "main",
+			wantErr: true,
+		},
+		{
+			name:    "Malformed SSH missing repository path",
+			url:     "ssh://git@github.com",
+			branch:  "main",
+			wantErr: true,
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
