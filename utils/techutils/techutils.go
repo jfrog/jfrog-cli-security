@@ -920,7 +920,6 @@ func PromotePipToUv(techs []Technology, dir string) []Technology {
 	return techs
 }
 
-// removeTechnology returns techs without any entry equal to tech.
 func removeTechnology(techs []Technology, tech Technology) []Technology {
 	filtered := make([]Technology, 0, len(techs))
 	for _, t := range techs {
