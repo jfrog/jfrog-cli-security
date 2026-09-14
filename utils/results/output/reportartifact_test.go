@@ -77,10 +77,11 @@ func TestUploadViaXrayApi_ServerError_ReturnsError(t *testing.T) {
 
 func TestExtractBaseGitPath(t *testing.T) {
 	testCases := []struct {
-		name   string
-		url    string
-		branch string
-		want   string
+		name    string
+		url     string
+		branch  string
+		want    string
+		wantErr bool
 	}{
 		{
 			name:   "HTTPS",
@@ -90,9 +91,21 @@ func TestExtractBaseGitPath(t *testing.T) {
 		},
 		{
 			name:   "HTTPS credentials and port",
-			url:    "https://user:token@git.example.com:8443/jfrog/xray-url-canonical-e2e.git",
+			url:    "https://user:token@git.example.com:8443/jfrog/xray-url-canonical-e2e.git", // #nosec G101 -- test fixture, not a real credential
 			branch: "main",
 			want:   "git.example.com:8443/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "HTTPS dotted repository name",
+			url:    "https://github.com/jfrog/repo.v2",
+			branch: "main",
+			want:   "github.com/jfrog/repo.v2/main",
+		},
+		{
+			name:    "HTTPS missing repository path",
+			url:     "https://github.com",
+			branch:  "main",
+			wantErr: true,
 		},
 		{
 			name:   "SCP",
@@ -110,6 +123,10 @@ func TestExtractBaseGitPath(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			got, err := extractBaseGitPath(testCase.url, testCase.branch)
+			if testCase.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, testCase.want, got)
 		})

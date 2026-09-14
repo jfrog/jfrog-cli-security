@@ -150,7 +150,10 @@ func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
 		if err != nil || parsed.Host == "" {
 			return "", fmt.Errorf("failed to parse git clone URL %q", gitCloneUrl)
 		}
-		repoPath := strings.TrimSuffix(parsed.EscapedPath(), filepath.Ext(parsed.EscapedPath()))
+		repoPath := strings.TrimSuffix(parsed.EscapedPath(), ".git")
+		if strings.Trim(repoPath, "/") == "" {
+			return "", fmt.Errorf("failed to parse git clone URL %q", gitCloneUrl)
+		}
 		return parsed.Host + repoPath + "/" + sourceBranchName, nil
 	}
 	gitRepoKey := xscUtils.GetGitRepoUrlKey(gitCloneUrl)
