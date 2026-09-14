@@ -1,0 +1,8 @@
+{
+  "name": "member-a",
+  "version": "1.0.0",
+  "license": "ISC",
+  "dependencies": {
+    "minimist": "1.2.5"
+  }
+}
