@@ -1,0 +1,7 @@
+[project]
+name = "member-a"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "pyjwt==1.7.1",
+]

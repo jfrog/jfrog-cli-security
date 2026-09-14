@@ -44,6 +44,8 @@ func (py *PythonPackageUpdater) updateDirectDependency(fixDetails *FixDetails) (
 		return py.handlePip(fixDetails)
 	case techutils.Pipenv:
 		return py.CommonPackageUpdater.UpdateDependency(fixDetails, fixDetails.Technology.GetPackageInstallationCommand())
+	case techutils.Uv:
+		return py.handleUv(fixDetails)
 	default:
 		return errors.New("unknown python package manager: " + fixDetails.Technology.GetPackageType())
 	}
@@ -75,6 +77,28 @@ func (py *PythonPackageUpdater) handlePip(fixDetails *FixDetails) (err error) {
 		err = fmt.Errorf("an error occurred while writing the fixed version of %s to the requirements file:\n%s", fixDetails.SuggestedFixedVersion, err.Error())
 	}
 	return
+}
+
+func (py *PythonPackageUpdater) handleUv(fixDetails *FixDetails) (err error) {
+	const pyprojectFile = "pyproject.toml"
+	var fixedFile string
+	fixedPackage := fixDetails.ImpactedDependencyName + "==" + fixDetails.SuggestedFixedVersion
+	currentFile, err := py.tryReadRequirementFile(pyprojectFile)
+	if err != nil {
+		return errors.New("failed to read pyproject.toml: " + err.Error())
+	}
+	re := regexp.MustCompile(PythonPackageRegexPrefix + "(" + fixDetails.ImpactedDependencyName + "|" + strings.ToLower(fixDetails.ImpactedDependencyName) + ")" + PythonPackageRegexSuffix)
+	if packageToReplace := re.FindString(currentFile); packageToReplace != "" {
+		fixedFile = strings.Replace(currentFile, packageToReplace, strings.ToLower(fixedPackage), 1)
+	}
+	if fixedFile == "" {
+		return fmt.Errorf("impacted package %s not found, fix failed", fixDetails.ImpactedDependencyName)
+	}
+	//#nosec G703 -- False positive - the path is determined by internal file scanning, not user input, and was already validated by the preceding read.
+	if err = os.WriteFile(pyprojectFile, []byte(fixedFile), 0600); err != nil {
+		return fmt.Errorf("an error occurred while writing the fixed version of %s to pyproject.toml:\n%s", fixDetails.SuggestedFixedVersion, err.Error())
+	}
+	return runPackageMangerCommand(techutils.Uv.GetExecCommandName(), techutils.Uv.String(), []string{"lock", "--upgrade-package", fixDetails.ImpactedDependencyName})
 }
 
 func (py *PythonPackageUpdater) tryGetRequirementFile() (string, error) {
