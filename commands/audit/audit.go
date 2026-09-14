@@ -707,7 +707,6 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 	}
 }
 
-// Old flow: creates targets from technologies detected in the working directories.
 // filterAmbiguousPipUvTargets drops, per working directory, whichever of Pip/Uv
 // techutils.PromotePipToUv rejects for that directory - the same ambiguity
 // detectTechnologiesInTarget resolves for the new BOM-generator flow. Without this, a
@@ -740,6 +739,7 @@ func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[
 	return techToWorkingDirs
 }
 
+// Old flow: creates targets from technologies detected in the working directories.
 func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults, params *AuditParams, cwd string) {
 	exclusions := params.Exclusions()
 	if configProfile := params.GetConfigProfile(); configProfile != nil {
