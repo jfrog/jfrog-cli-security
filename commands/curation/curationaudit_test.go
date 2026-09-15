@@ -5408,11 +5408,9 @@ func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
 	assert.Equal(t, blocked, s.Action)
 }
 
-// TestFetchCvsBlockedStatusPinnedWholePackageBlocked verifies that a pinned exact version
-// (e.g. "requests==2.31.0") whose whole package is confirmed blocked (Step 0) still gets
-// full policy detail via the per-version probe (Steps 1-3), when the package-level 403
-// body has no parseable policy message — and that detail is preserved as-is, since Step 0
-// found no policy of its own to compare it against.
+// TestFetchCvsBlockedStatusPinnedWholePackageBlocked verifies a pinned exact version whose
+// whole package is confirmed blocked (Step 0) still gets full policy detail via the
+// per-version probe (Steps 1-3), when the package-level 403 has no parseable policy.
 func TestFetchCvsBlockedStatusPinnedWholePackageBlocked(t *testing.T) {
 	const (
 		blockedPkg      = "requests"
@@ -5488,11 +5486,9 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlocked(t *testing.T) {
 	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
 }
 
-// TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails verifies the
-// fallback path: when the whole package is confirmed blocked (Step 0) but the
-// per-version enrichment probe fails for any reason (here: the version-specific
-// metadata lookup itself fails), the row must still be rendered using the
-// package-level fallback — never silently dropped.
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails verifies that when
+// Step 0 confirms a whole-package block but the per-version enrichment probe fails, the
+// row still renders via the package-level fallback — never silently dropped.
 func TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails(t *testing.T) {
 	const (
 		blockedPkg = "requests"
@@ -5543,10 +5539,9 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails(t *testin
 	assert.Equal(t, BlockingReasonUnknown, s.BlockingReason)
 }
 
-// TestFetchCvsBlockedStatusRangedWholePackageBlocked verifies a RANGED direct pin (e.g.
-// "urllib3>=2.0.0") whose package is fully blocked renders as "All versions blocked" with
-// full policy detail, using Artifactory's real whole-package-block message format
-// ("All versions blocked - {policy:X,condition:Y}").
+// TestFetchCvsBlockedStatusRangedWholePackageBlocked verifies a ranged direct pin whose
+// package is fully blocked renders as "All versions blocked" with full policy detail,
+// using Artifactory's real whole-package-block message format.
 func TestFetchCvsBlockedStatusRangedWholePackageBlocked(t *testing.T) {
 	const (
 		blockedPkg          = "urllib3"
@@ -5605,9 +5600,8 @@ func TestFetchCvsBlockedStatusRangedWholePackageBlocked(t *testing.T) {
 }
 
 // TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggregate covers a
-// pinned version blocked by a DIFFERENT policy than the one Step 0's aggregate check found
-// (e.g. per-version immature-30 vs. aggregate openssf-test). The per-version detail must be
-// preserved as-is, not overwritten with generic text tied to the unrelated aggregate policy.
+// pinned version blocked by a DIFFERENT policy than Step 0's aggregate check. The
+// per-version detail must be preserved, not overwritten with the unrelated generic text.
 func TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggregate(t *testing.T) {
 	const (
 		blockedPkg       = "deepagents"
@@ -5682,11 +5676,10 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggreg
 	assert.Equal(t, perVersionRec, s.Policy[0].Recommendation, "must preserve the real per-version recommendation, not the generic 'remove and replace' text")
 }
 
-// TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate is a regression
-// test: a pinned version (e.g. "urllib3==2.0.0") never takes Step 0's shortcut return (only
-// ranged/version-less pins do), so it always falls through to the per-version probe. When
-// that probe finds the SAME policy+condition as the aggregate check, the row must be
-// normalized to generic text — not leak the raw, inconsistently-worded backend message.
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate: a pinned version
+// always falls through to the per-version probe (only ranged/version-less pins take Step
+// 0's shortcut). When that probe finds the SAME policy as the aggregate, normalize to
+// generic text — don't leak the raw, inconsistently-worded backend message.
 func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *testing.T) {
 	const (
 		blockedPkg      = "urllib3"
@@ -5764,9 +5757,8 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *
 }
 
 // TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch verifies that
-// when the per-version probe recovers MULTIPLE policies, only the entry matching the
-// aggregate's policy+condition is normalized to generic text — a second, genuinely different
-// real policy in the same probe result must be preserved untouched, not blanket-overwritten.
+// when the per-version probe recovers MULTIPLE policies, only the one matching the
+// aggregate is normalized — a genuinely different second policy stays untouched.
 func TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch(t *testing.T) {
 	const (
 		blockedPkg      = "urllib3"
@@ -5853,11 +5845,9 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch(t
 }
 
 // TestFetchCvsBlockedStatusTransitivePinnedWholePackageBlocked verifies a TRANSITIVE blocker
-// with an exact PINNED version (Version set, VersionRange empty) — which, unlike a name-only
-// ResolutionImpossible entry, never takes Step 0's shortcut return and always falls through to
-// the per-version probe (Steps 1-3). Confirms the real parent's version is still shown (not
-// blanked, since only whole-package-blocked DIRECT dependencies blank the version column) and
-// DepRelation/Recommendation correctly reflect the transitive relationship.
+// with an exact pinned version always falls through to the per-version probe (Steps 1-3).
+// Confirms the real parent's version is still shown (only direct deps blank it) and
+// DepRelation/Recommendation reflect the transitive relationship.
 func TestFetchCvsBlockedStatusTransitivePinnedWholePackageBlocked(t *testing.T) {
 	const (
 		blockedPkg      = "charset-normalizer"
@@ -5926,10 +5916,9 @@ func TestFetchCvsBlockedStatusTransitivePinnedWholePackageBlocked(t *testing.T) 
 	assert.Equal(t, blocked, s.Action)
 }
 
-// TestFetchCvsBlockedStatusTransitiveWholePackageBlocked verifies a TRANSITIVE blocker
+// TestFetchCvsBlockedStatusTransitiveWholePackageBlocked verifies a transitive blocker
 // (attributed to a real parent) whose package is fully blocked renders "All versions
-// blocked" with indirect DepRelation, correct parent attribution, and a Recommendation
-// naming the real parent.
+// blocked" with indirect DepRelation and a Recommendation naming the real parent.
 func TestFetchCvsBlockedStatusTransitiveWholePackageBlocked(t *testing.T) {
 	const (
 		blockedPkg     = "charset-normalizer"
@@ -5991,11 +5980,9 @@ func TestFetchCvsBlockedStatusTransitiveWholePackageBlocked(t *testing.T) {
 	assert.Contains(t, s.Policy[0].Recommendation, blockedPkg)
 }
 
-// TestFetchCvsBlockedStatusWholePackageBlockedUnparsableBody verifies that a confirmed
-// whole-package block (403 on the all-versions metadata API) whose body doesn't carry a
-// parseable policy message still renders a row — with BlockingReasonUnknown — rather than
-// being silently dropped, matching getBlockedPackageDetails's existing defensive behavior
-// for the per-version path.
+// TestFetchCvsBlockedStatusWholePackageBlockedUnparsableBody verifies a confirmed
+// whole-package block with an unparsable 403 body still renders a row (BlockingReasonUnknown)
+// instead of being silently dropped — matching getBlockedPackageDetails's per-version behavior.
 func TestFetchCvsBlockedStatusWholePackageBlockedUnparsableBody(t *testing.T) {
 	const (
 		blockedPkg = "some-pkg"
@@ -6101,15 +6088,95 @@ func TestFetchCvsBlockedStatusWholePackageBlockedAcrossTechs(t *testing.T) {
 	}
 }
 
-// TestFetchCvsBlockedStatusUvRangedDirectNoVersionEcho reproduces the uv self-referential
-// recommendation bug: a ranged direct dependency (e.g. `urllib3>=2.0.0`) whose whole package
-// gets blocked. uv's error text for this case ("X was not found in the package registry")
-// never echoes the range, so python.parseCvsFailedPackages can't populate either Version or
-// VersionRange on the pin — the only signal that this is a direct dependency (rather than a
-// deep transitive blocker with an unrecoverable parent) is ConfirmedDirect, set from uv's
-// "your project depends on X" phrasing. Without honoring it, DepRelation is misclassified as
-// indirect and the recommendation text becomes self-referential ("urllib3 is a transitive
-// dependency of urllib3").
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedAcrossTechs verifies the pinned-exact
+// enrichment path (Steps 1-3) works identically for pip, poetry, pipenv, and uv — not just
+// the Step 0 ranged short-circuit already covered elsewhere. Guards against a future
+// regression that special-cases pip.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedAcrossTechs(t *testing.T) {
+	const (
+		blockedPkg      = "urllib3"
+		blockedVer      = "2.0.0"
+		repo            = "test-repo"
+		policyName      = "openssf-jfca-test"
+		condName        = "openssf"
+		rawExpl         = "The OpenSSF value is missing"
+		rawRec          = "Apply a waiver and install again if suitable for use"
+		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
+	)
+	// Step 0's aggregate probe: confirmed whole-package block.
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		policyName, condName,
+	)
+	// Steps 1-3's per-version probe: the SAME policy+condition, raw backend wording — must be
+	// normalized to generic text, same as the pip-only regression test above.
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, policyName, condName, rawExpl, rawRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(wholePackageBlockResponse))
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(versionMetaJSON))
+				case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+					w.WriteHeader(http.StatusForbidden)
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(versionBlockResponse))
+				default:
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+			})
+			defer serverMock.Close()
+
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				rtAuth:               rtAuth,
+				httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+				url:                  rtAuth.GetUrl(),
+				repo:                 repo,
+				tech:                 tech,
+			}
+
+			// Pinned exact pin — same shape parseCvsFailedPackages produces for
+			// "urllib3==2.0.0", regardless of which tool's output was parsed.
+			pins := []python.PinnedRequirement{
+				{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+			}
+
+			statuses := analyzer.fetchCvsBlockedStatus(pins)
+			require.Len(t, statuses, 1, "pinned whole-package block must not be dropped for %s", tech)
+
+			s := statuses[0]
+			assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+			assert.Equal(t, string(tech), s.PkgType, "package type must reflect the actual technology")
+			require.Len(t, s.Policy, 1)
+			assert.Equal(t, policyName, s.Policy[0].Policy)
+			assert.Equal(t, condName, s.Policy[0].Condition)
+			assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation,
+				"same policy as aggregate must be normalized to generic text for %s too", tech)
+			assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation,
+				"direct pinned dependency, same policy as aggregate, must get the generic npm-parity recommendation for %s too", tech)
+		})
+	}
+}
+
+// TestFetchCvsBlockedStatusUvRangedDirectNoVersionEcho: uv's error text for a blocked
+// ranged direct dep never echoes the range, so only ConfirmedDirect signals it's direct.
+// Without it, DepRelation is misclassified as indirect and the text turns self-referential.
 func TestFetchCvsBlockedStatusUvRangedDirectNoVersionEcho(t *testing.T) {
 	const (
 		blockedPkg     = "urllib3"

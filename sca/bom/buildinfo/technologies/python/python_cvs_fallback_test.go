@@ -177,6 +177,18 @@ func TestParseCvsFailedPackages(t *testing.T) {
 			want: []PinnedRequirement{{Name: "charset-normalizer", VersionRange: "<4,>=2", ParentName: "requests", ParentVersion: "2.31.0"}},
 		},
 		{
+			name: "pip: diamond dependency — two chains collide on the same child name, first wins",
+			output: "no matching distributions available for your environment:\n" +
+				"    charset-normalizer\n" +
+				"\n" +
+				"The conflict is caused by:\n" +
+				"    package-a 1.0.0 depends on charset-normalizer<4 and >=2\n" +
+				"    package-b 2.0.0 depends on charset-normalizer<5 and >=3\n" +
+				"\n" +
+				"To fix this you could try to:\n",
+			want: []PinnedRequirement{{Name: "charset-normalizer", ParentName: "package-a", ParentVersion: "1.0.0"}},
+		},
+		{
 			name: "uv: ranged direct dependency, whole package blocked, no version echoed",
 			output: "× No solution found when resolving dependencies:\n" +
 				"╰─▶ Because urllib3 was not found in the package registry and your project\n" +
@@ -197,9 +209,9 @@ func TestIsCvsVersionFilteredOutput(t *testing.T) {
 		"Additionally, some packages in these conflicts have no matching distributions available for your environment:\n" +
 		"    langgraph-sdk"
 	cases := map[string]bool{
-		"ERROR: No matching distribution found for deepagents==0.5.5":                                                                                                                                                         true,
-		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                                                                                                                         true,
-		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.":                                                                                                  true,
+		"ERROR: No matching distribution found for deepagents==0.5.5":                                                        true,
+		"ERROR: Could not find a version that satisfies the requirement langchain-core<2.0.0,>=1.3.2":                        true,
+		"Because sample-poetry-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed.": true,
 		"× No solution found when resolving dependencies:\n╰─▶ Because there is no version of telnyx==4.87.1 and your project depends on telnyx==4.87.1, we can conclude that your project's requirements are unsatisfiable.": true,
 		resolutionImpossible:                               true,
 		"ERROR: 403 Forbidden":                             false,
