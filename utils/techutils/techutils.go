@@ -345,6 +345,10 @@ var (
 	pyProjectTomlFlitRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"flit_core[^\]]*.*]`)
 	// `pdm-pep517` in the [build-system] section
 	pyProjectTomlPdmRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"pdm-pep517".*]`)
+	// [tool.uv] or dotted tables such as [tool.uv.sources]
+	pyProjectTomlUvTableRegex = regexp.MustCompile(`(?m)^\[tool\.uv(?:\.[^\]]+)?\]`)
+	// [[tool.uv.index]] (and other uv array-of-tables)
+	pyProjectTomlUvArrayTableRegex = regexp.MustCompile(`(?m)^\[\[tool\.uv(?:\.[^\]]+)?\]\]`)
 )
 
 func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
@@ -882,8 +886,11 @@ func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string]
 // Rule, in order:
 //  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
 //     poetry.lock) → Pip wins, Uv is dropped.
-//  2. Otherwise, any uv signal (uv.lock, pyproject.toml [tool.uv]/[[tool.uv.index]], or
-//     ~/.config/uv/uv.toml) → Uv wins, Pip is dropped.
+//  2. Otherwise, a project-local uv signal (uv.lock or a pyproject.toml [tool.uv] /
+//     [[tool.uv.*]] table) → Uv wins, Pip is dropped.
+//
+// Machine-global ~/.config/uv/uv.toml is not a project signal: it is common on developer
+// machines and must not rewrite a pip-only PEP 621 project to Uv.
 //
 // dir is the working directory being evaluated - callers must pass it explicitly rather
 // than relying on the process's current directory, since a single process may evaluate
@@ -902,17 +909,13 @@ func PromotePipToUv(techs []Technology, dir string) []Technology {
 	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
 		uvSignal = "uv.lock detected"
 	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
-		(strings.Contains(string(data), "[tool.uv]") || strings.Contains(string(data), "[[tool.uv.index]]")) {
-		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.index]])"
-	} else if home, homeErr := os.UserHomeDir(); homeErr == nil {
-		if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
-			uvSignal = "~/.config/uv/uv.toml detected"
-		}
+		(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
+		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
 	}
 	if uvSignal == "" {
 		return techs
 	}
-	log.Info(uvSignal + " — treating project as uv.")
+	log.Debug(uvSignal + " — treating project as uv.")
 	techs = removeTechnology(techs, Pip)
 	if !containsTechnology(techs, Uv) {
 		techs = append(techs, Uv)

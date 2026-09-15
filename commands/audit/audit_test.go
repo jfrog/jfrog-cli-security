@@ -20,6 +20,7 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
@@ -1705,4 +1706,115 @@ func createEmptyFile(t *testing.T, path string) {
 	file, err := os.Create(path)
 	assert.NoError(t, err)
 	assert.NoError(t, file.Close())
+}
+
+func TestFilterAmbiguousPipUvTargets(t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) map[techutils.Technology]map[string][]string
+		expectPip bool
+		expectUv  bool
+		check     func(t *testing.T, got map[techutils.Technology]map[string][]string)
+	}{
+		{
+			name: "overlap uv.lock in shared dir drops pip",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "uv.lock"), []byte("version = 1\n"), 0o644))
+				return map[techutils.Technology]map[string][]string{
+					techutils.Pip: {dir: {filepath.Join(dir, "pyproject.toml")}},
+					techutils.Uv:  {dir: {filepath.Join(dir, "uv.lock")}},
+				}
+			},
+			expectUv: true,
+		},
+		{
+			name: "overlap pip-exclusive file in shared dir drops uv",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "requirements.txt"), []byte("requests==2.31.0\n"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "uv.lock"), []byte("# stray\n"), 0o644))
+				return map[techutils.Technology]map[string][]string{
+					techutils.Pip: {dir: {filepath.Join(dir, "requirements.txt")}},
+					techutils.Uv:  {dir: {filepath.Join(dir, "uv.lock")}},
+				}
+			},
+			expectPip: true,
+		},
+		{
+			name: "pip-only is unchanged",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				dir := t.TempDir()
+				return map[techutils.Technology]map[string][]string{
+					techutils.Pip: {dir: {filepath.Join(dir, "pyproject.toml")}},
+				}
+			},
+			expectPip: true,
+		},
+		{
+			name: "uv-only is unchanged",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				dir := t.TempDir()
+				return map[techutils.Technology]map[string][]string{
+					techutils.Uv: {dir: {filepath.Join(dir, "uv.lock")}},
+				}
+			},
+			expectUv: true,
+		},
+		{
+			name: "in-place delete keeps non-overlapping pip working dir",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				pipOnly := t.TempDir()
+				shared := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(pipOnly, "requirements.txt"), []byte("requests==2.31.0\n"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(shared, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(shared, "uv.lock"), []byte("version = 1\n"), 0o644))
+				return map[techutils.Technology]map[string][]string{
+					techutils.Pip: {
+						pipOnly: {filepath.Join(pipOnly, "requirements.txt")},
+						shared:  {filepath.Join(shared, "pyproject.toml")},
+					},
+					techutils.Uv: {shared: {filepath.Join(shared, "uv.lock")}},
+				}
+			},
+			expectPip: true,
+			expectUv:  true,
+			check: func(t *testing.T, got map[techutils.Technology]map[string][]string) {
+				assert.Len(t, got[techutils.Pip], 1)
+				assert.Len(t, got[techutils.Uv], 1)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := filterAmbiguousPipUvTargets(tc.setup(t))
+			_, hasPip := got[techutils.Pip]
+			_, hasUv := got[techutils.Uv]
+			assert.Equal(t, tc.expectPip, hasPip)
+			assert.Equal(t, tc.expectUv, hasUv)
+			if hasPip {
+				assert.NotEmpty(t, got[techutils.Pip])
+			}
+			if hasUv {
+				assert.NotEmpty(t, got[techutils.Uv])
+			}
+			if tc.check != nil {
+				tc.check(t, got)
+			}
+		})
+	}
+}
+
+func TestDetectTechnologiesInTargetNestedUv(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "pkg", "python")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(nested, "pyproject.toml"), []byte("[project]\nname = \"demo\"\nversion = \"0.1.0\"\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(nested, "uv.lock"), []byte("version = 1\n"), 0o644))
+
+	techs := detectTechnologiesInTarget(results.ScanTarget{Target: root}, NewAuditParams())
+	assert.Contains(t, techs, techutils.Uv)
+	assert.NotContains(t, techs, techutils.Pip)
 }

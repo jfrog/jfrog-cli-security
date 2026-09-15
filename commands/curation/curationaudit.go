@@ -712,9 +712,16 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 // The rule itself lives in techutils.PromotePipToUv, shared with the general 'jf audit'/'jf
 // scan' detection flow so both commands resolve the same Pip/Uv ambiguity identically.
 func promotePipToUv(techs []string) []string {
-	dir, err := os.Getwd()
-	if err != nil {
-		return techs
+	return promotePipToUvIn(techs, "")
+}
+
+func promotePipToUvIn(techs []string, dir string) []string {
+	if dir == "" {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return techs
+		}
 	}
 	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), dir)
 	result := make([]string, 0, len(promoted))
@@ -757,7 +764,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 	default:
 		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 		techs = promoteYarnWorkspaceMember(techs)
-		techs = promotePipToUv(techs)
+		techs = promotePipToUvIn(techs, ca.OriginPath)
 		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {

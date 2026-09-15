@@ -685,14 +685,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			requestToFail: map[string]bool{
@@ -5502,8 +5502,9 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 }
 
 // TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
-// [tool.uv]/[[tool.uv.index]], ~/.config/uv/uv.toml), confirms pip-exclusive files always
-// win, and confirms it collapses a tech list already containing both pip and uv into one.
+// [tool.uv]/[[tool.uv.index]]), confirms pip-exclusive files always win, and confirms it
+// collapses a tech list already containing both pip and uv into one. Global ~/.config/uv/uv.toml
+// is not a project signal and must not rewrite pip-only projects.
 func TestPromotePipToUv(t *testing.T) {
 	pip := techutils.Pip.String()
 	uv := techutils.Uv.String()
@@ -5568,13 +5569,13 @@ func TestPromotePipToUv(t *testing.T) {
 			expectedHasPip: true,
 		},
 		{
-			name:          "pip + ~/.config/uv/uv.toml — promoted to uv",
-			techs:         []string{pip},
-			hasUvToml:     true,
-			expectedHasUv: true,
+			name:           "pip + ~/.config/uv/uv.toml — stays pip",
+			techs:          []string{pip},
+			hasUvToml:      true,
+			expectedHasPip: true,
 		},
 		{
-			name:           "pip-exclusive file takes priority over ~/.config/uv/uv.toml — stays pip",
+			name:           "pip-exclusive file is unaffected by ~/.config/uv/uv.toml — stays pip",
 			techs:          []string{pip},
 			hasPipFile:     "Pipfile",
 			hasUvToml:      true,

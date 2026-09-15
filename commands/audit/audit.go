@@ -678,15 +678,33 @@ func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditPar
 			log.Warn(fmt.Sprintf("Couldn't detect technologies in '%s' directory: %s", included, err.Error()))
 			continue
 		}
-		dirTechs := make([]techutils.Technology, 0, len(techToWorkingDirs))
-		for tech := range techToWorkingDirs {
-			dirTechs = append(dirTechs, tech)
-		}
-		for _, tech := range techutils.PromotePipToUv(dirTechs, included) {
+		for _, tech := range technologiesAfterPipUvPromotion(techToWorkingDirs) {
 			detectedTechnologies.Add(tech)
 		}
 	}
 	return detectedTechnologies.ToSlice()
+}
+
+func technologiesAfterPipUvPromotion(techToWorkingDirs map[techutils.Technology]map[string][]string) []techutils.Technology {
+	workingDirs := datastructures.MakeSet[string]()
+	for _, dirs := range techToWorkingDirs {
+		for dir := range dirs {
+			workingDirs.Add(dir)
+		}
+	}
+	promoted := datastructures.MakeSet[techutils.Technology]()
+	for _, dir := range workingDirs.ToSlice() {
+		dirTechs := make([]techutils.Technology, 0)
+		for tech, dirs := range techToWorkingDirs {
+			if _, ok := dirs[dir]; ok {
+				dirTechs = append(dirTechs, tech)
+			}
+		}
+		for _, tech := range techutils.PromotePipToUv(dirTechs, dir) {
+			promoted.Add(tech)
+		}
+	}
+	return promoted.ToSlice()
 }
 
 func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
