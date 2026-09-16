@@ -16,12 +16,12 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
@@ -71,6 +71,13 @@ func getScaScanFileName(cmdResults *results.SecurityCommandResults) string {
 	return ""
 }
 
+func vulnerabilityId(vuln services.Vulnerability) string {
+	if len(vuln.Cves) > 0 && vuln.Cves[0].Id != "" {
+		return vuln.Cves[0].Id
+	}
+	return vuln.IssueId
+}
+
 func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	fileName := getScaScanFileName(cmdResults)
 	fileContent, err := os.ReadFile(fileName)
@@ -91,7 +98,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	}
 	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
-			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
+			vulnerability := map[string]string{"bom-ref": component, "id": vulnerabilityId(vuln)}
 			vulnerabilities = append(vulnerabilities, vulnerability)
 		}
 	}
@@ -119,7 +126,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 			addVuln := vulns.CreateElement("vulnerability")
 			addVuln.CreateAttr("bom-ref", component)
 			id := addVuln.CreateElement("id")
-			id.CreateText(vuln.Cves[0].Id)
+			id.CreateText(vulnerabilityId(vuln))
 		}
 	}
 	result.IndentTabs()
@@ -185,7 +192,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
 	if fileCollectingErr != nil {
-		scanResults.GeneralError = errors.Join(scanResults.GeneralError, fileCollectingErr)
+		scanResults.AddGeneralError(fileCollectingErr, false)
 	}
 
 	if scanResults.GetErrors() != nil {
@@ -265,7 +272,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
 				targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *scanResults), *scanResults)
-				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)
+				targetResults.Technologies = []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}
 				return
 			}
 

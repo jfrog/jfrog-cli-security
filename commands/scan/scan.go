@@ -13,6 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -26,7 +27,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/sync/errgroup"
@@ -46,6 +46,7 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayClientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -217,7 +218,28 @@ func (scanCmd *ScanCommand) SetScansToPerform(scansToPerform []utils.SubScanType
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
+	scanCmd.multiScanId, scanCmd.startTime = xsc.SendNewScanEvent(
+		scanCmd.xrayVersion,
+		scanCmd.xscVersion,
+		scanCmd.serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, scanCmd.serverDetails, scanCmd.getAnalyticsProjectPath()),
+		scanCmd.resultsContext.ProjectKey,
+	)
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *results.SecurityCommandResults) (err error) {
+		if scanResults == nil {
+			return
+		}
+		xsc.SendScanEndedWithResults(scanCmd.serverDetails, scanResults)
+		return scanCmd.recordResults(scanResults)
+	})
+}
+
+func (scanCmd *ScanCommand) getAnalyticsProjectPath() string {
+	currentDir, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return ""
+	}
+	return currentDir
 }
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
@@ -338,7 +360,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
-			if utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+			if cmdResults.IsJASRequested(scanCmd.scansToPerform...) {
 				if err = jas.ValidateRequiredInstalledSoftware(); err != nil {
 					return xrayManager, cmdResults.AddGeneralError(err, false)
 				}
@@ -352,10 +374,10 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandResults, xrayManager *xrayClient.XrayServicesManager) (err error) {
 	// Download (if needed) the analyzer manager in a background routine.
 	AnalyzerErrGroup := new(errgroup.Group)
-	if cmdResults.Entitlements.Jas && utils.IsJASRequested(cmdResults.CmdType, scanCmd.scansToPerform...) {
+	if cmdResults.Entitlements.Jas && cmdResults.IsJASRequested(scanCmd.scansToPerform...) {
 		if scanCmd.customAnalyzerManagerPath == "" {
 			AnalyzerErrGroup.Go(func() error {
-				return jas.DownloadAnalyzerManagerIfNeeded(0)
+				return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 			})
 		} else {
 			log.Debug("Using custom analyzer manager binary path, skipping download")
@@ -365,9 +387,13 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	}
 	// Prepare the BOM generator for SCA scans in a background routine.
 	scaErrGroup := new(errgroup.Group)
-	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, scanCmd.scansToPerform...) {
+	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, cmdResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		scaErrGroup.Go(func() error {
-			return scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator()
+			return scanCmd.bomGenerator.WithOptions(
+				indexer.WithXray(xrayManager, scanCmd.xrayVersion),
+				indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits),
+				indexer.WithServerDetails(scanCmd.serverDetails),
+			).PrepareGenerator()
 		})
 	} else {
 		log.Debug("SCA scans were not initiated, so SCA scan preparation was skipped...")
@@ -432,8 +458,10 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 			targetResults := scanCmd.getBinaryTargetResults(cmdResults, filePath, threadId)
 			// Generate SBOM for the file.
 			deprecatedGraph := scanCmd.GenerateBinarySbom(cmdResults.CmdType, targetResults, cmdResults.ResultContext.IncludeSbom, threadId)
-			if len(targetResults.Errors) > 0 {
-				log.Warn(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"Failed to generate SBOM for file %s: %s", targetResults.Target, targetResults.GetErrors()))
+			if notSkippedErrors := targetResults.GetNotSkippedErrors(); len(notSkippedErrors) > 0 {
+				for _, notSkippedError := range notSkippedErrors {
+					log.Warn(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"Failed to generate SBOM for file %s: %s", targetResults.Target, notSkippedError.Error()))
+				}
 				return
 			}
 			// Add a new task to the second producer/consumer
@@ -457,7 +485,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 }
 
 func (scanCmd *ScanCommand) GenerateBinarySbom(cmdType utils.CommandType, targetResults *results.TargetResults, includeSbom bool, threadId int) (deprecatedGraph *xrayClientUtils.BinaryGraphNode) {
-	if !includeSbom && !utils.IsScanRequested(cmdType, utils.ScaScan, scanCmd.scansToPerform...) {
+	if !includeSbom && !utils.IsScanRequested(cmdType, utils.ScaScan, targetResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "Skipping SBOM generation as requested by input...")
 		return
 	}
@@ -486,8 +514,8 @@ func (scanCmd *ScanCommand) GenerateBinarySbom(cmdType utils.CommandType, target
 func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, deprecatedGraph *xrayClientUtils.BinaryGraphNode, scanThreadId int) (targetCompId string, graphScanResults *services.ScanResponse, err error) {
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	// If the scan is not requested, skip it.
-	if !utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, scanCmd.scansToPerform...) {
-		log.Debug(scanLogPrefix + fmt.Sprintf("Skipping SCA for %s as requested by input...", targetResults.Target))
+	if !utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, targetResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
+		log.Debug(scanLogPrefix + fmt.Sprintf("Skipping SCA for '%s' as requested by input...", targetResults.String()))
 		return
 	}
 	// TODO: Use the following code when binary will also support scan strategy (interface) and not only scan graph.
@@ -539,7 +567,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		return
 	}
 	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-	targetResults.Technology = techutils.ToTechnology(graphScanResults.ScannedPackageType)
+	targetResults.Technologies = []techutils.Technology{techutils.ToTechnology(graphScanResults.ScannedPackageType)}
 	// Dump scan response if requested
 	if scanCmd.outputDir == "" {
 		return
@@ -570,14 +598,14 @@ func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGr
 
 func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi string, secretValidation bool, targetResults *results.TargetResults, targetCompId string, graphScanResults *services.ScanResponse, jasFileProducerConsumer *utils.SecurityParallelRunner, scanThreadId int) (err error) {
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
-	module, err := getJasModule(targetResults)
+	deprecatedAppsConfigModule, err := getJasDeprecatedAppsConfigModule(targetResults.Target)
 	if err != nil {
 		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"jas scanning failed with error: %s", err.Error()), false)
 	}
+	targetResults.DeprecatedAppsConfigModule = &deprecatedAppsConfigModule
 	// Prepare Jas scans
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
-			secretValidation,
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(
 				false,
@@ -607,12 +635,12 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	}
 	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	jasParams := runner.JasRunnerParams{
-		Runner:          jasFileProducerConsumer,
-		ServerDetails:   scanCmd.serverDetails,
-		Scanner:         scanner,
-		Module:          module,
-		TargetOutputDir: scanCmd.outputDir,
-		ScansToPerform:  scanCmd.scansToPerform,
+		Runner:           jasFileProducerConsumer,
+		ServerDetails:    scanCmd.serverDetails,
+		Scanner:          scanner,
+		SecretValidation: secretValidation,
+		TargetOutputDir:  scanCmd.outputDir,
+		ScansToPerform:   scanCmd.scansToPerform,
 		CvesProvider: func() (directCves []string, indirectCves []string) {
 			if graphScanResults == nil {
 				// No SCA scan results, return empty CVE lists.
@@ -649,11 +677,11 @@ func getJasScanTypes(cmdType utils.CommandType, targetResults *results.TargetRes
 }
 
 func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResults) bool {
-	return cmdType == utils.DockerImage || targetResults.Technology == techutils.Docker || targetResults.Technology == techutils.Oci
+	return cmdType == utils.DockerImage || targetResults.HasTechnology(techutils.Docker) || targetResults.HasTechnology(techutils.Oci)
 }
 
-func getJasModule(targetResults *results.TargetResults) (jfrogappsconfig.Module, error) {
-	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig([]string{targetResults.Target})
+func getJasDeprecatedAppsConfigModule(target string) (jfrogappsconfig.Module, error) {
+	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig([]string{target})
 	if err != nil {
 		return jfrogappsconfig.Module{}, err
 	}

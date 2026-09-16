@@ -39,7 +39,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if params.IsCurationCmd {
 		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
 		goProxyParams.Direct = false
-		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go)
+		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go.String())
 		if errCacheFolder != nil {
 			err = errCacheFolder
 			return
@@ -74,7 +74,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 
 	// Modules satisfied by a local filesystem 'replace' directive were never published and must not be
 	// probed against Artifactory during curation-audit.
-	var localReplaceModules map[string]bool
+	var localReplaceModules map[string]map[string]bool
 	if params.IsCurationCmd {
 		localReplaceModules = getLocalReplaceModules(currentDir)
 	}
@@ -120,7 +120,7 @@ func handleCurationGoError(err error) (bool, error) {
 	return false, nil
 }
 
-func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string], localReplaceModules map[string]bool) {
+func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string], localReplaceModules map[string]map[string]bool) {
 	if currNode.NodeHasLoop() {
 		return
 	}
@@ -148,20 +148,22 @@ func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph m
 	}
 }
 
-// isLocalReplaceModule reports whether childName ("<module-path>:<version>") is in localReplaceModules.
-func isLocalReplaceModule(childName string, localReplaceModules map[string]bool) bool {
-	modulePath, _, found := strings.Cut(childName, ":")
+// isLocalReplaceModule reports whether childName ("<path>:<version>") is covered by a local replace. ""
+// in the versions set means unconditional (any version); otherwise only that exact pinned version matches.
+func isLocalReplaceModule(childName string, localReplaceModules map[string]map[string]bool) bool {
+	modulePath, version, found := strings.Cut(childName, ":")
 	if !found {
 		modulePath = childName
+		version = ""
 	}
-	return localReplaceModules[modulePath]
+	versions := localReplaceModules[modulePath]
+	return versions[""] || versions[version]
 }
 
-// getLocalReplaceModules returns module paths that go.mod at projectDir replaces with a local directory.
-// Module-to-module replaces are excluded - those resolve to a real, published module and must still be probed.
-// Fails open (empty set + warning) on any read/parse error, so a broken go.mod only regresses to today's behavior instead of aborting the audit.
-func getLocalReplaceModules(projectDir string) map[string]bool {
-	localReplaceModules := map[string]bool{}
+// getLocalReplaceModules returns, per module path, the versions go.mod at projectDir replaces with a local
+// directory ("" = unconditional). Module-to-module replaces are excluded. Fails open on read/parse errors.
+func getLocalReplaceModules(projectDir string) map[string]map[string]bool {
+	localReplaceModules := map[string]map[string]bool{}
 	goModPath := filepath.Join(projectDir, "go.mod")
 	data, err := os.ReadFile(goModPath)
 	if err != nil {
@@ -175,7 +177,10 @@ func getLocalReplaceModules(projectDir string) map[string]bool {
 	}
 	for _, r := range modFile.Replace {
 		if modfile.IsDirectoryPath(r.New.Path) {
-			localReplaceModules[r.Old.Path] = true
+			if localReplaceModules[r.Old.Path] == nil {
+				localReplaceModules[r.Old.Path] = map[string]bool{}
+			}
+			localReplaceModules[r.Old.Path][r.Old.Version] = true
 		}
 	}
 	return localReplaceModules

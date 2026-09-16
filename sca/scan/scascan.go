@@ -90,10 +90,16 @@ func createScaScanTaskWithRunner(auditParallelRunner *utils.SecurityParallelRunn
 	return func(threadId int) (err error) {
 		defer auditParallelRunner.ScaScansWg.Done()
 		params.ThreadId = threadId
-		auditParallelRunner.ResultsMu.Lock()
-		defer auditParallelRunner.ResultsMu.Unlock()
 		return scaScanTask(strategy, params)
 	}
+}
+
+func (params ScaScanParams) withResultsLock(write func()) {
+	if params.Runner != nil {
+		params.Runner.ResultsMu.Lock()
+		defer params.Runner.ResultsMu.Unlock()
+	}
+	write()
 }
 
 func shouldRunScan(params ScaScanParams) (bool, error) {
@@ -103,22 +109,19 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If the scan is not requested, skip it.
 	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, utils.ScaScan) {
-		log.Debug(fmt.Sprintf("%sSkipping SCA for %s as requested by input...", logPrefix, params.ScanResults.Target))
+		log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by input...", logPrefix, params.ScanResults.String()))
 		return false, nil
 	}
+	if params.ScanResults == nil {
+		return false, errors.New("scan results are nil in SCA scan parameters")
+	}
 	// If the scan is turned off in the config profile, skip it.
-	if params.ConfigProfile != nil {
-		if len(params.ConfigProfile.Modules) < 1 {
-			// Verify Modules are not nil and contain at least one modules
-			return false, fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
-		}
-		if !params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
-			log.Debug(fmt.Sprintf("%sSkipping SCA as requested by '%s' config profile...", logPrefix, params.ConfigProfile.ProfileName))
+	if centralConfiguredToRun := params.ScanResults.IsScanRequestedByCentralConfig(utils.ScaScan); centralConfiguredToRun != nil {
+		log.Debug(fmt.Sprintf("Using config profile '%s' to determine if SCA should be performed...", params.ConfigProfile.ProfileName))
+		if !*centralConfiguredToRun {
+			log.Debug(fmt.Sprintf("%sSkipping SCA for '%s' as requested by '%s' config profile...", logPrefix, params.ScanResults.String(), params.ConfigProfile.ProfileName))
 			return false, nil
 		}
-	}
-	if params.ScanResults == nil {
-		return false, errors.New("scan results are nil for target")
 	}
 	return hasDependenciesToScan(params.ScanResults, logPrefix), nil
 }
@@ -155,7 +158,9 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		params.ScanResults.ScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+		params.withResultsLock(func() {
+			params.ScanResults.ScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+		})
 		if err != nil {
 			return err
 		}
@@ -165,7 +170,9 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
 	bomWithVulnerabilities, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
+	params.withResultsLock(func() {
+		params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}

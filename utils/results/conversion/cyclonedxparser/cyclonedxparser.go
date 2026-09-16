@@ -3,6 +3,7 @@ package cyclonedxparser
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -30,6 +31,8 @@ const (
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
 	// Git context property
 	gitContextProperty = "jfrog:git:context"
+	// Include directories property
+	includeDirectoriesProperty = "jfrog:include:directories"
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -92,7 +95,14 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 		return results.ErrResetConvertor
 	}
 	cdc.currentTarget = target
-	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target))
+	properties := []cyclonedx.Property{}
+	if len(target.Include) > 0 {
+		properties = append(properties, cyclonedx.Property{
+			Name:  includeDirectoriesProperty,
+			Value: strings.Join(target.Include, ","),
+		})
+	}
+	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target, properties...))
 	return
 }
 
@@ -142,9 +152,11 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, 
 	}
 	cdc.addJasService(applicableScan)
 	return results.ForEachScaBomVulnerability(cdc.currentTarget, enrichedSbom, cdc.entitledForJas, results.CollectRuns(applicableScan...),
-		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-			// Add the vulnerability related component if it is not already existing
-			cdc.getOrCreateScaComponent(compToParse)
+		func(vulnToParse cyclonedx.Vulnerability, compToParse *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			if compToParse != nil {
+				// Add the vulnerability related component if it is not already existing
+				cdc.getOrCreateScaComponent(*compToParse)
+			}
 			// Add the vulnerability to the BOM if it is not already existing
 			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
 			// Attach JAS information to the vulnerability
@@ -184,13 +196,35 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(secrets ...[]*sarif.Run) (
 			}
 		}
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, applicabilityStatus, source)}
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetSecretScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetExposureScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		properties = append(properties, cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
 			Value: sarifutils.GetLocationSnippetText(location),
 		})
 		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)
+		return
+	})
+}
+
+func (cdc *CmdResultsCycloneDxConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	source := cdc.addJasService(services)
+	return results.ForEachJasIssue(results.CollectRuns(services...), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, cdc.currentTarget))
+		// Create a new JAS vulnerability, add it to the BOM and return it
+		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetExposureScannerRuleId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		// Add the location to the vulnerability
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name: fmt.Sprintf(
+				jasIssueLocationPropertyTemplate, "services", affectedComponent.BOMRef,
+				sarifutils.GetLocationStartLine(location), sarifutils.GetLocationStartColumn(location), sarifutils.GetLocationEndLine(location), sarifutils.GetLocationEndColumn(location),
+			),
+			Value: sarifutils.GetLocationSnippetText(location),
+		})
 		return
 	})
 }
@@ -393,7 +427,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclone
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnToParse)
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdxutils.CloneVulnerability(vulnToParse))
 	vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 	// Ensure the source is set for the vulnerability
 	if vulnerability.Source == nil {

@@ -12,11 +12,14 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"unicode/utf8"
 
+	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -29,8 +32,15 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.5"
+	mavenDepTreeVersion = "1.2.0"
 	settingsXmlFile     = "settings.xml"
+
+	// curationSettingsID is the stable XML id for server/mirror/profile entries injected
+	// into the temp settings.xml. Dedicated id keeps re-runs idempotent.
+	curationSettingsID = "jfrog-curation-audit"
+	// defaultSettingsID is the generic id used for non-curation runs, and is also the
+	// id rendered by the built-in template (resources/settings.xml).
+	defaultSettingsID = "artifactory"
 )
 
 var mavenConfigPath = filepath.Join(".mvn", "maven.config")
@@ -50,23 +60,27 @@ var mavenDepTreeJar []byte
 
 type MavenDepTreeManager struct {
 	DepTreeManager
-	isInstalled bool
-	// this flag its curation command, it will set dedicated cache and download url.
-	isCurationCmd bool
-	// path to the curation dedicated cache
-	curationCacheFolder string
-	cmdName             MavenDepTreeCmd
-	settingsXmlPath     string
+	isInstalled          bool
+	isCurationCmd        bool
+	mvnIncludePluginDeps bool
+	curationCacheFolder  string
+	cmdName              MavenDepTreeCmd
+	settingsXmlPath      string
+	// userSettingsXmlPath overrides the ~/.m2/settings.xml seed path (test-only).
+	userSettingsXmlPath string
+	insecureTls         bool
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
 	depTreeManager := NewDepTreeManager(params)
 	return &MavenDepTreeManager{
-		DepTreeManager:      depTreeManager,
-		isInstalled:         params.IsMavenDepTreeInstalled,
-		cmdName:             cmdName,
-		isCurationCmd:       params.IsCurationCmd,
-		curationCacheFolder: params.CurationCacheFolder,
+		DepTreeManager:       depTreeManager,
+		isInstalled:          params.IsMavenDepTreeInstalled,
+		cmdName:              cmdName,
+		isCurationCmd:        params.IsCurationCmd,
+		mvnIncludePluginDeps: params.MvnIncludePluginDeps,
+		curationCacheFolder:  params.CurationCacheFolder,
+		insecureTls:          params.InsecureTls,
 	}
 }
 
@@ -82,12 +96,46 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 	defer func() {
 		err = errors.Join(err, clearMavenDepTreeRun())
 	}()
-	dependencyTree, uniqueDeps, err = getGraphFromDepTree(outputFilePaths)
+	var pluginDeps map[string]*xray.DepTreeNode
+	var pluginNodesPresent bool
+	dependencyTree, uniqueDeps, pluginDeps, pluginNodesPresent, err = getGraphAndPluginDepsFromDepTree(outputFilePaths)
+	if err != nil {
+		return
+	}
+	// Plugin deps are downloaded during mvn install but absent from mvn dependency:tree;
+	// without injection jf ca would miss curation violations that block the build.
+	// "--mvn-include-plugin-deps" is a string literal to avoid a cli->sca import cycle
+	// (mirrors flags.MvnIncludePluginDeps in cli/docs/flags.go).
+	if manager.mvnIncludePluginDeps && len(dependencyTree) > 0 {
+		switch {
+		case len(pluginDeps) > 0:
+			injectPluginDeps(uniqueDeps, dependencyTree, pluginDeps)
+		case pluginNodesPresent:
+			log.Debug("'--mvn-include-plugin-deps' is set: maven-dep-tree reported no build-plugin dependencies to include.")
+		default:
+			log.Warn("'--mvn-include-plugin-deps' is set but the resolved maven-dep-tree plugin did not report a " +
+				"plugin-dependencies section; plugin dependencies will not be included in the curation evaluation. " +
+				"This usually means the maven-dep-tree plugin version does not support plugin dependency resolution.")
+		}
+	}
 	return
 }
 
-// Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
-// If a non-nil clearMavenDepTreeRun pointer is returns it means we had no error during the entire function execution
+// injectPluginDeps adds plugin deps to uniqueDeps and attaches them to every module root.
+func injectPluginDeps(uniqueDeps map[string]*xray.DepTreeNode, dependencyTree []*xrayUtils.GraphNode, pluginDeps map[string]*xray.DepTreeNode) {
+	for id, node := range pluginDeps {
+		gavID := GavPackageTypeIdentifier + id
+		if _, exists := uniqueDeps[gavID]; exists {
+			continue
+		}
+		uniqueDeps[gavID] = node
+		for _, moduleRoot := range dependencyTree {
+			moduleRoot.Nodes = append(moduleRoot.Nodes, &xrayUtils.GraphNode{Id: gavID, Types: node.Types, Classifier: node.Classifier})
+		}
+	}
+}
+
+// RunMavenDepTree runs maven-dep-tree and returns the output path along with a cleanup function.
 func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMavenDepTreeRun func() error, err error) {
 	if mdt.useWrapper {
 		mdt.useWrapper, err = isMavenWrapperExist()
@@ -95,7 +143,6 @@ func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMa
 			return
 		}
 	}
-	// depTreeExecDir is a temp directory for all the files that are required for the maven-dep-tree run
 	depTreeExecDir, clearMavenDepTreeRun, err := mdt.CreateTempDirWithSettingsXmlIfNeeded()
 	if err != nil {
 		return
@@ -103,11 +150,7 @@ func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMa
 	if err = mdt.installMavenDepTreePlugin(depTreeExecDir); err != nil {
 		return
 	}
-
 	depTreeOutput, err = mdt.execMavenDepTree(depTreeExecDir)
-	if err != nil {
-		return
-	}
 	return
 }
 
@@ -145,10 +188,12 @@ func (mdt *MavenDepTreeManager) runTreeCmd(depTreeExecDir string) (string, error
 	if mdt.isCurationCmd {
 		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
 	}
+	if mdt.mvnIncludePluginDeps {
+		goals = append(goals, "-DincludePluginDeps=true")
+	}
 	if _, err := mdt.RunMvnCmd(goals); err != nil {
 		return "", err
 	}
-
 	mavenDepTreeOutput, err := os.ReadFile(mavenDepTreePath)
 	if err != nil {
 		return "", errorutils.CheckError(err)
@@ -170,7 +215,6 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if err != nil {
 		return
 	}
-
 	defer func() {
 		if restoreMavenConfig != nil {
 			err = errors.Join(err, restoreMavenConfig())
@@ -180,22 +224,74 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if mdt.settingsXmlPath != "" {
 		goals = append(goals, "-s", mdt.settingsXmlPath)
 	}
+	if mdt.insecureTls {
+		// aether.* covers Maven 3.9+'s native resolver transport; wagon.* covers the legacy one.
+		goals = append(goals,
+			"-Dmaven.wagon.http.ssl.insecure=true",
+			"-Dmaven.wagon.http.ssl.allowall=true",
+			"-Dmaven.wagon.http.ssl.ignore.validity.dates=true",
+			"-Daether.connector.https.securityMode=insecure",
+		)
+	}
 
 	execPath := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
 	cmdOutput, err = buildMvnExecCommand(mdt.useWrapper, execPath, goals).CombinedOutput()
 	if err != nil {
-		stringOutput := string(cmdOutput)
+		stringOutput := maskCredentials(string(cmdOutput), mdt.server)
 		if len(cmdOutput) > 0 {
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command '%s %s'\n\n%s", execPath, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command '%s %s': %s", execPath, strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %w", execPath, strings.Join(goals, " "), err)
+			if stringOutput != "" {
+				err = fmt.Errorf("%w\n%s", err, truncateForError(stringOutput))
+			}
 		}
 	}
 	return
+}
+
+// maskCredentials redacts known credentials from output, mirroring uv.go's maskPassword.
+func maskCredentials(output string, server *config.ServerDetails) string {
+	if server == nil {
+		return output
+	}
+	username, password, err := server.GetAuthenticationCredentials()
+	if err != nil {
+		return output
+	}
+	if password != "" {
+		output = strings.ReplaceAll(output, password, "***")
+	}
+	if username != "" {
+		output = strings.ReplaceAll(output, username, "***")
+	}
+	// Also mask percent-encoded forms, in case a userinfo-embedded URL is ever echoed back.
+	encodedUser, encodedPass, _ := strings.Cut(url.UserPassword(username, password).String(), ":")
+	if encodedPass != "" && encodedPass != password {
+		output = strings.ReplaceAll(output, encodedPass, "***")
+	}
+	if encodedUser != "" && encodedUser != username {
+		output = strings.ReplaceAll(output, encodedUser, "***")
+	}
+	return output
+}
+
+const maxCapturedOutputInError = 8 * 1024
+
+// truncateForError keeps the tail, advanced to a rune boundary to avoid invalid UTF-8.
+func truncateForError(output string) string {
+	if len(output) <= maxCapturedOutputInError {
+		return output
+	}
+	cut := len(output) - maxCapturedOutputInError
+	for cut < len(output) && !utf8.RuneStart(output[cut]) {
+		cut++
+	}
+	return fmt.Sprintf("...(truncated %d bytes; see verbose log for full output)...\n%s", cut, output[cut:])
 }
 
 func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
@@ -206,8 +302,8 @@ func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
 }
 
-// Constructs the command to run mvnw/mvn with the given goals.
-// When using the Maven wrapper on non-Windows systems, the wrapper script is invoked via 'sh' in order to avoid "permission denied" errors.
+// buildMvnExecCommand constructs the mvn/mvnw command. On non-Windows the wrapper is
+// invoked via 'sh' to avoid "permission denied" errors on scripts without +x.
 func buildMvnExecCommand(useWrapper bool, mvnExecPath string, goals []string) *exec.Cmd {
 	var cmd *exec.Cmd
 	if useWrapper && !coreutils.IsWindows() {
@@ -225,9 +321,7 @@ func getMavenExecPath(useWrapper bool) string {
 		if coreutils.IsWindows() {
 			wrapperName += ".cmd"
 		}
-		// Prefix with "." + separator to form an explicit relative path (e.g. "./mvnw" or ".\mvnw.cmd").
-		// This is required since Go 1.19, which no longer resolves executables in the current directory
-		// via PATH unless an explicit relative path is provided.
+		// Explicit relative path required since Go 1.19 no longer resolves CWD executables via PATH.
 		return "." + string(os.PathSeparator) + wrapperName
 	}
 	return "mvn"
@@ -260,8 +354,9 @@ func removeMavenConfig() (func() error, error) {
 	return restoreMavenConfig, err
 }
 
-// Creates a new settings.xml file configured with the provided server and repository from the current MavenDepTreeManager instance.
-// The settings.xml will be written to the given path.
+// createSettingsXmlWithConfiguredArtifactory writes a temp settings.xml for the Maven run.
+// For curation runs it seeds from ~/.m2/settings.xml (preserving proxies etc.) and upserts
+// curation entries on top. For plain audit runs it uses the built-in template directly.
 func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(settingsXmlPath string) error {
 	username, password, err := getArtifactoryAuthFromServer(mdt.server)
 	if err != nil {
@@ -277,16 +372,47 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	}
 
 	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+
+	// Plain audit runs use the template directly; only curation seeds from ~/.m2/settings.xml.
+	if !mdt.isCurationCmd {
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, defaultSettingsID)
+	}
+
+	userSettingsPath := mdt.userSettingsXmlPath
+	if userSettingsPath == "" {
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			log.Warn("Could not resolve user home directory, using settings.xml template:", homeErr.Error())
+			return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+		}
+		userSettingsPath = filepath.Join(homeDir, ".m2", settingsXmlFile)
+	}
+
+	exists, err := fileutils.IsFileExists(userSettingsPath, false)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Could not stat settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+	if exists {
+		log.Debug("Seeding temp settings.xml from existing user settings:", userSettingsPath)
+		return mdt.createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath)
+	}
+	return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+}
+
+func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, id string) error {
 	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
 	if err != nil {
 		return err
 	}
 	buf := &bytes.Buffer{}
 	err = SettingsTemplate.Execute(buf, struct {
+		ID                       string
 		Username                 string
-		Password                 string // #nosec G117 -- required by settings.xml template; value written to local file only
+		Password                 string // #nosec G117 -- written to local temp file only
 		RemoteRepositoryFullPath string
 	}{
+		ID:                       id,
 		Username:                 username,
 		Password:                 password,
 		RemoteRepositoryFullPath: remoteRepositoryFullPath,
@@ -297,17 +423,114 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
 }
 
-// Creates a temporary directory.
-// If Artifactory resolution repo is provided, a settings.xml file with the provided server and repository will be created inside the temporarily directory.
+// createSettingsXmlFromExisting seeds the temp settings.xml from the user's file and
+// upserts curation entries. Falls back to the built-in template if the file is
+// unparsable (e.g. mid-write) or missing the <settings> root. Only called for curation
+// runs, so the template fallback here always uses curationSettingsID.
+func (mdt *MavenDepTreeManager) createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath string) error {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromFile(userSettingsPath); err != nil {
+		log.Warn(fmt.Sprintf("Could not parse settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+	root := doc.SelectElement("settings")
+	if root == nil {
+		log.Warn(fmt.Sprintf("settings.xml at %s has no <settings> root; falling back to built-in template.", userSettingsPath))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+
+	upsertCurationServer(root, username, password)
+	upsertCurationMirror(root, remoteRepositoryFullPath)
+	upsertCurationProfile(root, remoteRepositoryFullPath)
+	upsertCurationActiveProfile(root)
+
+	doc.Indent(4)
+	buf, err := doc.WriteToBytes()
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf, 0600))
+}
+
+func xmlGetOrCreate(parent *etree.Element, name string) *etree.Element {
+	if el := parent.SelectElement(name); el != nil {
+		return el
+	}
+	return parent.CreateElement(name)
+}
+
+func xmlFindByID(parent *etree.Element, elementName, id string) *etree.Element {
+	for _, el := range parent.SelectElements(elementName) {
+		if idEl := el.SelectElement("id"); idEl != nil && idEl.Text() == id {
+			return el
+		}
+	}
+	return nil
+}
+
+func xmlGetOrCreateByID(parent *etree.Element, elementName, id string) *etree.Element {
+	if el := xmlFindByID(parent, elementName, id); el != nil {
+		return el
+	}
+	return parent.CreateElement(elementName)
+}
+
+func xmlSetChild(parent *etree.Element, name, text string) {
+	xmlGetOrCreate(parent, name).SetText(text)
+}
+
+func upsertCurationServer(root *etree.Element, username, password string) {
+	servers := xmlGetOrCreate(root, "servers")
+	server := xmlGetOrCreateByID(servers, "server", curationSettingsID)
+	xmlSetChild(server, "id", curationSettingsID)
+	xmlSetChild(server, "username", username)
+	xmlSetChild(server, "password", password) // #nosec G117 -- written to local temp file only
+}
+
+func upsertCurationMirror(root *etree.Element, repoURL string) {
+	mirrors := xmlGetOrCreate(root, "mirrors")
+	mirror := xmlFindByID(mirrors, "mirror", curationSettingsID)
+	if mirror == nil {
+		// Insert first: a pre-existing catch-all mirror would otherwise win in document order.
+		mirror = etree.NewElement("mirror")
+		mirrors.InsertChildAt(0, mirror)
+	}
+	xmlSetChild(mirror, "id", curationSettingsID)
+	xmlSetChild(mirror, "url", repoURL)
+	xmlSetChild(mirror, "mirrorOf", "*")
+}
+
+func upsertCurationProfile(root *etree.Element, repoURL string) {
+	profiles := xmlGetOrCreate(root, "profiles")
+	profile := xmlGetOrCreateByID(profiles, "profile", curationSettingsID)
+	xmlSetChild(profile, "id", curationSettingsID)
+
+	repos := xmlGetOrCreate(profile, "repositories")
+	repo := xmlGetOrCreateByID(repos, "repository", curationSettingsID)
+	xmlSetChild(xmlGetOrCreate(repo, "snapshots"), "enabled", "true")
+	xmlSetChild(repo, "id", curationSettingsID)
+	xmlSetChild(repo, "name", "mavenRepo")
+	xmlSetChild(repo, "url", repoURL)
+}
+
+func upsertCurationActiveProfile(root *etree.Element) {
+	activeProfiles := xmlGetOrCreate(root, "activeProfiles")
+	for _, ap := range activeProfiles.SelectElements("activeProfile") {
+		if ap.Text() == curationSettingsID {
+			return
+		}
+	}
+	activeProfiles.CreateElement("activeProfile").SetText(curationSettingsID)
+}
+
+// CreateTempDirWithSettingsXmlIfNeeded creates a temp dir and, when a deps repo is
+// configured, writes a settings.xml into it.
 func (mdt *MavenDepTreeManager) CreateTempDirWithSettingsXmlIfNeeded() (tempDirPath string, clearMavenDepTreeRun func() error, err error) {
 	tempDirPath, err = fileutils.CreateTempDir()
 	if err != nil {
 		return
 	}
-
 	clearMavenDepTreeRun = func() error { return fileutils.RemoveTempDir(tempDirPath) }
-
-	// Create a settings.xml file that sets the dependency resolution from the given server and repository
 	if mdt.depsRepo != "" {
 		err = mdt.createSettingsXmlWithConfiguredArtifactory(tempDirPath)
 	}

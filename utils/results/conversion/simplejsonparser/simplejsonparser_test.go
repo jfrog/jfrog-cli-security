@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -484,6 +485,159 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 			out, err := PrepareSimpleJsonJasIssues(tc.entitledForJas, false, tc.jasIssues...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
+		})
+	}
+}
+
+func TestPrepareSimpleJsonVulnerabilities_Technology(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		target               results.ScanTarget
+		vulns                []services.Vulnerability
+		expectedTechPerIssue map[string]techutils.Technology
+	}{
+		{
+			name:   "Target technology used as fallback",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Npm}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:  "XRAY-100",
+					Summary:  "vuln without tech",
+					Severity: "High",
+					Components: map[string]services.Component{
+						"npm://dep:1.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "npm://dep:1.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-100": techutils.Npm,
+			},
+		},
+		{
+			name:   "Response technology takes precedence over empty target",
+			target: results.ScanTarget{Target: "target"},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-200",
+					Summary:    "vuln with response tech",
+					Severity:   "Medium",
+					Technology: "pip",
+					Components: map[string]services.Component{
+						"pip://dep:2.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "pip://dep:2.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-200": techutils.Pip,
+			},
+		},
+		{
+			name:   "Target technology wins when response is generic",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Maven}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-300",
+					Summary:    "generic vuln",
+					Severity:   "Low",
+					Technology: "generic",
+					Components: map[string]services.Component{
+						"maven://dep:3.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "maven://dep:3.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-300": techutils.Maven,
+			},
+		},
+		{
+			name:   "Target with multiple technologies and issues",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Maven, techutils.Npm}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-400",
+					Summary:    "vuln with npm tech",
+					Severity:   "Medium",
+					Technology: "npm",
+					Components: map[string]services.Component{
+						"npm://dep:4.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "npm://dep:4.0.0"}}},
+						},
+					},
+				},
+				{
+					IssueId:    "XRAY-500",
+					Summary:    "vuln with maven tech",
+					Severity:   "Low",
+					Technology: "maven",
+					Components: map[string]services.Component{
+						"maven://dep:5.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "maven://dep:5.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-400": techutils.Npm,
+				"XRAY-500": techutils.Maven,
+			},
+		},
+		{
+			name:   "Poetry target with pypi response",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Poetry}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-600",
+					Summary:    "pypi vuln",
+					Severity:   "High",
+					Technology: "pypi",
+					Components: map[string]services.Component{
+						"pypi://dep:6.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "pypi://dep:6.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-600": techutils.Poetry,
+			},
+		},
+		{
+			name:   "Gradle target with gav response",
+			target: results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Gradle}},
+			vulns: []services.Vulnerability{
+				{
+					IssueId:    "XRAY-800",
+					Summary:    "gav vuln",
+					Severity:   "Low",
+					Technology: "gav",
+					Components: map[string]services.Component{
+						"gav://dep:8.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{{{ComponentId: "root"}, {ComponentId: "gav://dep:8.0.0"}}},
+						},
+					},
+				},
+			},
+			expectedTechPerIssue: map[string]techutils.Technology{
+				"XRAY-800": techutils.Gradle,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rows, err := PrepareSimpleJsonVulnerabilities(tc.target, nil, services.ScanResponse{Vulnerabilities: tc.vulns}, false, false)
+			assert.NoError(t, err)
+			for _, row := range rows {
+				expectedTech, ok := tc.expectedTechPerIssue[row.IssueId]
+				if assert.True(t, ok, "unexpected issue %s in output", row.IssueId) {
+					assert.Equal(t, expectedTech, row.Technology, "IssueId %s: Technology mismatch", row.IssueId)
+				}
+			}
 		})
 	}
 }

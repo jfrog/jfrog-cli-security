@@ -14,6 +14,7 @@ import (
 	gitContributorsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/git/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -22,21 +23,23 @@ import (
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
-			Name:        "audit",
-			Aliases:     []string{"a"},
-			Description: gitAuditDocs.GetDescription(),
-			Flags:       flags.GetCommandFlags(flags.GitAudit),
-			Hidden:      true,
-			Action:      GitAuditCmd,
+			Name:          "audit",
+			Aliases:       []string{"a"},
+			Description:   gitAuditDocs.GetDescription(),
+			AIDescription: gitAuditDocs.GetAIDescription(),
+			Flags:         flags.GetCommandFlags(flags.GitAudit),
+			Hidden:        true,
+			Action:        GitAuditCmd,
 		},
 		// TODO: Move cc cmd to Frogbot/Script
 		{
-			Name:        "count-contributors",
-			Aliases:     []string{"cc"},
-			Flags:       flags.GetCommandFlags(flags.GitCountContributors),
-			Description: gitContributorsDocs.GetContContributorsDescription(),
-			Hidden:      true,
-			Action:      GitCountContributorsCmd,
+			Name:          "count-contributors",
+			Aliases:       []string{"cc"},
+			Flags:         flags.GetCommandFlags(flags.GitCountContributors),
+			Description:   gitContributorsDocs.GetContContributorsDescription(),
+			AIDescription: gitContributorsDocs.GetContContributorsAIDescription(),
+			Hidden:        true,
+			Action:        GitCountContributorsCmd,
 		},
 	}
 }
@@ -55,6 +58,9 @@ func GitAuditCmd(c *components.Context) error {
 		return err
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
+	// Set config profile params
+	gitAuditCmd.SetUseConfigProfile(c.GetBoolFlagValue(flags.UseConfigProfile))
+	gitAuditCmd.SetWorkspaceName(c.GetStringFlagValue(flags.Workspace))
 	// Set violations params
 	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), outputFormat.All)
 	if err != nil {
@@ -100,7 +106,7 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
-	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
+	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(utils.DefaultXrayCdxUploadRepoName)
 	gitAuditCmd.SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	gitAuditCmd.SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath))
 	gitAuditCmd.SetIncludeSnippetDetection(includeSnippetDetection)

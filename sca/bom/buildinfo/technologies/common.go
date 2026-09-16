@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
+	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -18,9 +19,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
+	xrayUtils "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 )
 
@@ -48,11 +49,18 @@ type BuildInfoBomGeneratorParams struct {
 	Args               []string
 	InstallCommandArgs []string
 	// Curation params
-	IsCurationCmd bool
+	IsCurationCmd        bool
+	MvnIncludePluginDeps bool
+	ParallelRequests     int
+	// OutputFormat is the --format flag value forwarded from the curation command.
+	// The zero value is treated as outFormat.Table by all renderers.
+	// Set by curation commands only; generic audit/scan commands leave this unset.
+	OutputFormat outFormat.OutputFormat
 	// Java params
-	IsMavenDepTreeInstalled bool
-	UseWrapper              bool
-	UseIncludedBuilds       bool
+	IsMavenDepTreeInstalled       bool
+	UseWrapper                    bool
+	UseIncludedBuilds             bool
+	GradleExcludeTestDependencies bool
 	// Python params
 	PipRequirementsFile string
 	// Npm params
@@ -60,12 +68,38 @@ type BuildInfoBomGeneratorParams struct {
 	NpmOverwritePackageLock bool
 	NpmRunNative            bool
 	NpmLegacyPeerDeps       bool
+	// NpmForceLogsMax, when non-empty, is appended as --logs-max <value> to the install command.
+	// Leave empty unless ambient logs-max is known to be 0 — never override a nonzero setting.
+	NpmForceLogsMax string
+	// Yarn params
+	// YarnOverwriteYarnLock refreshes yarn.lock when older than package.json (mirrors NpmOverwritePackageLock).
+	// Curation sets this to true; audit/scan leave it false to trust the existing lockfile.
+	YarnOverwriteYarnLock bool
+	// YarnCredentialsFromFallback is true when .yarnrc.yml had no token of its own and
+	// ServerDetails' credentials came from the 'jf c' server config instead. When false, the
+	// same token is already in use by .yarnrc.yml's native resolution, so injecting it into
+	// the subprocess env would just add a redundant network call.
+	YarnCredentialsFromFallback bool
 	// Pnpm params
 	MaxTreeDepth string
 	// Docker params
 	DockerImageName string
+	// Hugging Face params
+	// HuggingFaceModel is the model/dataset reference to audit, e.g. "mcpotato/42-eicar-street:main".
+	// Set by the curation command's --hugging-face-model flag.
+	// When empty, BuildDependencyTree auto-discovers references from HFWorkingDirectory.
+	HuggingFaceModel string
+	// HFWorkingDirectory is the project root used for Hugging Face auto-discovery.
+	// Defaults to "." when empty.
+	HFWorkingDirectory string
+	// HFProjectName overrides the HF root-node name (falls back to the working
+	// directory basename when empty). Set by the curation command to a collision-free
+	// name when auditing multiple --working-dirs entries that share a basename.
+	HFProjectName string
 	// NuGet params
 	SolutionFilePath string
+	// Uv params
+	ScriptPath string
 }
 
 func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {
@@ -83,11 +117,10 @@ func (bbp *BuildInfoBomGeneratorParams) SetConanProfile(file string) *BuildInfoB
 	return bbp
 }
 
-func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
+func GetScaExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
 	if configProfile != nil {
 		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
 	}
-
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}
@@ -97,7 +130,7 @@ func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive boo
 func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
 	technology := scanGraphParams.Technology()
-	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
+	xrayManager, err := xrayUtils.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xrayUtils.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		return nil, err
 	}

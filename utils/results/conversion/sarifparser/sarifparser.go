@@ -49,6 +49,7 @@ var (
 const (
 	ScaRun        RunInJfrogReport = "sca"
 	SecretsRun    RunInJfrogReport = "secrets"
+	ServicesRun   RunInJfrogReport = "services"
 	IacRun        RunInJfrogReport = "iac"
 	SastRun       RunInJfrogReport = "sast"
 	ViolationsRun RunInJfrogReport = "violations"
@@ -77,6 +78,7 @@ type currentTargetRuns struct {
 	// Current run cache information
 	scaCurrentRun       *sarif.Run
 	secretsCurrentRun   *sarif.Run
+	servicesCurrentRun  *sarif.Run
 	iacCurrentRun       *sarif.Run
 	sastCurrentRun      *sarif.Run
 	maliciousCurrentRun *sarif.Run
@@ -156,6 +158,10 @@ func (sc *CmdResultsSarifConverter) flush() {
 	if sc.currentTargetConvertedRuns.secretsCurrentRun != nil {
 		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.secretsCurrentRun)
 	}
+	// Flush services if needed
+	if sc.currentTargetConvertedRuns.servicesCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.servicesCurrentRun)
+	}
 	// Flush iac if needed
 	if sc.currentTargetConvertedRuns.iacCurrentRun != nil {
 		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.iacCurrentRun)
@@ -179,10 +185,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 		// For binary, the target is a file and not a directory
 		wd = filepath.Dir(wd)
 	}
-	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(wd))).
-		WithExecutionSuccessful(errorCount == 0),
-	)
+	run.Invocations = append(run.Invocations, sarifutils.CreateNewInvocation(errorCount == 0, wd, target.Include...))
 	return run
 }
 
@@ -236,7 +239,10 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 			err = errors.Join(err, e)
 			continue
 		}
-		compName, compVersion, _ := techutils.SplitPackageURL(cveViolation.ImpactedComponent.PackageURL)
+		var compName, compVersion string
+		if cveViolation.ImpactedComponent != nil {
+			compName, compVersion, _ = techutils.SplitPackageURL(cveViolation.ImpactedComponent.PackageURL)
+		}
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 sc.currentCmdType,
 			IssueId:                 cveViolation.CveVulnerability.ID,
@@ -258,7 +264,12 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 	}
 	// License violations
 	for _, licenseViolation := range violationsScanResults.License {
-		compName, compVersion, _ := techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
+		var compName, compVersion string
+		summary := licenseViolation.LicenseKey
+		if licenseViolation.ImpactedComponent != nil {
+			compName, compVersion, _ = techutils.SplitPackageURL(licenseViolation.ImpactedComponent.PackageURL)
+			summary = getLicenseViolationSummary(compName, compVersion, licenseViolation.LicenseKey)
+		}
 		markdownDescription, e := getScaLicenseViolationMarkdown(compName, compVersion, licenseViolation.LicenseKey, licenseViolation.DirectComponents)
 		if e != nil {
 			err = errors.Join(err, e)
@@ -267,7 +278,7 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 sc.currentCmdType,
 			IssueId:                 licenseViolation.LicenseKey,
-			Summary:                 getLicenseViolationSummary(compName, compVersion, licenseViolation.LicenseKey),
+			Summary:                 summary,
 			Violation:               &licenseViolation.Violation,
 			MarkdownDescription:     markdownDescription,
 			SeverityScore:           fmt.Sprintf("%.1f", severityutils.GetSeverityScore(licenseViolation.Severity, jasutils.Applicable)),
@@ -291,6 +302,11 @@ func (sc *CmdResultsSarifConverter) ParseViolations(violationsScanResults violat
 	for _, iacViolation := range violationsScanResults.Iac {
 		iacResult, iacRule := createJasViolation(iacViolation)
 		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{iacRule}, iacResult)
+	}
+	// Services violations
+	for _, servicesViolation := range violationsScanResults.Services {
+		servicesResult, servicesRule := createJasViolation(servicesViolation)
+		sc.addResultsToCurrentRun(ViolationsRun, []*sarif.ReportingDescriptor{servicesRule}, servicesResult)
 	}
 	// Sast violations
 	for _, sastViolation := range violationsScanResults.Sast {
@@ -349,14 +365,19 @@ func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom *cyclonedx.BOM, appli
 
 func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
 	bomIndex := cdxutils.NewBOMIndex(enrichedSbom, true)
-	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
-		impactPaths := results.BuildImpactPath(component, bomIndex)
-		directDependencies := results.ExtractComponentDirectComponentsInBOM(bomIndex, component, impactPaths)
+	return func(vulnerability cyclonedx.Vulnerability, component *cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+		var impactPaths [][]formats.ComponentRow
+		var directDependencies []formats.ComponentRow
+		var compName, compVersion string
+		if component != nil {
+			impactPaths = results.BuildImpactPath(*component, bomIndex)
+			directDependencies = results.ExtractComponentDirectComponentsInBOM(bomIndex, *component, impactPaths)
+			compName, compVersion, _ = techutils.SplitPackageURL(component.PackageURL)
+		}
 		applicabilityStatus, maxCveScore, cves, fixedVersions, markdownDescription, e := prepareCdxInfoForSarif(vulnerability, severity, applicability, directDependencies, fixedVersion)
 		if e != nil {
 			return
 		}
-		compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
 		createAndAddScaIssue(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 vulnerability.ID,
@@ -426,6 +447,14 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...[]*sarif.Run) (err e
 	return
 }
 
+func (sc *CmdResultsSarifConverter) ParseServices(services ...[]*sarif.Run) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
+		return
+	}
+	sc.currentTargetConvertedRuns.servicesCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.servicesCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.ServicesScan), results.CollectRuns(services...)...)...)
+	return
+}
+
 func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...[]*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
@@ -457,6 +486,8 @@ func (sc *CmdResultsSarifConverter) addResultsToCurrentRun(runType RunInJfrogRep
 		currentRun = sc.currentTargetConvertedRuns.scaCurrentRun
 	case SecretsRun:
 		currentRun = sc.currentTargetConvertedRuns.secretsCurrentRun
+	case ServicesRun:
+		currentRun = sc.currentTargetConvertedRuns.servicesCurrentRun
 	case IacRun:
 		currentRun = sc.currentTargetConvertedRuns.iacCurrentRun
 	case SastRun:
@@ -563,8 +594,9 @@ func createAndAddScaIssue(params scaParseParams, sarifResults *[]*sarif.Result, 
 }
 
 func createJasViolation(jasViolation violationutils.JasViolation) (sarifResult *sarif.Result, rule *sarif.ReportingDescriptor) {
-	// Rule is the same as the vulnerability rule, no need to create a new one
-	rule = jasViolation.Rule
+	// Rule is the same as the vulnerability rule, no need to create a new one. A rule always belongs to a single scan type,
+	// so stamping the type on it is idempotent even though the rule is shared with the vulnerabilities run.
+	rule = appendViolationTypeToSarifRule(jasViolation.Rule, jasViolation.Violation)
 	// Copy the result to avoid modifying the original one, Append the violation context to the result properties
 	sarifResult = appendViolationContextToSarifResult(sarifutils.CopyResult(jasViolation.Result), jasViolation.Violation)
 	return
@@ -589,6 +621,23 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 		params.Summary,
 		params.MarkdownDescription,
 	)
+	if isViolation {
+		rule = appendViolationTypeToSarifRule(rule, *params.Violation)
+	}
+	if len(params.DirectComponents) == 0 && params.ImpactedPackagesName == "" && params.ImpactedPackagesVersion == "" {
+		log.Debug(fmt.Sprintf("Issue %s without any components, adding a result with the issue id only without any location", issueId))
+		// Issue without any components, lets add a result with the issue id only
+		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
+			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc("unknown", "unknown", issueId, watch))).
+			WithLevel(level.String())
+		// Add properties
+		issueResult = appendScaVulnerabilityPropertiesToSarifResult(issueResult, params.ApplicabilityStatus, params.FixedVersions, params.AddFixedVersionProperty)
+		if isViolation {
+			issueResult = appendViolationContextToSarifResult(issueResult, *params.Violation)
+		}
+		sarifResults = append(sarifResults, issueResult)
+		return
+	}
 	for _, directDependency := range params.DirectComponents {
 		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
@@ -641,6 +690,17 @@ func appendViolationContextToSarifResult(sarifResult *sarif.Result, violation vi
 		sarifResult.Properties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(policies, ","))
 	}
 	return sarifResult
+}
+
+func appendViolationTypeToSarifRule(rule *sarif.ReportingDescriptor, violation violationutils.Violation) *sarif.ReportingDescriptor {
+	if rule == nil || violation.ViolationType == "" {
+		return rule
+	}
+	if rule.Properties == nil {
+		rule.Properties = sarif.NewPropertyBag()
+	}
+	rule.Properties.Add(sarifutils.ViolationTypeSarifPropertyKey, violation.ViolationType.String())
+	return rule
 }
 
 func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
@@ -885,19 +945,21 @@ func getScanTypeFromRule(subScanType utils.SubScanType, rule *sarif.ReportingDes
 	if rule == nil {
 		return subScanType
 	}
-	return getScanType(subScanType, sarifutils.GetRuleId(rule))
+	return resolveScanType(subScanType, sarifutils.GetRuleViolationType(rule))
 }
 
 func getScanTypeFromResult(subScanType utils.SubScanType, result *sarif.Result) utils.SubScanType {
 	if result == nil {
 		return subScanType
 	}
-	// Try to get from properties first
-	if violationType := sarifutils.GetResultViolationType(result); violationType != "" {
+	return resolveScanType(subScanType, sarifutils.GetResultViolationType(result))
+}
+
+func resolveScanType(defaultType utils.SubScanType, violationType string) utils.SubScanType {
+	if violationType != "" {
 		return getResultViolationType(violationType)
 	}
-	// Fallback to rule id
-	return getScanType(subScanType, sarifutils.GetResultRuleId(result))
+	return defaultType
 }
 
 func getResultViolationType(violationType string) utils.SubScanType {
@@ -906,27 +968,13 @@ func getResultViolationType(violationType string) utils.SubScanType {
 		return utils.SecretsScan
 	case violationutils.IacViolationType:
 		return utils.IacScan
+	case violationutils.ServicesViolationType:
+		return utils.ServicesScan
 	case violationutils.SastViolationType:
 		return utils.SastScan
 	default:
 		return utils.ScaScan
 	}
-}
-
-func getScanType(defaultType utils.SubScanType, scanType string) utils.SubScanType {
-	if defaultType != "" || scanType == "" {
-		// If default type is given, use it
-		return defaultType
-	}
-	if strings.HasPrefix(scanType, "CVE") || strings.HasPrefix(scanType, "XRAY") {
-		return utils.ScaScan
-	}
-	if strings.HasPrefix(scanType, "EXP") || strings.Contains(scanType, "SECRET") {
-		return utils.SecretsScan
-	}
-	// TODO: Add more rules to identify IAC
-	// Default to SAST
-	return utils.SastScan
 }
 
 func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths, isJasViolations bool, target *results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {

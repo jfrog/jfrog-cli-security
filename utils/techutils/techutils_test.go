@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )
 
@@ -57,6 +58,35 @@ func TestMapFilesToRelevantWorkingDirectories(t *testing.T) {
 			requestedDescriptors: noRequest,
 			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-lock.yaml")}},
 			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			name:                 "pnpmWorkspaceTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			name:                 "pnpmfileTest",
+			paths:                []string{filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir:   map[string][]string{"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", ".pnpmfile.cjs")}},
+			expectedExcluded:     map[string][]Technology{"dir": {Npm, Yarn}},
+		},
+		{
+			// pnpm-workspace.yaml + pnpm-lock.yaml both present: only pnpm should be detected,
+			// npm and yarn excluded.
+			name: "pnpmWorkspaceAndLockfileTest",
+			paths: []string{
+				filepath.Join("dir", "package.json"),
+				filepath.Join("dir", "pnpm-workspace.yaml"),
+				filepath.Join("dir", "pnpm-lock.yaml"),
+			},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir: map[string][]string{
+				"dir": {filepath.Join("dir", "package.json"), filepath.Join("dir", "pnpm-workspace.yaml"), filepath.Join("dir", "pnpm-lock.yaml")},
+			},
+			expectedExcluded: map[string][]Technology{"dir": {Npm, Yarn}},
 		},
 		{
 			name:                 "yarnTest",
@@ -116,6 +146,17 @@ func TestMapFilesToRelevantWorkingDirectories(t *testing.T) {
 			expectedWorkingDir: map[string][]string{
 				"dir":                        {filepath.Join("dir", "project.sln")},
 				filepath.Join("dir", "sub1"): {filepath.Join("dir", "sub1", "project.csproj")},
+			},
+			expectedExcluded: noExclude,
+		},
+		{
+			// A directory with only a '.slnx' file (no '.sln', no '.csproj') must still be
+			// detected as a NuGet/.NET working directory.
+			name:                 "nugetSlnxOnlyTest",
+			paths:                []string{filepath.Join("dir", "project.slnx"), filepath.Join("dir", "file")},
+			requestedDescriptors: noRequest,
+			expectedWorkingDir: map[string][]string{
+				"dir": {filepath.Join("dir", "project.slnx")},
 			},
 			expectedExcluded: noExclude,
 		},
@@ -862,6 +903,32 @@ func TestSplitPackageURL(t *testing.T) {
 	}
 }
 
+func TestResolveIssueTechnology(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		compType string
+		targets  []Technology
+		expected Technology
+	}{
+		{"empty response npm target", "", "npm", []Technology{Npm}, Npm},
+		{"pip response poetry target", "pip", "pypi", []Technology{Poetry}, Poetry},
+		{"pypi response poetry target", "pypi", "pypi", []Technology{Poetry}, Poetry},
+		{"gav response gradle target", "gav", "gav", []Technology{Gradle}, Gradle},
+		{"npm response disambiguate", "npm", "npm", []Technology{Maven, Npm}, Npm},
+		{"maven response disambiguate", "maven", "maven", []Technology{Maven, Npm}, Maven},
+		{"generic uses target", "generic", "maven", []Technology{Maven}, Maven},
+		{"yarn npm type", "yarn", "npm", []Technology{Yarn}, Yarn},
+		{"single target fallback", "", "go", []Technology{Go}, Go},
+		{"no match", "", "pypi", []Technology{Maven, Npm}, NoTech},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ResolveIssueTechnology(tt.response, tt.targets, tt.compType))
+		})
+	}
+}
+
 func TestCdxPackageTypeToTechnology(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -993,5 +1060,286 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 			actual := XrayComponentIdToCdxComponentRef(tt.input)
 			assert.Equalf(t, tt.expected, actual, "XrayComponentIdToCdxComponentRef(%v) == %v", tt.input, tt.expected)
 		})
+	}
+}
+
+// TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers pins
+// the scoping contract for the workspace-member detector fixup: the
+// generic file-based detector that 'jf audit', 'jf scan' etc. depend on
+// must NOT promote bare-package.json members from Npm to Yarn. Only
+// curation has opted into that behaviour via DetectedTechnologiesList-
+// ForCurationAudit. Without this test a careless future change could
+// re-introduce the promotion at the generic layer and silently flip the
+// audit detection result for every yarn-workspace user.
+func TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers(t *testing.T) {
+	root := t.TempDir()
+	member := filepath.Join(root, "packages", "admin-ui")
+	assert.NoError(t, os.MkdirAll(member, 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+		[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "yarn.lock"), []byte("# yarn\n"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+		[]byte(`{"name":"admin-ui"}`), 0644))
+
+	detected, err := DetectTechnologiesDescriptors(member, false, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+	// Bare package.json is an npm indicator and only a yarn descriptor;
+	// the legacy detector therefore returns Npm. The curation-only
+	// promotion lives in DetectedTechnologiesListForCurationAudit, NOT
+	// here, so this generic call must keep returning Npm.
+	assert.Contains(t, detected, Npm, "generic detector must keep returning Npm for bare-package.json dirs — audit/scan rely on this")
+	assert.NotContains(t, detected, Yarn, "generic detector must NOT auto-route to yarn — that would silently change every 'jf audit' for yarn workspace users")
+}
+
+// TestPromoteYarnWorkspaceMembers covers the detector fixup that turns
+// 'jf ca --working-dirs=<yarn workspace member>' from an npm audit into a
+// yarn audit. Without this fixup the user's scoped audit would silently
+// resolve through npm (because package.json is an npm indicator) against
+// a yarn-managed project — wrong tool for the registry contract, wrong
+// algorithm for the curation answers.
+//
+// The three cases match the only three states a single workingDirectory
+// can be in after the main detector passes: (1) an npm dir that IS a
+// yarn workspace member → must be moved to yarn, npm bucket cleaned up;
+// (2) an npm dir that ISN'T a yarn workspace member → must be left
+// alone, no spurious yarn entries; (3) an npm-workspaces sibling (yarn
+// "workspaces" syntax exists but no yarn indicator at the root) → must
+// be left as npm, no yarn promotion.
+func TestPromoteYarnWorkspaceMembers(t *testing.T) {
+	t.Run("npm dir claimed by yarn parent is promoted to yarn", func(t *testing.T) {
+		root := t.TempDir()
+		member := filepath.Join(root, "packages", "admin-ui")
+		assert.NoError(t, os.MkdirAll(member, 0755))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+		// Yarn indicator at the root is mandatory: directoryHasYarnIndicator
+		// must accept this ancestor, otherwise the promotion is rejected as
+		// an npm-workspaces sibling (case 3 below).
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "yarn.lock"), []byte("# yarn\n"), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+			[]byte(`{"name":"admin-ui"}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {member: {filepath.Join(member, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		// Yarn must now own the member dir, with the same descriptors
+		// the npm bucket originally held. Downstream code that iterates
+		// detected[Yarn][wd] for descriptor paths must see the same shape
+		// it sees for any other yarn dir.
+		assert.Contains(t, detected, Yarn)
+		assert.Contains(t, detected[Yarn], member)
+		assert.Equal(t, []string{filepath.Join(member, "package.json")}, detected[Yarn][member])
+		// Npm bucket must be gone — a stale empty entry would still appear
+		// in 'Detected N technologies' debug logs and confuse triage.
+		assert.NotContains(t, detected, Npm, "empty Npm bucket must be deleted after the member is moved out")
+	})
+
+	t.Run("npm dir without yarn parent is untouched", func(t *testing.T) {
+		root := t.TempDir()
+		// Plain npm project: package.json + package-lock.json, no
+		// workspaces declared, no yarn artefacts anywhere.
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"plain-npm"}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {root: {filepath.Join(root, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		assert.Contains(t, detected, Npm, "ordinary npm dir must remain npm — no walking-up surprise")
+		assert.NotContains(t, detected, Yarn)
+		assert.Contains(t, detected[Npm], root)
+	})
+
+	t.Run("npm-workspaces sibling is not promoted", func(t *testing.T) {
+		root := t.TempDir()
+		member := filepath.Join(root, "packages", "admin-ui")
+		assert.NoError(t, os.MkdirAll(member, 0755))
+		// 'workspaces' field exists at root — but no yarn indicator next
+		// to it. This is an npm-workspaces project, not yarn. The
+		// directoryHasYarnIndicator guard in isYarnWorkspaceMemberDir
+		// must reject it; otherwise we'd hijack npm-workspaces users.
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"),
+			[]byte(`{"name":"root","workspaces":["packages/*"]}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{}`), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(member, "package.json"),
+			[]byte(`{"name":"admin-ui"}`), 0644))
+
+		detected := map[Technology]map[string][]string{
+			Npm: {member: {filepath.Join(member, "package.json")}},
+		}
+		promoteYarnWorkspaceMembers(detected)
+
+		assert.Contains(t, detected, Npm, "npm-workspaces member must stay in npm — no yarn hijack")
+		assert.NotContains(t, detected, Yarn)
+	})
+}
+
+// TestUvToFormal verifies that uv's formal name matches the tool's own branding (lowercase).
+func TestUvToFormal(t *testing.T) {
+	assert.Equal(t, "uv", Uv.ToFormal())
+}
+
+func TestPep723ScriptUnauditedHint(t *testing.T) {
+	// This only returns a hint message; it never alters detection itself.
+	t.Run("PEP 723 script present returns a hint", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "script.py"),
+			[]byte("# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"), 0644))
+		assert.NotEmpty(t, Pep723ScriptUnauditedHint(dir))
+	})
+
+	t.Run("no PEP 723 script present returns no hint", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+		assert.Empty(t, Pep723ScriptUnauditedHint(dir))
+	})
+}
+
+// TestPep723Hint_BareScript_NoHint: a lone .py file with nothing else in the directory
+// detects no technology, so the PEP 723 hint must not fire either.
+func TestPep723Hint_BareScript_NoHint(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "script.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAudit()
+
+	assert.Empty(t, techs, "a lone .py file detects no technology at all")
+}
+
+// TestPep723Hint_UvSibling_HintFires: a uv project can have an unrelated PEP 723 script
+// alongside it. The project's own audit never resolves that script's deps, so the hint
+// must fire even though uv was also detected.
+func TestPep723Hint_UvSibling_HintFires(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "verify_isolation.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAudit()
+
+	assert.Contains(t, techs, Uv.String(), "the project itself must still be detected normally")
+	found, findErr := hasUnauditedPep723Script(root)
+	require.NoError(t, findErr)
+	assert.True(t, found, "the sibling script's inline deps are out of scope for the project's own audit")
+}
+
+func TestHasPep723ScriptMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name: "valid PEP 723 block",
+			content: `# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "requests<3",
+# ]
+# ///
+
+import requests
+`,
+			expected: true,
+		},
+		{
+			name:     "no metadata block at all",
+			content:  "import requests\nprint('hello')\n",
+			expected: false,
+		},
+		{
+			name: "open marker with no closing marker",
+			content: `# /// script
+# dependencies = ["requests"]
+import requests
+`,
+			expected: false,
+		},
+		{
+			name:     "closing marker with no opening marker",
+			content:  "# ///\nimport requests\n",
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, HasPep723ScriptMetadata(tt.content))
+		})
+	}
+}
+
+func TestHasUnauditedPep723Script_FindsNestedScript(t *testing.T) {
+	dir := t.TempDir()
+
+	pep723Content := "# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("# /// script\n# ///\n"), 0644))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "subdir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "subdir", "nested.py"), []byte(pep723Content), 0644))
+
+	found, err := hasUnauditedPep723Script(dir)
+	require.NoError(t, err)
+	assert.True(t, found, "a PEP 723 file nested at any depth must be found, even with plain .py and non-.py files present")
+}
+
+// TestHasUnauditedPep723Script_ExcludesDefaultPatterns verifies excluded directories
+// (venv, node_modules, .git, etc.) are skipped, while non-excluded ones are still scanned.
+func TestHasUnauditedPep723Script_ExcludesDefaultPatterns(t *testing.T) {
+	pep723Content := "# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"
+
+	t.Run("only excluded dir has a script — not found", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".venv", "lib"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".venv", "lib", "vendored.py"), []byte(pep723Content), 0644))
+
+		found, err := hasUnauditedPep723Script(dir)
+		require.NoError(t, err)
+		assert.False(t, found, "a script only under an excluded directory like .venv must be pruned, not found")
+	})
+
+	t.Run("non-excluded sibling also has a script — found", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".venv", "lib"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".venv", "lib", "vendored.py"), []byte(pep723Content), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tools", "deploy.py"), []byte(pep723Content), 0644))
+
+		found, err := hasUnauditedPep723Script(dir)
+		require.NoError(t, err)
+		assert.True(t, found, "a script under a non-excluded subdirectory must still be found")
+	})
+}
+
+func TestHasUnauditedPep723Script_NoScripts(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "plain.py"), []byte("print('hi')\n"), 0644))
+
+	found, err := hasUnauditedPep723Script(dir)
+	require.NoError(t, err)
+	assert.False(t, found)
+}
+
+// Cargo is curation-only, so it must have no shared-detection indicators for jf audit/jf scan to find.
+func TestCargoHasNoSharedDetectionIndicator(t *testing.T) {
+	for _, name := range []string{"Cargo.toml", "Cargo.lock"} {
+		isIndicator, err := Cargo.isIndicator(name)
+		require.NoError(t, err)
+		assert.False(t, isIndicator, "%q must not be a shared-detection indicator for Cargo", name)
 	}
 }

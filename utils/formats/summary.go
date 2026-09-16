@@ -7,6 +7,7 @@ import (
 
 const (
 	IacResult            SummaryResultType = "IAC"
+	ServicesResult       SummaryResultType = "Services"
 	SecretsResult        SummaryResultType = "Secrets"
 	SastResult           SummaryResultType = "SAST"
 	ScaResult            SummaryResultType = "SCA"
@@ -38,6 +39,7 @@ type ScanSummary struct {
 type ScanResultSummary struct {
 	ScaResults       *ScaScanResultSummary `json:"sca,omitempty"`
 	IacResults       *ResultSummary        `json:"iac,omitempty"`
+	ServicesResults  *ResultSummary        `json:"services,omitempty"`
 	SecretsResults   *ResultSummary        `json:"secrets,omitempty"`
 	SastResults      *ResultSummary        `json:"sast,omitempty"`
 	MaliciousResults *ResultSummary        `json:"maliciousCode,omitempty"`
@@ -60,6 +62,11 @@ type ScaScanResultSummary struct {
 type CuratedPackages struct {
 	Blocked      []BlockedPackages `json:"blocked,omitempty"`
 	PackageCount int               `json:"num_packages,omitempty"`
+	// IsPartial is true when the dependency tree could not be fully resolved (e.g. CVS pip fallback).
+	// PackageCount reflects only recovered blocked packages, not the full tree size.
+	IsPartial bool `json:"partial,omitempty"`
+	// PartialReason explains why IsPartial is true, e.g. "cvs_fallback" or "hf_unresolved".
+	PartialReason string `json:"partial_reason,omitempty"`
 }
 
 type BlockedPackages struct {
@@ -179,6 +186,9 @@ func (srs *ScanResultSummary) GetTotal(filterTypes ...SummaryResultType) (total 
 	if srs.IacResults != nil && isFilterApply(IacResult, filterTypes) {
 		total += srs.IacResults.GetTotal()
 	}
+	if srs.ServicesResults != nil && isFilterApply(ServicesResult, filterTypes) {
+		total += srs.ServicesResults.GetTotal()
+	}
 	if srs.SecretsResults != nil && isFilterApply(SecretsResult, filterTypes) {
 		total += srs.SecretsResults.GetTotal()
 	}
@@ -223,6 +233,9 @@ func (ss *ScanResultSummary) GetSummaryBySeverity() (summary ResultSummary) {
 	}
 	if ss.IacResults != nil {
 		summary = MergeResultSummaries(summary, *ss.IacResults)
+	}
+	if ss.ServicesResults != nil {
+		summary = MergeResultSummaries(summary, *ss.ServicesResults)
 	}
 	if ss.SecretsResults != nil {
 		summary = MergeResultSummaries(summary, *ss.SecretsResults)
@@ -300,6 +313,9 @@ func extractIssuesToSummary(issues *ScanResultSummary, destination *ScanResultSu
 	}
 	if issues.IacResults != nil {
 		destination.IacResults = mergeResultSummariesPointers(destination.IacResults, issues.IacResults)
+	}
+	if issues.ServicesResults != nil {
+		destination.ServicesResults = mergeResultSummariesPointers(destination.ServicesResults, issues.ServicesResults)
 	}
 	if issues.SecretsResults != nil {
 		destination.SecretsResults = mergeResultSummariesPointers(destination.SecretsResults, issues.SecretsResults)

@@ -2,15 +2,227 @@ package buildinfo
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreutils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func isolateResolverConfig(t *testing.T) string {
+	t.Helper()
+	t.Setenv(coreutils.HomeDir, t.TempDir())
+	dummyHome := t.TempDir()
+	t.Setenv("HOME", dummyHome)
+	t.Setenv("USERPROFILE", dummyHome)
+	require.NoError(t, config.SaveServersConf([]*config.ServerDetails{{
+		ServerId:       "test",
+		Url:            "http://localhost/",
+		ArtifactoryUrl: "http://localhost/artifactory/",
+	}}))
+	projectRoot := t.TempDir()
+	originalCwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectRoot))
+	t.Cleanup(func() { require.NoError(t, os.Chdir(originalCwd)) })
+	return projectRoot
+}
+
+func TestResolveTechParams(t *testing.T) {
+	t.Run("isolates DependenciesRepository per technology", func(t *testing.T) {
+		projectRoot := isolateResolverConfig(t)
+		projectsDir := filepath.Join(projectRoot, ".jfrog", "projects")
+		require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "go.yaml"),
+			[]byte("version: 1\ntype: go\nresolver:\n  serverId: test\n  repo: go-vir\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"),
+			[]byte("version: 1\ntype: npm\nresolver:\n  serverId: test\n  repo: npm-remote\n"), 0o644))
+
+		generator := NewBuildInfoBomGenerator()
+
+		goParams, _, err := generator.resolveTechParams(techutils.Go)
+		require.NoError(t, err)
+		assert.Equal(t, "go-vir", goParams.DependenciesRepository)
+
+		npmParams, _, err := generator.resolveTechParams(techutils.Npm)
+		require.NoError(t, err)
+		assert.Equal(t, "npm-remote", npmParams.DependenciesRepository)
+		assert.Empty(t, generator.params.DependenciesRepository)
+	})
+
+	t.Run("isolates ServerDetails from in-place mutation", func(t *testing.T) {
+		shared := &config.ServerDetails{
+			ServerId:       "test",
+			Url:            "http://localhost/",
+			ArtifactoryUrl: "http://localhost/artifactory/",
+		}
+		generator := NewBuildInfoBomGenerator()
+		generator.params = technologies.BuildInfoBomGeneratorParams{
+			ServerDetails:          shared,
+			DependenciesRepository: "cli-deps-repo",
+		}
+
+		techParams, _, err := generator.resolveTechParams(techutils.Nuget)
+		require.NoError(t, err)
+		require.NotNil(t, techParams.ServerDetails)
+		assert.NotSame(t, shared, techParams.ServerDetails)
+
+		techParams.ServerDetails.ArtifactoryUrl += "api/curation/audit"
+		assert.Equal(t, "http://localhost/artifactory/", shared.ArtifactoryUrl)
+		assert.Equal(t, "http://localhost/artifactory/", generator.params.ServerDetails.ArtifactoryUrl)
+	})
+}
+
+func TestMergeResults(t *testing.T) {
+	nodeA := &xrayUtils.GraphNode{Id: "npm://a:1"}
+	nodeB := &xrayUtils.GraphNode{Id: "gav://b:2"}
+	nodeC := &xrayUtils.GraphNode{Id: "pypi://c:3"}
+	fullTreeA := &xrayUtils.GraphNode{Id: "root-a"}
+	fullTreeB := &xrayUtils.GraphNode{Id: "root-b"}
+
+	testCases := []struct {
+		name       string
+		existing   *DependencyTreeResult
+		additional *DependencyTreeResult
+		assertFn   func(t *testing.T, got, existing *DependencyTreeResult)
+	}{
+		{
+			name: "nil additional returns existing unchanged",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
+				DownloadUrls: map[string]string{"pkg:a": "https://a"},
+			},
+			additional: nil,
+			assertFn: func(t *testing.T, got, existing *DependencyTreeResult) {
+				assert.Same(t, existing, got)
+				assert.Len(t, got.FlatTree.Nodes, 1)
+				assert.Equal(t, "https://a", got.DownloadUrls["pkg:a"])
+			},
+		},
+		{
+			name:       "nil existing returns additional",
+			existing:   nil,
+			additional: &DependencyTreeResult{FlatTree: &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeB}}},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				require.NotNil(t, got)
+				assert.Len(t, got.FlatTree.Nodes, 1)
+				assert.Equal(t, "gav://b:2", got.FlatTree.Nodes[0].Id)
+			},
+		},
+		{
+			name: "merges flat tree nodes without duplicates",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA, nodeB}},
+				DownloadUrls: map[string]string{},
+			},
+			additional: &DependencyTreeResult{
+				FlatTree: &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeB, nodeC}},
+			},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				require.NotNil(t, got.FlatTree)
+				assert.ElementsMatch(t, []*xrayUtils.GraphNode{nodeA, nodeB, nodeC}, got.FlatTree.Nodes)
+			},
+		},
+		{
+			name: "merging same nodes again does not duplicate",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA, nodeB}},
+				DownloadUrls: map[string]string{},
+			},
+			additional: &DependencyTreeResult{
+				FlatTree: &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
+			},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				assert.Len(t, got.FlatTree.Nodes, 2)
+			},
+		},
+		{
+			name: "merges download URLs without overwriting existing keys",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
+				DownloadUrls: map[string]string{"pkg:a": "https://existing"},
+			},
+			additional: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeC}},
+				DownloadUrls: map[string]string{"pkg:a": "https://new", "pkg:c": "https://c"},
+			},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				assert.Equal(t, "https://existing", got.DownloadUrls["pkg:a"])
+				assert.Equal(t, "https://c", got.DownloadUrls["pkg:c"])
+			},
+		},
+		{
+			name: "appends full dependency trees",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeA}},
+				FullDepTrees: []*xrayUtils.GraphNode{fullTreeA},
+				DownloadUrls: map[string]string{},
+			},
+			additional: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{nodeB}},
+				FullDepTrees: []*xrayUtils.GraphNode{fullTreeB},
+			},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				assert.Equal(t, []*xrayUtils.GraphNode{fullTreeA, fullTreeB}, got.FullDepTrees)
+			},
+		},
+		{
+			name: "clears flat tree when no nodes remain",
+			existing: &DependencyTreeResult{
+				FlatTree:     &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{}},
+				DownloadUrls: map[string]string{},
+			},
+			additional: &DependencyTreeResult{
+				FlatTree: &xrayUtils.GraphNode{Nodes: []*xrayUtils.GraphNode{}},
+			},
+			assertFn: func(t *testing.T, got, _ *DependencyTreeResult) {
+				assert.Nil(t, got.FlatTree)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var existing, additional *DependencyTreeResult
+			if tc.existing != nil {
+				existing = copyDependencyTreeResult(tc.existing)
+			}
+			if tc.additional != nil {
+				additional = copyDependencyTreeResult(tc.additional)
+			}
+			got := mergeResults(existing, additional)
+			tc.assertFn(t, got, existing)
+		})
+	}
+}
+
+func copyDependencyTreeResult(src *DependencyTreeResult) *DependencyTreeResult {
+	if src == nil {
+		return nil
+	}
+	dst := &DependencyTreeResult{
+		FullDepTrees: append([]*xrayUtils.GraphNode(nil), src.FullDepTrees...),
+		DownloadUrls: make(map[string]string, len(src.DownloadUrls)),
+	}
+	for k, v := range src.DownloadUrls {
+		dst.DownloadUrls[k] = v
+	}
+	if src.FlatTree != nil {
+		nodes := make([]*xrayUtils.GraphNode, len(src.FlatTree.Nodes))
+		copy(nodes, src.FlatTree.Nodes)
+		dst.FlatTree = &xrayUtils.GraphNode{Nodes: nodes}
+	}
+	return dst
+}
 
 func TestGetDiffDependencyTree(t *testing.T) {
 	targetResults := &results.TargetResults{
@@ -110,4 +322,13 @@ func TestGetDiffDependencyTree(t *testing.T) {
 			assert.ElementsMatch(t, testCase.expectedDependencies, result.FlatTree.Nodes)
 		})
 	}
+}
+
+func TestBuildJavaDepTreeParamsPreservesInsecureTls(t *testing.T) {
+	t.Parallel()
+	params := technologies.BuildInfoBomGeneratorParams{InsecureTls: true, DependenciesRepository: "test-repo"}
+	result := buildJavaDepTreeParams(params, nil, "cache-folder")
+	assert.True(t, result.InsecureTls)
+	assert.Equal(t, "test-repo", result.DepsRepo)
+	assert.Equal(t, "cache-folder", result.CurationCacheFolder)
 }

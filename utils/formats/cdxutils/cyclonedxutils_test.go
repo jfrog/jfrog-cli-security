@@ -6,6 +6,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAppendProperties(t *testing.T) {
@@ -1157,6 +1158,23 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 	}
 }
 
+func TestScanLicenseToCycloneDx(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		license  string
+		expected cyclonedx.License
+	}{
+		{name: "prefer key as id", key: "Apache-2.0-Key", license: "Apache-2.0", expected: cyclonedx.License{ID: "Apache-2.0-Key"}},
+		{name: "fallback to name", key: "", license: "Apache-2.0", expected: cyclonedx.License{Name: "Apache-2.0"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, *ScanLicenseToCycloneDx(tt.key, tt.license))
+		})
+	}
+}
+
 func TestAttachLicenseToComponent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1203,6 +1221,79 @@ func TestAttachLicenseToComponent(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, got)
 		})
 	}
+}
+
+func TestCloneVulnerability_IsolatesAffectsMutation(t *testing.T) {
+	original := cyclonedx.Vulnerability{
+		BOMRef:  "CVE-TEST",
+		Affects: &[]cyclonedx.Affects{{Ref: "pkg:maven/foo@1.0"}},
+	}
+	cloned := CloneVulnerability(original)
+	require.NotSame(t, original.Affects, cloned.Affects)
+	*cloned.Affects = append(*cloned.Affects, cyclonedx.Affects{Ref: "file:evidence"})
+	assert.Len(t, *original.Affects, 1)
+	assert.Len(t, *cloned.Affects, 2)
+}
+
+func TestCloneVulnerability_IsolatesAffectsRangeMutation(t *testing.T) {
+	rng := []cyclonedx.AffectedVersions{{Version: "1.0", Status: cyclonedx.VulnerabilityStatusAffected}}
+	original := cyclonedx.Vulnerability{
+		Affects: &[]cyclonedx.Affects{{Ref: "pkg:maven/foo@1.0", Range: &rng}},
+	}
+	cloned := CloneVulnerability(original)
+	require.NotSame(t, (*original.Affects)[0].Range, (*cloned.Affects)[0].Range)
+	*(*cloned.Affects)[0].Range = append(*(*cloned.Affects)[0].Range, cyclonedx.AffectedVersions{
+		Version: "2.0",
+		Status:  cyclonedx.VulnerabilityStatusNotAffected,
+	})
+	assert.Len(t, *(*original.Affects)[0].Range, 1)
+	assert.Len(t, *(*cloned.Affects)[0].Range, 2)
+}
+
+func TestCloneVulnerability_IsolatesPropertiesMutation(t *testing.T) {
+	original := cyclonedx.Vulnerability{
+		Properties: &[]cyclonedx.Property{{Name: "xray:severity", Value: "High"}},
+	}
+	cloned := CloneVulnerability(original)
+	require.NotSame(t, original.Properties, cloned.Properties)
+	*cloned.Properties = append(*cloned.Properties, cyclonedx.Property{Name: "added", Value: "true"})
+	assert.Len(t, *original.Properties, 1)
+	assert.Len(t, *cloned.Properties, 2)
+}
+
+func TestCloneVulnerability_IsolatesRatingsMutation(t *testing.T) {
+	original := cyclonedx.Vulnerability{
+		Ratings: &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
+	}
+	cloned := CloneVulnerability(original)
+	require.NotSame(t, original.Ratings, cloned.Ratings)
+	*cloned.Ratings = append(*cloned.Ratings, cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityLow})
+	assert.Len(t, *original.Ratings, 1)
+	assert.Len(t, *cloned.Ratings, 2)
+}
+
+func TestCloneVulnerability_PreservesScalarFields(t *testing.T) {
+	original := cyclonedx.Vulnerability{
+		BOMRef:      "CVE-2024-1",
+		ID:          "CVE-2024-1",
+		Description: "test description",
+	}
+	cloned := CloneVulnerability(original)
+	assert.Equal(t, original.BOMRef, cloned.BOMRef)
+	assert.Equal(t, original.ID, cloned.ID)
+	assert.Equal(t, original.Description, cloned.Description)
+	assert.Nil(t, cloned.Affects)
+	assert.Nil(t, cloned.Properties)
+	assert.Nil(t, cloned.Ratings)
+}
+
+func TestCloneVulnerability_NilSlices(t *testing.T) {
+	original := cyclonedx.Vulnerability{BOMRef: "CVE-EMPTY"}
+	cloned := CloneVulnerability(original)
+	assert.Equal(t, original.BOMRef, cloned.BOMRef)
+	assert.Nil(t, cloned.Affects)
+	assert.Nil(t, cloned.Properties)
+	assert.Nil(t, cloned.Ratings)
 }
 
 func TestAttachComponentAffectsAndHasImpactedAffects(t *testing.T) {

@@ -84,7 +84,7 @@ func removeTxtSuffix(txtFileName string) error {
 }
 
 // TestGetLocalReplaceModules: go.mod replaces example.com/localmod with a local directory.
-// getLocalReplaceModules must report that module path as local.
+// getLocalReplaceModules must report that module path as local, keyed by version ("" = unconditional).
 func TestGetLocalReplaceModules(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-local-replace-project"))
 	defer cleanUp()
@@ -94,7 +94,112 @@ func TestGetLocalReplaceModules(t *testing.T) {
 	currentDir, err := os.Getwd()
 	assert.NoError(t, err)
 	localReplaceModules := getLocalReplaceModules(currentDir)
-	assert.Equal(t, map[string]bool{"example.com/localmod": true}, localReplaceModules)
+	assert.Equal(t, map[string]map[string]bool{"example.com/localmod": {"": true}}, localReplaceModules)
+}
+
+// TestGetLocalReplaceModules_VersionPinned: a version-pinned replace only covers that one version - a
+// different, real published version of the same path must still be probed, not silently skipped.
+func TestGetLocalReplaceModules_VersionPinned(t *testing.T) {
+	tmpDir := t.TempDir()
+	goModContent := "module testVersionPinned\n\ngo 1.21\n\n" +
+		"require example.com/pinned v0.1.0\n\n" +
+		"replace example.com/pinned v0.1.0 => ./pinned\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goModContent), 0644))
+
+	localReplaceModules := getLocalReplaceModules(tmpDir)
+	assert.Equal(t, map[string]map[string]bool{"example.com/pinned": {"v0.1.0": true}}, localReplaceModules)
+
+	// The pinned version is local...
+	assert.True(t, isLocalReplaceModule("example.com/pinned:v0.1.0", localReplaceModules))
+	// ...but a DIFFERENT version of the same path is a real, different published module - not local.
+	assert.False(t, isLocalReplaceModule("example.com/pinned:v0.2.0", localReplaceModules))
+}
+
+// TestGetLocalReplaceModules_MultiplePinnedVersionsSamePath: multiple version-pinned replaces for the same
+// path are all captured; a version covered by none of them is still treated as real.
+func TestGetLocalReplaceModules_MultiplePinnedVersionsSamePath(t *testing.T) {
+	tmpDir := t.TempDir()
+	goModContent := "module testMultiPinned\n\ngo 1.21\n\n" +
+		"require example.com/multi v0.2.0\n\n" +
+		"replace example.com/multi v0.1.0 => ./local-a\n\n" +
+		"replace example.com/multi v0.2.0 => ./local-b\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goModContent), 0644))
+
+	localReplaceModules := getLocalReplaceModules(tmpDir)
+	assert.Equal(t, map[string]map[string]bool{"example.com/multi": {"v0.1.0": true, "v0.2.0": true}}, localReplaceModules)
+
+	assert.True(t, isLocalReplaceModule("example.com/multi:v0.1.0", localReplaceModules))
+	assert.True(t, isLocalReplaceModule("example.com/multi:v0.2.0", localReplaceModules))
+	// A third version, covered by neither pinned replace, is a real published module - not local.
+	assert.False(t, isLocalReplaceModule("example.com/multi:v0.3.0", localReplaceModules))
+}
+
+// TestGetLocalReplaceModules_ModuleToModuleReplace: a replace pointing at another module (not a directory)
+// is never local - it's a real published module and must still be probed.
+func TestGetLocalReplaceModules_ModuleToModuleReplace(t *testing.T) {
+	tmpDir := t.TempDir()
+	goModContent := "module testModuleReplace\n\ngo 1.21\n\n" +
+		"require example.com/foo v1.0.0\n\n" +
+		"replace example.com/foo => example.com/bar v1.2.3\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goModContent), 0644))
+
+	localReplaceModules := getLocalReplaceModules(tmpDir)
+	assert.Empty(t, localReplaceModules)
+	assert.False(t, isLocalReplaceModule("example.com/foo:v1.0.0", localReplaceModules))
+}
+
+// TestGetLocalReplaceModules_ErrorPaths: a missing or malformed go.mod must fail open (empty set, no panic).
+func TestGetLocalReplaceModules_ErrorPaths(t *testing.T) {
+	t.Run("missing go.mod", func(t *testing.T) {
+		tmpDir := t.TempDir() // no go.mod written at all
+		assert.Empty(t, getLocalReplaceModules(tmpDir))
+	})
+
+	t.Run("malformed go.mod", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("this is not { valid go.mod syntax"), 0644))
+		assert.Empty(t, getLocalReplaceModules(tmpDir))
+	})
+}
+
+// TestIsLocalReplaceModule: an unconditional replace matches any version; a pinned replace matches only that one.
+func TestIsLocalReplaceModule(t *testing.T) {
+	tests := []struct {
+		name                string
+		childName           string
+		localReplaceModules map[string]map[string]bool
+		want                bool
+	}{
+		{
+			name:                "unconditional replace matches any version",
+			childName:           "example.com/mod:v9.9.9",
+			localReplaceModules: map[string]map[string]bool{"example.com/mod": {"": true}},
+			want:                true,
+		},
+		{
+			name:                "version-pinned replace matches the pinned version",
+			childName:           "example.com/mod:v0.1.0",
+			localReplaceModules: map[string]map[string]bool{"example.com/mod": {"v0.1.0": true}},
+			want:                true,
+		},
+		{
+			name:                "version-pinned replace does NOT match a different version",
+			childName:           "example.com/mod:v0.2.0",
+			localReplaceModules: map[string]map[string]bool{"example.com/mod": {"v0.1.0": true}},
+			want:                false,
+		},
+		{
+			name:                "unknown path",
+			childName:           "example.com/other:v1.0.0",
+			localReplaceModules: map[string]map[string]bool{"example.com/mod": {"v0.1.0": true}},
+			want:                false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isLocalReplaceModule(tt.childName, tt.localReplaceModules))
+		})
+	}
 }
 
 // TestPopulateGoDependencyTree_LocalReplace: given a graph/list shaped like real 'go mod graph'/'go list'
@@ -119,7 +224,7 @@ func TestPopulateGoDependencyTree_LocalReplace(t *testing.T) {
 		"rsc.io/quote:v1.5.2":         true,
 		"rsc.io/sampler:v1.3.0":       true,
 	}
-	localReplaceModules := map[string]bool{"example.com/localmod": true}
+	localReplaceModules := map[string]map[string]bool{"example.com/localmod": {"": true}}
 
 	rootNode := &xrayUtils.GraphNode{Id: goPackageTypeIdentifier + "testGoLocalReplace", Nodes: []*xrayUtils.GraphNode{}}
 	uniqueDepsSet := datastructures.MakeSet[string]()

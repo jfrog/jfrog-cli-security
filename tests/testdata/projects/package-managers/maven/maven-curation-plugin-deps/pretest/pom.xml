@@ -1,0 +1,35 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>test</groupId>
+    <artifactId>plugin-dep-app</artifactId>
+    <packaging>jar</packaging>
+    <version>1.0.0</version>
+    <name>plugin-dep-app</name>
+
+    <!--
+        Mirrors test/pom.xml so the pretest mvn run pre-populates the curation
+        cache (project deps, maven-jar-plugin:3.4.1 and its transitive closure
+        including org.ow2.asm:asm:9.8, plus maven-dependency-plugin and
+        maven-help-plugin invoked from the goals list). During the actual test
+        every artifact resolves from cache; only the curation HEAD probes hit
+        the mock server.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.webjars</groupId>
+            <artifactId>lodash</artifactId>
+            <version>4.17.21</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

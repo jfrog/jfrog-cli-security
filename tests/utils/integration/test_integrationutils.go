@@ -44,6 +44,12 @@ func InitUnitTest(t *testing.T) {
 	}
 }
 
+func InitRemediationTest(t *testing.T) {
+	if !*configTests.TestRemediation {
+		t.Skip(getSkipTestMsg("Remediation integration", "--test.remediation"))
+	}
+}
+
 func InitArtifactoryTest(t *testing.T) {
 	if !*configTests.TestArtifactory {
 		t.Skip(getSkipTestMsg("Artifactory integration", "--test.artifactory"))

@@ -50,7 +50,6 @@ type AuditParamsInterface interface {
 	SetIsRecursiveScan(isRecursiveScan bool) *AuditBasicParams
 	IsRecursiveScan() bool
 	SkipAutoInstall() bool
-	AllowPartialResults() bool
 	GetXrayVersion() string
 	GetConfigProfile() *xscservices.ConfigProfile
 	SolutionFilePath() string
@@ -328,8 +327,8 @@ func (abp *AuditBasicParams) SkipAutoInstall() bool {
 	return abp.skipAutoInstall
 }
 
-func (abp *AuditBasicParams) AllowPartialResults() bool {
-	return abp.allowPartialResults
+func (abp *AuditBasicParams) CalculatedAllowPartialResults() bool {
+	return (abp.configProfile != nil && !abp.configProfile.GeneralConfig.FailUponAnyScannerError) || abp.allowPartialResults
 }
 
 func (abp *AuditBasicParams) SetXrayVersion(xrayVersion string) *AuditBasicParams {

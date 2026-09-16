@@ -1,8 +1,10 @@
 package audit
 
 import (
+	"fmt"
 	"time"
 
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
@@ -18,14 +20,18 @@ import (
 )
 
 type AuditParams struct {
+	// Where to scan
+	appsConfig  *jfrogappsconfig.JFrogAppsConfig
+	workingDirs []string
 	// Common params to all scan routines
-	resultsContext    results.ResultContext
-	gitContext        *xscServices.XscGitInfoContext
-	workingDirs       []string
-	rootDir           string
-	installFunc       func(tech string) error
-	fixableOnly       bool
-	minSeverityFilter severityutils.Severity
+	resultsContext results.ResultContext
+	gitContext     *xscServices.XscGitInfoContext
+	rootDir        string
+	installFunc    func(tech string) error
+	// Optional hook invoked once technologies are detected for all targets, before any SBOM/dependency-tree generation runs (i.e. before any build-tool plugin executes untrusted code). A non-nil error aborts the scan.
+	detectedTechnologiesGuardCallback func(detectedTechnologies []techutils.Technology) error
+	fixableOnly                       bool
+	minSeverityFilter                 severityutils.Severity
 	*AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
@@ -159,6 +165,15 @@ func (params *AuditParams) SetInstallFunc(installFunc func(tech string) error) *
 	return params
 }
 
+func (params *AuditParams) SetDetectedTechnologiesGuardCallback(callback func(detectedTechnologies []techutils.Technology) error) *AuditParams {
+	params.detectedTechnologiesGuardCallback = callback
+	return params
+}
+
+func (params *AuditParams) DetectedTechnologiesGuardCallback() func(detectedTechnologies []techutils.Technology) error {
+	return params.detectedTechnologiesGuardCallback
+}
+
 func (params *AuditParams) FixableOnly() bool {
 	return params.fixableOnly
 }
@@ -222,8 +237,8 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 	bomParams = technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:         params.GetXrayVersion(),
 		Progress:            params.Progress(),
-		ExclusionPattern:    technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
-		AllowPartialResults: params.AllowPartialResults(),
+		ExclusionPattern:    technologies.GetScaExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
+		AllowPartialResults: params.CalculatedAllowPartialResults(),
 		// Artifactory repository info
 		ServerDetails:          serverDetails,
 		DependenciesRepository: params.DepsRepo(),
@@ -237,9 +252,10 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Curation params
 		IsCurationCmd: params.IsCurationCmd(),
 		// Java params
-		IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
-		UseWrapper:              params.UseWrapper(),
-		UseIncludedBuilds:       params.UseIncludedBuilds(),
+		IsMavenDepTreeInstalled:       params.IsMavenDepTreeInstalled(),
+		UseWrapper:                    params.UseWrapper(),
+		UseIncludedBuilds:             params.UseIncludedBuilds(),
+		GradleExcludeTestDependencies: params.ExcludeTestDependencies(),
 		// Python params
 		PipRequirementsFile: params.PipRequirementsFile(),
 		// Pnpm params
@@ -273,6 +289,15 @@ func (params *AuditParams) SetSastChangedFilesMode(sastChangedFilesMode bool) *A
 	return params
 }
 
+func (params *AuditParams) SetDeprecatedAppsConfig(appsConfig *jfrogappsconfig.JFrogAppsConfig) *AuditParams {
+	params.appsConfig = appsConfig
+	return params
+}
+
+func (params *AuditParams) DeprecatedAppsConfig() *jfrogappsconfig.JFrogAppsConfig {
+	return params.appsConfig
+}
+
 func (params *AuditParams) SastChangedFilesMode() bool {
 	return params.sastChangedFilesMode
 }
@@ -299,15 +324,14 @@ func (params *AuditParams) DiffMode() bool {
 // Our solution for this case is to send all dependencies to the CA scanner.
 // When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
 // Only npm is supported for this flag.
-func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(target results.ScanTarget) bool {
 	if params.bomGenerator == nil {
 		return false
 	}
-	// Check if bomGenerator is BuildInfo type, if not, return false
 	if _, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); !success {
 		return false
 	}
-	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+	return target.HasTechnology(techutils.Pip) || (params.thirdPartyApplicabilityScan && target.HasTechnology(techutils.Npm))
 }
 
 func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {
@@ -343,5 +367,17 @@ func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *Aud
 }
 
 func (params *AuditParams) RtResultRepository() string {
+	return params.rtResultRepository
+}
+
+func (params *AuditParams) SetIncludeSbom(include bool) *AuditParams {
+	params.resultsContext.IncludeSbom = include
+	return params
+}
+
+func (params *AuditParams) GetRtResultRepositoryWithProjectKey() string {
+	if params.rtResultRepository != "" && params.resultsContext.ProjectKey != "" {
+		return fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, params.rtResultRepository)
+	}
 	return params.rtResultRepository
 }

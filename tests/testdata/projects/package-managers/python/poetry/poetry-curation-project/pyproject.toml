@@ -1,0 +1,14 @@
+[build-system]
+build-backend = 'poetry.core.masonry.api'
+requires = ['poetry-core>=1.0.0']
+
+[tool]
+[tool.poetry]
+authors = ['JFrog <test@jfrog.com>']
+description = 'Fixture project for the jf curation-audit (e2e) Poetry test.'
+name = 'poetry-curation-project'
+version = '0.1.0'
+
+[tool.poetry.dependencies]
+python  = "^3.11"
+urllib3 = "1.26.20"

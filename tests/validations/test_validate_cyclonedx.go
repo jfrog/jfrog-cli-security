@@ -44,8 +44,8 @@ func GetCycloneDxActualValues(t *testing.T, content string) (actualValues Valida
 func toActualValuesCycloneDx(content *cdxutils.FullBOM) (actualValues ValidationCountActualValues) {
 	actualValues.SbomComponents, actualValues.RootComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(&content.BOM)
 	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities = countScaVulnerabilities(&content.BOM)
-	actualValues.SastVulnerabilities, actualValues.SecretsVulnerabilities, actualValues.IacVulnerabilities, actualValues.InactiveSecretsVulnerabilities = countJasVulnerabilities(content)
-	actualValues.Vulnerabilities = actualValues.ScaVulnerabilities + actualValues.SastVulnerabilities + actualValues.SecretsVulnerabilities + actualValues.IacVulnerabilities
+	actualValues.SastVulnerabilities, actualValues.SecretsVulnerabilities, actualValues.IacVulnerabilities, actualValues.ServicesVulnerabilities, actualValues.InactiveSecretsVulnerabilities = countJasVulnerabilities(content)
+	actualValues.Vulnerabilities = actualValues.ScaVulnerabilities + actualValues.SastVulnerabilities + actualValues.SecretsVulnerabilities + actualValues.IacVulnerabilities + actualValues.ServicesVulnerabilities
 	return
 }
 
@@ -115,7 +115,7 @@ func countScaVulnerabilities(content *cyclonedx.BOM) (scaVulnerabilities, applic
 	return
 }
 
-func countJasVulnerabilities(content *cdxutils.FullBOM) (sastVulnerabilities, secretsVulnerabilities, iacVulnerabilities, inactiveSecretsVulnerabilities int) {
+func countJasVulnerabilities(content *cdxutils.FullBOM) (sastVulnerabilities, secretsVulnerabilities, iacVulnerabilities, servicesVulnerabilities, inactiveSecretsVulnerabilities int) {
 	if content == nil || content.Vulnerabilities == nil {
 		return
 	}
@@ -133,6 +133,9 @@ func countJasVulnerabilities(content *cdxutils.FullBOM) (sastVulnerabilities, se
 			}
 			if strings.HasPrefix(property.Name, "jfrog:iac:location:") {
 				iacVulnerabilities++
+			}
+			if strings.HasPrefix(property.Name, "jfrog:services:location:") {
+				servicesVulnerabilities++
 			}
 			if strings.HasPrefix(property.Name, "jfrog:secret:location:") {
 				secretsVulnerabilities++

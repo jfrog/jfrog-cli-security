@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,9 +43,9 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 func TestJasRunner(t *testing.T) {
 	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
-	targetResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
+	targetResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).NewScanResults(results.ScanTarget{Target: "target", Technologies: []techutils.Technology{techutils.Pip}})
 
-	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars(false, "", "", "", "", []string{}, targetResults.GetTechnologies()...)))
+	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars(false, "", "", "", "", []string{}, targetResults.GetTechnologies()...)))
 	assert.NoError(t, err)
 	jasScanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable()
 	assert.NoError(t, err)
@@ -65,7 +66,7 @@ func TestJasRunner(t *testing.T) {
 	assert.NoError(t, AddJasScannersTasks(testParams))
 }
 
-func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
+func TestJasRunner_Module_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
@@ -76,10 +77,54 @@ func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
 			DirectDependenciesCves:   directCves,
 			IndirectDependenciesCves: indirectCves,
 			ScanType:                 applicability.ApplicabilityScannerType,
-			Module:                   jfrogAppsConfigForTest.Modules[0],
+			Target:                   results.ScanTarget{Target: "target", DeprecatedAppsConfigModule: &jfrogAppsConfigForTest.Modules[0]},
 		},
 		scanner,
 	)
 	// Expect error:
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
+}
+
+func TestJasRunner_Target_AnalyzerManagerReturnsError(t *testing.T) {
+	assert.NoError(t, testUtils.PrepareAnalyzerManagerResource())
+
+	scanner, _ := jas.NewJasScanner(&jas.FakeServerDetails)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"})
+	_, err := applicability.RunApplicabilityScan(
+		applicability.ContextualAnalysisScanParams{
+			DirectDependenciesCves:   directCves,
+			IndirectDependenciesCves: indirectCves,
+			ScanType:                 applicability.ApplicabilityScannerType,
+			Target:                   results.ScanTarget{Target: "target"},
+		},
+		scanner,
+	)
+	// Expect error:
+	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
+}
+
+func TestSastChangedFilesMode(t *testing.T) {
+	profileWithDiffMode := &services.ConfigProfile{Modules: []services.Module{{
+		ScanConfig: services.ScanConfig{SastScannerConfig: services.SastScannerConfig{EnableFastDiffMode: true}},
+	}}}
+	profileWithoutDiffMode := &services.ConfigProfile{Modules: []services.Module{{
+		ScanConfig: services.ScanConfig{SastScannerConfig: services.SastScannerConfig{EnableSastScan: true}},
+	}}}
+
+	tests := []struct {
+		name     string
+		params   JasRunnerParams
+		expected bool
+	}{
+		{name: "no profile and no flag", params: JasRunnerParams{}},
+		{name: "flag only", params: JasRunnerParams{SastChangedFilesMode: true}, expected: true},
+		{name: "profile differential scanning enabled", params: JasRunnerParams{ConfigProfile: profileWithDiffMode}, expected: true},
+		{name: "profile differential scanning disabled", params: JasRunnerParams{ConfigProfile: profileWithoutDiffMode}},
+		{name: "profile without modules", params: JasRunnerParams{ConfigProfile: &services.ConfigProfile{}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.params.sastChangedFilesMode())
+		})
+	}
 }

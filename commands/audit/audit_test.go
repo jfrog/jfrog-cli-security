@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,7 +21,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -58,14 +61,15 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, Nuget is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "Nuget"),
+						Target:       filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -74,8 +78,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -88,8 +92,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -99,7 +103,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				{
 					// We requested specific technologies, yarn is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Target: filepath.Join(dir, "yarn"),
+						Target:       filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.NoTech},
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
@@ -116,8 +121,8 @@ func TestDetectScansToPerform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Nuget,
-						Target:     filepath.Join(dir, "Nuget"),
+						Technologies: []techutils.Technology{techutils.Nuget},
+						Target:       filepath.Join(dir, "Nuget"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -126,8 +131,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -136,8 +141,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Maven,
-						Target:     filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -150,8 +155,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Npm,
-						Target:     filepath.Join(dir, "dir", "npm"),
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -160,8 +165,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Yarn,
-						Target:     filepath.Join(dir, "yarn"),
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -170,8 +175,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pip,
-						Target:     filepath.Join(dir, "yarn", "Pip"),
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -180,8 +185,8 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Pipenv,
-						Target:     filepath.Join(dir, "yarn", "Pipenv"),
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
 					},
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
@@ -190,10 +195,245 @@ func TestDetectScansToPerform(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Non-recursive scan on directory with descriptor at top level",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")})
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single technology (npm only)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{dir})
+				param.SetTechnologies([]string{"npm"}).SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+				{
+					// Requested tech npm had no other descriptors at root; add JAS-only target for requested directory
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Technologies: []techutils.Technology{techutils.NoTech},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
+		{
+			name: "Multiple working dirs (subset - dir and yarn only, no Nuget)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir"), filepath.Join(dir, "yarn")})
+				param.SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{
+							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
+						},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Npm},
+						Target:       filepath.Join(dir, "dir", "npm"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Pip},
+						Target:       filepath.Join(dir, "yarn", "Pip"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Pipenv},
+						Target:       filepath.Join(dir, "yarn", "Pipenv"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Yarn},
+						Target:       filepath.Join(dir, "yarn"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single technology (maven only)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
+				param.SetIsRecursiveScan(true)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Maven},
+						Target:       filepath.Join(dir, "dir", "maven"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{
+							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Non-recursive on go directory",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "go")})
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Technologies: []techutils.Technology{techutils.Go},
+						Target:       filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single target with one working dir (npm)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "npm")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+				param.SetIsRecursiveScan(false)
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "npm")},
+						Technologies: []techutils.Technology{techutils.Npm},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
+		{
+			name: "Single target with one working dir (maven)",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")})
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       filepath.Join(dir, "dir", "maven"),
+						Technologies: []techutils.Technology{techutils.Maven},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "maven", "pom.xml")},
+					},
+				},
+			},
+		},
+		{
+			name: "Single target root directory with one include directory (maven) - new flow",
+			wd:   dir,
+			params: func() *AuditParams {
+				param := NewAuditParams().
+					SetWorkingDirs([]string{filepath.Join(dir, "dir", "maven")}).
+					SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+				return param
+			},
+			expected: []*results.TargetResults{
+				{
+					ScanTarget: results.ScanTarget{
+						Target:       dir,
+						Include:      []string{filepath.Join(dir, "dir", "maven")},
+						Technologies: []techutils.Technology{techutils.Maven},
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.wd != "" {
+				defer securityTestUtils.ChangeWDWithCallback(t, test.wd)()
+			}
 			results := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
@@ -210,6 +450,13 @@ func TestDetectScansToPerform(t *testing.T) {
 					if test.expected[i].ScaResults != nil {
 						sort.Strings(test.expected[i].ScaResults.Descriptors)
 					}
+					// Normalize for comparison: DeprecatedAppsConfigModule varies by working dir and is not under test
+					results.Targets[i].DeprecatedAppsConfigModule = nil
+					// Normalize single-target expected to actual cwd (path can differ e.g. /var vs /private/var on macOS)
+					if len(results.Targets) == 1 && len(results.Targets[i].Include) > 0 {
+						test.expected[i].Target = results.Targets[i].Target
+						test.expected[i].Include = results.Targets[i].Include
+					}
 				}
 			}
 			assert.ElementsMatch(t, test.expected, results.Targets)
@@ -219,30 +466,209 @@ func TestDetectScansToPerform(t *testing.T) {
 	cleanUp()
 }
 
-func TestShouldGenerateSbom(t *testing.T) {
-	configProfileWithSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: true,
-				},
-			},
-		}},
-	}
-	configProfileWithoutSca := services.ConfigProfile{
-		Modules: []services.Module{{
-			ScanConfig: services.ScanConfig{
-				ScaScannerConfig: services.ScaScannerConfig{
-					EnableScaScan: false,
-				},
-			},
-		}},
+// Old flow with JAS-only (no SCA) leaves IsRecursiveScan false. Directories without
+// technologies must still become scan targets so secrets/IaC/SAST can run.
+func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
+	baseDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(baseDir))
+	}()
+
+	cwdDir := filepath.Join(baseDir, "cwd")
+	emptyDir1 := filepath.Join(baseDir, "wd1")
+	emptyDir2 := filepath.Join(baseDir, "wd2")
+	npmDir := filepath.Join(baseDir, "npm-wd")
+	assert.NoError(t, os.MkdirAll(cwdDir, 0o755))
+	assert.NoError(t, os.MkdirAll(emptyDir1, 0o755))
+	assert.NoError(t, os.MkdirAll(emptyDir2, 0o755))
+	assert.NoError(t, os.MkdirAll(npmDir, 0o755))
+	createEmptyFile(t, filepath.Join(npmDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, cwdDir)()
+	resolvedCwdDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		workingDirs []string
+		wantTargets []string
+	}{
+		{
+			name:        "current directory when no working dirs are passed",
+			wantTargets: []string{resolvedCwdDir},
+		},
+		{
+			name:        "single working dir",
+			workingDirs: []string{emptyDir1},
+			wantTargets: []string{emptyDir1},
+		},
+		{
+			name:        "multiple working dirs (mono-repo)",
+			workingDirs: []string{emptyDir1, emptyDir2},
+			wantTargets: []string{emptyDir1, emptyDir2},
+		},
+		{
+			name:        "mixed tech and no-tech working dirs",
+			workingDirs: []string{npmDir, emptyDir1},
+			wantTargets: []string{npmDir, emptyDir1},
+		},
 	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+			params := NewAuditParams()
+			if tt.workingDirs != nil {
+				params.SetWorkingDirs(tt.workingDirs)
+			}
+			// Mimic GetTargetsInfo for jf audit --secrets: SCA not requested => non-recursive.
+			params.SetIsRecursiveScan(false)
+			params.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+
+			detectScanTargets(cmdRes, params)
+
+			got := make([]string, 0, len(cmdRes.Targets))
+			for _, target := range cmdRes.Targets {
+				got = append(got, target.Target)
+			}
+			assert.ElementsMatch(t, tt.wantTargets, got)
+		})
+	}
+}
+
+func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_cli_audit")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedOnly := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
+	assert.NoError(t, os.MkdirAll(excludedOnly, 0o755))
+	createEmptyFile(t, filepath.Join(excludedOnly, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetWorkingDirs([]string{excludedOnly})
+	params.SetIsRecursiveScan(false)
+	params.SetExclusions([]string{"*cli_exclude_workdir_only_audit*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_for_agg")
+	siblingNpm := filepath.Join(baseDir, "sibling_npm_for_agg_test")
+	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
+	assert.NoError(t, os.MkdirAll(siblingNpm, 0o755))
+	createEmptyFile(t, filepath.Join(siblingNpm, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{siblingNpm})
+	params.SetExclusions([]string{"*parent_only_excluded_for_agg*"})
+
+	detectScanTargets(cmdRes, params)
+	assert.Len(t, cmdRes.Targets, 1)
+	tr := cmdRes.Targets[0]
+	tr.DeprecatedAppsConfigModule = nil
+	assert.Len(t, tr.Include, 1)
+	assert.Equal(t, siblingNpm, tr.Include[0])
+	hasNpm := false
+	for _, tech := range tr.Technologies {
+		if tech == techutils.Npm {
+			hasNpm = true
+		}
+	}
+	assert.True(t, hasNpm, "expected Npm among detected technologies")
+}
+
+func TestPopulateScanTargetsDetectedTechnologiesGuardCallbackIsNotSkippable(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	mavenDir := filepath.Join(baseDir, "maven-wd")
+	assert.NoError(t, os.MkdirAll(mavenDir, 0o755))
+	createEmptyFile(t, filepath.Join(mavenDir, "pom.xml"))
+
+	callbackErr := errors.New("environment guard failed")
+
+	tests := []struct {
+		name                string
+		allowPartialResults bool
+	}{
+		{
+			name:                "Partial results disabled - fail upon every error",
+			allowPartialResults: false,
+		},
+		{
+			name:                "allowPartialResults=true - callback error must still propagate",
+			allowPartialResults: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).SetAllowPartialResults(tt.allowPartialResults)
+			params := NewAuditParams()
+			params.SetWorkingDirs([]string{mavenDir})
+			params.SetIsRecursiveScan(false)
+			params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+			params.SetDetectedTechnologiesGuardCallback(func(detected []techutils.Technology) error {
+				return callbackErr
+			})
+
+			populateScanTargets(cmdRes, params)
+
+			// The callback error must surface via GetErrors() regardless of AllowPartialResults
+			assert.ErrorContains(t, cmdRes.GetErrors(), callbackErr.Error())
+		})
+	}
+}
+
+func TestShouldGenerateSbom(t *testing.T) {
+	configProfileModulesWithSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: true,
+			},
+		},
+	}}
+	configProfileModulesWithoutSca := []services.Module{{
+		ScanConfig: services.ScanConfig{
+			ScaScannerConfig: services.ScaScannerConfig{
+				EnableScaScan: false,
+			},
+		},
+	}}
+
 	testCases := []struct {
-		name       string
-		params     *AuditParams
-		expectSbom bool
+		name        string
+		params      *AuditParams
+		scanResults *results.TargetResults
+		expectSbom  bool
 	}{
 		{
 			name: "include sbom requested explicitly",
@@ -294,35 +720,35 @@ func TestShouldGenerateSbom(t *testing.T) {
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithSca)
 				return params
 			}(),
-			expectSbom: true,
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithSca}},
+			expectSbom:  true,
 		},
 		{
 			name: "non sca scans with sca disabled in config profile",
 			params: func() *AuditParams {
 				params := NewAuditParams().SetResultsContext(results.ResultContext{})
 				params.SetScansToPerform([]utils.SubScanType{utils.SastScan})
-				params.SetConfigProfile(&configProfileWithoutSca)
 				return params
 			}(),
-			expectSbom: false,
+			scanResults: &results.TargetResults{ScanTarget: results.ScanTarget{CentralConfigModules: configProfileModulesWithoutSca}},
+			expectSbom:  false,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.params))
+			assert.Equal(t, testCase.expectSbom, shouldGenerateSbom(testCase.scanResults, testCase.params))
 		})
 	}
 }
 
 // Note: Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
 func TestAuditWithConfigProfile(t *testing.T) {
+	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	testcases := []struct {
 		name                    string
-		testDirPath             string
 		configProfile           services.ConfigProfile
 		expectedScaIssues       int
 		expectedCaApplicable    int
@@ -330,12 +756,12 @@ func TestAuditWithConfigProfile(t *testing.T) {
 		expectedCaNotCovered    int
 		expectedCaNotApplicable int
 		expectedSastIssues      int
+		expectedServicesIssues  int
 		expectedSecretsIssues   int
 		expectedIacIssues       int
 	}{
 		{
-			name:        "Enable Sca scanner",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable Sca scanner",
 			configProfile: services.ConfigProfile{
 				ProfileName: "Sca only",
 				Modules: []services.Module{{
@@ -358,14 +784,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedScaIssues: 15,
 		},
 		{
-			name:        "Sca scanner enabled with exclusions",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Sca scanner enabled with exclusions",
 			configProfile: services.ConfigProfile{
 				ProfileName: "Sca-exclude-dirs",
 				Modules: []services.Module{{
@@ -389,14 +817,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedScaIssues: 0,
 		},
 		{
-			name:        "Enable Sca and Applicability scanners",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable Sca and Applicability scanners",
 			configProfile: services.ConfigProfile{
 				ProfileName: "Sca&Applicability",
 				Modules: []services.Module{{
@@ -419,6 +849,9 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
@@ -426,8 +859,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 		},
 		// TODO Add testcase for Sca and Applicability with exclusions after resolving the Glob patterns issues
 		{
-			name:        "Enable only secrets scanner",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable only secrets scanner",
 			configProfile: services.ConfigProfile{
 				ProfileName: "only-secrets",
 				Modules: []services.Module{{
@@ -450,14 +882,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
-			expectedSecretsIssues: 16,
+			expectedSecretsIssues: 15,
 		},
 		{
-			name:        "Secrets scanner is enabled with exclusions",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Secrets scanner is enabled with exclusions",
 			configProfile: services.ConfigProfile{
 				ProfileName: "secrets-with-exclusions",
 				Modules: []services.Module{{
@@ -481,14 +915,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 10,
 		},
 		{
-			name:        "Enable only Sast scanner",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable only Sast scanner",
 			configProfile: services.ConfigProfile{
 				ProfileName: "only-sast",
 				Modules: []services.Module{{
@@ -511,14 +947,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
-			expectedSastIssues: 4,
+			expectedSastIssues: 2,
 		},
 		{
-			name:        "Sast scanner is enabled with exclusions",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Sast scanner is enabled with exclusions",
 			configProfile: services.ConfigProfile{
 				ProfileName: "sast-with-exclusions",
 				Modules: []services.Module{{
@@ -542,14 +980,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: false,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedSastIssues: 0,
 		},
 		{
-			name:        "Enable only IaC scanner",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable only IaC scanner",
 			configProfile: services.ConfigProfile{
 				ProfileName: "only-iac",
 				Modules: []services.Module{{
@@ -572,14 +1012,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedIacIssues: 9,
 		},
 		{
-			name:        "Iac is enabled with exclusions",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Iac is enabled with exclusions",
 			configProfile: services.ConfigProfile{
 				ProfileName: "iac-with-exclusions",
 				Modules: []services.Module{{
@@ -603,14 +1045,78 @@ func TestAuditWithConfigProfile(t *testing.T) {
 							EnableIacScan:   true,
 							ExcludePatterns: []string{"**/*iac/gcp*/**"},
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: false,
+						},
 					},
 				}},
 			},
 			expectedIacIssues: 0,
 		},
 		{
-			name:        "Enable All Scanners",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "Enable only Services scanner",
+			configProfile: services.ConfigProfile{
+				ProfileName: "only-services",
+				Modules: []services.Module{{
+					ModuleId:     1,
+					ModuleName:   "only-services-module",
+					PathFromRoot: ".",
+					ScanConfig: services.ScanConfig{
+						ScaScannerConfig: services.ScaScannerConfig{
+							EnableScaScan: false,
+						},
+						ContextualAnalysisScannerConfig: services.CaScannerConfig{
+							EnableCaScan: false,
+						},
+						SastScannerConfig: services.SastScannerConfig{
+							EnableSastScan: false,
+						},
+						IacScannerConfig: services.IacScannerConfig{
+							EnableIacScan: false,
+						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
+					},
+				}},
+			},
+			expectedServicesIssues: 6,
+		},
+		{
+			name: "Services scanner is enabled with exclusions",
+			configProfile: services.ConfigProfile{
+				ProfileName: "services-with-exclusions",
+				Modules: []services.Module{{
+					ModuleId:     1,
+					ModuleName:   "services-with-exclusions-module",
+					PathFromRoot: ".",
+					ScanConfig: services.ScanConfig{
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+							ExcludePatterns:    []string{"**/*.git*/**"},
+						},
+						ScaScannerConfig: services.ScaScannerConfig{
+							EnableScaScan: false,
+						},
+						ContextualAnalysisScannerConfig: services.CaScannerConfig{
+							EnableCaScan: false,
+						},
+						SastScannerConfig: services.SastScannerConfig{
+							EnableSastScan: false,
+						},
+						SecretsScannerConfig: services.SecretsScannerConfig{
+							EnableSecretsScan: false,
+						},
+						IacScannerConfig: services.IacScannerConfig{
+							EnableIacScan: false,
+						},
+					},
+				}},
+			},
+			expectedServicesIssues: 0,
+		},
+		{
+			name: "Enable All Scanners",
 			configProfile: services.ConfigProfile{
 				ProfileName: "all-jas-scanners",
 				Modules: []services.Module{{
@@ -633,17 +1139,21 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
 					},
 				}},
 			},
-			expectedSastIssues:    4,
-			expectedSecretsIssues: 16,
-			expectedIacIssues:     9,
-			expectedCaNotCovered:  15,
+			expectedServicesIssues: 6,
+			expectedSastIssues:     2,
+			expectedSecretsIssues:  15,
+			expectedIacIssues:      9,
+			expectedScaIssues:      15,
+			expectedCaNotCovered:   15,
 		},
 		{
-			name:        "All scanners enabled but some with exclude patterns",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			name: "All scanners enabled but some with exclude patterns",
 			configProfile: services.ConfigProfile{
 				ProfileName: "some-scanners-with-exclusions",
 				Modules: []services.Module{{
@@ -668,22 +1178,27 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan: true,
 						},
+						ServicesScannerConfig: services.ServicesScannerConfig{
+							EnableServicesScan: true,
+						},
 					},
 				}},
 			},
-			expectedSastIssues:    0,
-			expectedSecretsIssues: 7,
-			expectedIacIssues:     9,
-			expectedCaNotCovered:  15,
+			expectedServicesIssues: 6,
+			expectedSastIssues:     0,
+			expectedSecretsIssues:  10,
+			expectedIacIssues:      9,
+			expectedScaIssues:      15,
+			expectedCaNotCovered:   15,
 		},
 	}
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
+			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
-			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testcase.testDirPath)
+			tempProjectPath, cleanUp := securityTestUtils.CreateTestProjectInTempDir(t, testDirPath)
 			defer cleanUp()
 
 			configProfile := testcase.configProfile
@@ -696,10 +1211,10 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-				SetViolationGenerator(local.NewDeprecatedViolationGenerator()).
-				SetWorkingDirs([]string{tempProjectPath}).
+				SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator()).
+				SetRootDir(tempProjectPath).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
@@ -717,12 +1232,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			} else {
 				scaResultsCount = testcase.expectedScaIssues
 			}
+			expectedServicesIssues := securityTestUtils.ExpectedServicesIssueCount(testcase.expectedServicesIssues)
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
-				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount},
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + expectedServicesIssues},
 				Vulnerabilities: &validations.VulnerabilityCount{
-					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues},
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: expectedServicesIssues},
 					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
 				},
 			})
@@ -733,7 +1249,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
 	assert.NoError(t, securityTestUtils.PrepareAnalyzerManagerResource())
-	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -745,32 +1261,33 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	auditBasicParams := (&AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
-		SetXrayVersion(utils.EntitlementsMinVersion).
+		SetXrayVersion(services.ConfigProfileNewSchemaMinXrayVersion).
 		SetUseJas(true).
 		SetIsRecursiveScan(true)
 
 	auditParams := NewAuditParams().
-		SetWorkingDirs([]string{tempProjectPath}).
+		SetRootDir(tempProjectPath).
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+		SetBomGenerator(xrayplugin.NewXrayLibBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(local.NewDeprecatedViolationGenerator())
+		SetViolationGenerator(enforcer.NewPolicyEnforcerViolationGenerator())
 
 	auditResults := RunAudit(auditParams)
 	assert.NoError(t, auditResults.GetErrors())
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 6)
+	assert.Len(t, filesList, 7)
 
 	searchForStrWithSubString(t, filesList, "bom")
 	searchForStrWithSubString(t, filesList, "sca")
 	searchForStrWithSubString(t, filesList, "iac")
 	searchForStrWithSubString(t, filesList, "sast")
 	searchForStrWithSubString(t, filesList, "secrets")
+	searchForStrWithSubString(t, filesList, "services")
 	searchForStrWithSubString(t, filesList, "applicability")
 }
 
@@ -780,7 +1297,7 @@ func searchForStrWithSubString(t *testing.T, filesList []string, subString strin
 			return
 		}
 	}
-	assert.Fail(t, "File %s not found in the list", subString)
+	assert.Fail(t, fmt.Sprintf("File %s not found in the list", subString))
 }
 
 func TestAuditWithPartialResults(t *testing.T) {
@@ -1052,8 +1569,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				Targets: []*results.TargetResults{
 					{
 						ScanTarget: results.ScanTarget{
-							Target:     tempProjectPath,
-							Technology: techutils.Pip,
+							Target:       tempProjectPath,
+							Technologies: []techutils.Technology{techutils.Pip},
 						},
 						ScaResults: &results.ScaScanResults{
 							Sbom: &cyclonedx.BOM{

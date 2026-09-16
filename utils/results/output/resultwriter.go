@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+	"golang.org/x/exp/slices"
 )
 
 type ResultsWriter struct {
@@ -149,7 +150,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		PlatformUrl:            rw.platformUrl,
 		IsMultipleRoots:        rw.isMultipleRoots,
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
-		IncludeSbom:            rw.commandResults.IncludeSbom(),
+		IncludeSbom:            rw.commandResults.IncludesSbom(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
 		HasViolationContext:    rw.showViolations || rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
@@ -261,6 +262,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
 		return
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.ServicesScan, jasutils.Services); err != nil {
+		return
+	}
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
 		return
 	}
@@ -274,7 +278,7 @@ func (rw *ResultsWriter) printTables() (err error) {
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.commandResults.IsScanRequestedByCentralConfig(utils.ScaScan), rw.subScansPerformed...) {
 		if rw.showViolations || rw.commandResults.HasViolationContext() {
 			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 				return
@@ -291,14 +295,14 @@ func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTabl
 			}
 		}
 	}
-	if !rw.commandResults.IncludeSbom() {
+	if !rw.commandResults.ResultContext.IncludeSbom {
 		return
 	}
 	return PrintSbomTable(tableContent, rw.commandResults.CmdType)
 }
 
 func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTables, subScan utils.SubScanType, scanType jasutils.JasScanType) (err error) {
-	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.subScansPerformed...) {
+	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.commandResults.IsScanRequestedByCentralConfig(subScan), rw.subScansPerformed...) {
 		return
 	}
 	if (rw.showViolations || rw.commandResults.HasViolationContext()) && len(rw.commandResults.ResultContext.GitRepoHttpsCloneUrl) > 0 {
@@ -313,7 +317,7 @@ func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTabl
 }
 
 func (rw *ResultsWriter) shouldPrintSecretValidationExtraMessage() bool {
-	return rw.commandResults.SecretValidation && utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPerformed...)
+	return rw.commandResults.IsSecretValidationActive(slices.Contains(rw.subScansPerformed, utils.SecretTokenValidationScan)) && utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.commandResults.IsScanRequestedByCentralConfig(utils.SecretsScan), rw.subScansPerformed...)
 }
 
 // PrintVulnerabilitiesTable prints the vulnerabilities in a table.
@@ -408,6 +412,14 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 		} else {
 			return coreutils.PrintTable(tables.IacVulnerabilitiesTable, "Infrastructure as Code Vulnerabilities",
 				"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
+		}
+	case jasutils.Services:
+		if violations {
+			return coreutils.PrintTable(tables.ServicesViolationsTable, "Services Violations",
+				"✨ No services violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.ServicesVulnerabilitiesTable, "Services Detection",
+				"✨ No services were found ✨", false)
 		}
 	case jasutils.Sast:
 		if violations {

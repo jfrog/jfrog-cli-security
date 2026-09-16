@@ -6,18 +6,20 @@ inputs:
     description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
     required: false
     default: 'false'
+  go-version-file:
+    description: "Path to the Go version file."
+    required: true
+    default: 'go.mod'
 
 runs:
   using: "composite"
   steps:
-    # Install dependencies
-    - name: Setup Go
-      uses: actions/setup-go@v5
+  
+    - name: Setup Go with cache
+      uses: jfrog/.github/actions/install-go-with-cache@main
       with:
-        go-version: 1.26
-    # - name: Setup Go with cache
-    #   uses: jfrog/.github/actions/install-go-with-cache@main
-
+        go-version-file: ${{ inputs.go-version-file }}
+        
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
@@ -29,11 +31,11 @@ runs:
     - name: Install npm
       uses: actions/setup-node@v6
       with:
-        node-version: "16"
+        node-version: "18"
     - name: Setup Pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 8
+        version: 10.34.1
 
     - name: Install Java
       uses: actions/setup-java@v5
@@ -41,7 +43,7 @@ runs:
         java-version: "11"
         distribution: "corretto"
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v6
       with:
         gradle-version: 7.6
 
@@ -78,13 +80,38 @@ runs:
     - name: Setup Pipenv
       run: python -m pip install pipenv
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Ensure Python Scripts dir is on PATH (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $scriptsDir = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+        Add-Content -Path $env:GITHUB_PATH -Value $scriptsDir
+    - name: Diagnose pipenv resolvability (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      continue-on-error: true
+      run: |
+        Write-Host "PATH: $env:PATH"
+        Write-Host "--- Get-Command pipenv ---"
+        Get-Command pipenv -ErrorAction SilentlyContinue
+        Write-Host "--- pipenv --version ---"
+        cmd /c "pipenv --version"
+        Write-Host "--- python -m pipenv --version ---"
+        cmd /c "python -m pipenv --version"
     - name: Setup Poetry
       run: python -m pip install poetry
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v9.0.0
+      with:
+        version: "0.11.32"
     - name: Setup Conan
       run: |
         python -m pip install conan
         conan profile detect
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Cargo (Rust)
+      run: rustup default stable
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
 
     - name: Install Swift on Linux and macOS

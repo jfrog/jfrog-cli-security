@@ -1,0 +1,36 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>test</groupId>
+    <artifactId>plugin-dep-app</artifactId>
+    <packaging>jar</packaging>
+    <version>1.0.0</version>
+    <name>plugin-dep-app</name>
+
+    <!--
+        Integration-test fixture for the mvn-include-plugin-deps CLI flag.
+        maven-jar-plugin is pinned to 3.4.1 so its transitive closure is fixed
+        regardless of the runner's ambient Maven version. That closure includes
+        org.ow2.asm:asm:9.8 (via plexus-archiver:4.9.2), which is the GAV the
+        mock curation server blocks. asm is a transitive dependency of a build
+        plugin, so mvn dependency:tree never sees it; only with the flag on does
+        the curation audit resolve plugin deps and surface it as blocked.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.webjars</groupId>
+            <artifactId>lodash</artifactId>
+            <version>4.17.21</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -134,7 +134,7 @@ func (gm *GitManager) GetSourceControlContext() (gitInfo *services.XscGitInfoCon
 	if !isClean {
 		return nil, fmt.Errorf("uncommitted changes found in the repository, not supported in git audit")
 	}
-	log.Debug(fmt.Sprintf("Git Context: %+v", gitInfo))
+	log.Verbose(fmt.Sprintf("Git Context: %+v", gitInfo))
 	return gitInfo, nil
 }
 

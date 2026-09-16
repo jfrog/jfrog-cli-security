@@ -1,22 +1,23 @@
 package techutils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -35,6 +36,7 @@ const (
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
 	Ruby       CodeLanguage = "ruby"
+	Rust       CodeLanguage = "rust"
 	// package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
 	SwiftLang     CodeLanguage = "Any"
@@ -52,21 +54,24 @@ const (
 	Pip       Technology = "pip"
 	Pipenv    Technology = "pipenv"
 	Poetry    Technology = "poetry"
+	Uv        Technology = "uv"
 	Nuget     Technology = "nuget"
 	Dotnet    Technology = "dotnet"
 	Conan     Technology = "conan"
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
 	Gem       Technology = "ruby"
+	Cargo     Technology = "cargo"
 	// Not Supported by build-info BOM generator
-	Docker   Technology = "docker"
-	Oci      Technology = "oci"
-	Rpm      Technology = "rpm"
-	Debian   Technology = "deb"
-	Composer Technology = "composer"
-	Alpine   Technology = "alpine"
-	Cpp      Technology = "cpp"
-	NoTech   Technology = ""
+	Docker        Technology = "docker"
+	HuggingFaceML Technology = "huggingfaceml"
+	Oci           Technology = "oci"
+	Rpm           Technology = "rpm"
+	Debian        Technology = "deb"
+	Composer      Technology = "composer"
+	Alpine        Technology = "alpine"
+	Cpp           Technology = "cpp"
+	NoTech        Technology = ""
 )
 
 // Alternative package types for some technologies
@@ -83,15 +88,18 @@ var AllTechnologiesStrings = []string{
 	Pip.String(),
 	Pipenv.String(),
 	Poetry.String(),
+	Uv.String(),
 	Nuget.String(),
 	Dotnet.String(),
 	Docker.String(),
+	HuggingFaceML.String(),
 	Oci.String(),
 	Conan.String(),
 	Cocoapods.String(),
 	Swift.String(),
 	NoTech.String(),
 	Gem.String(),
+	Cargo.String(),
 	Rpm.String(),
 	Debian.String(),
 	Composer.String(),
@@ -174,7 +182,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
-		exclude:                    []string{"pnpm-lock.yaml", ".yarnrc.yml", "yarn.lock", ".yarn"},
+		exclude:                    []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
@@ -185,7 +193,7 @@ var technologiesData = map[Technology]TechData{
 	Pnpm: {
 		packageType:                "npm",
 		xrayPackageType:            "npm",
-		indicators:                 []string{"pnpm-lock.yaml"},
+		indicators:                 []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
@@ -195,7 +203,7 @@ var technologiesData = map[Technology]TechData{
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
-		exclude:                []string{"pnpm-lock.yaml"},
+		exclude:                []string{"pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
 		projectType:            project.Yarn,
@@ -244,10 +252,20 @@ var technologiesData = map[Technology]TechData{
 		projectType:                project.Poetry,
 		language:                   Python,
 	},
+	Uv: {
+		formal:             "uv",
+		packageType:        Pypi,
+		xrayPackageType:    Pypi,
+		indicators:         []string{"uv.lock"},
+		packageDescriptors: []string{"pyproject.toml"},
+		execCommand:        "uv",
+		projectType:        project.UV,
+		language:           Python,
+	},
 	Nuget: {
 		formal:             "NuGet",
-		indicators:         []string{".sln", ".csproj"},
-		packageDescriptors: []string{".sln", ".csproj"},
+		indicators:         []string{".sln", ".slnx", ".csproj"},
+		packageDescriptors: []string{".sln", ".slnx", ".csproj"},
 		// .NET CLI is used for NuGet projects
 		execCommand:                "dotnet",
 		packageInstallationCommand: "add",
@@ -258,8 +276,8 @@ var technologiesData = map[Technology]TechData{
 	},
 	Dotnet: {
 		formal:             ".NET",
-		indicators:         []string{".sln", ".csproj"},
-		packageDescriptors: []string{".sln", ".csproj"},
+		indicators:         []string{".sln", ".slnx", ".csproj"},
+		packageDescriptors: []string{".sln", ".slnx", ".csproj"},
 		projectType:        project.Dotnet,
 		language:           CSharp,
 	},
@@ -292,12 +310,24 @@ var technologiesData = map[Technology]TechData{
 		projectType:        project.Ruby,
 		language:           Ruby,
 	},
+	// No 'indicators': Cargo is curation-only and would otherwise be auto-detected by jf audit too.
+	Cargo: {
+		formal:             "Cargo",
+		xrayPackageType:    "cargo",
+		packageDescriptors: []string{"Cargo.toml"},
+		execCommand:        "cargo",
+		language:           Rust,
+	},
 	// Snippet detection
 	Cpp: {formal: "Github", packageType: "github", xrayPackageType: "cpp"},
 	// Not Supported by build-info BOM generator
 	Docker: {
 		formal:      "Docker",
 		projectType: project.Docker,
+	},
+	HuggingFaceML: {
+		formal:          "Hugging Face",
+		xrayPackageType: "huggingfaceml",
 	},
 	Oci:      {},
 	Rpm:      {formal: "RPM"},
@@ -340,6 +370,14 @@ func (tech Technology) ToFormal() string {
 		return cases.Title(language.Und).String(tech.String())
 	}
 	return technologiesData[tech].formal
+}
+
+func ToFormalString(technologies []Technology) string {
+	formals := make([]string, len(technologies))
+	for i, tech := range technologies {
+		formals[i] = tech.ToFormal()
+	}
+	return strings.Join(formals, ", ")
 }
 
 func (tech Technology) String() string {
@@ -422,6 +460,106 @@ func DetectedTechnologiesList() (technologies []string) {
 	return detectedTechnologiesListInPath(wd, false)
 }
 
+// DetectedTechnologiesListForCurationAudit is the curation-audit variant of
+// DetectedTechnologiesList that additionally re-routes any working directory
+// detected as Npm to Yarn whenever a parent directory is a yarn workspace
+// root that claims it. The promotion is curation-only by design — the
+// generic file-based detector intentionally does not walk upward, and other
+// commands ('jf audit', 'jf scan', etc.) keep the legacy npm-fallback
+// behaviour for yarn workspace members so this change cannot regress them.
+//
+// Unlike DetectedTechnologiesList, this does not log the result: the caller still has
+// more promotions to apply (pnpm/yarn, pip→uv) before the list is final, and logging
+// early could show a technology immediately superseded (e.g. "Detected: pip." right
+// before "...treating as uv.").
+//
+// Used by doCurateAudit so 'jf ca --working-dirs=<workspace member>'
+// resolves through yarn (matching how the project's lockfile was produced)
+// instead of npm (which would synthesise a different dependency set and
+// produce curation answers that don't match what yarn would have resolved).
+func DetectedTechnologiesListForCurationAudit() (technologies []string) {
+	wd, err := os.Getwd()
+	if errorutils.CheckError(err) != nil {
+		return
+	}
+	detected, err := DetectTechnologiesDescriptors(wd, false, []string{}, map[Technology][]string{}, "")
+	if err != nil {
+		return
+	}
+	if len(detected) == 0 {
+		return
+	}
+	promoteYarnWorkspaceMembers(detected)
+	return DetectedTechnologiesToSlice(detected)
+}
+
+// Pep723ScriptUnauditedHint returns a hint when wd contains a PEP 723 script (or "" if
+// none), since jf ca only audits one via --script.
+//
+// Callers must only invoke this once uv was confirmed detected in wd, and must log the
+// result themselves — this function never logs directly, since jf ca's progress spinner
+// would swallow a log line emitted while it's active.
+func Pep723ScriptUnauditedHint(wd string) string {
+	found, err := hasUnauditedPep723Script(wd)
+	if err != nil || !found {
+		return ""
+	}
+	return "Found PEP 723 inline-script(s) that were not audited by this run — use 'jf ca --script <file>' to audit them."
+}
+
+var (
+	pep723OpenMarkerRegex  = regexp.MustCompile(`(?m)^#\s*///\s*script\s*$`)
+	pep723CloseMarkerRegex = regexp.MustCompile(`(?m)^#\s*///\s*$`)
+)
+
+// HasPep723ScriptMetadata reports whether content contains a PEP 723 inline
+// script metadata block: a "# /// script" line followed later by a lone
+// "# ///" closing line.
+func HasPep723ScriptMetadata(content string) bool {
+	loc := pep723OpenMarkerRegex.FindStringIndex(content)
+	if loc == nil {
+		return false
+	}
+	return pep723CloseMarkerRegex.MatchString(content[loc[1]:])
+}
+
+// hasUnauditedPep723Script reports whether dir contains, at any depth, a .py file with
+// PEP 723 inline script metadata. It stops at the first match (filepath.SkipAll) since
+// only a yes/no signal is needed, and prunes directories matching
+// utils.DefaultScaExcludePatterns (.git, node_modules, venv, test, dist, target) instead
+// of filtering them out after walking, since walking into a large excluded tree (e.g. a
+// committed .venv) is the dominant cost.
+func hasUnauditedPep723Script(dir string) (bool, error) {
+	var found bool
+	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == dir {
+			return nil //nolint:nilerr // a single unreadable entry shouldn't abort the whole yes/no scan
+		}
+		if d.IsDir() {
+			if utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".py") || utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+			return nil
+		}
+		data, readErr := os.ReadFile(path) // #nosec G122 -- path comes from WalkDir over dir, a local project directory the CLI was already pointed at
+		if readErr != nil {
+			return nil //nolint:nilerr // a single unreadable file shouldn't abort the whole yes/no scan
+		}
+		if HasPep723ScriptMetadata(string(data)) {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return false, walkErr
+	}
+	return found, nil
+}
+
 func detectedTechnologiesListInPath(path string, recursive bool) (technologies []string) {
 	detectedTechnologies, err := DetectTechnologiesDescriptors(path, recursive, []string{}, map[Technology][]string{}, "")
 	if err != nil {
@@ -440,7 +578,7 @@ func detectedTechnologiesListInPath(path string, recursive bool) (technologies [
 // If requestedTechs is empty, all technologies will be checked.
 // If excludePathPattern is not empty, files/directories that match the wildcard pattern will be excluded from the search.
 func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs []string, requestedDescriptors map[Technology][]string, excludePathPattern string) (technologiesDetected map[Technology]map[string][]string, err error) {
-	filesList, dirsList, err := listFilesAndDirs(path, recursive, true, true, excludePathPattern)
+	filesList, dirsList, err := utils.ListFilesAndDirs(path, recursive, true, true, excludePathPattern)
 	if err != nil {
 		return
 	}
@@ -463,29 +601,18 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
 	}
 	techCount := len(technologiesDetected)
+	detectedTechs := datastructures.MakeSet[Technology]()
+	for tech := range technologiesDetected {
+		if tech == NoTech {
+			continue
+		}
+		detectedTechs.Add(tech)
+	}
 	if _, exist := technologiesDetected[NoTech]; exist {
 		techCount--
 	}
 	if techCount > 0 {
-		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
-	}
-	return
-}
-
-func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
-	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
-	if err != nil {
-		return
-	}
-	for _, path := range filesOrDirsInPath {
-		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
-			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
-			continue
-		} else if isDir {
-			dirs = append(dirs, path)
-		} else {
-			files = append(files, path)
-		}
+		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, detectedTechs.ToSlice()))
 	}
 	return
 }
@@ -547,7 +674,7 @@ func getDirChildren(dir string, dirsList []string) (children []string) {
 //     wd/wd2: [tech1]
 func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors map[Technology][]string) (workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, err error) {
 	workingDirectoryToIndicatorsSet := make(map[string]*datastructures.Set[string])
-	excludedTechAtWorkingDir = make(map[string][]Technology)
+	excludedTechAtWorkingDirSet := make(map[string]*datastructures.Set[Technology])
 	for _, path := range files {
 		directory := filepath.Dir(path)
 
@@ -567,13 +694,20 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 			}
 			// Check if the working directory contains a file/directory with a name that ends with an excluded suffix
 			if isExclude(path, techData) {
-				excludedTechAtWorkingDir[directory] = append(excludedTechAtWorkingDir[directory], tech)
+				if _, exist := excludedTechAtWorkingDirSet[directory]; !exist {
+					excludedTechAtWorkingDirSet[directory] = datastructures.MakeSet[Technology]()
+				}
+				excludedTechAtWorkingDirSet[directory].Add(tech)
 			}
 		}
 	}
 	workingDirectoryToIndicators = make(map[string][]string)
 	for wd, indicators := range workingDirectoryToIndicatorsSet {
 		workingDirectoryToIndicators[wd] = indicators.ToSlice()
+	}
+	excludedTechAtWorkingDir = make(map[string][]Technology)
+	for wd, excluded := range excludedTechAtWorkingDirSet {
+		excludedTechAtWorkingDir[wd] = excluded.ToSlice()
 	}
 	return
 }
@@ -703,6 +837,146 @@ func isTechExcludedInWorkingDir(tech Technology, wd string, excludedTechAtWorkin
 		}
 	}
 	return false
+}
+
+// promoteYarnWorkspaceMembers re-routes any working directory currently
+// detected as Npm to Yarn whenever a parent directory is a yarn workspace
+// root that claims it. The detector by default routes a bare package.json
+// dir to npm (it's an npm indicator but only a yarn descriptor), so without
+// this fixup 'jf ca --working-dirs=<member>' on a yarn project would resolve
+// <member> via 'npm ls' — producing curation answers that don't match what
+// yarn would have resolved, and skipping the yarn-specific code paths that
+// understand workspaces, --mode=update-lockfile, and the curation install
+// failure modes.
+//
+// The promotion preserves the descriptor list from the original npm entry
+// (which is always [<member>/package.json] in this scenario) so downstream
+// code that iterates descriptors gets the same shape it would for any
+// yarn dir. If npm has no other dirs after the move, the empty Npm entry
+// is removed so the detector report doesn't claim a phantom npm project.
+func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string][]string) {
+	npmDirs, hasNpm := technologiesDetected[Npm]
+	if !hasNpm {
+		return
+	}
+	for wd, descriptors := range npmDirs {
+		if !isYarnWorkspaceMemberDir(wd) {
+			continue
+		}
+		log.Debug(fmt.Sprintf(
+			"Promoting working directory '%s' from Npm to Yarn: a parent yarn workspace root claims it via its 'workspaces' field.", wd))
+		delete(npmDirs, wd)
+		if _, exist := technologiesDetected[Yarn]; !exist {
+			technologiesDetected[Yarn] = map[string][]string{}
+		}
+		technologiesDetected[Yarn][wd] = descriptors
+	}
+	if len(npmDirs) == 0 {
+		delete(technologiesDetected, Npm)
+	}
+}
+
+// isYarnWorkspaceMemberDir reports whether dir is a yarn workspace member —
+// a child directory whose ownership is declared by a parent's package.json
+// "workspaces" field, with that parent being a yarn-flavoured root.
+//
+// "Yarn-flavoured" requires one of yarn.lock / .yarnrc.yml / .yarnrc /
+// .yarn next to the parent's package.json. Without this guard a sibling
+// npm-workspaces project would be claimed by mistake (npm also uses a
+// "workspaces" field).
+//
+// Walking stops at the first workspace-aware ancestor: yarn's own
+// resolver does not look beyond the first workspaces declaration, so
+// neither should we.
+func isYarnWorkspaceMemberDir(dir string) bool {
+	absTarget, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	cur := filepath.Dir(absTarget)
+	for {
+		pkgPath := filepath.Join(cur, "package.json")
+		if _, statErr := os.Stat(pkgPath); statErr == nil {
+			data, readErr := os.ReadFile(pkgPath)
+			if readErr != nil {
+				return false
+			}
+			var raw struct {
+				Workspaces json.RawMessage `json:"workspaces"`
+			}
+			if jsonErr := json.Unmarshal(data, &raw); jsonErr == nil && len(raw.Workspaces) > 0 {
+				if !DirectoryHasYarnIndicator(cur) {
+					return false
+				}
+				return ancestorClaims(cur, absTarget, raw.Workspaces)
+			}
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return false
+		}
+		cur = parent
+	}
+}
+
+// DirectoryHasYarnIndicator reports whether dir carries any of the files
+// that mark it as a yarn-managed project root. Used to disambiguate between
+// yarn and npm workspaces — both ecosystems share the "workspaces" field in
+// package.json, but only yarn puts these indicators next to it. Shared by
+// curation detection here and by yarn's workspace-root walk in
+// sca/bom/buildinfo/technologies/yarn.
+func DirectoryHasYarnIndicator(dir string) bool {
+	for _, name := range []string{"yarn.lock", ".yarnrc.yml", ".yarnrc", ".yarn"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ancestorClaims reports whether ancestor's "workspaces" patterns expand
+// to a directory equal to absTarget. We resolve patterns relative to
+// ancestor with filepath.Glob (the same expansion yarn V2+ performs) and
+// compare absolute paths, so symlinked or '.'-prefixed paths still match.
+func ancestorClaims(ancestor, absTarget string, workspacesField json.RawMessage) bool {
+	patterns := DecodeYarnWorkspacesField(workspacesField)
+	for _, pattern := range patterns {
+		matches, globErr := filepath.Glob(filepath.Join(ancestor, pattern))
+		if globErr != nil {
+			continue
+		}
+		for _, m := range matches {
+			absMatch, absErr := filepath.Abs(m)
+			if absErr != nil {
+				continue
+			}
+			if absMatch == absTarget {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// DecodeYarnWorkspacesField accepts either form yarn V2+ allows in
+// package.json — the array form (["packages/*"]) or the object form
+// ({"packages": [...]}) — and returns the flat list of glob patterns.
+// Anything else (bare string, number, etc.) is rejected and returns nil
+// so the caller treats the ancestor as not claiming the target. Shared
+// between curation detection here and the yarn package's workspace-root
+// walk to keep the two semantics in sync.
+func DecodeYarnWorkspacesField(raw json.RawMessage) []string {
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return arr
+	}
+	var obj struct {
+		Packages []string `json:"packages"`
+	}
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		return obj.Packages
+	}
+	return nil
 }
 
 // Remove sub directories keys from the given workingDirectoryToFiles map.
@@ -886,6 +1160,94 @@ func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
 		}
 	}
 	return cdxPackageType
+}
+
+// IsAmbiguousTechnologyString returns true for Xray/CDX types that map to multiple package managers (pypi, gav, npm, etc.).
+func IsAmbiguousTechnologyString(technology string) bool {
+	switch strings.ToLower(technology) {
+	case "", "generic", Pypi, Gav, string(Npm):
+		return true
+	default:
+		return false
+	}
+}
+
+// technologySharesXrayEcosystem reports whether tech belongs to the same Xray ecosystem as xrayType.
+func technologySharesXrayEcosystem(tech Technology, xrayType string) bool {
+	if tech.GetXrayPackageType() == xrayType {
+		return true
+	}
+	switch xrayType {
+	case Pypi:
+		return tech == Pip || tech == Pipenv || tech == Poetry || tech == Uv
+	case Gav:
+		return tech == Maven || tech == Gradle
+	case string(Npm):
+		return tech == Npm || tech == Pnpm || tech == Yarn
+	default:
+		return false
+	}
+}
+
+// ComponentPackageTypeToXrayType normalizes a CDX PURL type or Xray component-id type to an Xray package type.
+func ComponentPackageTypeToXrayType(packageType string) string {
+	if packageType == "" {
+		return ""
+	}
+	switch strings.ToLower(packageType) {
+	case Pypi, Gav:
+		return strings.ToLower(packageType)
+	default:
+		return CdxPackageTypeToXrayPackageType(packageType)
+	}
+}
+
+// TechnologiesInTargetsWithXrayType returns target technologies that share the given Xray package type ecosystem.
+func TechnologiesInTargetsWithXrayType(targets []Technology, xrayType string) []Technology {
+	if xrayType == "" {
+		return nil
+	}
+	var matches []Technology
+	for _, tech := range targets {
+		if tech == NoTech {
+			continue
+		}
+		if technologySharesXrayEcosystem(tech, xrayType) {
+			matches = append(matches, tech)
+		}
+	}
+	return matches
+}
+
+func containsTechnology(targets []Technology, tech Technology) bool {
+	for _, t := range targets {
+		if t == tech {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveIssueTechnology picks the most specific technology for an SCA issue using the Xray response, detected target
+// technologies, and the impacted component package type.
+func ResolveIssueTechnology(responseTechnology string, targetTechnologies []Technology, componentPackageType string) Technology {
+	responseTech := ToTechnology(responseTechnology)
+	xrayType := ComponentPackageTypeToXrayType(componentPackageType)
+	candidates := TechnologiesInTargetsWithXrayType(targetTechnologies, xrayType)
+
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) && containsTechnology(candidates, responseTech) {
+		return responseTech
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	if responseTech != NoTech && !IsAmbiguousTechnologyString(responseTechnology) {
+		return responseTech
+	}
+	if len(targetTechnologies) == 1 && targetTechnologies[0] != NoTech {
+		return targetTechnologies[0]
+	}
+	return NoTech
 }
 
 // https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst

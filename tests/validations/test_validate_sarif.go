@@ -20,6 +20,7 @@ const (
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
 	SecretsToolName            = "JFrog Secrets scanner"
+	ServicesToolName           = "JFrog Services scanner"
 	ContextualAnalysisToolName = "JFrog Applicability Scanner"
 )
 
@@ -62,13 +63,18 @@ func toActualValuesSarif(content *sarif.Report) (actualValues ValidationCountAct
 	actualValues.Vulnerabilities += actualValues.IacVulnerabilities
 	actualValues.Violations += actualValues.IacViolations
 
+	// Services
+	actualValues.ServicesVulnerabilities, actualValues.ServicesViolations = countJasResults(sarifutils.GetRunsByToolName(content, ServicesToolName))
+	actualValues.Vulnerabilities += actualValues.ServicesVulnerabilities
+	actualValues.Violations += actualValues.ServicesViolations
+
 	// SAST
 	actualValues.SastVulnerabilities, actualValues.SastViolations = countJasResults(sarifutils.GetRunsByToolName(content, SastToolName))
 	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
 	actualValues.Violations += actualValues.SastViolations
 
 	// Violations run
-	actualValues.Violations, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations, actualValues.SastViolations, actualValues.IacViolations, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countViolations(sarifutils.GetRunsByToolName(content, sarifparser.PolicyEnforcerToolName))
+	actualValues.Violations, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations, actualValues.SastViolations, actualValues.IacViolations, actualValues.ServicesViolations, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countViolations(sarifutils.GetRunsByToolName(content, sarifparser.PolicyEnforcerToolName))
 
 	return
 }
@@ -215,7 +221,7 @@ func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 	return
 }
 
-func countViolations(policyRuns []*sarif.Run) (total, sca, sec, lic, applic, undetermined, notCover, notApplic, missingCtx, sast, iac, secrets, inactive int) {
+func countViolations(policyRuns []*sarif.Run) (total, sca, sec, lic, applic, undetermined, notCover, notApplic, missingCtx, sast, iac, services, secrets, inactive int) {
 	for _, run := range policyRuns {
 		for _, result := range run.Results {
 			total++
@@ -233,6 +239,8 @@ func countViolations(policyRuns []*sarif.Run) (total, sca, sec, lic, applic, und
 				sast++
 			case violationutils.IacViolationType:
 				iac++
+			case violationutils.ServicesViolationType:
+				services++
 			case violationutils.SecretsViolationType:
 				secrets++
 			}

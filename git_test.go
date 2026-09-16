@@ -58,13 +58,16 @@ func TestCountContributorsFlags(t *testing.T) {
 
 type gitAuditCommandTestParams struct {
 	auditCommandTestParams
+	UseConfigProfile bool
 	// Override the test project repo clone url
 	OverrideRepoCloneUrl string
 	OverrideCommitMsg    string
 }
 
-func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
+func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string, error) {
+	args := append([]string{"git"}, getAuditCmdArgs(params.auditCommandTestParams)...)
+	args = append(args, fmt.Sprintf("--use-config-profile=%t", params.UseConfigProfile))
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
 }
 
 func getDummyGitRepoUrl() string {
@@ -104,7 +107,7 @@ func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, g
 		amendHeadCommitForTest(t, gitAuditParams.OverrideCommitMsg)
 	}
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, gitAuditParams.auditCommandTestParams)
+	output, err := testGitAuditCommand(t, gitAuditParams)
 	if expectError != "" {
 		assert.ErrorContains(t, err, expectError)
 	} else {
@@ -133,9 +136,10 @@ func TestGitAuditSimpleJson(t *testing.T) {
 func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 	// XRAY-136444 will be fixed in 3.141.7
 	integration.InitAuditNewScaTests(t, "3.141.7")
+	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-08-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138919")
 	if coreutils.IsWindows() {
 		// On windows tests are failing due to the bug in Xray Server, should be fixed at XRAY-138079
-		securityTestUtils.SkipTestIfDurationNotPassed(t, "09-04-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
+		securityTestUtils.SkipTestIfDurationNotPassed(t, "01-08-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
 	}
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
@@ -165,12 +169,12 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 85, Violations: 12, Vulnerabilities: 16},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + securityTestUtils.ExpectedServicesIssueCount(6), Vulnerabilities: 16 + securityTestUtils.ExpectedServicesIssueCount(6)},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(6)},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(6)}},
 		},
 	)
 }
@@ -198,8 +202,8 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		},
 		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
-			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+			Total: &validations.TotalCount{Licenses: 3, Violations: 18, Vulnerabilities: 18},
+			// Check that we have at least one violation for each scan type. (IAC and Services are not supported in old flows)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
 	)
@@ -213,7 +217,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", xrayUtils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(dummyCloneUrl)},
-		Exposures:       &xrayUtils.ExposuresFilterName{Categories: []xrayUtils.ExposureType{xrayUtils.SecretExposureType, xrayUtils.IacExposureType}},
+		Exposures:       &xrayUtils.ExposuresFilterName{Categories: []xrayUtils.ExposureType{xrayUtils.SecretExposureType, xrayUtils.IacExposureType, xrayUtils.ServicesExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
@@ -256,20 +260,20 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		gitAuditCommandTestParams{auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey, WithVuln: true}},
 		xrayVersion, xscVersion, policy.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Vulnerabilities: 12, Violations: 12},
+			Total: &validations.TotalCount{Vulnerabilities: 18, Violations: 18},
 			// Validate we have vulnerabilities for each scan type (to make sure if violations are issue when fail or not related and issue from other places before)
 			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
-			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+			// Check that we have at least one violation for each scan type. (IAC and Services are not supported in old flows)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
 	)
 }
 
 func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinXrayVersion)
 	defer testCleanUp()
-
-	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
+	// TODO: investigate why "issues" npm project causes flaky tests XRAY-145258
+	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues-mvn")
 	// Tests are running in parallel for multiple OSes and environments, so we need to generate a unique repo clone URL to avoid conflicts.
 	dummyCloneUrl := getDummyGitRepoUrl()
 
@@ -288,18 +292,27 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		}
 	}()
 
+	// Services scan is not supported in old flows, so we don't include it in the onlyScan list
+	onlyScan := []securityUtils.SubScanType{securityUtils.SecretsScan, securityUtils.ScaScan, securityUtils.SastScan, securityUtils.IacScan}
+
 	// Run the git audit command and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
+			auditCommandTestParams: auditCommandTestParams{
+				Format:                       format.SimpleJson,
+				Watches:                      []string{watchName},
+				DisableFailOnFailedBuildFlag: true,
+				OnlyScan:                     onlyScan,
+				ValidateSecrets:              true,
+			},
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-before"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 20, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 14, NotCovered: 6, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 72, Sast: 5, Secrets: 6},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},
@@ -320,15 +333,21 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		gitAuditCommandTestParams{
-			auditCommandTestParams: auditCommandTestParams{Format: format.SimpleJson, Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true},
-			OverrideRepoCloneUrl:   dummyCloneUrl,
-			OverrideCommitMsg:      getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
+			auditCommandTestParams: auditCommandTestParams{
+				Format:                       format.SimpleJson,
+				Watches:                      []string{skipWatchName},
+				DisableFailOnFailedBuildFlag: true,
+				ValidateSecrets:              true,
+				OnlyScan:                     onlyScan,
+			},
+			OverrideRepoCloneUrl: dummyCloneUrl,
+			OverrideCommitMsg:    getDummyCommitMsg("git-audit-jas-skip-not-applicable-cves-violations-after"),
 		},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 6, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 6, Inactive: 2},
+				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 6},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},

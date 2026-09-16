@@ -146,23 +146,23 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	}
 	if unique {
 		// Only count CVE findings, not impacted components
-		expected.Total.Vulnerabilities = 7
+		expected.Total.Vulnerabilities = 8
 		expected.Vulnerabilities = &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 4, Iac: 1, Secrets: 2},
+			ValidateScan:                &validations.ScanCount{Sca: 4, Iac: 1, Services: 1, Secrets: 2},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 2, NotCovered: 1},
 		}
 	} else {
 		// Count all findings (pair of issueId+impactedComponent)
-		expected.Total.Vulnerabilities = 8
+		expected.Total.Vulnerabilities = 9
 		expected.Vulnerabilities = &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 5, Iac: 1, Secrets: 2},
+			ValidateScan:                &validations.ScanCount{Sca: 5, Iac: 1, Services: 1, Secrets: 2},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 3, NotCovered: 1},
 		}
 	}
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.SourceCode)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technology: techutils.Npm}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
+	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technologies: []techutils.Technology{techutils.Npm}}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
 	// SCA scan results
 	npmTargetResults.ScaScanResults(0, services.ScanResponse{
 		ScanId: "711851ce-68c4-4dfd-7afb-c29737ebcb96",
@@ -364,6 +364,18 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		// No Violations
 		[]*sarif.Run{}, 0,
 	)
+	// Services scan results
+	npmTargetResults.AddJasScanResults(jasutils.Services,
+		[]*sarif.Run{{
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.ServicesToolName, validations.CreateDummyJasRule("GITHUB-ACTIONS-permissions-write-all"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
+			Results: []*sarif.Result{
+				validations.CreateDummyJasResult("GITHUB-ACTIONS-permissions-write-all", severityutils.LevelError, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", ".github", "workflows", "services.yml"), StartLine: 10, StartColumn: 1, EndLine: 10, EndColumn: 20, Snippet: "permissions: write-all"}),
+			},
+		}},
+		// No Violations
+		[]*sarif.Run{}, 0,
+	)
 	// Secrets scan results
 	npmTargetResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
@@ -422,7 +434,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "XRAY-609848",
 						Severity:      severityutils.Unknown,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/async@3.2.4",
 						PackageURL: "pkg:npm/async@3.2.4",
 					},
@@ -462,7 +474,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "98yhnmju7654rfvbnj",
 						Severity:      severityutils.Medium,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
@@ -503,7 +515,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						ViolationId:   "12ee2e134edqwe234",
 						Severity:      severityutils.High,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:npm/lodash@4.17.0",
 						PackageURL: "pkg:npm/lodash@4.17.0",
 					},
@@ -606,7 +618,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.DockerImage)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technology: techutils.Oci})
+	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technologies: []techutils.Technology{techutils.Oci}})
 	// SCA scan results
 	dockerImageTarget.ScaScanResults(0, services.ScanResponse{
 		ScanId: "27da9106-88ea-416b-799b-bc7d15783473",
@@ -751,7 +763,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ViolationId:   "XRAY-632747",
 						Severity:      severityutils.Unknown,
 					},
-					ImpactedComponent: cyclonedx.Component{
+					ImpactedComponent: &cyclonedx.Component{
 						BOMRef:     "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 						PackageURL: "pkg:deb/debian/bookworm/libssl3@3.0.13-1~deb12u1",
 					},

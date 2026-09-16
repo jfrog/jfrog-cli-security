@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
@@ -70,6 +71,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(secrets ...[]*sarif.Run) error
+	ParseServices(services ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
 	ParseMalicious(malicious ...[]*sarif.Run) error
@@ -117,7 +119,12 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 			// Skip this target as it's not in the include list
 			continue
 		}
-		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
+		allTargetErrors := targetScansResults.GetAllErrors()
+		targetErrors := []error{}
+		for _, targetError := range allTargetErrors {
+			targetErrors = append(targetErrors, targetError.ActualError)
+		}
+		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetErrors...); err != nil {
 			return
 		}
 		if err = parseScaResults(params, parser, cmdResults.CmdType, targetScansResults); err != nil {
@@ -145,7 +152,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			return
 		}
 	}
-	if targetScansResults.ScaResults == nil || !utils.IsScanRequested(cmdType, utils.ScaScan, params.RequestedScans...) {
+	if targetScansResults.ScaResults == nil || !utils.IsScanRequested(cmdType, utils.ScaScan, targetScansResults.IsScanRequestedByCentralConfig(utils.ScaScan), params.RequestedScans...) {
 		// Nothing to parse, no SCA results
 		return
 	}
@@ -157,6 +164,8 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		// If no enriched SBOM was provided, we can't parse new flow
 		return
 	}
+	// ScaResults.Sbom is the canonical enriched BOM. Format parsers must treat it as read-only;
+	// export-only mutations belong on parser-owned output (e.g. cyclonedxparser.cdc.bom).
 	// Parse the SCA results from the enriched SBOM
 	if params.IncludeVulnerabilities && targetScansResults.ScaResults.Sbom.Vulnerabilities != nil {
 		var applicableRuns []*sarif.Run
@@ -210,12 +219,16 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if err = parser.ParseSecrets(targetResults.JasResults.JasVulnerabilities.SecretsScanResults); err != nil {
 		return
 	}
+	// Parsing JAS Services results
+	if err = parser.ParseServices(targetResults.JasResults.JasVulnerabilities.ServicesScanResults); err != nil {
+		return
+	}
 	// Parsing JAS IAC results
 	if err = parser.ParseIacs(targetResults.JasResults.JasVulnerabilities.IacScanResults); err != nil {
 		return
 	}
 	// Parsing JAS SAST results
-	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+	if err = parser.ParseSast(sarifutils.GroupResultsByLocation(targetResults.JasResults.JasVulnerabilities.SastScanResults)); err != nil {
 		return
 	}
 	// Parsing JAS Malicious Code results

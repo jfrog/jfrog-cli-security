@@ -48,17 +48,19 @@ func GetSimpleJsonActualValues(t *testing.T, content string) (actualValues Valid
 func toActualValuesSimpleJson(results formats.SimpleJsonResults) (actualValues ValidationCountActualValues) {
 	actualValues = ValidationCountActualValues{
 		// Total
-		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities),
-		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations),
+		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities) + len(results.ServicesVulnerabilities),
+		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations) + len(results.ServicesViolations),
 		Licenses:        len(results.Licenses),
 		// Jas vulnerabilities
-		SastVulnerabilities:    len(results.SastVulnerabilities),
-		SecretsVulnerabilities: len(results.SecretsVulnerabilities),
-		IacVulnerabilities:     len(results.IacsVulnerabilities),
+		SastVulnerabilities:     len(results.SastVulnerabilities),
+		SecretsVulnerabilities:  len(results.SecretsVulnerabilities),
+		IacVulnerabilities:      len(results.IacsVulnerabilities),
+		ServicesVulnerabilities: len(results.ServicesVulnerabilities),
 		// Jas violations
-		SastViolations:    len(results.SastViolations),
-		SecretsViolations: len(results.SecretsViolations),
-		IacViolations:     len(results.IacsViolations),
+		SastViolations:     len(results.SastViolations),
+		SecretsViolations:  len(results.SecretsViolations),
+		IacViolations:      len(results.IacsViolations),
+		ServicesViolations: len(results.ServicesViolations),
 		// Sca vulnerabilities
 		ScaVulnerabilities: len(results.Vulnerabilities),
 		// Sca violations
@@ -158,7 +160,6 @@ func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected
 		StringValidation{Expected: expected.Summary, Actual: actual.Summary, Msg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId)},
 		StringValidation{Expected: expected.Severity, Actual: actual.Severity, Msg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId)},
 		StringValidation{Expected: expected.Applicable, Actual: actual.Applicable, Msg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId)},
-		// StringValidation{Expected: expected.Technology.String(), Actual: actual.Technology.String(), Msg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId)},
 		ListValidation[string]{Expected: expected.References, Actual: actual.References, Msg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId)},
 
 		StringValidation{Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId)},

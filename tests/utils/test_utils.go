@@ -21,13 +21,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
-	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
@@ -52,8 +52,18 @@ func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int,
 			t.Skipf("Skipping test (%d/%d days have passed since %s, but %d days are required.) Reason: %s", daysSinceDate, durationDays, dateStr, durationDays, msg)
 		}
 	} else if daysSinceDate > durationDays {
-		t.Log("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call.")
+		t.Logf("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call. (%s)", msg)
 	}
+}
+
+// ExpectedServicesIssueCount returns the expected JAS Services findings for the current OS.
+// Analyzer Manager's GitHub Actions services scanner currently does not detect workflow files on Windows.
+// Scanner bug is tracked in XRAY-159123.
+func ExpectedServicesIssueCount(count int) int {
+	if coreutils.IsWindows() {
+		return 0
+	}
+	return count
 }
 
 func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {
@@ -479,11 +489,11 @@ func PrepareAnalyzerManagerResource() (err error) {
 		}
 		return nil
 	}
-	return jas.DownloadAnalyzerManagerIfNeeded(0)
+	return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
 }
 
 func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
-	manager, version, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(details)
+	manager, version, err := xray.CreateXrayServiceManagerAndGetVersion(details)
 	if err != nil {
 		return fmt.Errorf("failed to create Xray service manager: %w", err)
 	}
@@ -492,5 +502,5 @@ func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
 }
 
 func PrepareXrayScanLibResource() (err error) {
-	return plugin.DownloadXrayLibPluginIfNeeded()
+	return plugin.DownloadXrayLibPluginIfNeeded("", nil)
 }

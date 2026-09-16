@@ -58,3 +58,12 @@ func (sgp *ScanGraphParams) SetTechnology(technology techutils.Technology) *Scan
 func (sgp *ScanGraphParams) Technology() techutils.Technology {
 	return sgp.technology
 }
+
+func (sgp ScanGraphParams) Clone() ScanGraphParams {
+	cloned := sgp
+	if sgp.xrayGraphScanParams != nil {
+		paramsCopy := *sgp.xrayGraphScanParams
+		cloned.xrayGraphScanParams = &paramsCopy
+	}
+	return cloned
+}

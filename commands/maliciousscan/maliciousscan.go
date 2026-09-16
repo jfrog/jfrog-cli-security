@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -113,7 +114,7 @@ func (cmd *MaliciousScanCommand) Run() (err error) {
 }
 
 func (cmd *MaliciousScanCommand) validateAndPrepare() (xrayVersion string, entitledForJas bool, workingDirs []string, err error) {
-	xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, xrayUtils.WithScopedProjectKey(cmd.project))
+	xrayManager, xrayVersion, err := corexray.CreateXrayServiceManagerAndGetVersion(cmd.serverDetails, corexray.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return "", false, nil, err
 	}
@@ -153,7 +154,6 @@ func (cmd *MaliciousScanCommand) initializeCommandResults(xrayVersion string, en
 func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
-			false,
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(false, "", "", "", cmd.project, nil),
 		),
@@ -178,7 +178,7 @@ func (cmd *MaliciousScanCommand) createJasScanner() (*jas.JasScanner, error) {
 
 func (cmd *MaliciousScanCommand) setAnalyzerManagerPath(scanner *jas.JasScanner) error {
 	if cmd.customAnalyzerManagerPath == "" {
-		if err := jas.DownloadAnalyzerManagerIfNeeded(0); err != nil {
+		if err := jas.DownloadAnalyzerManagerIfNeeded("", nil, 0); err != nil {
 			return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
 		}
 		var err error
