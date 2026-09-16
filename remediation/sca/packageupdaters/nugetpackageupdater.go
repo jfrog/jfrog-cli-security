@@ -18,7 +18,9 @@ import (
 var nugetProjectFileSuffixes = []string{".csproj", ".fsproj", ".vbproj"}
 
 const (
-	nugetPackageReferenceElementPattern = `(?s)<PackageReference\b[^>]*/>|<PackageReference\b[^>]*[^/]>.*?</PackageReference>`
+	// (?i) accounts for MSBuild element names being case-insensitive (e.g. <packagereference> is
+	// just as valid as <PackageReference>), even though this casing is rare in practice.
+	nugetPackageReferenceElementPattern = `(?is)<PackageReference\b[^>]*/>|<PackageReference\b[^>]*[^/]>.*?</PackageReference>`
 	nugetKeyAttrPattern                 = `(?i)\b(?:Include|Update)\s*=\s*["']%s["']`
 	// nugetVersionAttrPattern matches whatever is already inside Version="...", including an
 	// MSBuild property reference like "$(FooVersion)" - such a reference gets overwritten with the
@@ -77,30 +79,20 @@ func (n *NugetPackageUpdater) UpdateDependency(fixDetails *FixDetails) error {
 
 	var fixErrors error
 	var failingDescriptors []string
-	var fixedAny bool
 	for _, projectFilePath := range projectFilePaths {
 		if fixErr := n.fixVulnerabilityAndRestore(projectFilePath, fixDetails.ImpactedDependencyName, fixDetails.SuggestedFixedVersion, originalWd); fixErr != nil {
 			log.Warn(fixErr.Error())
 			fixErrors = errors.Join(fixErrors, fmt.Errorf("failed to fix '%s' in descriptor '%s': %w", fixDetails.ImpactedDependencyName, projectFilePath, fixErr))
 			failingDescriptors = append(failingDescriptors, projectFilePath)
 		} else {
-			fixedAny = true
 			log.Debug("Updated successfully " + projectFilePath)
 		}
 	}
 
-	if fixErrors == nil {
-		return nil
+	if fixErrors != nil {
+		return fmt.Errorf("encountered errors while fixing '%s' vulnerability in descriptors [%s]: %w", fixDetails.ImpactedDependencyName, strings.Join(failingDescriptors, ", "), fixErrors)
 	}
-	if fixedAny {
-		// At least one descriptor was fixed - don't fail the whole vulnerability just because a
-		// sibling descriptor (e.g. one governed by Central Package Management) couldn't be fixed.
-		// A caller treating any error as "nothing happened" would otherwise discard an
-		// already-applied, successful fix.
-		log.Warn(fmt.Sprintf("Partially fixed '%s': could not fix descriptor(s) [%s]: %s", fixDetails.ImpactedDependencyName, strings.Join(failingDescriptors, ", "), fixErrors.Error()))
-		return nil
-	}
-	return fmt.Errorf("encountered errors while fixing '%s' vulnerability in descriptors [%s]: %w", fixDetails.ImpactedDependencyName, strings.Join(failingDescriptors, ", "), fixErrors)
+	return nil
 }
 
 func collectProjectFilePaths(fixDetails *FixDetails) []string {
@@ -151,7 +143,11 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 		return rollbackProjectFile(projectFilePath, originalProjectFile, fmt.Errorf("failed to read %s: %w", lockFilePath, err))
 	}
 
-	lockFileTracked, checkErr := IsFileTrackedByGit(lockFilePath, originalWd)
+	absLockFilePath := lockFilePath
+	if !filepath.IsAbs(absLockFilePath) {
+		absLockFilePath = filepath.Join(originalWd, absLockFilePath)
+	}
+	lockFileTracked, checkErr := IsFileTrackedByGit(absLockFilePath, originalWd)
 	if checkErr != nil {
 		log.Debug(fmt.Sprintf("Failed to check if lock file is tracked in git: %s. Proceeding with lock file regeneration.", checkErr.Error()))
 		lockFileTracked = true

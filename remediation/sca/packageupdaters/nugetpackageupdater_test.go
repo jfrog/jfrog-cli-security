@@ -8,7 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/assert"
@@ -102,6 +105,15 @@ func TestNugetUpdateDependency(t *testing.T) {
   </ItemGroup>
 </Project>`
 
+	lowercaseElementCsproj := `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <packagereference Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+</Project>`
+
 	testCases := []struct {
 		name               string
 		customCsproj       string
@@ -159,6 +171,19 @@ func TestNugetUpdateDependency(t *testing.T) {
 			expectedContains:   []string{`<Version>13.0.1</Version>`},
 			expectedNotContain: []string{`<Version>12.0.3</Version>`},
 		},
+		{
+			name:         "LowercaseElementName",
+			customCsproj: lowercaseElementCsproj,
+			fixDetails: &FixDetails{
+				SuggestedFixedVersion:  "13.0.1",
+				IsDirectDependency:     true,
+				Technology:             techutils.Nuget,
+				ImpactedDependencyName: "Newtonsoft.Json",
+				Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: "Project.csproj"}}}},
+			},
+			expectedContains:   []string{`Include="Newtonsoft.Json" Version="13.0.1"`},
+			expectedNotContain: []string{`Version="12.0.3"`},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -195,7 +220,7 @@ func TestNugetUpdateDependency(t *testing.T) {
 	}
 }
 
-func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
+func TestNugetUpdateDependencyPartialFailureKeepsSuccessfulWrites(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
 	currDir, err := os.Getwd()
@@ -225,9 +250,9 @@ func TestNugetUpdateDependencyPartialSuccess(t *testing.T) {
 
 	updater := &NugetPackageUpdater{}
 	err = updater.UpdateDependency(fixDetails)
-	// A successful sibling fix must not be reported as an error just because the CPM-governed one
-	// couldn't be fixed - the failure is logged, not surfaced as the call's result.
-	assert.NoError(t, err)
+	// Matches Maven/npm: a sibling failure is still surfaced as an error, but it doesn't roll back
+	// whatever other descriptors were already fixed successfully.
+	assert.Error(t, err)
 
 	fixedProject, err := os.ReadFile("Project.csproj")
 	assert.NoError(t, err)
@@ -383,6 +408,68 @@ func TestNugetUpdateDependencyRegeneratesLockFile(t *testing.T) {
 	assert.Contains(t, string(lockFile), `"resolved":"13.0.1"`)
 }
 
+// TestNugetUpdateDependencySkipsRestoreForUntrackedLockFile uses a real git repository (rather than
+// a bare temp dir, as every other test in this file does) so that IsFileTrackedByGit takes its
+// genuine "not tracked" path instead of failing open because the directory isn't a git repo at all.
+func TestNugetUpdateDependencySkipsRestoreForUntrackedLockFile(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	repo, err := git.PlainInit(tmpDir, false)
+	assert.NoError(t, err)
+	worktree, err := repo.Worktree()
+	assert.NoError(t, err)
+	_, err = worktree.Add(filepath.Join("WithLockFile", "WithLockFile.csproj"))
+	assert.NoError(t, err)
+	// packages.lock.json is deliberately left untracked (not added/committed).
+	signature := &object.Signature{Name: "test", Email: "test@example.com", When: time.Now()}
+	_, err = worktree.Commit("track project file only", &git.CommitOptions{Author: signature})
+	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	writeFakeDotnetRestore(t, toolDir, 0, `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	originalLockFile, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join("WithLockFile", "WithLockFile.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(filepath.Join("WithLockFile", "WithLockFile.csproj"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedCsproj), `Include="Newtonsoft.Json" Version="13.0.1"`, "the reference itself is still updated regardless of lock file tracking")
+
+	lockFileAfter, err := os.ReadFile(filepath.Join("WithLockFile", "packages.lock.json"))
+	assert.NoError(t, err)
+	assert.Equal(t, originalLockFile, lockFileAfter, "untracked lock file must be left untouched, not regenerated")
+
+	_, statErr := os.Stat(filepath.Join(toolDir, "args.log"))
+	assert.True(t, os.IsNotExist(statErr), "dotnet restore must not run at all for an untracked lock file")
+}
+
 func TestNugetUpdateDependencyMultipleProjectsEachRegenerateOwnLockFile(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
@@ -466,8 +553,9 @@ func TestNugetUpdateDependencyRestoreFailureIsolatedPerProject(t *testing.T) {
 
 	updater := &NugetPackageUpdater{}
 	err = updater.UpdateDependency(fixDetails)
-	// The failing project must not turn the successful sibling's fix into a reported error.
-	assert.NoError(t, err)
+	// The failing project is still reported as an error, but its rollback stays isolated to itself -
+	// it must not affect the sibling project that was fixed successfully.
+	assert.Error(t, err)
 
 	fixedCsproj, err := os.ReadFile(filepath.Join("WithLockFile", "WithLockFile.csproj"))
 	assert.NoError(t, err)
