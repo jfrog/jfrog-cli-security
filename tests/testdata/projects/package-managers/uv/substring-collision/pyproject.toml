@@ -1,0 +1,5 @@
+[project]
+name = "uv-project"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["cattrs==23.2.3", "attrs==23.2.0"]

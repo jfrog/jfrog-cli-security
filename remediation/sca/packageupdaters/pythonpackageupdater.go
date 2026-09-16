@@ -79,26 +79,41 @@ func (py *PythonPackageUpdater) handlePip(fixDetails *FixDetails) (err error) {
 	return
 }
 
+// pythonDependencyLeftBoundary requires a match to start at the beginning of a TOML
+// array entry or the start of the file, not merely as a suffix of a longer name - without
+// it, a fix for "attrs" would also match inside "cattrs".
+const pythonDependencyLeftBoundary = `(^|[\s"'\[,])`
+
 func (py *PythonPackageUpdater) handleUv(fixDetails *FixDetails) (err error) {
 	const pyprojectFile = "pyproject.toml"
-	var fixedFile string
-	fixedPackage := fixDetails.ImpactedDependencyName + "==" + fixDetails.SuggestedFixedVersion
 	currentFile, err := py.tryReadRequirementFile(pyprojectFile)
 	if err != nil {
 		return errors.New("failed to read pyproject.toml: " + err.Error())
 	}
-	re := regexp.MustCompile(PythonPackageRegexPrefix + "(" + fixDetails.ImpactedDependencyName + "|" + strings.ToLower(fixDetails.ImpactedDependencyName) + ")" + PythonPackageRegexSuffix)
-	if packageToReplace := re.FindString(currentFile); packageToReplace != "" {
-		fixedFile = strings.Replace(currentFile, packageToReplace, strings.ToLower(fixedPackage), 1)
-	}
-	if fixedFile == "" {
+	escapedName := regexp.QuoteMeta(fixDetails.ImpactedDependencyName)
+	re := regexp.MustCompile(PythonPackageRegexPrefix + pythonDependencyLeftBoundary + escapedName + PythonPackageRegexSuffix)
+	if !re.MatchString(currentFile) {
 		return fmt.Errorf("impacted package %s not found, fix failed", fixDetails.ImpactedDependencyName)
 	}
+	fixedPackage := strings.ToLower(fixDetails.ImpactedDependencyName) + "==" + fixDetails.SuggestedFixedVersion
+	// ReplaceAllString, not just the first match: the same package can be pinned in more
+	// than one place (e.g. [project].dependencies and a [dependency-groups] table), and
+	// leaving one occurrence behind makes 'uv lock' fail as unsatisfiable.
+	fixedFile := re.ReplaceAllString(currentFile, "${1}"+fixedPackage)
+
 	//#nosec G703 -- False positive - the path is determined by internal file scanning, not user input, and was already validated by the preceding read.
 	if err = os.WriteFile(pyprojectFile, []byte(fixedFile), 0600); err != nil {
 		return fmt.Errorf("an error occurred while writing the fixed version of %s to pyproject.toml:\n%s", fixDetails.SuggestedFixedVersion, err.Error())
 	}
-	return runPackageMangerCommand(techutils.Uv.GetExecCommandName(), techutils.Uv.String(), []string{"lock", "--upgrade-package", fixDetails.ImpactedDependencyName})
+
+	if lockErr := runPackageMangerCommand(techutils.Uv.GetExecCommandName(), techutils.Uv.String(), []string{"lock", "--upgrade-package", fixDetails.ImpactedDependencyName}); lockErr != nil {
+		//#nosec G306 -- 0600 matches the permissions used for the write above.
+		if rollbackErr := os.WriteFile(pyprojectFile, []byte(currentFile), 0600); rollbackErr != nil {
+			return fmt.Errorf("failed to rollback pyproject.toml after uv lock failure: %w (original error: %v)", rollbackErr, lockErr)
+		}
+		return lockErr
+	}
+	return nil
 }
 
 func (py *PythonPackageUpdater) tryGetRequirementFile() (string, error) {
