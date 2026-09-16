@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -628,7 +629,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			requestToFail: map[string]bool{
-				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip":       false,
+				"/api/go/go-virtual/example.com/localmod/@v/v0.0.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {packagesStatus: []*PackageStatus{
@@ -667,7 +669,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
-					totalNumberOfPackages: 3,
+					totalNumberOfPackages: 4,
 				},
 			},
 		},
@@ -1120,6 +1122,15 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
 			compName:     "github.com/kennygrant/sanitize",
 			version:      "v1.2.4",
+		},
+		{
+			name:         "local replace go component id is skipped",
+			compId:       "go://github.com/example/localmod:v0.0.0" + _go.LocalReplaceMarker,
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: nil,
+			compName:     "github.com/example/localmod",
+			version:      "v0.0.0",
 		},
 	}
 	for _, tt := range tests {

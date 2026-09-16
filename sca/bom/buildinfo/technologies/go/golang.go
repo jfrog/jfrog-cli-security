@@ -2,6 +2,8 @@ package _go
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -14,11 +16,15 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"golang.org/x/mod/modfile"
 )
 
 const (
 	goPackageTypeIdentifier = "go://"
 	goSourceCodePrefix      = "github.com/golang/go:v"
+	// LocalReplaceMarker tags a tree node whose module is satisfied by a local 'replace' directive.
+	// It's never published, so never probe it.
+	LocalReplaceMarker = ":local-replace"
 )
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
@@ -65,13 +71,21 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
+
+	// Modules satisfied by a local filesystem 'replace' directive were never published and must not be
+	// probed against Artifactory during curation-audit.
+	var localReplaceModules map[string]bool
+	if params.IsCurationCmd {
+		localReplaceModules = getLocalReplaceModules(currentDir)
+	}
+
 	// Parse the dependencies into Xray dependency tree format
 	rootNode := &xrayUtils.GraphNode{
 		Id:    goPackageTypeIdentifier + rootModuleName,
 		Nodes: []*xrayUtils.GraphNode{},
 	}
 	uniqueDepsSet := datastructures.MakeSet[string]()
-	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
+	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet, localReplaceModules)
 
 	// In case of curation command, go version is not relevant as it can't be resolved from go repo
 	if !params.IsCurationCmd {
@@ -106,26 +120,65 @@ func handleCurationGoError(err error) (bool, error) {
 	return false, nil
 }
 
-func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string]) {
+func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string], localReplaceModules map[string]bool) {
 	if currNode.NodeHasLoop() {
 		return
 	}
 	uniqueDepsSet.Add(currNode.Id)
-	currDepChildren := dependenciesGraph[strings.TrimPrefix(currNode.Id, goPackageTypeIdentifier)]
+	// Strip our marker before the graph lookup, so a local module's own (real) dependencies are still found.
+	graphKey := strings.TrimSuffix(strings.TrimPrefix(currNode.Id, goPackageTypeIdentifier), LocalReplaceMarker)
+	currDepChildren := dependenciesGraph[graphKey]
 	// Recursively create & append all node's dependencies.
 	for _, childName := range currDepChildren {
 		if !dependenciesList[childName] {
 			// 'go list all' is more accurate than 'go graph' so we filter out deps that don't exist in go list
 			continue
 		}
+		childId := goPackageTypeIdentifier + childName
+		if isLocalReplaceModule(childName, localReplaceModules) {
+			childId += LocalReplaceMarker
+		}
 		childNode := &xrayUtils.GraphNode{
-			Id:     goPackageTypeIdentifier + childName,
+			Id:     childId,
 			Nodes:  []*xrayUtils.GraphNode{},
 			Parent: currNode,
 		}
 		currNode.Nodes = append(currNode.Nodes, childNode)
-		populateGoDependencyTree(childNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
+		populateGoDependencyTree(childNode, dependenciesGraph, dependenciesList, uniqueDepsSet, localReplaceModules)
 	}
+}
+
+// isLocalReplaceModule reports whether childName ("<module-path>:<version>") is in localReplaceModules.
+func isLocalReplaceModule(childName string, localReplaceModules map[string]bool) bool {
+	modulePath, _, found := strings.Cut(childName, ":")
+	if !found {
+		modulePath = childName
+	}
+	return localReplaceModules[modulePath]
+}
+
+// getLocalReplaceModules returns module paths that go.mod at projectDir replaces with a local directory.
+// Module-to-module replaces are excluded - those resolve to a real, published module and must still be probed.
+// Fails open (empty set + warning) on any read/parse error, so a broken go.mod only regresses to today's behavior instead of aborting the audit.
+func getLocalReplaceModules(projectDir string) map[string]bool {
+	localReplaceModules := map[string]bool{}
+	goModPath := filepath.Join(projectDir, "go.mod")
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		log.Warn("curation-audit: failed reading go.mod to detect local 'replace' directives, local modules will not be skipped: " + err.Error())
+		return localReplaceModules
+	}
+	modFile, err := modfile.Parse(goModPath, data, nil)
+	if err != nil {
+		log.Warn("curation-audit: failed parsing go.mod to detect local 'replace' directives, local modules will not be skipped: " + err.Error())
+		return localReplaceModules
+	}
+	for _, r := range modFile.Replace {
+		if modfile.IsDirectoryPath(r.New.Path) {
+			localReplaceModules[r.Old.Path] = true
+		}
+	}
+	return localReplaceModules
 }
 
 func getGoVersionAsDependency() (*xrayUtils.GraphNode, error) {

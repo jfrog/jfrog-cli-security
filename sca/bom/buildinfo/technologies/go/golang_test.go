@@ -12,10 +12,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -79,6 +81,69 @@ func TestBuildGoDependencyList(t *testing.T) {
 func removeTxtSuffix(txtFileName string) error {
 	// go.sum.txt  >> go.sum
 	return fileutils.MoveFile(txtFileName, strings.TrimSuffix(txtFileName, ".txt"))
+}
+
+// TestGetLocalReplaceModules: go.mod replaces example.com/localmod with a local directory.
+// getLocalReplaceModules must report that module path as local.
+func TestGetLocalReplaceModules(t *testing.T) {
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-local-replace-project"))
+	defer cleanUp()
+
+	assert.NoError(t, removeTxtSuffix("go.mod.txt"))
+
+	currentDir, err := os.Getwd()
+	assert.NoError(t, err)
+	localReplaceModules := getLocalReplaceModules(currentDir)
+	assert.Equal(t, map[string]bool{"example.com/localmod": true}, localReplaceModules)
+}
+
+// TestPopulateGoDependencyTree_LocalReplace: given a graph/list shaped like real 'go mod graph'/'go list'
+// output for a local-replaced module, the tree must tag that module but leave its real dependency and an
+// unrelated real dependency untouched.
+func TestPopulateGoDependencyTree_LocalReplace(t *testing.T) {
+	dependenciesGraph := map[string][]string{
+		"testGoLocalReplace": {
+			"example.com/localmod:v0.0.0",
+			"rsc.io/quote:v1.5.2",
+		},
+		"example.com/localmod:v0.0.0": {
+			"golang.org/x/text:v0.3.3",
+		},
+		"rsc.io/quote:v1.5.2": {
+			"rsc.io/sampler:v1.3.0",
+		},
+	}
+	dependenciesList := map[string]bool{
+		"example.com/localmod:v0.0.0": true,
+		"golang.org/x/text:v0.3.3":    true,
+		"rsc.io/quote:v1.5.2":         true,
+		"rsc.io/sampler:v1.3.0":       true,
+	}
+	localReplaceModules := map[string]bool{"example.com/localmod": true}
+
+	rootNode := &xrayUtils.GraphNode{Id: goPackageTypeIdentifier + "testGoLocalReplace", Nodes: []*xrayUtils.GraphNode{}}
+	uniqueDepsSet := datastructures.MakeSet[string]()
+	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet, localReplaceModules)
+
+	expectedUniqueDeps := []string{
+		goPackageTypeIdentifier + "testGoLocalReplace",
+		goPackageTypeIdentifier + "example.com/localmod:v0.0.0" + LocalReplaceMarker,
+		goPackageTypeIdentifier + "golang.org/x/text:v0.3.3",
+		goPackageTypeIdentifier + "rsc.io/quote:v1.5.2",
+		goPackageTypeIdentifier + "rsc.io/sampler:v1.3.0",
+	}
+	assert.ElementsMatch(t, uniqueDepsSet.ToSlice(), expectedUniqueDeps, "First is actual, Second is Expected")
+
+	// The locally-replaced module is tagged with the marker...
+	localReplaceNode := tests.GetAndAssertNode(t, rootNode.Nodes, "example.com/localmod:v0.0.0"+LocalReplaceMarker)
+	// ...but its own real, published dependency is still present, walked, and NOT marked.
+	assert.Len(t, localReplaceNode.Nodes, 1)
+	tests.GetAndAssertNode(t, localReplaceNode.Nodes, "golang.org/x/text:v0.3.3")
+
+	// An unrelated real dependency (and its own transitive dependency) is completely untouched.
+	realDep := tests.GetAndAssertNode(t, rootNode.Nodes, "rsc.io/quote:v1.5.2")
+	assert.Len(t, realDep.Nodes, 1)
+	tests.GetAndAssertNode(t, realDep.Nodes, "rsc.io/sampler:v1.3.0")
 }
 
 func Test_handleCurationGoError(t *testing.T) {
