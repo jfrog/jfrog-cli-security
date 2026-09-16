@@ -983,7 +983,7 @@ func TestGetCompatiblePackageUpdater(t *testing.T) {
 		{techutils.Poetry, true, &PythonPackageUpdater{}},
 		{techutils.Pipenv, true, &PythonPackageUpdater{}},
 		{techutils.Nuget, true, &NugetPackageUpdater{}},
-		{techutils.Yarn, false, nil},
+		{techutils.Yarn, true, &YarnPackageUpdater{}},
 		{techutils.Gradle, false, nil},
 		{techutils.Conan, false, nil},
 	}
