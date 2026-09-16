@@ -125,13 +125,13 @@ func TestParseCvsFailedPackages(t *testing.T) {
 				"╰─▶ Because there is no version of telnyx==4.87.1 and your project depends\n" +
 				"    on telnyx==4.87.1, we can conclude that your project's requirements\n" +
 				"    are unsatisfiable.",
-			want: []PinnedRequirement{{Name: "telnyx", Version: "4.87.1", ParentName: "telnyx", ParentVersion: "4.87.1"}},
+			want: []PinnedRequirement{{Name: "telnyx", Version: "4.87.1", ParentName: "telnyx", ParentVersion: "4.87.1", ConfirmedDirect: true}},
 		},
 		{
 			name: "uv: deduplicates repeated name==version in output",
 			output: "Because there is no version of requests==2.28.0 and your project depends\n" +
 				"on requests==2.28.0, we can conclude...",
-			want: []PinnedRequirement{{Name: "requests", Version: "2.28.0", ParentName: "requests", ParentVersion: "2.28.0"}},
+			want: []PinnedRequirement{{Name: "requests", Version: "2.28.0", ParentName: "requests", ParentVersion: "2.28.0", ConfirmedDirect: true}},
 		},
 		{
 			name: "uv: transitive CVS-stripped dependency attributed to its real parent",
@@ -156,6 +156,45 @@ func TestParseCvsFailedPackages(t *testing.T) {
 				"we can conclude that deepagents==0.6.12 cannot\n" +
 				"be used.",
 			want: []PinnedRequirement{{Name: "langsmith", Version: "0.10.0", ParentName: "deepagents", ParentVersion: "0.6.12"}},
+		},
+		{
+			name: "uv: transitive package-not-found, parent constrains child by range not exact pin",
+			output: "× No solution found when resolving dependencies:\n" +
+				"╰─▶ Because charset-normalizer was not found in the package registry and\n" +
+				"    requests==2.31.0 depends on charset-normalizer, we can conclude that\n" +
+				"    requests==2.31.0 cannot be used.\n" +
+				"    And because your project depends on requests==2.31.0, we can conclude\n" +
+				"    that your project's requirements are unsatisfiable.",
+			want: []PinnedRequirement{{Name: "charset-normalizer", ParentName: "requests", ParentVersion: "2.31.0"}},
+		},
+		{
+			name: "pipenv: transitive range dep attributed to its real parent (space-separated phrasing)",
+			output: "✘ Locking Failed!\n" +
+				"ERROR: No matching distribution found for charset-normalizer<4,>=2\n" +
+				"\n" +
+				"The conflict is caused by:\n" +
+				"    requests 2.31.0 depends on charset-normalizer<4 and >=2\n",
+			want: []PinnedRequirement{{Name: "charset-normalizer", VersionRange: "<4,>=2", ParentName: "requests", ParentVersion: "2.31.0"}},
+		},
+		{
+			name: "pip: diamond dependency — two chains collide on the same child name, first wins",
+			output: "no matching distributions available for your environment:\n" +
+				"    charset-normalizer\n" +
+				"\n" +
+				"The conflict is caused by:\n" +
+				"    package-a 1.0.0 depends on charset-normalizer<4 and >=2\n" +
+				"    package-b 2.0.0 depends on charset-normalizer<5 and >=3\n" +
+				"\n" +
+				"To fix this you could try to:\n",
+			want: []PinnedRequirement{{Name: "charset-normalizer", ParentName: "package-a", ParentVersion: "1.0.0"}},
+		},
+		{
+			name: "uv: ranged direct dependency, whole package blocked, no version echoed",
+			output: "× No solution found when resolving dependencies:\n" +
+				"╰─▶ Because urllib3 was not found in the package registry and your project\n" +
+				"    depends on urllib3, we can conclude that your project's requirements are\n" +
+				"    unsatisfiable.",
+			want: []PinnedRequirement{{Name: "urllib3", ParentName: "urllib3", ConfirmedDirect: true}},
 		},
 	}
 	for _, tc := range cases {
