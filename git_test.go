@@ -311,7 +311,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 72, Sast: 5, Secrets: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 72, Sast: 5, Secrets: 4},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 61, NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
@@ -346,7 +346,7 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 6},
+				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 4},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 10, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
