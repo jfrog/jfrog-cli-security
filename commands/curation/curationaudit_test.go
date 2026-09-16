@@ -4272,6 +4272,9 @@ func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
 	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
 
 	ca := NewCurationAuditCommand()
+	// techsToAudit's default branch resolves Pip/Uv ambiguity via ca.OriginPath, not the
+	// process's cwd - production sets this from absWd before reaching this point.
+	ca.OriginPath = projectDir
 
 	techs := ca.techsToAudit()
 
