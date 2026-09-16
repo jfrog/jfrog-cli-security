@@ -1753,6 +1753,17 @@ func TestFilterAmbiguousPipUvTargets(t *testing.T) {
 			expectPip: true,
 		},
 		{
+			name: "pip-only pyproject.toml [tool.uv] without uv.lock promotes to uv",
+			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[tool.uv]\npython = \"3.12\"\n"), 0o644))
+				return map[techutils.Technology]map[string][]string{
+					techutils.Pip: {dir: {filepath.Join(dir, "pyproject.toml")}},
+				}
+			},
+			expectUv: true,
+		},
+		{
 			name: "uv-only is unchanged",
 			setup: func(t *testing.T) map[techutils.Technology]map[string][]string {
 				dir := t.TempDir()

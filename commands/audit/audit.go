@@ -725,26 +725,34 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 	}
 }
 
-// filterAmbiguousPipUvTargets drops, per working directory, whichever of Pip/Uv
-// techutils.PromotePipToUv rejects for that directory - the same ambiguity
-// detectTechnologiesInTarget resolves for the new BOM-generator flow. Without this, a
-// uv-managed working directory that also matches Pip's generic pyproject.toml indicator
-// would be scanned twice, once mislabeled.
+// filterAmbiguousPipUvTargets applies techutils.PromotePipToUv to every Pip working
+// directory, including directories that have no Uv detector hit yet. Uv's shared
+// indicator is uv.lock, so a pyproject.toml with [tool.uv] and no lockfile is detected
+// as Pip only; promotion still rewrites that directory to Uv, matching
+// detectTechnologiesInTarget.
 func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[string][]string) map[techutils.Technology]map[string][]string {
 	pipDirs, hasPip := techToWorkingDirs[techutils.Pip]
-	uvDirs, hasUv := techToWorkingDirs[techutils.Uv]
-	if !hasPip || !hasUv {
+	if !hasPip {
 		return techToWorkingDirs
 	}
-	for dir := range pipDirs {
-		if _, ambiguous := uvDirs[dir]; !ambiguous {
-			continue
+	uvDirs := techToWorkingDirs[techutils.Uv]
+	if uvDirs == nil {
+		uvDirs = map[string][]string{}
+	}
+	for dir, descriptors := range pipDirs {
+		dirTechs := []techutils.Technology{techutils.Pip}
+		if _, ok := uvDirs[dir]; ok {
+			dirTechs = append(dirTechs, techutils.Uv)
 		}
-		promoted := techutils.PromotePipToUv([]techutils.Technology{techutils.Pip, techutils.Uv}, dir)
+		promoted := techutils.PromotePipToUv(dirTechs, dir)
 		if !slices.Contains(promoted, techutils.Pip) {
 			delete(pipDirs, dir)
 		}
-		if !slices.Contains(promoted, techutils.Uv) {
+		if slices.Contains(promoted, techutils.Uv) {
+			if _, ok := uvDirs[dir]; !ok {
+				uvDirs[dir] = descriptors
+			}
+		} else {
 			delete(uvDirs, dir)
 		}
 	}
@@ -753,6 +761,8 @@ func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[
 	}
 	if len(uvDirs) == 0 {
 		delete(techToWorkingDirs, techutils.Uv)
+	} else {
+		techToWorkingDirs[techutils.Uv] = uvDirs
 	}
 	return techToWorkingDirs
 }

@@ -4238,7 +4238,7 @@ func TestPipWinsOverStrayUvLock(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("# stray uv.lock\n"), 0644))
 	t.Chdir(root)
 
-	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
 
 	assert.Contains(t, techs, techutils.Pip.String(), "a pip-exclusive file (requirements.txt) must win over a stray uv.lock")
 	assert.NotContains(t, techs, techutils.Uv.String(), "must not report uv when a pip-exclusive file is present")
@@ -4253,7 +4253,7 @@ func TestPureUvProjectNotReportedAsPip(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
 	t.Chdir(root)
 
-	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
 
 	assert.Contains(t, techs, techutils.Uv.String(), "uv.lock present, no pip-exclusive files — must report uv")
 	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
@@ -5608,7 +5608,6 @@ func TestPromotePipToUv(t *testing.T) {
 
 			t.Setenv("HOME", fakeHome)
 			t.Setenv("USERPROFILE", fakeHome)
-			t.Chdir(projectDir)
 
 			if tc.hasPipFile != "" {
 				require.NoError(t, os.WriteFile(filepath.Join(projectDir, tc.hasPipFile), []byte{}, 0o644))
@@ -5625,7 +5624,7 @@ func TestPromotePipToUv(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n"), 0o644))
 			}
 
-			result := promotePipToUv(tc.techs)
+			result := promotePipToUvIn(tc.techs, projectDir)
 
 			hasPip, hasUv := false, false
 			for _, tech := range result {

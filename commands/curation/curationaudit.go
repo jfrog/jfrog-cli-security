@@ -709,19 +709,11 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	}
 }
 
-// The rule itself lives in techutils.PromotePipToUv, shared with the general 'jf audit'/'jf
-// scan' detection flow so both commands resolve the same Pip/Uv ambiguity identically.
-func promotePipToUv(techs []string) []string {
-	return promotePipToUvIn(techs, "")
-}
-
+// promotePipToUvIn applies techutils.PromotePipToUv against dir. Callers must pass the
+// project directory; an empty dir is a no-op so this never falls back to the process cwd.
 func promotePipToUvIn(techs []string, dir string) []string {
 	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return techs
-		}
+		return techs
 	}
 	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), dir)
 	result := make([]string, 0, len(promoted))
