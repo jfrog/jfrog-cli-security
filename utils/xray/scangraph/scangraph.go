@@ -23,6 +23,7 @@ func useXscGraphScan(params *services.XrayGraphScanParams) bool {
 	return params.XscVersion != "" && params.MultiScanId != ""
 }
 
+// XSC sca/scan/graph requires "nodes"; binary leaf graphs omit it, so drop XSC ids and stay on Xray.
 func disableXscForBinaryScan(params *services.XrayGraphScanParams) {
 	if params == nil || params.ScanType != services.Binary {
 		return
