@@ -229,7 +229,22 @@ func TestGetGitProject(t *testing.T) {
 		{
 			name:    "SSH",
 			url:     "git@github.com:jfrog/jfrog-cli-security.git",
-			project: "jfrog-cli-security",
+			project: "jfrog",
+		},
+		{
+			name:    "SSH with clone port",
+			url:     "ssh://git@github.com:22/jfrog/jfrog-cli-security.git",
+			project: "jfrog",
+		},
+		{
+			name:    "Azure SSH",
+			url:     "git@ssh.dev.azure.com:v3/Org/Project/Repo",
+			project: "Org/Project",
+		},
+		{
+			name:    "Azure HTTPS",
+			url:     "https://dev.azure.com/Org/Project/_git/Repo.git",
+			project: "Org/Project",
 		},
 		{
 			name:    "Bitbucket Https",

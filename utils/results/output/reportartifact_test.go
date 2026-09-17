@@ -74,3 +74,73 @@ func TestUploadViaXrayApi_ServerError_ReturnsError(t *testing.T) {
 	_, err := uploadViaXrayApi(newTestServerDetails(server.URL), "frogbot", "path", "file.cdx.json", "", &cdxutils.FullBOM{})
 	assert.Error(t, err)
 }
+
+func TestExtractBaseGitPath(t *testing.T) {
+	testCases := []struct {
+		name    string
+		url     string
+		branch  string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:   "HTTPS",
+			url:    "https://github.com/jfrog/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "HTTPS credentials and port",
+			url:    "https://user:token@git.example.com:8443/jfrog/xray-url-canonical-e2e.git", // #nosec G101 -- test fixture, not a real credential
+			branch: "main",
+			want:   "git.example.com:8443/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "HTTPS dotted repository name",
+			url:    "https://github.com/jfrog/repo.v2",
+			branch: "main",
+			want:   "github.com/jfrog/repo.v2/main",
+		},
+		{
+			name:    "HTTPS missing repository path",
+			url:     "https://github.com",
+			branch:  "main",
+			wantErr: true,
+		},
+		{
+			name:   "SCP",
+			url:    "git@github.com:JFROG/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/JFROG/xray-url-canonical-e2e/main",
+		},
+		{
+			name:   "SSH with port",
+			url:    "ssh://git@github.com:22/jfrog/xray-url-canonical-e2e.git",
+			branch: "main",
+			want:   "github.com/jfrog/xray-url-canonical-e2e/main",
+		},
+		{
+			name:    "Malformed SCP missing repository path",
+			url:     "git@github.com:",
+			branch:  "main",
+			wantErr: true,
+		},
+		{
+			name:    "Malformed SSH missing repository path",
+			url:     "ssh://git@github.com",
+			branch:  "main",
+			wantErr: true,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := extractBaseGitPath(testCase.url, testCase.branch)
+			if testCase.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, testCase.want, got)
+		})
+	}
+}
