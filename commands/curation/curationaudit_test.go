@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -685,21 +686,41 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
+			// example.com/localmod is a tripwire, not an expected call: it's local-replaced and must never
+			// be probed. If a regression ever probes it, this mock 403s it, breaking expectedResp below.
 			requestToFail: map[string]bool{
-				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip":       false,
+				"/api/go/go-virtual/example.com/localmod/@v/v0.0.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "example.com/localmod",
+						ParentVersion:     "v0.0.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "indirect",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",
@@ -735,7 +756,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
-					totalNumberOfPackages: 3,
+					totalNumberOfPackages: 4,
 				},
 			},
 		},
@@ -1229,6 +1250,15 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
 			compName:     "github.com/kennygrant/sanitize",
 			version:      "v1.2.4",
+		},
+		{
+			name:         "local replace go component id is skipped",
+			compId:       "go://github.com/example/localmod:v0.0.0" + _go.LocalReplaceMarker,
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: nil,
+			compName:     "github.com/example/localmod",
+			version:      "v0.0.0",
 		},
 	}
 	for _, tt := range tests {

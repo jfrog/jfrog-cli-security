@@ -46,6 +46,7 @@ import (
 	cargotech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cargo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	gemtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
@@ -3298,10 +3299,16 @@ func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []strin
 // output: downloadUrl: <artiUrl>/api/go/go/github.com/kennygrant/sanitize/@v/v1.2.4.zip
 func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, techutils.Go.String()+"://")
+	// A module satisfied by a filesystem 'replace' directive was never published - skip probing it.
+	isLocalReplace := strings.HasSuffix(id, _go.LocalReplaceMarker)
+	id = strings.TrimSuffix(id, _go.LocalReplaceMarker)
 	nameVersion := strings.Split(id, ":")
 	name = nameVersion[0]
 	if len(nameVersion) > 1 {
 		version = nameVersion[1]
+	}
+	if isLocalReplace {
+		return nil, name, "", version
 	}
 	url := strings.TrimSuffix(artiUrl, "/") + "/api/go/" + repo + "/" + name + "/@v/" + version + ".zip"
 	return []string{url}, name, "", version
