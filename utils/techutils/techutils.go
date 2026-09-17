@@ -263,9 +263,13 @@ var technologiesData = map[Technology]TechData{
 		language:           Python,
 	},
 	Nuget: {
-		formal:             "NuGet",
-		indicators:         []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj"},
-		packageDescriptors: []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj"},
+		formal:     "NuGet",
+		indicators: []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj"},
+		// packages.lock.json is included here too: for a package whose version comes from Central
+		// Package Management or Directory.Build.props, the .csproj itself never contains the
+		// version text, so the scanner cites only the lock file as evidence. Without it listed here,
+		// that evidence is filtered out before it ever reaches the NuGet fix updater.
+		packageDescriptors: []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj", "packages.lock.json"},
 		// .NET CLI is used for NuGet projects
 		execCommand:                "dotnet",
 		packageInstallationCommand: "add",
@@ -454,6 +458,10 @@ func IsTechnologyDescriptor(path string) Technology {
 		}
 	}
 	return NoTech
+}
+
+func IsLockFilePackageDescriptor(path string) bool {
+	return strings.EqualFold(filepath.Base(path), "packages.lock.json")
 }
 
 func DetectedTechnologiesList() (technologies []string) {
