@@ -460,6 +460,10 @@ func IsTechnologyDescriptor(path string) Technology {
 	return NoTech
 }
 
+func IsLockFilePackageDescriptor(path string) bool {
+	return strings.EqualFold(filepath.Base(path), "packages.lock.json")
+}
+
 func DetectedTechnologiesList() (technologies []string) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {

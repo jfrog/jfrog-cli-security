@@ -25,10 +25,12 @@ type UnsupportedErrorType string
 const (
 	IndirectDependencyFixNotSupported UnsupportedErrorType = "IndirectDependencyFixNotSupported"
 	// NoInlineVersionFixNotSupported covers a PackageReference with no inline version, no
-	// VersionOverride, and no resolvable PackageVersion in the nearest Directory.Packages.props
-	// or a file it Imports - including when that props file disables Central Package Management.
-	NoInlineVersionFixNotSupported UnsupportedErrorType = "NoInlineVersionFixNotSupported"
-	UnsupportedFixReason           UnsupportedErrorType = "UnsupportedFixReason"
+	// VersionOverride, and no resolvable PackageVersion or PackageReference in the nearest
+	// Directory.Packages.props, Directory.Build.props, Directory.Build.targets, or a file they
+	// Import - including when Central Package Management is disabled.
+	NoInlineVersionFixNotSupported                UnsupportedErrorType = "NoInlineVersionFixNotSupported"
+	MixedInlineAndNonInlineVersionFixNotSupported UnsupportedErrorType = "MixedInlineAndNonInlineVersionFixNotSupported"
+	UnsupportedFixReason                          UnsupportedErrorType = "UnsupportedFixReason"
 )
 
 type ErrUnsupportedFix struct {
@@ -43,7 +45,9 @@ func (err *ErrUnsupportedFix) Error() string {
 	case IndirectDependencyFixNotSupported:
 		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - indirect dependency fix is not supported", err.PackageName, err.FixedVersion)
 	case NoInlineVersionFixNotSupported:
-		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - could not resolve a version to fix (no inline attribute, VersionOverride, or matching Directory.Packages.props entry found)", err.PackageName, err.FixedVersion)
+		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - could not resolve a version to fix (no inline attribute, VersionOverride, or matching Directory.Packages.props / Directory.Build.props entry found)", err.PackageName, err.FixedVersion)
+	case MixedInlineAndNonInlineVersionFixNotSupported:
+		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - package has both inline and versionless PackageReference entries", err.PackageName, err.FixedVersion)
 	case UnsupportedFixReason:
 		return fmt.Sprintf("skipping fix of vulnerable package '%s' version '%s' - %s", err.PackageName, err.FixedVersion, err.Reason)
 	default:
