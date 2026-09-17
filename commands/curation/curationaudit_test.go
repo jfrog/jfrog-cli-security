@@ -696,12 +696,31 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
+			// example.com/localmod is a tripwire, not an expected call: it's local-replaced and must never
+			// be probed. If a regression ever probes it, this mock 403s it, breaking expectedResp below.
 			requestToFail: map[string]bool{
 				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip":       false,
 				"/api/go/go-virtual/example.com/localmod/@v/v0.0.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "example.com/localmod",
+						ParentVersion:     "v0.0.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "indirect",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",

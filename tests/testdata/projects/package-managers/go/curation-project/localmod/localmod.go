@@ -1,5 +1,7 @@
 package localmod
 
+import "rsc.io/sampler"
+
 func Hello() string {
-	return "local"
+	return sampler.Hello()
 }
