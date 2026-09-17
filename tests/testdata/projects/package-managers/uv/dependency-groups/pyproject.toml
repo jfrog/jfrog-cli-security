@@ -1,0 +1,10 @@
+[project]
+name = "uv-project"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pyjwt==1.7.1",
+]
