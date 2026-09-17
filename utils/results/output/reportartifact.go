@@ -7,17 +7,19 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	securityxray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-client-go/auth"
-	"github.com/jfrog/jfrog-client-go/utils/log"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults) (artifactPath string, err error) {
+func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults, xrayVersion string) (artifactPath string, err error) {
 	cdxResults, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeSbom:            true,
 		IncludeLicenses:        true,
@@ -31,30 +33,73 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 	if err != nil {
 		return "", fmt.Errorf("failed calculating the artifact path: %w", err)
 	}
+	projectKey := cmdResults.ResultContext.ProjectKey
+
+	if shouldUseXrayScanCdxUploadApi(xrayVersion) {
+		fileName := buildScanCdxFileName(cmdResults.CmdType)
+		return uploadViaXrayApi(serverDetails, rtResultRepository, artifactFinalRepoPath, fileName, projectKey, cdxResults)
+	}
+	return uploadViaArtifactoryDirect(serverDetails, rtResultRepository, artifactFinalRepoPath, cmdResults.CmdType, projectKey, cdxResults)
+}
+
+func shouldUseXrayScanCdxUploadApi(xrayVersion string) bool {
+	if xrayVersion == "" {
+		return false
+	}
+	return clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.XrayCdxUploadMinVersion) == nil
+}
+
+func buildScanCdxFileName(cmdType utils.CommandType) string {
+	return utils.BuildResultFileName(string(cmdType), "cdx.json")
+}
+
+func uploadViaXrayApi(serverDetails *config.ServerDetails, rtResultRepository, artifactFinalRepoPath, fileName, projectKey string, cdxResults *cdxutils.FullBOM) (artifactPath string, err error) {
+	bomBytes, err := utils.GetAsJsonBytes(cdxResults, true, true)
+	if err != nil {
+		return "", fmt.Errorf("failed marshaling cdx for upload: %w", err)
+	}
+	// Xray uses legacy SARIF format, so we need to strip the unset indexes
+	if bomBytes, err = sarifutils.StripUnsetIndexes(bomBytes); err != nil {
+		return "", fmt.Errorf("failed to sanitize CycloneDx SARIF indexes: %w", err)
+	}
+	xrayManager, err := securityxray.CreateXrayServiceManager(serverDetails, securityxray.WithScopedProjectKey(projectKey))
+	if err != nil {
+		return "", fmt.Errorf("failed creating xray service manager: %w", err)
+	}
+	resp, err := xrayManager.Xsc().UploadScanCdx(services.UploadScanCdxParams{
+		RepoName: rtResultRepository,
+		RepoPath: artifactFinalRepoPath,
+		FileName: fileName,
+		Bom:      string(bomBytes),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed uploading the scan results via xray: %w", err)
+	}
+	return resp.Path, nil
+}
+
+// Used for direct upload only through upload-cdx command and older xray versions.
+// This flow still required an access token with necessary permission to upload an artifact directly to Artifactory and permission to create a repo in Artifactory if it doesn't exist.
+func uploadViaArtifactoryDirect(serverDetails *config.ServerDetails, rtResultRepository, artifactFinalRepoPath string, cmdType utils.CommandType, projectKey string, cdxResults *cdxutils.FullBOM) (artifactPath string, err error) {
 	uploadCmd := upload.NewUploadCycloneDxCommand().
 		SetContentToUpload(cdxResults).
-		SetFilePrefix(string(cmdResults.CmdType)).
+		SetFilePrefix(string(cmdType)).
 		SetServerDetails(serverDetails).
 		SetUploadRepository(filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath))).
-		SetProjectKey(cmdResults.ResultContext.ProjectKey)
+		SetProjectKey(projectKey)
 	artifactName, err := uploadCmd.Upload()
 	if err != nil {
 		return "", fmt.Errorf("failed uploading the scan results: %w", err)
-	}
-	// Set the results platform URL in the command results and log it
-	if resultsUrl := getCommandScanResultsPlatformUrl(cdxResults, serverDetails, filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath)), artifactName); resultsUrl != "" {
-		cmdResults.SetResultsPlatformUrl(resultsUrl)
 	}
 	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
 }
 
 func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults, pretty bool) string {
-	isGitContext := cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil
-	uploadMsg := upload.GetScanResultsPlatformUrlMessage(isGitContext)
+	uploadMsg := upload.GetScanResultsPlatformUrlMessage(cmdResults.CmdType == utils.SourceCode && cmdResults.GitContext != nil)
 	if pretty {
 		uploadMsg = coreutils.PrintTitle(uploadMsg)
 	}
-	if isGitContext {
+	if cmdResults.ResultsPlatformUrl == "" {
 		return uploadMsg
 	}
 	link := cmdResults.ResultsPlatformUrl
@@ -62,20 +107,6 @@ func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResu
 		link = coreutils.PrintLink(link)
 	}
 	return fmt.Sprintf("%s:\n%s", uploadMsg, link)
-}
-
-func getCommandScanResultsPlatformUrl(cdxResults *cdxutils.FullBOM, serverDetails *config.ServerDetails, repoPath, artifactName string) string {
-	content, err := utils.GetAsJsonBytes(cdxResults, true, true)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to generate CycloneDX content bytes for scan results URL: %s", err.Error()))
-		return ""
-	}
-	sha256, err := utils.Sha256Hash(string(content))
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to calculate SHA256 for scan results URL: %s", err.Error()))
-		return ""
-	}
-	return upload.GetCdxScanResultsUrl(serverDetails.GetUrl(), repoPath, artifactName, sha256)
 }
 
 func getResultsArtifactPath(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails) (string, error) {

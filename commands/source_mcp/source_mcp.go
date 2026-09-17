@@ -5,7 +5,9 @@ import (
 	"io"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
@@ -22,7 +24,7 @@ type McpCommand struct {
 	ErrorPipe     io.Writer
 }
 
-func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars map[string]string) (err error) {
+func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars utils.EnvironmentVariables) (err error) {
 	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
 }
 
@@ -40,7 +42,7 @@ func (mcpCmd *McpCommand) Run() (err error) {
 }
 
 func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails)
 	if err != nil {
 		return
 	}

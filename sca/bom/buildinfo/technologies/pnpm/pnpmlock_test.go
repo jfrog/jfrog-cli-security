@@ -184,6 +184,54 @@ func TestSplitPnpmRef(t *testing.T) {
 	}
 }
 
+// TestBuildDepsMapResolvesAliases covers aliased dependencies
+// (e.g. "strip-ansi-cjs": "npm:strip-ansi@^6.0.1"), where the importers-block key is the
+// alias while the ref carries the real registry package. The map stays keyed by the alias
+// (that is the node_modules identity), but From must hold the real name so the Xray
+// component ID and the Artifactory download URL point at a package that actually exists.
+func TestBuildDepsMapResolvesAliases(t *testing.T) {
+	deps := map[string]pnpmLockDep{
+		"strip-ansi-cjs": {Specifier: "npm:strip-ansi@^6.0.1", Version: "strip-ansi@6.0.1"},
+		"my-babel":       {Specifier: "npm:@babel/code-frame@^7.24.7", Version: "@babel/code-frame@7.29.7"},
+		"strip-ansi":     {Specifier: "^7.0.1", Version: "7.2.0"},
+	}
+	got := buildDepsMap(deps, nil, map[string]bool{})
+
+	require.Contains(t, got, "strip-ansi-cjs")
+	assert.Equal(t, "strip-ansi", got["strip-ansi-cjs"].From, "alias must resolve to the real package name")
+	assert.Equal(t, "6.0.1", got["strip-ansi-cjs"].Version)
+
+	// An alias whose target is scoped must keep its scope.
+	require.Contains(t, got, "my-babel")
+	assert.Equal(t, "@babel/code-frame", got["my-babel"].From)
+	assert.Equal(t, "7.29.7", got["my-babel"].Version)
+
+	// A regular dependency is unaffected: the key is already the real name.
+	require.Contains(t, got, "strip-ansi")
+	assert.Equal(t, "strip-ansi", got["strip-ansi"].From)
+	assert.Equal(t, "7.2.0", got["strip-ansi"].Version)
+}
+
+// TestWalkSnapshotResolvesAliases covers the same aliasing, one level down: a package
+// may itself depend on an aliased package, recorded in the snapshots block.
+func TestWalkSnapshotResolvesAliases(t *testing.T) {
+	snapshots := map[string]pnpmLockSnapshot{
+		"parent@1.0.0": {Dependencies: map[string]string{
+			"strip-ansi-cjs": "strip-ansi@6.0.1",
+			"ansi-regex":     "5.0.1",
+		}},
+	}
+	got := walkSnapshot("parent@1.0.0", snapshots, map[string]bool{})
+
+	require.Contains(t, got, "strip-ansi-cjs")
+	assert.Equal(t, "strip-ansi", got["strip-ansi-cjs"].From, "transitive alias must resolve to the real package name")
+	assert.Equal(t, "6.0.1", got["strip-ansi-cjs"].Version)
+
+	require.Contains(t, got, "ansi-regex")
+	assert.Equal(t, "ansi-regex", got["ansi-regex"].From)
+	assert.Equal(t, "5.0.1", got["ansi-regex"].Version)
+}
+
 // TestValidateLockfileVersion ensures only lockfileVersion 9.0+ (the 'snapshots'
 // format this parser understands) is accepted, and older formats are rejected
 // rather than silently yielding an incomplete dependency tree.

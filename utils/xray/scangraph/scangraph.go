@@ -15,7 +15,26 @@ const (
 	CocoapodsScanMinXrayVersion = "3.103.3"
 )
 
+// Binary scans stay on Xray api/v1/scan/graph; XSC is only used for dependency scans with analytics ids.
+func useXscGraphScan(params *services.XrayGraphScanParams) bool {
+	if params == nil || params.ScanType == services.Binary {
+		return false
+	}
+	return params.XscVersion != "" && params.MultiScanId != ""
+}
+
+// XSC sca/scan/graph requires "nodes"; binary leaf graphs omit it, so drop XSC ids and stay on Xray.
+func disableXscForBinaryScan(params *services.XrayGraphScanParams) {
+	if params == nil || params.ScanType != services.Binary {
+		return
+	}
+	params.XscVersion = ""
+	params.MultiScanId = ""
+}
+
 func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
+	disableXscForBinaryScan(params.xrayGraphScanParams)
+
 	err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayGraphScanParams.XrayVersion, ScanTypeMinXrayVersion)
 	if err != nil {
 		// Remove scan type param if Xray version is under the minimum supported version
@@ -27,7 +46,7 @@ func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XraySe
 		return nil, err
 	}
 
-	xscEnabled := params.xrayGraphScanParams.XscVersion != "" && params.xrayGraphScanParams.MultiScanId != ""
+	xscEnabled := useXscGraphScan(params.xrayGraphScanParams)
 	scanResult, err := xrayManager.GetScanGraphResults(scanId, params.xrayGraphScanParams.XrayVersion, params.XrayGraphScanParams().IncludeVulnerabilities, params.XrayGraphScanParams().IncludeLicenses, xscEnabled)
 	if err != nil {
 		return nil, err

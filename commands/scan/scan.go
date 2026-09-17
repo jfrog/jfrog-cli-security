@@ -13,6 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -26,7 +27,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/sync/errgroup"
@@ -46,6 +46,7 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayClientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -217,7 +218,28 @@ func (scanCmd *ScanCommand) SetScansToPerform(scansToPerform []utils.SubScanType
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
+	scanCmd.multiScanId, scanCmd.startTime = xsc.SendNewScanEvent(
+		scanCmd.xrayVersion,
+		scanCmd.xscVersion,
+		scanCmd.serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, scanCmd.serverDetails, scanCmd.getAnalyticsProjectPath()),
+		scanCmd.resultsContext.ProjectKey,
+	)
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *results.SecurityCommandResults) (err error) {
+		if scanResults == nil {
+			return
+		}
+		xsc.SendScanEndedWithResults(scanCmd.serverDetails, scanResults)
+		return scanCmd.recordResults(scanResults)
+	})
+}
+
+func (scanCmd *ScanCommand) getAnalyticsProjectPath() string {
+	currentDir, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return ""
+	}
+	return currentDir
 }
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
@@ -367,7 +389,11 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	scaErrGroup := new(errgroup.Group)
 	if cmdResults.ResultContext.IncludeSbom || utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, cmdResults.IsScanRequestedByCentralConfig(utils.ScaScan), scanCmd.scansToPerform...) {
 		scaErrGroup.Go(func() error {
-			return scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator()
+			return scanCmd.bomGenerator.WithOptions(
+				indexer.WithXray(xrayManager, scanCmd.xrayVersion),
+				indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits),
+				indexer.WithServerDetails(scanCmd.serverDetails),
+			).PrepareGenerator()
 		})
 	} else {
 		log.Debug("SCA scans were not initiated, so SCA scan preparation was skipped...")
@@ -526,7 +552,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	targetCompId = binaryTree.Id
 
 	// Prepare parameters for the SCA scan
-	scanGraphParams := scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId)
+	scanGraphParams := scanCmd.getXrayScanGraphParams()
 	scanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
 	scanGraphParams.XrayGraphScanParams().BinaryGraph = binaryTree
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
@@ -552,15 +578,13 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	return
 }
 
-func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGraphParams {
+func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams {
 	params := &services.XrayGraphScanParams{
 		Watches:                scanCmd.resultsContext.Watches,
 		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
 		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
-		MultiScanId:            msi,
-		XscVersion:             scanCmd.xscVersion,
 		XrayVersion:            scanCmd.xrayVersion,
 	}
 	return scangraph.NewScanGraphParams().

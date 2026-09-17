@@ -3,24 +3,23 @@ package java
 import (
 	"bytes"
 	_ "embed"
-	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"text/template"
 	"unicode/utf8"
 
+	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -33,8 +32,15 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.5"
+	mavenDepTreeVersion = "1.2.0"
 	settingsXmlFile     = "settings.xml"
+
+	// curationSettingsID is the stable XML id for server/mirror/profile entries injected
+	// into the temp settings.xml. Dedicated id keeps re-runs idempotent.
+	curationSettingsID = "jfrog-curation-audit"
+	// defaultSettingsID is the generic id used for non-curation runs, and is also the
+	// id rendered by the built-in template (resources/settings.xml).
+	defaultSettingsID = "artifactory"
 )
 
 var mavenConfigPath = filepath.Join(".mvn", "maven.config")
@@ -54,15 +60,15 @@ var mavenDepTreeJar []byte
 
 type MavenDepTreeManager struct {
 	DepTreeManager
-	isInstalled bool
-	// isCurationCmd sets a dedicated cache and download URL for curation mode.
-	isCurationCmd bool
-	// mvnIncludePluginDeps enables resolution of Maven build-plugin transitive deps.
+	isInstalled          bool
+	isCurationCmd        bool
 	mvnIncludePluginDeps bool
-	// path to the curation dedicated cache
-	curationCacheFolder string
-	cmdName             MavenDepTreeCmd
-	settingsXmlPath     string
+	curationCacheFolder  string
+	cmdName              MavenDepTreeCmd
+	settingsXmlPath      string
+	// userSettingsXmlPath overrides the ~/.m2/settings.xml seed path (test-only).
+	userSettingsXmlPath string
+	insecureTls         bool
 }
 
 func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *MavenDepTreeManager {
@@ -74,6 +80,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 		isCurationCmd:        params.IsCurationCmd,
 		mvnIncludePluginDeps: params.MvnIncludePluginDeps,
 		curationCacheFolder:  params.CurationCacheFolder,
+		insecureTls:          params.InsecureTls,
 	}
 }
 
@@ -89,23 +96,32 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 	defer func() {
 		err = errors.Join(err, clearMavenDepTreeRun())
 	}()
-	dependencyTree, uniqueDeps, err = getGraphFromDepTree(outputFilePaths)
+	var pluginDeps map[string]*xray.DepTreeNode
+	var pluginNodesPresent bool
+	dependencyTree, uniqueDeps, pluginDeps, pluginNodesPresent, err = getGraphAndPluginDepsFromDepTree(outputFilePaths)
 	if err != nil {
 		return
 	}
-	// Include Maven build-plugin transitive deps when requested.
-	// They are downloaded during mvn install but never appear in mvn dependency:tree,
-	// so without this step jf ca would miss curation violations that block the build.
-	// Skip if the tree is empty — no roots to attach to and no point running extra subprocesses.
-	// To move this logic to maven-dep-tree - XRAY-145307
+	// Plugin deps are downloaded during mvn install but absent from mvn dependency:tree;
+	// without injection jf ca would miss curation violations that block the build.
+	// "--mvn-include-plugin-deps" is a string literal to avoid a cli->sca import cycle
+	// (mirrors flags.MvnIncludePluginDeps in cli/docs/flags.go).
 	if manager.mvnIncludePluginDeps && len(dependencyTree) > 0 {
-		injectPluginDeps(uniqueDeps, dependencyTree, manager.resolvePluginDeps())
+		switch {
+		case len(pluginDeps) > 0:
+			injectPluginDeps(uniqueDeps, dependencyTree, pluginDeps)
+		case pluginNodesPresent:
+			log.Debug("'--mvn-include-plugin-deps' is set: maven-dep-tree reported no build-plugin dependencies to include.")
+		default:
+			log.Warn("'--mvn-include-plugin-deps' is set but the resolved maven-dep-tree plugin did not report a " +
+				"plugin-dependencies section; plugin dependencies will not be included in the curation evaluation. " +
+				"This usually means the maven-dep-tree plugin version does not support plugin dependency resolution.")
+		}
 	}
 	return
 }
 
-// injectPluginDeps adds plugin deps to uniqueDeps and fans them out to every module root.
-// Split out so the dedup guard and fan-out are unit-testable without spawning Maven.
+// injectPluginDeps adds plugin deps to uniqueDeps and attaches them to every module root.
 func injectPluginDeps(uniqueDeps map[string]*xray.DepTreeNode, dependencyTree []*xrayUtils.GraphNode, pluginDeps map[string]*xray.DepTreeNode) {
 	for id, node := range pluginDeps {
 		gavID := GavPackageTypeIdentifier + id
@@ -114,319 +130,12 @@ func injectPluginDeps(uniqueDeps map[string]*xray.DepTreeNode, dependencyTree []
 		}
 		uniqueDeps[gavID] = node
 		for _, moduleRoot := range dependencyTree {
-			moduleRoot.Nodes = append(moduleRoot.Nodes, &xrayUtils.GraphNode{Id: gavID, Types: node.Types})
+			moduleRoot.Nodes = append(moduleRoot.Nodes, &xrayUtils.GraphNode{Id: gavID, Types: node.Types, Classifier: node.Classifier})
 		}
 	}
 }
 
-// resolvePluginDeps runs "mvn dependency:resolve-plugins" and returns all Maven build-plugin
-// transitive dependencies keyed by "groupId:artifactId:version". Failure is non-fatal.
-//
-// The result is filtered by the install-lifecycle plugin allow-list resolved from the
-// effective POM: only transitive deps of plugins that actually run during `mvn install` are
-// returned. If the effective-pom resolution fails, the allow-list is nil and all plugin deps
-// are returned (current behavior).
-func (mdt *MavenDepTreeManager) resolvePluginDeps() map[string]*xray.DepTreeNode {
-	allowedPlugins := mdt.resolveInstallLifecyclePlugins()
-
-	goals := []string{"dependency:resolve-plugins", "-B"}
-	if mdt.isCurationCmd && mdt.curationCacheFolder != "" {
-		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
-	}
-	output, err := mdt.RunMvnCmd(goals)
-	if err != nil {
-		log.Warn("[mvn-plugin-deps] Failed to resolve Maven plugin dependencies; plugin deps will not be included in curation evaluation:", err.Error())
-		return nil
-	}
-	if allowedPlugins != nil {
-		log.Debug(fmt.Sprintf("[mvn-plugin-deps] effective-pom install-lifecycle allow-list (%d plugins):", len(allowedPlugins)))
-		for coord := range allowedPlugins {
-			log.Debug("[mvn-plugin-deps]   allowed:", coord)
-		}
-	} else {
-		log.Debug("[mvn-plugin-deps] effective-pom allow-list unavailable - reporting every plugin dep without lifecycle filter")
-	}
-	parsed := parseMavenPluginDeps(string(output), allowedPlugins)
-	if allowedPlugins != nil {
-		log.Info(fmt.Sprintf("[mvn-plugin-deps] %d plugin transitive deps included after install-lifecycle filter", len(parsed)))
-	} else {
-		log.Info(fmt.Sprintf("[mvn-plugin-deps] %d plugin transitive deps included (lifecycle filter unavailable — all reported)", len(parsed)))
-	}
-	return parsed
-}
-
-// resolveInstallLifecyclePlugins runs "mvn help:effective-pom" and returns the set of
-// "groupId:artifactId" for plugins bound to phases executed by `mvn install`.
-// Plugins whose only executions target post-install phases (deploy/site/release) are excluded.
-// Returns nil if effective-pom resolution fails — callers must treat nil as "no filter".
-func (mdt *MavenDepTreeManager) resolveInstallLifecyclePlugins() map[string]struct{} {
-	outputFile, err := os.CreateTemp("", "effective-pom-*.xml")
-	if err != nil {
-		log.Warn("[mvn-plugin-deps] Failed to create temp file for effective POM; plugin filter disabled:", err.Error())
-		return nil
-	}
-	outputPath := outputFile.Name()
-	if closeErr := outputFile.Close(); closeErr != nil {
-		// Benign: mvn reopens the path via -Doutput=. Log so the rare failure is greppable.
-		log.Debug("[mvn-plugin-deps] temp file close after CreateTemp failed (benign):", closeErr.Error())
-	}
-	// Preserve the file on parse failure so callers can inspect why no plugins were extracted.
-	preserveFile := false
-	defer func() {
-		if preserveFile {
-			log.Warn("[mvn-plugin-deps] effective POM preserved for inspection at:", outputPath)
-			return
-		}
-		if removeErr := os.Remove(outputPath); removeErr != nil && !os.IsNotExist(removeErr) {
-			log.Debug("[mvn-plugin-deps] failed to remove effective POM temp file:", removeErr.Error())
-		}
-	}()
-
-	goals := []string{"help:effective-pom", "-B", "-Doutput=" + outputPath}
-	if mdt.isCurationCmd && mdt.curationCacheFolder != "" {
-		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
-	}
-	log.Debug("[mvn-plugin-deps] running 'mvn", strings.Join(goals, " "), "' to build the install-lifecycle plugin allow-list")
-	mvnOutput, err := mdt.RunMvnCmd(goals)
-	if err != nil {
-		log.Warn("[mvn-plugin-deps] mvn help:effective-pom failed - plugin filter disabled, all plugin deps will be reported. Reason:", err.Error())
-		if len(mvnOutput) > 0 {
-			log.Debug("[mvn-plugin-deps] mvn output (tail):\n", tailString(string(mvnOutput), 2000))
-		}
-		return nil
-	}
-
-	// #nosec G304 -- outputPath is from os.CreateTemp above, system-generated under $TMPDIR with a random suffix; never user-controlled.
-	data, err := os.ReadFile(outputPath)
-	if errors.Is(err, fs.ErrNotExist) {
-		log.Warn("[mvn-plugin-deps] effective POM output file missing after mvn run - plugin filter disabled. Reason:", err.Error())
-		return nil
-	}
-	if err != nil {
-		log.Warn("[mvn-plugin-deps] failed to read effective POM output - plugin filter disabled. Reason:", err.Error())
-		return nil
-	}
-	if len(data) == 0 {
-		log.Warn("[mvn-plugin-deps] effective POM output file is empty - plugin filter disabled. The maven-help-plugin version may not honor -Doutput=")
-		return nil
-	}
-	allowed := parseEffectivePomPluginCoordinates(string(data))
-	if allowed == nil {
-		log.Warn(fmt.Sprintf("[mvn-plugin-deps] effective POM parsed to empty allow-list (file size %d bytes) - plugin filter disabled", len(data)))
-		preserveFile = true
-	}
-	return allowed
-}
-
-// tailString returns roughly the last n bytes of s, advancing to the next rune
-// boundary so the result is always valid UTF-8 (off by at most 3 bytes vs n).
-func tailString(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	start := len(s) - n
-	for start < len(s) && !utf8.RuneStart(s[start]) {
-		start++
-	}
-	return "..." + s[start:]
-}
-
-// phasesNotRunByInstall is the set of lifecycle phases that `mvn install` never executes.
-// Covers the single Default-lifecycle phase past install (deploy), the entire Site
-// lifecycle, and the entire Clean lifecycle. A plugin whose only executions target
-// these phases is excluded from the allow-list.
-var phasesNotRunByInstall = map[string]struct{}{
-	"pre-site":    {},
-	"site":        {},
-	"post-site":   {},
-	"site-deploy": {},
-	"deploy":      {},
-	"pre-clean":   {},
-	"clean":       {},
-	"post-clean":  {},
-}
-
-// postInstallPluginsByDefault lists plugins whose default goal phase is past `install`,
-// even when the effective POM declares them without explicit <executions>.
-// Such plugins are excluded unless the user explicitly binds them to an install-lifecycle phase.
-var postInstallPluginsByDefault = map[string]struct{}{
-	"org.apache.maven.plugins:maven-deploy-plugin":  {},
-	"org.apache.maven.plugins:maven-site-plugin":    {},
-	"org.apache.maven.plugins:maven-release-plugin": {},
-	"org.apache.maven.plugins:maven-gpg-plugin":     {},
-}
-
-// effectivePomProject mirrors the subset of fields we need from `mvn help:effective-pom`.
-// A multi-module effective POM is wrapped in <projects>; we stream-decode <project> elements
-// regardless of nesting depth so both single and multi-module outputs work.
-type effectivePomProject struct {
-	XMLName xml.Name          `xml:"project"`
-	Build   effectivePomBuild `xml:"build"`
-}
-
-type effectivePomBuild struct {
-	Plugins []effectivePomPlugin `xml:"plugins>plugin"`
-}
-
-type effectivePomPlugin struct {
-	GroupID    string                  `xml:"groupId"`
-	ArtifactID string                  `xml:"artifactId"`
-	Executions []effectivePomExecution `xml:"executions>execution"`
-}
-
-type effectivePomExecution struct {
-	Phase string `xml:"phase"`
-}
-
-// effectivePomXmlnsRe matches xmlns and xmlns:prefix attribute declarations.
-// Maven emits the effective POM with xmlns="http://maven.apache.org/POM/4.0.0";
-// stripping it lets our namespace-agnostic struct tags match the actual elements.
-var effectivePomXmlnsRe = regexp.MustCompile(`\s+xmlns(?::[^=\s]+)?="[^"]*"`)
-
-// mavenCoordRe matches both plugin headers and transitive dep lines in dependency:resolve-plugins output.
-var mavenCoordRe = regexp.MustCompile(`\[INFO\]\s+([\w.\-]+):([\w.\-]+):(jar|war|pom|ear|aar|ejb|bundle|test-jar|maven-plugin):([\w.\-]+)(?::([\w.\-]+))?`)
-
-// defaultPluginGroupID is the implicit groupId for plugins under the official Maven
-// plugin namespace. The effective POM commonly omits <groupId> for these plugins,
-// relying on this default.
-const defaultPluginGroupID = "org.apache.maven.plugins"
-
-// parseEffectivePomPluginCoordinates walks the effective POM XML and returns the
-// allow-list of "groupId:artifactId" for plugins that participate in `mvn install`.
-// Returns nil if the XML cannot be decoded — callers treat nil as "no filter".
-func parseEffectivePomPluginCoordinates(xmlData string) map[string]struct{} {
-	// Strip xmlns declarations so the struct-tag matcher works regardless of the
-	// POM namespace declared by maven-help-plugin (defaults to maven.apache.org/POM/4.0.0).
-	xmlData = effectivePomXmlnsRe.ReplaceAllString(xmlData, "")
-	decoder := xml.NewDecoder(strings.NewReader(xmlData))
-	allowed := map[string]struct{}{}
-	projectsSeen, pluginsSeen, pluginsAllowed := 0, 0, 0
-	for {
-		tok, err := decoder.Token()
-		if err != nil {
-			break
-		}
-		start, ok := tok.(xml.StartElement)
-		if !ok || start.Name.Local != "project" {
-			continue
-		}
-		projectsSeen++
-		var project effectivePomProject
-		if err := decoder.DecodeElement(&project, &start); err != nil {
-			// Skip malformed <project> blocks; effective-pom for one module shouldn't fail the rest.
-			log.Debug("[mvn-plugin-deps] skipping malformed <project> block in effective POM:", err.Error())
-			continue
-		}
-		for _, p := range project.Build.Plugins {
-			pluginsSeen++
-			groupID := p.GroupID
-			if groupID == "" {
-				// Maven's effective POM frequently omits <groupId> for org.apache.maven.plugins.
-				groupID = defaultPluginGroupID
-			}
-			if p.ArtifactID == "" {
-				continue
-			}
-			coord := groupID + ":" + p.ArtifactID
-			if !isPluginInInstallLifecycle(coord, p.Executions) {
-				continue
-			}
-			allowed[coord] = struct{}{}
-			pluginsAllowed++
-		}
-	}
-	log.Debug(fmt.Sprintf("[mvn-plugin-deps] effective POM scan: %d <project> blocks, %d <plugin> entries under <build><plugins>, %d allowed", projectsSeen, pluginsSeen, pluginsAllowed))
-	if projectsSeen == 0 {
-		// No <project> parsed — treat as malformed and fall back to "no filter".
-		// An empty (non-nil) map is a valid result when every plugin was filtered out.
-		return nil
-	}
-	return allowed
-}
-
-// isPluginInInstallLifecycle returns true when the plugin's executions (or default phase)
-// fall within phases executed by `mvn install`.
-func isPluginInInstallLifecycle(coord string, executions []effectivePomExecution) bool {
-	// Single pass: keep an include if any explicit phase is in the install lifecycle,
-	// otherwise fall back to the plugin's default phase.
-	hasExplicit := false
-	for _, ex := range executions {
-		if ex.Phase == "" {
-			continue
-		}
-		hasExplicit = true
-		if _, skip := phasesNotRunByInstall[ex.Phase]; !skip {
-			return true
-		}
-	}
-	if !hasExplicit {
-		_, isPostInstall := postInstallPluginsByDefault[coord]
-		return !isPostInstall
-	}
-	return false
-}
-
-// mavenKnownScopes distinguishes a Maven scope from a classifier in a 5-field coordinate
-// (g:a:packaging:field4:field5). If field5 is a known scope, field4 is the version.
-var mavenKnownScopes = map[string]bool{
-	"compile": true, "runtime": true, "test": true, "provided": true, "system": true,
-}
-
-// parseMavenPluginDeps parses "mvn dependency:resolve-plugins" output and returns a map of
-// "groupId:artifactId:version" -> DepTreeNode for every resolved plugin dependency.
-//
-// When allowedPlugins is non-nil, only transitive deps of plugins in the allow-list are
-// returned, filtering out plugins bound to post-install lifecycles (deploy, site, release).
-// When allowedPlugins is nil all plugin deps are returned.
-//
-// Output formats matched:
-//
-//	[INFO]    g:a:maven-plugin:version:scope   (top-level plugin — switches the active filter)
-//	[INFO]       g:a:jar:version               (transitive dep, no classifier)
-//	[INFO]       g:a:jar:classifier:version    (transitive dep with classifier — version is last)
-func parseMavenPluginDeps(output string, allowedPlugins map[string]struct{}) map[string]*xray.DepTreeNode {
-	deps := map[string]*xray.DepTreeNode{}
-	// includeCurrent gates whether transitive deps under the most recently seen top-level
-	// plugin should be collected. nil allow-list means "include all".
-	includeCurrent := allowedPlugins == nil
-	for line := range strings.SplitSeq(output, "\n") {
-		m := mavenCoordRe.FindStringSubmatch(line)
-		if len(m) < 5 {
-			continue
-		}
-		groupID, artifactID, packaging := m[1], m[2], m[3]
-		version := m[4]
-		if m[5] != "" && !mavenKnownScopes[m[5]] {
-			// 5-field: g:a:packaging:classifier:version — m[4] is the classifier
-			version = m[5]
-		}
-		// else: g:a:packaging:version:scope — version is already m[4]
-		if packaging == "maven-plugin" {
-			// Top-level plugin line — update the active filter for the indented transitive deps below.
-			coord := groupID + ":" + artifactID
-			if allowedPlugins == nil {
-				includeCurrent = true
-				log.Debug("[mvn-plugin-deps] top-level plugin (no filter active):", coord)
-			} else if _, ok := allowedPlugins[coord]; ok {
-				includeCurrent = true
-				log.Debug("[mvn-plugin-deps] top-level plugin kept:", coord)
-			} else {
-				includeCurrent = false
-				log.Debug("[mvn-plugin-deps] top-level plugin filtered out:", coord)
-			}
-			continue
-		}
-		if !includeCurrent {
-			continue
-		}
-		nodeID := groupID + ":" + artifactID + ":" + version
-		deps[nodeID] = &xray.DepTreeNode{Types: &[]string{packaging}}
-	}
-	return deps
-}
-
-// Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
-// If a non-nil clearMavenDepTreeRun pointer is returns it means we had no error during the entire function execution
+// RunMavenDepTree runs maven-dep-tree and returns the output path along with a cleanup function.
 func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMavenDepTreeRun func() error, err error) {
 	if mdt.useWrapper {
 		mdt.useWrapper, err = isMavenWrapperExist()
@@ -434,7 +143,6 @@ func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMa
 			return
 		}
 	}
-	// depTreeExecDir is a temp directory for all the files that are required for the maven-dep-tree run
 	depTreeExecDir, clearMavenDepTreeRun, err := mdt.CreateTempDirWithSettingsXmlIfNeeded()
 	if err != nil {
 		return
@@ -442,11 +150,7 @@ func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMa
 	if err = mdt.installMavenDepTreePlugin(depTreeExecDir); err != nil {
 		return
 	}
-
 	depTreeOutput, err = mdt.execMavenDepTree(depTreeExecDir)
-	if err != nil {
-		return
-	}
 	return
 }
 
@@ -484,10 +188,12 @@ func (mdt *MavenDepTreeManager) runTreeCmd(depTreeExecDir string) (string, error
 	if mdt.isCurationCmd {
 		goals = append(goals, "-Dmaven.repo.local="+mdt.curationCacheFolder)
 	}
+	if mdt.mvnIncludePluginDeps {
+		goals = append(goals, "-DincludePluginDeps=true")
+	}
 	if _, err := mdt.RunMvnCmd(goals); err != nil {
 		return "", err
 	}
-
 	mavenDepTreeOutput, err := os.ReadFile(mavenDepTreePath)
 	if err != nil {
 		return "", errorutils.CheckError(err)
@@ -509,7 +215,6 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if err != nil {
 		return
 	}
-
 	defer func() {
 		if restoreMavenConfig != nil {
 			err = errors.Join(err, restoreMavenConfig())
@@ -519,22 +224,74 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if mdt.settingsXmlPath != "" {
 		goals = append(goals, "-s", mdt.settingsXmlPath)
 	}
+	if mdt.insecureTls {
+		// aether.* covers Maven 3.9+'s native resolver transport; wagon.* covers the legacy one.
+		goals = append(goals,
+			"-Dmaven.wagon.http.ssl.insecure=true",
+			"-Dmaven.wagon.http.ssl.allowall=true",
+			"-Dmaven.wagon.http.ssl.ignore.validity.dates=true",
+			"-Daether.connector.https.securityMode=insecure",
+		)
+	}
 
 	execPath := getMavenExecPath(mdt.useWrapper)
 	//#nosec G204
 	cmdOutput, err = buildMvnExecCommand(mdt.useWrapper, execPath, goals).CombinedOutput()
 	if err != nil {
-		stringOutput := string(cmdOutput)
+		stringOutput := maskCredentials(string(cmdOutput), mdt.server)
 		if len(cmdOutput) > 0 {
 			log.Verbose(stringOutput)
 		}
 		if msg := technologies.GetMsgToUserForCurationBlock(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command '%s %s'\n\n%s", execPath, strings.Join(goals, " "), msg)
 		} else {
-			err = fmt.Errorf("failed running command '%s %s': %s", execPath, strings.Join(goals, " "), err.Error())
+			err = fmt.Errorf("failed running command '%s %s': %w", execPath, strings.Join(goals, " "), err)
+			if stringOutput != "" {
+				err = fmt.Errorf("%w\n%s", err, truncateForError(stringOutput))
+			}
 		}
 	}
 	return
+}
+
+// maskCredentials redacts known credentials from output, mirroring uv.go's maskPassword.
+func maskCredentials(output string, server *config.ServerDetails) string {
+	if server == nil {
+		return output
+	}
+	username, password, err := server.GetAuthenticationCredentials()
+	if err != nil {
+		return output
+	}
+	if password != "" {
+		output = strings.ReplaceAll(output, password, "***")
+	}
+	if username != "" {
+		output = strings.ReplaceAll(output, username, "***")
+	}
+	// Also mask percent-encoded forms, in case a userinfo-embedded URL is ever echoed back.
+	encodedUser, encodedPass, _ := strings.Cut(url.UserPassword(username, password).String(), ":")
+	if encodedPass != "" && encodedPass != password {
+		output = strings.ReplaceAll(output, encodedPass, "***")
+	}
+	if encodedUser != "" && encodedUser != username {
+		output = strings.ReplaceAll(output, encodedUser, "***")
+	}
+	return output
+}
+
+const maxCapturedOutputInError = 8 * 1024
+
+// truncateForError keeps the tail, advanced to a rune boundary to avoid invalid UTF-8.
+func truncateForError(output string) string {
+	if len(output) <= maxCapturedOutputInError {
+		return output
+	}
+	cut := len(output) - maxCapturedOutputInError
+	for cut < len(output) && !utf8.RuneStart(output[cut]) {
+		cut++
+	}
+	return fmt.Sprintf("...(truncated %d bytes; see verbose log for full output)...\n%s", cut, output[cut:])
 }
 
 func (mdt *MavenDepTreeManager) GetSettingsXmlPath() string {
@@ -545,8 +302,8 @@ func (mdt *MavenDepTreeManager) SetSettingsXmlPath(settingsXmlPath string) {
 	mdt.settingsXmlPath = settingsXmlPath
 }
 
-// Constructs the command to run mvnw/mvn with the given goals.
-// When using the Maven wrapper on non-Windows systems, the wrapper script is invoked via 'sh' in order to avoid "permission denied" errors.
+// buildMvnExecCommand constructs the mvn/mvnw command. On non-Windows the wrapper is
+// invoked via 'sh' to avoid "permission denied" errors on scripts without +x.
 func buildMvnExecCommand(useWrapper bool, mvnExecPath string, goals []string) *exec.Cmd {
 	var cmd *exec.Cmd
 	if useWrapper && !coreutils.IsWindows() {
@@ -564,9 +321,7 @@ func getMavenExecPath(useWrapper bool) string {
 		if coreutils.IsWindows() {
 			wrapperName += ".cmd"
 		}
-		// Prefix with "." + separator to form an explicit relative path (e.g. "./mvnw" or ".\mvnw.cmd").
-		// This is required since Go 1.19, which no longer resolves executables in the current directory
-		// via PATH unless an explicit relative path is provided.
+		// Explicit relative path required since Go 1.19 no longer resolves CWD executables via PATH.
 		return "." + string(os.PathSeparator) + wrapperName
 	}
 	return "mvn"
@@ -599,8 +354,9 @@ func removeMavenConfig() (func() error, error) {
 	return restoreMavenConfig, err
 }
 
-// Creates a new settings.xml file configured with the provided server and repository from the current MavenDepTreeManager instance.
-// The settings.xml will be written to the given path.
+// createSettingsXmlWithConfiguredArtifactory writes a temp settings.xml for the Maven run.
+// For curation runs it seeds from ~/.m2/settings.xml (preserving proxies etc.) and upserts
+// curation entries on top. For plain audit runs it uses the built-in template directly.
 func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(settingsXmlPath string) error {
 	username, password, err := getArtifactoryAuthFromServer(mdt.server)
 	if err != nil {
@@ -616,16 +372,47 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	}
 
 	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+
+	// Plain audit runs use the template directly; only curation seeds from ~/.m2/settings.xml.
+	if !mdt.isCurationCmd {
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, defaultSettingsID)
+	}
+
+	userSettingsPath := mdt.userSettingsXmlPath
+	if userSettingsPath == "" {
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			log.Warn("Could not resolve user home directory, using settings.xml template:", homeErr.Error())
+			return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+		}
+		userSettingsPath = filepath.Join(homeDir, ".m2", settingsXmlFile)
+	}
+
+	exists, err := fileutils.IsFileExists(userSettingsPath, false)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Could not stat settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+	if exists {
+		log.Debug("Seeding temp settings.xml from existing user settings:", userSettingsPath)
+		return mdt.createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath)
+	}
+	return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+}
+
+func (mdt *MavenDepTreeManager) createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, id string) error {
 	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
 	if err != nil {
 		return err
 	}
 	buf := &bytes.Buffer{}
 	err = SettingsTemplate.Execute(buf, struct {
+		ID                       string
 		Username                 string
-		Password                 string // #nosec G117 -- required by settings.xml template; value written to local file only
+		Password                 string // #nosec G117 -- written to local temp file only
 		RemoteRepositoryFullPath string
 	}{
+		ID:                       id,
 		Username:                 username,
 		Password:                 password,
 		RemoteRepositoryFullPath: remoteRepositoryFullPath,
@@ -636,17 +423,114 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
 }
 
-// Creates a temporary directory.
-// If Artifactory resolution repo is provided, a settings.xml file with the provided server and repository will be created inside the temporarily directory.
+// createSettingsXmlFromExisting seeds the temp settings.xml from the user's file and
+// upserts curation entries. Falls back to the built-in template if the file is
+// unparsable (e.g. mid-write) or missing the <settings> root. Only called for curation
+// runs, so the template fallback here always uses curationSettingsID.
+func (mdt *MavenDepTreeManager) createSettingsXmlFromExisting(userSettingsPath, username, password, remoteRepositoryFullPath string) error {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromFile(userSettingsPath); err != nil {
+		log.Warn(fmt.Sprintf("Could not parse settings.xml at %s (%v); falling back to built-in template.", userSettingsPath, err))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+	root := doc.SelectElement("settings")
+	if root == nil {
+		log.Warn(fmt.Sprintf("settings.xml at %s has no <settings> root; falling back to built-in template.", userSettingsPath))
+		return mdt.createSettingsXmlFromTemplate(username, password, remoteRepositoryFullPath, curationSettingsID)
+	}
+
+	upsertCurationServer(root, username, password)
+	upsertCurationMirror(root, remoteRepositoryFullPath)
+	upsertCurationProfile(root, remoteRepositoryFullPath)
+	upsertCurationActiveProfile(root)
+
+	doc.Indent(4)
+	buf, err := doc.WriteToBytes()
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf, 0600))
+}
+
+func xmlGetOrCreate(parent *etree.Element, name string) *etree.Element {
+	if el := parent.SelectElement(name); el != nil {
+		return el
+	}
+	return parent.CreateElement(name)
+}
+
+func xmlFindByID(parent *etree.Element, elementName, id string) *etree.Element {
+	for _, el := range parent.SelectElements(elementName) {
+		if idEl := el.SelectElement("id"); idEl != nil && idEl.Text() == id {
+			return el
+		}
+	}
+	return nil
+}
+
+func xmlGetOrCreateByID(parent *etree.Element, elementName, id string) *etree.Element {
+	if el := xmlFindByID(parent, elementName, id); el != nil {
+		return el
+	}
+	return parent.CreateElement(elementName)
+}
+
+func xmlSetChild(parent *etree.Element, name, text string) {
+	xmlGetOrCreate(parent, name).SetText(text)
+}
+
+func upsertCurationServer(root *etree.Element, username, password string) {
+	servers := xmlGetOrCreate(root, "servers")
+	server := xmlGetOrCreateByID(servers, "server", curationSettingsID)
+	xmlSetChild(server, "id", curationSettingsID)
+	xmlSetChild(server, "username", username)
+	xmlSetChild(server, "password", password) // #nosec G117 -- written to local temp file only
+}
+
+func upsertCurationMirror(root *etree.Element, repoURL string) {
+	mirrors := xmlGetOrCreate(root, "mirrors")
+	mirror := xmlFindByID(mirrors, "mirror", curationSettingsID)
+	if mirror == nil {
+		// Insert first: a pre-existing catch-all mirror would otherwise win in document order.
+		mirror = etree.NewElement("mirror")
+		mirrors.InsertChildAt(0, mirror)
+	}
+	xmlSetChild(mirror, "id", curationSettingsID)
+	xmlSetChild(mirror, "url", repoURL)
+	xmlSetChild(mirror, "mirrorOf", "*")
+}
+
+func upsertCurationProfile(root *etree.Element, repoURL string) {
+	profiles := xmlGetOrCreate(root, "profiles")
+	profile := xmlGetOrCreateByID(profiles, "profile", curationSettingsID)
+	xmlSetChild(profile, "id", curationSettingsID)
+
+	repos := xmlGetOrCreate(profile, "repositories")
+	repo := xmlGetOrCreateByID(repos, "repository", curationSettingsID)
+	xmlSetChild(xmlGetOrCreate(repo, "snapshots"), "enabled", "true")
+	xmlSetChild(repo, "id", curationSettingsID)
+	xmlSetChild(repo, "name", "mavenRepo")
+	xmlSetChild(repo, "url", repoURL)
+}
+
+func upsertCurationActiveProfile(root *etree.Element) {
+	activeProfiles := xmlGetOrCreate(root, "activeProfiles")
+	for _, ap := range activeProfiles.SelectElements("activeProfile") {
+		if ap.Text() == curationSettingsID {
+			return
+		}
+	}
+	activeProfiles.CreateElement("activeProfile").SetText(curationSettingsID)
+}
+
+// CreateTempDirWithSettingsXmlIfNeeded creates a temp dir and, when a deps repo is
+// configured, writes a settings.xml into it.
 func (mdt *MavenDepTreeManager) CreateTempDirWithSettingsXmlIfNeeded() (tempDirPath string, clearMavenDepTreeRun func() error, err error) {
 	tempDirPath, err = fileutils.CreateTempDir()
 	if err != nil {
 		return
 	}
-
 	clearMavenDepTreeRun = func() error { return fileutils.RemoveTempDir(tempDirPath) }
-
-	// Create a settings.xml file that sets the dependency resolution from the given server and repository
 	if mdt.depsRepo != "" {
 		err = mdt.createSettingsXmlWithConfiguredArtifactory(tempDirPath)
 	}

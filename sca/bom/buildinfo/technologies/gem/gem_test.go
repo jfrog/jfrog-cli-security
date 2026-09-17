@@ -1,12 +1,19 @@
 package gem
 
 import (
+	"bytes"
+	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -69,4 +76,399 @@ func TestCalculateUniqueDeps(t *testing.T) {
 	}
 	uniqueDeps := calculateUniqueDependencies(input.Nodes)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
+}
+
+func TestParseArtifactoryGemSourceUrl(t *testing.T) {
+	testCases := []struct {
+		name          string
+		sourceUrl     string
+		expectMatch   bool
+		expectedRtUrl string
+		expectedRepo  string
+		expectedUser  string
+		expectedToken string
+	}{
+		{
+			name:          "artifactory gems source with embedded credentials",
+			sourceUrl:     "https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/", // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+			expectMatch:   true,
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
+			expectedUser:  "admin",
+			expectedToken: "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
+		},
+		{
+			name:          "artifactory gems source without credentials (anonymous access)",
+			sourceUrl:     "https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/",
+			expectMatch:   true,
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
+		},
+		{
+			name:          "reverse-proxy source without /artifactory context root",
+			sourceUrl:     "https://gems.company.com/api/gems/my-repo/",
+			expectMatch:   true,
+			expectedRtUrl: "https://gems.company.com/",
+			expectedRepo:  "my-repo",
+		},
+		{
+			name:          "source without trailing slash",
+			sourceUrl:     "https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test",
+			expectMatch:   true,
+			expectedRtUrl: "https://myrt.jfrogdev.org/artifactory/",
+			expectedRepo:  "rubygems-repo-test",
+		},
+		{
+			name:        "public rubygems.org source is not Artifactory-shaped",
+			sourceUrl:   "https://rubygems.org/",
+			expectMatch: false,
+		},
+		{
+			name:        "empty repository segment",
+			sourceUrl:   "https://myrt.jfrogdev.org/artifactory/api/gems/",
+			expectMatch: false,
+		},
+		{
+			name:        "malformed url",
+			sourceUrl:   "not-a-url",
+			expectMatch: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, ok := parseArtifactoryGemSourceUrl(tc.sourceUrl)
+			require.Equal(t, tc.expectMatch, ok)
+			if !tc.expectMatch {
+				return
+			}
+			assert.Equal(t, tc.expectedRtUrl, cfg.ArtifactoryUrl)
+			assert.Equal(t, tc.expectedRepo, cfg.RepoName)
+			assert.Equal(t, tc.expectedUser, cfg.AuthUser)
+			assert.Equal(t, tc.expectedToken, cfg.AuthToken)
+		})
+	}
+}
+
+// Regression test: a gemrc source with a single-segment (username-only, no colon) userinfo used
+// to be silently discarded -- AuthToken stayed empty and the caller fell back to the 'jf c'
+// server's credentials while logging "no credentials embedded", which is inaccurate. It's now
+// warned about instead, since it's a credential-shaped value that's actually being ignored.
+func TestParseArtifactoryGemSourceUrl_UsernameOnlyCredentialWarns(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cfg, ok := parseArtifactoryGemSourceUrl("https://sometoken@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/") // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+	require.True(t, ok)
+	assert.Equal(t, "sometoken", cfg.AuthUser)
+	assert.Empty(t, cfg.AuthToken, "a single-segment userinfo has no password to extract")
+	assert.Contains(t, buf.String(), "single-segment credential",
+		"a credential-shaped-but-unusable userinfo must be warned about, not silently discarded")
+}
+
+// A normal two-segment user:token@host credential (the documented "Set Me Up" convention)
+// must not trigger the single-segment warning.
+func TestParseArtifactoryGemSourceUrl_TwoSegmentCredentialDoesNotWarn(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cfg, ok := parseArtifactoryGemSourceUrl("https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/") // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+	require.True(t, ok)
+	assert.Equal(t, "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET", cfg.AuthToken)
+	assert.Empty(t, buf.String(), "a well-formed two-segment credential must not be warned about")
+}
+
+func TestExtractGemSourcesList(t *testing.T) {
+	testCases := []struct {
+		name        string
+		raw         map[string]any
+		expectFound bool
+		expected    []string
+	}{
+		{
+			name:        "leading-colon key (gem sources -a on-disk format)",
+			raw:         map[string]any{":sources": []any{"https://rubygems.org/", "https://example.com/"}},
+			expectFound: true,
+			expected:    []string{"https://rubygems.org/", "https://example.com/"},
+		},
+		{
+			name:        "plain key without leading colon",
+			raw:         map[string]any{"sources": []any{"https://rubygems.org/"}},
+			expectFound: true,
+			expected:    []string{"https://rubygems.org/"},
+		},
+		{
+			name:        "no sources key",
+			raw:         map[string]any{":verbose": true},
+			expectFound: false,
+		},
+		{
+			name:        "sources is not a list",
+			raw:         map[string]any{":sources": "https://rubygems.org/"},
+			expectFound: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			list, ok := extractGemSourcesList(tc.raw)
+			require.Equal(t, tc.expectFound, ok)
+			if tc.expectFound {
+				assert.Equal(t, tc.expected, list)
+			}
+		})
+	}
+}
+
+func TestGetNativeGemRegistryConfig(t *testing.T) {
+	t.Run("no gemrc files at all returns a clear error", func(t *testing.T) {
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+		t.Setenv("XDG_CONFIG_HOME", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "gem sources --add")
+	})
+
+	t.Run("GEMRC-listed file overrides ~/.gemrc sources", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://rubygems.org/\n"), 0600))
+
+		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
+		require.NoError(t, os.WriteFile(gemrcOverride,
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", gemrcOverride)
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "https://myrt.jfrogdev.org/artifactory/", cfg.ArtifactoryUrl)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
+	t.Run("sources with no Artifactory-shaped entry returns a clear error", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://rubygems.org/\n"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "point at an Artifactory Gems repository")
+	})
+
+	t.Run("first Artifactory-shaped source wins when multiple sources are configured", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n"+
+				"- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"+
+				"- https://rubygems.org/\n"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
+	t.Run("the Artifactory-shaped source is found regardless of its position in the list", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n"+
+				"- https://rubygems.org/\n"+
+				"- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
+	t.Run("GEMRC fully replaces ~/.gemrc's sources instead of merging with them", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+
+		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
+		require.NoError(t, os.WriteFile(gemrcOverride, []byte(":sources:\n- https://rubygems.org/\n"), 0600))
+
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", gemrcOverride)
+
+		// GEMRC's file has no Artifactory source; if it merged with ~/.gemrc this would
+		// succeed using ~/.gemrc's source instead of failing.
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "point at an Artifactory Gems repository")
+	})
+
+	t.Run("empty gemrc file returns the same clear error as a missing one", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"), []byte(""), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "gem sources --add")
+	})
+
+	t.Run("an empty ':sources:' list returns the same clear error as no sources", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"), []byte(":sources: []\n"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "gem sources --add")
+	})
+
+	// Regression test: the "no sources" error used to hardcode "~/.gemrc" even when the empty
+	// ':sources:' list came from a GEMRC-listed file, unlike its sibling error a few lines down
+	// (no Artifactory-shaped source found), which already names the actual file.
+	t.Run("an empty ':sources:' list from a GEMRC-listed file names that file, not ~/.gemrc", func(t *testing.T) {
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+
+		gemrcOverride := filepath.Join(t.TempDir(), "gemrc-override")
+		require.NoError(t, os.WriteFile(gemrcOverride, []byte(":sources: []\n"), 0600))
+		t.Setenv("GEMRC", gemrcOverride)
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), gemrcOverride)
+		assert.NotContains(t, err.Error(), "~/.gemrc")
+	})
+
+	t.Run("GEMRC accepts ';' as a separator on non-Windows too", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("';' is the only separator on Windows regardless of this fix")
+		}
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+
+		firstGemrc := filepath.Join(t.TempDir(), "first-gemrc")
+		require.NoError(t, os.WriteFile(firstGemrc, []byte(":sources:\n- https://rubygems.org/\n"), 0600))
+		secondGemrc := filepath.Join(t.TempDir(), "second-gemrc")
+		require.NoError(t, os.WriteFile(secondGemrc,
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+		t.Setenv("GEMRC", firstGemrc+";"+secondGemrc)
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
+	t.Run("falls back to $XDG_CONFIG_HOME/gem/gemrc when ~/.gemrc doesn't exist", func(t *testing.T) {
+		tempHome := t.TempDir()
+		xdgConfigHome := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(xdgConfigHome, "gem"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(xdgConfigHome, "gem", "gemrc"),
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600))
+
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+		t.Setenv("XDG_CONFIG_HOME", xdgConfigHome)
+
+		cfg, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.Equal(t, "rubygems-repo-test", cfg.RepoName)
+	})
+
+	t.Run("a source with the wrong API path is not mistaken for an Artifactory Gems repository", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://myrt.jfrogdev.org/artifactory/api/rubygems/rubygems-repo-test/\n"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "point at an Artifactory Gems repository")
+	})
+
+	// Regression test: the debug log used to print the raw gemrc source string, which leaks
+	// any embedded user:token@host credentials (a normal RubyGems gemrc pattern) into logs.
+	t.Run("debug log does not leak embedded credentials from the gemrc source", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"),
+			[]byte(":sources:\n- https://admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET@myrt.jfrogdev.org/artifactory/api/gems/rubygems-repo-test/\n"), 0600)) // #nosec G101 -- fake placeholder value in a test fixture, not a real credential
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		var buf bytes.Buffer
+		origLogger := log.Logger
+		log.SetLogger(log.NewLogger(log.DEBUG, &buf))
+		defer log.SetLogger(origLogger)
+
+		_, err := GetNativeGemRegistryConfig()
+		require.NoError(t, err)
+		assert.NotContains(t, buf.String(), "FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
+			"gemrc source credentials must never be written to the log")
+		assert.NotContains(t, buf.String(), "admin:FAKE-TEST-TOKEN-NOT-A-REAL-SECRET",
+			"gemrc source credentials must never be written to the log")
+	})
+
+	t.Run("a malformed gemrc file is not classified as NotConfiguredError", func(t *testing.T) {
+		tempHome := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tempHome, ".gemrc"), []byte(":sources: [unterminated"), 0600))
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse")
+
+		var notConfigured *NotConfiguredError
+		assert.False(t, errors.As(err, &notConfigured),
+			"a real parse failure must not be classified as 'not configured'")
+	})
+
+	t.Run("not-configured errors are routed through errorutils.CheckError", func(t *testing.T) {
+		tempHome := t.TempDir()
+		t.Setenv("HOME", tempHome)
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("GEMRC", "")
+		t.Setenv("XDG_CONFIG_HOME", "")
+
+		var checkedErr error
+		origCheckError := errorutils.CheckError
+		errorutils.CheckError = func(err error) error {
+			checkedErr = err
+			return err
+		}
+		defer func() { errorutils.CheckError = origCheckError }()
+
+		_, err := GetNativeGemRegistryConfig()
+		require.Error(t, err)
+		assert.Same(t, err, checkedErr, "the not-configured error must be passed through errorutils.CheckError")
+
+		var notConfigured *NotConfiguredError
+		assert.True(t, errors.As(err, &notConfigured), "must be classifiable as NotConfiguredError")
+	})
 }

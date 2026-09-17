@@ -11,22 +11,28 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -503,7 +509,7 @@ func TestDoCurationAudit(t *testing.T) {
 }
 
 func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) func() {
-	_, cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, testCase, config)
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, testCase, config)
 	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, testCase.pathToProject))
 	var cleanUpChdir func()
 	if testCase.pathToTest != "" {
@@ -521,7 +527,7 @@ func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCa
 	}
 }
 
-func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) (string, func()) {
+func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) func() {
 	tempHomeDirPath, err := fileutils.CreateTempDir()
 	assert.NoError(t, err)
 	// create .jfrog dir in temp home dir
@@ -533,7 +539,23 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
 	// Create the server details config file
 	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
-	return tempHomeDirPath, func() {
+
+	// Every Gem test case gets a ~/.gemrc with an Artifactory-shaped source, whether or not the
+	// fixture project also has a ruby.yaml. ruby.yaml takes priority when present (see
+	// setRepoFromGemrc), so this also exercises the both-present-yaml-wins case for fixtures
+	// that ship one, e.g. curation-project.
+	var callbackGemrc func()
+	if testCase.tech == techutils.Gem {
+		gemrcPath := filepath.Join(tempHomeDirPath, "gemrc")
+		gemSource := strings.TrimSuffix(config.ArtifactoryUrl, "/") + "/api/gems/ruby-remote/"
+		assert.NoError(t, os.WriteFile(gemrcPath, []byte(":sources:\n- "+gemSource+"\n"), 0600))
+		callbackGemrc = clienttestutils.SetEnvWithCallbackAndAssert(t, "GEMRC", gemrcPath)
+	}
+
+	return func() {
+		if callbackGemrc != nil {
+			callbackGemrc()
+		}
 		callbackHomeDir()
 		err := fileutils.RemoveTempDir(tempHomeDirPath)
 		if err != nil {
@@ -572,6 +594,10 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.SetInsecureTls(tt.allowInsecureTls)
 	curationCmd.SetMvnIncludePluginDeps(tt.mvnIncludePluginDeps)
+	// Mirrors the real CLI wrapper layer, which resolves --server-id/default before Run().
+	if defaultServer, confErr := config.GetDefaultServerConf(); confErr == nil {
+		curationCmd.SetServerDetails(defaultServer)
+	}
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -660,21 +686,41 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
+			// example.com/localmod is a tripwire, not an expected call: it's local-replaced and must never
+			// be probed. If a regression ever probes it, this mock 403s it, breaking expectedResp below.
 			requestToFail: map[string]bool{
-				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip":       false,
+				"/api/go/go-virtual/example.com/localmod/@v/v0.0.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "example.com/localmod",
+						ParentVersion:     "v0.0.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "indirect",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",
@@ -710,7 +756,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
-					totalNumberOfPackages: 3,
+					totalNumberOfPackages: 4,
 				},
 			},
 		},
@@ -811,6 +857,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			// curation-project ships a ruby.yaml, and createTempHomeDirWithConfig auto-generates
+			// a ~/.gemrc for every Gem test case too — so this also proves ruby.yaml takes
+			// priority over ~/.gemrc when both are present (see setRepoFromGemrc). The
+			// yaml-absent / ~/.gemrc-fallback / no-config-error paths are covered at the unit
+			// level (TestSetRepoFromGemrc_*), matching how pip's single yaml-based integration
+			// fixture pairs with its own unit tests for the fallback/error paths.
 			name:          "gem tree - one blocked package",
 			tech:          techutils.Gem,
 			pathToProject: filepath.Join("projects", "package-managers", "gem", "curation-project"),
@@ -830,9 +882,12 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Gemfile": filepath.Join("tests", "testdata", "projects", "package-managers", "gem", "curation-project", "Gemfile"),
 			},
 
-			// Block a package that your logs confirm is being requested.
+			// Block a package that your logs confirm is being requested. The repo name
+			// (ruby-yaml-repo) is intentionally distinct from the ~/.gemrc source that
+			// createTempHomeDirWithConfig auto-generates for every Gem test (ruby-remote),
+			// so this test can actually distinguish ruby.yaml winning from ~/.gemrc winning.
 			requestToFail: map[string]bool{
-				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+				"/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem": true,
 			},
 
 			// Expect a report containing the exact blocked package.
@@ -843,7 +898,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "actionview",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -860,7 +915,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "activesupport",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "direct",
@@ -877,7 +932,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							Action:            "blocked",
 							ParentName:        "rails-dom-testing",
 							ParentVersion:     "2.3.0",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
@@ -918,16 +973,15 @@ func getTestCasesForDoCurationAudit() []testCase {
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven.String())
 				require.NoError(t, err)
 				cleanUpTestDirChange()
-				// One mvn invocation, multiple goals: maven-dep-tree:tree primes the project
-				// dep cache; dependency:resolve-plugins and help:effective-pom pre-download
-				// the plugins that resolvePluginDeps()/resolveInstallLifecyclePlugins() will
-				// re-run during the test phase against the mock server.
+				// Pre-populate the curation cache with all plugin artifact downloads so that
+				// during the actual test run against the mock server only the blocked artifact
+				// triggers an HTTP request. The -DincludePluginDeps=true flag causes
+				// maven-dep-tree to resolve plugin transitive deps in the same invocation.
 				return []string{
 					"com.jfrog:maven-dep-tree:" + java.GetMavenDepTreeVersion() + ":tree",
 					"-DdepsTreeOutputFile=output",
 					"-Dmaven.repo.local=" + curationCache,
-					"dependency:resolve-plugins",
-					"help:effective-pom",
+					"-DincludePluginDeps=true",
 				}
 			},
 			mvnIncludePluginDeps: true,
@@ -1090,43 +1144,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Cause: executor timeout after 2 attempts with 0 milliseconds wait intervals",
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
-		{
-			name:          "dotnet tree",
-			tech:          techutils.Dotnet,
-			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
-			serveResources: map[string]string{
-				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
-				"index.json":               filepath.Join("resources", "index.json"),
-				"13.0.3":                   filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
-			},
-			requestToFail: map[string]bool{
-				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
-			},
-			expectedResp: map[string]*CurationReport{
-				"dotnet-curation": {packagesStatus: []*PackageStatus{
-					{
-						Action:            "blocked",
-						ParentName:        "Newtonsoft.Json",
-						ParentVersion:     "13.0.3",
-						BlockedPackageUrl: "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
-						PackageName:       "Newtonsoft.Json",
-						PackageVersion:    "13.0.3",
-						BlockingReason:    "Policy violations",
-						DepRelation:       "direct",
-						PkgType:           "nuget",
-						Policy: []Policy{
-							{
-								Policy:    "pol1",
-								Condition: "cond1",
-							},
-						},
-					},
-				},
-					totalNumberOfPackages: 1,
-				},
-			},
-			allowInsecureTls: true,
-		},
 	}
 	return tests
 }
@@ -1149,7 +1166,8 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 		}
 		if r.Method == http.MethodGet {
 			if resourceToServe != nil {
-				if pathToRes := getResourceToServe(resourceToServe, r.RequestURI); pathToRes != "" && strings.Contains(r.RequestURI, "api/curation/audit") {
+				// Cargo's sparse-index fetches hit /api/cargo/<repo>/index/... directly, not the pass-through.
+				if pathToRes := getResourceToServe(resourceToServe, r.RequestURI); pathToRes != "" && (strings.Contains(r.RequestURI, "api/curation/audit") || strings.Contains(r.RequestURI, "api/cargo/")) {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
@@ -1200,6 +1218,8 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 				Password:       password,
 				Url:            url,
 				ArtifactoryUrl: url,
+				// Natively-resolving techs fall back to the default server, which requires this flag.
+				IsDefault: true,
 			},
 		},
 		Version: "v" + strconv.Itoa(coreutils.GetCliConfigVersion()),
@@ -1230,6 +1250,15 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
 			compName:     "github.com/kennygrant/sanitize",
 			version:      "v1.2.4",
+		},
+		{
+			name:         "local replace go component id is skipped",
+			compId:       "go://github.com/example/localmod:v0.0.0" + _go.LocalReplaceMarker,
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: nil,
+			compName:     "github.com/example/localmod",
+			version:      "v0.0.0",
 		},
 	}
 	for _, tt := range tests {
@@ -1386,6 +1415,339 @@ func Test_getDockerNameAndVersion(t *testing.T) {
 		})
 	}
 }
+func Test_getHuggingFaceNameAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantVersion      string
+	}{
+		{
+			name:             "model with explicit sha revision",
+			id:               "huggingfaceml://mcpotato/42-eicar-street:8fb61c4d511e9aaff0ea55396a124aa292830efc",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/mcpotato/42-eicar-street/revision/8fb61c4d511e9aaff0ea55396a124aa292830efc"},
+			wantName:         "mcpotato/42-eicar-street",
+			wantVersion:      "8fb61c4d511e9aaff0ea55396a124aa292830efc",
+		},
+		{
+			name:             "model with branch revision",
+			id:               "huggingfaceml://bert-base-uncased:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/bert-base-uncased/revision/main"},
+			wantName:         "bert-base-uncased",
+			wantVersion:      "main",
+		},
+		{
+			name:             "model id with no revision defaults to main",
+			id:               "huggingfaceml://org/model",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "empty artiUrl and repo produce no download URL",
+			id:               "huggingfaceml://org/model:main",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "empty id returns empty results",
+			id:               "",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			name:             "trailing slash stripped from artiUrl",
+			id:               "huggingfaceml://org/model:v1.0",
+			artiUrl:          "https://test.jfrogdev.org/artifactory/",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/v1.0"},
+			wantName:         "org/model",
+			wantVersion:      "v1.0",
+		},
+		{
+			name:             "trailing colon defaults to main (not empty string)",
+			id:               "huggingfaceml://org/model:",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/main"},
+			wantName:         "org/model",
+			wantVersion:      "main",
+		},
+		{
+			name:             "leading colon only (no repo id) returns empty",
+			id:               "huggingfaceml://:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantVersion:      "",
+		},
+		{
+			// refs/pr/3 is a valid Hugging Face revision (a PR ref) and contains '/'.
+			// It must be split off as the revision (not glued onto name) and
+			// path-escaped in the URL so it lands as a single path segment.
+			name:             "PR ref revision containing slashes is split and path-escaped",
+			id:               "huggingfaceml://org/model:refs/pr/3",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/model/revision/refs%2Fpr%2F3"},
+			wantName:         "org/model",
+			wantVersion:      "refs/pr/3",
+		},
+		{
+			// repo_id (name) must be URL-escaped per segment just like revision already is —
+			// otherwise '?', '#', or a space in a model ref produces a malformed/injected URL.
+			name:             "repo_id with special characters is escaped per segment",
+			id:               "huggingfaceml://org/weird model?id#frag:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: []string{"https://test.jfrogdev.org/artifactory/api/huggingfaceml/my-hugging-face-repo/api/models/org/weird%20model%3Fid%23frag/revision/main"},
+			wantName:         "org/weird model?id#frag",
+			wantVersion:      "main",
+		},
+		{
+			// url.PathEscape leaves '.'/'..' unescaped (unreserved per RFC 3986), so a
+			// repo_id segment of exactly ".." would still traverse the request path after
+			// escaping. Such a segment must be rejected outright rather than escaped.
+			name:             "repo_id with path-traversal segment produces no download URL",
+			id:               "huggingfaceml://../../api/system/ping:main",
+			artiUrl:          "https://test.jfrogdev.org/artifactory",
+			repo:             "my-hugging-face-repo",
+			wantDownloadUrls: nil,
+			wantName:         "../../api/system/ping",
+			wantVersion:      "main",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotVersion := getHuggingFaceNameAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+func Test_validateCurationAuditFlags_DockerAndHuggingFaceConflict(t *testing.T) {
+	ca := NewCurationAuditCommand().
+		SetDockerImageName("my.registry/image:tag").
+		SetHuggingFaceModel("org/model:main")
+	err := validateCurationAuditFlags(ca)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--docker-image and --hugging-face-model cannot be used together")
+}
+
+func Test_validateCurationAuditFlags_DockerOnly(t *testing.T) {
+	ca := NewCurationAuditCommand().SetDockerImageName("my.registry/image:tag")
+	assert.NoError(t, validateCurationAuditFlags(ca))
+}
+
+func Test_hasPythonFiles_ExcludesDist(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	require.NoError(t, os.MkdirAll(distDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "only_here.py"), []byte("x = 1\n"), 0644))
+	assert.False(t, hasPythonFiles(dir))
+}
+
+func Test_hasPythonFiles_FindsProjectSource(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app.py"), []byte("x = 1\n"), 0644))
+	assert.True(t, hasPythonFiles(dir))
+}
+
+func Test_isHuggingFaceReport(t *testing.T) {
+	hfPkg := &PackageStatus{PkgType: techutils.HuggingFaceML.String()}
+	tests := []struct {
+		name   string
+		report *CurationReport
+		want   bool
+	}{
+		{
+			name:   "empty report",
+			report: &CurationReport{},
+			want:   false,
+		},
+		{
+			name:   "warnings only without HF marker",
+			report: &CurationReport{warnings: []string{"unresolved"}},
+			want:   false,
+		},
+		{
+			name:   "HF warnings-only placeholder",
+			report: &CurationReport{warnings: []string{"unresolved"}, huggingFaceReport: true},
+			want:   true,
+		},
+		{
+			name:   "all HF packages",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg}},
+			want:   true,
+		},
+		{
+			name:   "mixed package types",
+			report: &CurationReport{packagesStatus: []*PackageStatus{hfPkg, {PkgType: techutils.Pip.String()}}},
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isHuggingFaceReport(tt.report))
+		})
+	}
+}
+
+func Test_isWarningsOnlyReport(t *testing.T) {
+	assert.False(t, isWarningsOnlyReport(&CurationReport{}))
+	assert.True(t, isWarningsOnlyReport(&CurationReport{warnings: []string{"warn"}}))
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		packagesStatus: []*PackageStatus{{PkgType: techutils.HuggingFaceML.String()}},
+	}))
+	// packagesStatus only ever holds blocked packages (see fetchNodeStatus), so an
+	// all-clean audit of a real package also has an empty packagesStatus — same
+	// shape as the true "nothing was audited" placeholder. totalNumberOfPackages
+	// must be the signal that disambiguates them, not packagesStatus emptiness.
+	assert.False(t, isWarningsOnlyReport(&CurationReport{
+		totalNumberOfPackages: 1,
+		warnings:              []string{"dynamic revision"},
+	}))
+}
+
+func Test_countPackageNodes(t *testing.T) {
+	rootNodes := func(ids ...string) map[string]struct{} {
+		m := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			m[id] = struct{}{}
+		}
+		return m
+	}
+	nodes := func(ids ...string) []*xrayUtils.GraphNode {
+		var n []*xrayUtils.GraphNode
+		for _, id := range ids {
+			n = append(n, &xrayUtils.GraphNode{Id: id})
+		}
+		return n
+	}
+
+	// Single root (e.g. npm/pip): FlatTree.Nodes includes the root's own self-entry
+	// alongside its dependencies — that self-entry must be excluded from the count.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root"), nodes("root", "dep-a", "dep-b")))
+
+	// Multiple roots (e.g. multiple --working-dirs): every root self-entry present
+	// in the flat graph must be excluded, not just the first.
+	assert.Equal(t, 2, countPackageNodes(
+		rootNodes("root-a", "root-b"), nodes("root-a", "dep-a", "root-b", "dep-b")))
+
+	// Hugging Face: BuildDependencyTree never adds a root self-entry, so nothing
+	// should be subtracted — a single-dependency project must not undercount to 0.
+	assert.Equal(t, 1, countPackageNodes(
+		rootNodes("huggingface-project"), nodes("huggingfaceml://org/model:main")))
+
+	assert.Equal(t, 0, countPackageNodes(rootNodes("root"), nil))
+}
+
+func Test_convertResultsToSummary_SkipsWarningsOnly(t *testing.T) {
+	results := map[string]*CurationReport{
+		"pip-project":         {packagesStatus: []*PackageStatus{{PackageName: "requests"}}, totalNumberOfPackages: 1},
+		hfUnresolvedReportKey: {warnings: []string{"unresolved HF ref"}, huggingFaceReport: true},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "pip-project", summary.Scans[0].Target)
+}
+
+// Test_convertResultsToSummary_RecordsAllUnresolvedHFReport: an all-unresolved hfPartial
+// report must still be recorded, not dropped like the true "not attempted" placeholder.
+func Test_convertResultsToSummary_RecordsAllUnresolvedHFReport(t *testing.T) {
+	results := map[string]*CurationReport{
+		"hf-project": {totalNumberOfPackages: 0, hfPartial: true, warnings: []string{"2 model reference(s)... HTTP 404"}},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "hf-project", summary.Scans[0].Target)
+	assert.Equal(t, 0, summary.Scans[0].CuratedPackages.PackageCount)
+	assert.True(t, summary.Scans[0].CuratedPackages.IsPartial)
+	assert.Equal(t, "hf_unresolved", summary.Scans[0].CuratedPackages.PartialReason)
+}
+
+// PackageCount must reflect remediation-needed rows, not the raw row count including "not evaluated" ones.
+func Test_convertResultsToSummary_NpmLogPartialPackageCountExcludesNotEvaluated(t *testing.T) {
+	results := map[string]*CurationReport{
+		"npm-project": {
+			packagesStatus: []*PackageStatus{
+				{PackageName: "blocked-a", Action: blocked},
+				{PackageName: "blocked-b", Action: blocked},
+				{PackageName: "git-dep", Action: notEvaluated},
+			},
+			totalNumberOfPackages: 3,
+			isPartial:             true,
+			npmLogPartial:         true,
+		},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, 2, summary.Scans[0].CuratedPackages.PackageCount,
+		"PackageCount must count only rows needing remediation, not the not-evaluated row")
+}
+
+// An advisory-only npm-log-fallback report must still be recorded in the summary, like hfPartial already is.
+func Test_convertResultsToSummary_RecordsAdvisoryOnlyNpmLogPartialReport(t *testing.T) {
+	results := map[string]*CurationReport{
+		"npm-project": {
+			totalNumberOfPackages: 0,
+			isPartial:             true,
+			npmLogPartial:         true,
+			warnings:              []string{"lodash@99.99.99 could not be resolved"},
+		},
+	}
+	summary := convertResultsToSummary(results)
+	require.Len(t, summary.Scans, 1)
+	assert.Equal(t, "npm-project", summary.Scans[0].Target)
+	assert.True(t, summary.Scans[0].CuratedPackages.IsPartial)
+	assert.Equal(t, "npm_log_fallback", summary.Scans[0].CuratedPackages.PartialReason)
+}
+
+func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	// Use a mock server so server resolution succeeds; the HF_ENDPOINT error then
+	// fires naturally from getHuggingFaceRepositoryConfig → repoFromHFEndpoint.
+	mockServer, serverConfig := hfMockServer(t, map[string]bool{}, map[string]bool{}, "hf-repo")
+	defer mockServer.Close()
+
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+
+	t.Setenv("HF_ENDPOINT", "")
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(serverConfig)
+	ca.SetIsCurationCmd(true)
+	ca.SetInsecureTls(true)
+	ca.SetHuggingFaceModel("org/model:main")
+	results := map[string]*CurationReport{}
+	err := ca.doCurateAudit(results)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HF_ENDPOINT")
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1499,8 +1861,9 @@ func Test_convertResultsToSummary(t *testing.T) {
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							PackageCount: 1,
-							IsPartial:    true,
+							PackageCount:  1,
+							IsPartial:     true,
+							PartialReason: "cvs_fallback",
 							Blocked: []formats.BlockedPackages{{
 								Policy:    "p",
 								Condition: "immature",
@@ -1736,6 +2099,28 @@ func TestSendWaiverRequests(t *testing.T) {
 			expectError: false,
 		},
 		{
+			// Cargo's body uses "detail" instead of "message" -- "message" is omitted here.
+			name: "Single package forbidden, Artifactory's cargo-shaped 'detail' body",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/cargo/cargo-remote/v1/crates/widget/1.0.0/download",
+					PackageName:       "widget",
+					PackageVersion:    "1.0.0",
+				},
+			},
+			msg:          "Requesting waiver for testing",
+			mockResponse: `{"errors":[{"status":403,"detail":"waiver-id|forbidden"}]}`,
+			expectedStatus: []WaiverResponse{
+				{
+					PkgName:     "widget",
+					Status:      "forbidden",
+					WaiverID:    "waiver-id",
+					Explanation: WaiverRequestForbidden,
+				},
+			},
+			expectError: false,
+		},
+		{
 			name: "Error while sending requests",
 			pkgs: []*PackageStatus{
 				{
@@ -1837,6 +2222,74 @@ func TestFetchNodesStatusConcurrentMapWrite(t *testing.T) {
 		return true
 	})
 	assert.Equal(t, numNodes, count, "expected all %d packages to be recorded as blocked", numNodes)
+}
+
+// TestFetchNodeStatus_HFExplicit404ReturnsError verifies an unresolvable explicit
+// --hugging-face-model (HTTP 404) is a hard error, not a silently-skipped node.
+func TestFetchNodeStatus_HFExplicit404ReturnsError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      true,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "org/nonexistent-model")
+	assert.Contains(t, err.Error(), "404")
+	assert.Empty(t, analyzer.hfUnresolvedNodes, "explicit mode must error, not silently record as unresolved")
+}
+
+// TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError verifies an
+// unresolvable auto-discovered reference (HTTP 404) is recorded as a warning,
+// not a hard error.
+func TestFetchNodeStatus_HFAutoDiscovery404RecordsUnresolvedNotError(t *testing.T) {
+	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	root := &xrayUtils.GraphNode{Id: "huggingfaceml://root"}
+	root.Nodes = append(root.Nodes, &xrayUtils.GraphNode{Id: "huggingfaceml://org/nonexistent-model:main"})
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "hf-repo",
+		tech:                 techutils.HuggingFaceML,
+		hfExplicitModel:      false,
+	}
+
+	packagesStatusMap := sync.Map{}
+	rootNodes := map[string]struct{}{root.Id: {}}
+	err := analyzer.fetchNodesStatus(root, &packagesStatusMap, rootNodes)
+	require.NoError(t, err)
+	require.Len(t, analyzer.hfUnresolvedNodes, 1)
+	assert.Equal(t, "org/nonexistent-model:main", analyzer.hfUnresolvedNodes[0])
 }
 
 // =============================================================================
@@ -1944,12 +2397,16 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(tt.respBody))
 			})
 			defer serverMock.Close()
 
+			// Poetry (like Pip/Pipenv) routes through sendBoundedRequest, which requires a
+			// zero-retry client — mirrors the production boundedRedirectManager construction.
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
 			rtAuth := rtManager.GetConfig().GetServiceDetails()
 			httpClientDetails := rtAuth.CreateHttpClientDetails()
 			analyzer := treeAnalyzer{
@@ -1973,6 +2430,89 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) 
 			assert.Equal(t, pkgVersion, got.PackageVersion)
 		})
 	}
+}
+
+// A "detail"-only body (Cargo's shape, "message" omitted) must still resolve as a real policy block.
+func TestGetBlockedPackageDetails_CargoDetailFieldFallback(t *testing.T) {
+	const (
+		pkgName    = "widget"
+		pkgVersion = "1.0.0"
+	)
+	blockMsg := "Package widget:1.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"detail":%q}]}`, blockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(blockJSON))
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "cargo-remote",
+		tech:                 techutils.Cargo,
+	}
+	packageUrl := fmt.Sprintf("%sapi/cargo/cargo-remote/v1/crates/%s/%s/download", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+	got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, blocked, got.Action)
+	assert.Equal(t, BlockingReasonPolicy, got.BlockingReason,
+		"a 'detail'-only body must still be recognized as a real policy block, not fall back to unknown")
+	require.Len(t, got.Policy, 1)
+	assert.Equal(t, "cve-high", got.Policy[0].Policy)
+}
+
+func TestGetBlockedPackageDetails_ObjectShapedDetailFieldDoesNotBreakDecoding(t *testing.T) {
+	const (
+		pkgName    = "bitnami/kubectl"
+		pkgVersion = "latest"
+	)
+	blockMsg := "Package bitnami/kubectl:latest download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q,"detail":{"nested":"object"}}]}`, blockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(blockJSON))
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		url:                  rtAuth.GetUrl(),
+		repo:                 "docker-curation",
+		tech:                 techutils.Docker,
+	}
+	packageUrl := fmt.Sprintf("%sapi/docker/docker-curation/v2/%s/manifests/%s", rtAuth.GetUrl(), pkgName, pkgVersion)
+
+	got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, blocked, got.Action)
+	assert.Equal(t, BlockingReasonPolicy, got.BlockingReason,
+		"an object-shaped 'detail' alongside a valid 'message' must not break decoding into BlockingReasonUnknown")
+	require.Len(t, got.Policy, 1)
+	assert.Equal(t, "cve-high", got.Policy[0].Policy)
 }
 
 // TestFetchCvsBlockedStatusTransitive verifies the CVS fallback for a transitive range blocker:
@@ -2005,7 +2545,7 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	// Version-specific metadata JSON (returns the whl download URL).
 	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		// All-versions metadata: /api/pypi/<repo>/pypi/<name>/json
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
@@ -2032,6 +2572,10 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	httpClientDetails := rtAuth.CreateHttpClientDetails()
 
@@ -2078,6 +2622,177 @@ func TestFetchCvsBlockedStatusTransitive(t *testing.T) {
 	assert.Equal(t, blocked, s.Action)
 }
 
+// TestFetchCvsBlockedStatusPoetry verifies that the CVS fallback works for a
+// poetry-pinned package: wrapPoetryCurationErr produces a *CvsBlockedError
+// and fetchCvsBlockedStatus recovers the policy from the 403 probe, with the
+// package type set to "poetry".
+func TestFetchCvsBlockedStatusPoetry(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "telnyx"
+		blockedVer      = "4.87.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 5 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/te/ln/telnyx-4.87.1-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	// Poetry (like Pip/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	// Exact-pin PinnedRequirement produced by wrapPoetryCurationErr for a poetry project.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusPoetryTransitive verifies the CVS fallback for a transitive
+// blocker under poetry.
+func TestFetchCvsBlockedStatusPoetryTransitive(t *testing.T) {
+	const (
+		repo            = "test-poetry-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.12"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "immature-strict"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	// Poetry (like Pip/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Poetry,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution — must differ from the blocked package.
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+	assert.NotEqual(t, s.PackageName, s.ParentName, "transitive blocker must show a different direct-dependency name")
+
+	assert.Equal(t, string(techutils.Poetry), s.PkgType, "package type must be poetry")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
 // TestFetchCvsBlockedStatusNotInMetadataNotRendered verifies that a version absent from the metadata API is not rendered as a blocked row.
 func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	const (
@@ -2086,7 +2801,7 @@ func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 		ver  = "4.87.1000" // not in the metadata API
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+pkg+"/"+ver+"/json"):
 			w.WriteHeader(http.StatusNotFound)
@@ -2096,6 +2811,10 @@ func TestFetchCvsBlockedStatusNotInMetadataNotRendered(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2127,7 +2846,7 @@ func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
 			w.WriteHeader(http.StatusOK)
@@ -2144,6 +2863,10 @@ func TestFetchCvsBlockedStatusSetsDepRelation(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2191,7 +2914,7 @@ func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodHead:
 			w.WriteHeader(http.StatusInternalServerError)
@@ -2204,6 +2927,10 @@ func TestFetchCvsBlockedStatusHeadErrorNoFalsePositive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2232,7 +2959,7 @@ func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
 		whlRelativePath = "packages/ab/cd/foo-1.0-py3-none-any.whl"
 	)
 
-	serverMock, _, rtManager := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodHead:
 			// Stale CVS cache cleared; package is now accessible.
@@ -2246,6 +2973,10 @@ func TestFetchCvsBlockedStatusHeadOKNoFalsePositive(t *testing.T) {
 	})
 	defer serverMock.Close()
 
+	// Pip (like Poetry/Pipenv) routes through sendBoundedRequest, which requires a
+	// zero-retry client — mirrors the production boundedRedirectManager construction.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
 	rtAuth := rtManager.GetConfig().GetServiceDetails()
 	analyzer := treeAnalyzer{
 		rtManager:            rtManager,
@@ -2313,49 +3044,1830 @@ func TestRunCvsFallbackGetWdFailurePreservesResults(t *testing.T) {
 	assert.Contains(t, results, "unknown-project", "results key must be the fallback key when Getwd fails")
 }
 
+// TestRunCvsFallback_KeepsSeparateTableFromExistingReport verifies pip's CVS-fallback report
+// gets its own distinct key (a second table) instead of overwriting or fusing into an existing
+// report already recorded under the same directory-basename key (e.g. by HF auto-discovery).
+func TestRunCvsFallback_KeepsSeparateTableFromExistingReport(t *testing.T) {
+	const (
+		repo            = "test-pip-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+	blockJSON := `{"errors":[{"status":403,"message":"Package langchain-core:1.4.7 download was blocked by Curation service due to policy 'p'","policy":"p","condition":"immature","explanation":"too new","recommendation":"use older"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	orig := osGetwd
+	osGetwd = func() (string, error) { return "/home/user/ml-project", nil }
+	t.Cleanup(func() { osGetwd = orig })
+	const key = "ml-project"
+
+	// Pre-existing report under the same key, as HF auto-discovery would leave it.
+	results := map[string]*CurationReport{
+		key: {
+			packagesStatus:    []*PackageStatus{{PackageName: "org/malicious-model", PackageVersion: "main", PkgType: "huggingfaceml"}},
+			warnings:          []string{"Hugging Face: 1 model reference(s) could not be resolved"},
+			huggingFaceReport: true,
+			hfPartial:         true,
+		},
+	}
+
+	cvsErr := &python.CvsBlockedError{
+		Packages: []python.PinnedRequirement{
+			{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+		},
+	}
+	err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+	require.NoError(t, err)
+
+	require.Len(t, results, 2, "pip's fallback must land in a new table, leaving the existing HF report untouched")
+
+	hfReport := results[key]
+	require.NotNil(t, hfReport)
+	assert.True(t, hfReport.huggingFaceReport)
+	assert.True(t, hfReport.hfPartial)
+	assert.Len(t, hfReport.packagesStatus, 1, "the pre-existing HF report must be unmodified")
+	assert.Len(t, hfReport.warnings, 1)
+
+	pipKey := uniqueReportKey(map[string]*CurationReport{key: hfReport}, key, techutils.Pip)
+	pipReport := results[pipKey]
+	require.NotNil(t, pipReport, "pip's report must be recorded under a disambiguated key, not merged into %q", key)
+	assert.Len(t, pipReport.packagesStatus, 1)
+	assert.True(t, pipReport.isPartial)
+	assert.False(t, pipReport.huggingFaceReport, "pip's own report must not carry the HF marker")
+}
+
+// Feeds the mixed-crash.log fixture through the full runNpmLogFallback end to end.
+func TestRunNpmLogFallback(t *testing.T) {
+	const repo = "my-pnpm-remote"
+	acceptsBlockMsg := "Package accepts:2.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	acceptsBlockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, acceptsBlockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/accepts-2.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(acceptsBlockJSON))
+		case strings.Contains(r.URL.Path, "/lodash-99.99.99.tgz"):
+			// Genuine ETARGET: plain 404, no curation signal.
+			w.WriteHeader(http.StatusNotFound)
+		case strings.Contains(r.URL.Path, "/express-5.2.1.tgz"), strings.Contains(r.URL.Path, "/typescript-5.3.3.tgz"):
+			w.WriteHeader(http.StatusOK)
+		case strings.Contains(r.URL.Path, "/depd-"), strings.Contains(r.URL.Path, "/is-thirteen-"), strings.Contains(r.URL.Path, "/some-range-pkg-"):
+			t.Errorf("unexpected HEAD-check for a whole-package-blocked/non-registry/unresolvable-range entry: %s", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"mypnpmproject-v11","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+	logsDir := filepath.Join(TestDataDir, "curation", "npmlogs", "mixed-crash", "_logs")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotNil(t, report)
+	assert.True(t, report.isPartial)
+	assert.True(t, report.npmLogPartial)
+	assert.Equal(t, originalErr.Error(), report.npmLogOriginalErr,
+		"the real underlying npm error must be preserved, not just a generic curation-blamed message")
+
+	byName := map[string]*PackageStatus{}
+	for _, ps := range report.packagesStatus {
+		byName[ps.PackageName] = ps
+	}
+
+	// Whole-package-blocked, transitive via express: "All versions blocked" and the
+	// transitive-aware recommendation naming both packages.
+	depd := byName["depd"]
+	require.NotNil(t, depd, "depd should be reported as a whole-package block")
+	assert.Equal(t, allVersionsBlockedText, depd.PackageVersion)
+	assert.Equal(t, "express", depd.ParentName, "depd's direct-dependency attribution must walk to express, not stop at an intermediate parent")
+	require.Len(t, depd.Policy, 1)
+	assert.Contains(t, depd.Policy[0].Recommendation, "transitive dependency of express")
+
+	// Resolved and blocked via the normal HEAD-check path (getBlockedPackageDetails,
+	// unmodified) — full policy detail recovered from the 403 body.
+	accepts := byName["accepts"]
+	require.NotNil(t, accepts, "accepts should be reported as blocked via the standard HEAD-check")
+	assert.Equal(t, "2.0.0", accepts.PackageVersion)
+	require.Len(t, accepts.Policy, 1)
+	assert.Equal(t, "cve-high", accepts.Policy[0].Policy)
+
+	// Clean packages never appear as rows.
+	assert.NotContains(t, byName, "express")
+	assert.NotContains(t, byName, "typescript")
+
+	// Git-URL, genuine ETARGET, and unresolvable range: never probed, never a row — advisory
+	// warnings only, so none can be mistaken for a real block in the table/JSON output.
+	assert.NotContains(t, byName, "is-thirteen")
+	assert.NotContains(t, byName, "lodash")
+	assert.NotContains(t, byName, "some-range-pkg")
+	require.Len(t, report.warnings, 3)
+	warningsText := strings.Join(report.warnings, "\n")
+	assert.Contains(t, warningsText, "is-thirteen")
+	assert.Contains(t, warningsText, "github:jonschlinkert/is-thirteen")
+	assert.Contains(t, warningsText, "lodash@99.99.99")
+	assert.Contains(t, warningsText, "not a curation policy block")
+	assert.Contains(t, warningsText, "some-range-pkg")
+	assert.Contains(t, warningsText, "^3.0.0")
+}
+
+// An ETARGET-confirmed-blocked package must not be stored under a key the graph lookup never finds.
+func TestRunNpmLogFallback_ETARGETConfirmedBlockAppearsInReport(t *testing.T) {
+	blockMsg := "Package pinned-blocked:9.9.9 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/pinned-blocked-9.9.9.tgz") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"46 silly placeDep ROOT pinned-blocked@ OK for: myproj@1.0.0 want: 9.9.9\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.Len(t, report.packagesStatus, 1, "the confirmed-blocked ETARGET package must appear as a row")
+	assert.Equal(t, "pinned-blocked", report.packagesStatus[0].PackageName)
+	assert.Equal(t, "9.9.9", report.packagesStatus[0].PackageVersion)
+}
+
+// An advisory-only entry must not claim the shared dedup key and skip a same-name probeable entry.
+func TestRunNpmLogFallback_SeenKeysDoesNotSkipCrossCategoryEntry(t *testing.T) {
+	blockMsg := "Package widget:2.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	var widgetTarballHits int
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/widget-2.0.0.tgz") {
+			widgetTarballHits++
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget" appears twice: once via an unresolvable range (advisory-only, no probe),
+	// once via a bare, exact, genuinely blocked version (ETARGET, must be probed).
+	logContent := "0 verbose cli node npm\n" +
+		"44 silly placeDep ROOT dep-a@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"45 silly placeDep ROOT dep-b@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"46 silly placeDep node_modules/dep-a widget@ OK for: dep-a@1.0.0 want: ^1.0.0\n" +
+		"47 silly placeDep node_modules/dep-b widget@ OK for: dep-b@1.0.0 want: 2.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	assert.Equal(t, 1, widgetTarballHits, "the ETARGET occurrence's own HTTP probe must run exactly once, not be skipped by the unresolvable-range occurrence's dedup entry")
+	require.NotEmpty(t, report.packagesStatus, "widget's confirmed block must surface as a row (once per parent edge that pulls it in)")
+	for _, ps := range report.packagesStatus {
+		assert.Equal(t, "widget", ps.PackageName)
+		assert.Equal(t, "2.0.0", ps.PackageVersion)
+	}
+}
+
+// Two ETARGET entries for the same name but different pinned specifiers must both surface, not collide.
+func TestRunNpmLogFallback_SameNameDifferentSpecifierETARGETEntriesDoNotCollide(t *testing.T) {
+	blockJSON := func(name, version string) string {
+		msg := fmt.Sprintf("Package %s:%s download was blocked by jfrog packages curation service due to the following policies violated "+
+			"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}.", name, version)
+		return fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, msg)
+	}
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/widget-2.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("widget", "2.0.0")))
+		case strings.Contains(r.URL.Path, "/widget-3.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("widget", "3.0.0")))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget" pinned at two different blocked versions by two different parents.
+	logContent := "0 verbose cli node npm\n" +
+		"44 silly placeDep ROOT dep-a@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"45 silly placeDep ROOT dep-b@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"46 silly placeDep node_modules/dep-a widget@ OK for: dep-a@1.0.0 want: 2.0.0\n" +
+		"47 silly placeDep node_modules/dep-b widget@ OK for: dep-b@1.0.0 want: 3.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	versionsSeen := map[string]bool{}
+	for _, ps := range report.packagesStatus {
+		assert.Equal(t, "widget", ps.PackageName)
+		versionsSeen[ps.PackageVersion] = true
+	}
+	assert.True(t, versionsSeen["2.0.0"], "dep-a's genuinely blocked 2.0.0 must appear, not be overwritten by 3.0.0")
+	assert.True(t, versionsSeen["3.0.0"], "dep-b's genuinely blocked 3.0.0 must appear, not be lost to the shared blank-version key")
+}
+
+// When package.json can't be read, the root identity must be recovered from the log itself.
+func TestRunNpmLogFallback_MissingPackageJsonStillRecoversReport(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected HEAD-check for a whole-package-blocked entry: %s", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// Root-level entry carries the real project identity ("realproj@9.9.9"); the working
+	// directory's basename below is deliberately something else.
+	logContent := "0 verbose cli node npm\n" +
+		"43 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}\n" +
+		"44 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/blockedpkg 100ms (cache skip)\n" +
+		"45 silly placeDep ROOT blockedpkg@ OK for: realproj@9.9.9 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	// No package.json written — readNpmProjectNameVersion fails.
+	projectDir := filepath.Join(t.TempDir(), "unrelated-dir-name")
+	require.NoError(t, os.MkdirAll(projectDir, 0755))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotEmpty(t, report.packagesStatus, "blockedpkg must still surface as a row even when package.json can't be read")
+	assert.Equal(t, "blockedpkg", report.packagesStatus[0].PackageName)
+	assert.True(t, directDepNamesContains(report, "blockedpkg"), "blockedpkg is a direct dependency of the real (log-recovered) root, so its recommendation must say so, not treat it as transitive")
+}
+
+// directDepNamesContains checks pkgName's recommendation uses the direct, not transitive, wording.
+func directDepNamesContains(report *CurationReport, pkgName string) bool {
+	for _, ps := range report.packagesStatus {
+		if ps.PackageName != pkgName {
+			continue
+		}
+		for _, p := range ps.Policy {
+			if strings.Contains(p.Recommendation, "Remove this package from your project and replace with an alternate package") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// A key-construction failure must not silently vanish the package from the report the same way
+// as ordinary dedup — it must surface as a warning, same as a probe failure.
+func TestRunNpmLogFallback_KeyErrSurfacesAsWarningNotSilentDrop(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "widget-abc123"@0.0.0 matches isYarnBerryWorkspaceMember's pattern (name ends in
+	// "-" + 6 hex chars, version "0.0.0"), so getNpmNameScopeAndVersion returns zero URLs
+	// and npmPackageKey genuinely fails to derive a key — a real trigger, not a mock.
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT widget-abc123@0.0.0 OK for: myproj@1.0.0 want: ^0.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	for _, ps := range report.packagesStatus {
+		assert.NotEqual(t, "widget-abc123", ps.PackageName, "a package whose key couldn't be derived must not be reported as confirmed clean or blocked")
+	}
+	require.NotEmpty(t, report.warnings, "a key-construction failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "widget-abc123")
+}
+
+// A probe failure (network/5xx) for a resolved entry must not be silently treated as "clean" — it must surface as a warning.
+func TestRunNpmLogFallback_ProbeErrorSurfacesAsWarningNotClean(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/flaky-pkg-1.0.0.tgz") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT flaky-pkg@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	for _, ps := range report.packagesStatus {
+		assert.NotEqual(t, "flaky-pkg", ps.PackageName, "a package whose probe failed must not be reported as confirmed clean or blocked")
+	}
+	require.NotEmpty(t, report.warnings, "a probe failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "flaky-pkg")
+}
+
+// A blocked name shared by a direct edge and a transitive edge must get the recommendation for each edge, not one shared answer.
+func TestRunNpmLogFallback_RecommendationIsPerEdgeNotPerName(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	// "blocked-name" is both a direct dep of myproj and a transitive dep of "otherdirect".
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT blocked-name@ OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"11 silly placeDep ROOT otherdirect@1.0.0 OK for: myproj@1.0.0 want: ^1.0.0\n" +
+		"12 silly placeDep node_modules/otherdirect blocked-name@ OK for: otherdirect@1.0.0 want: ^2.0.0\n" +
+		"40 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}\n" +
+		"41 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/blocked-name 50ms (cache skip)\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	var directRow, transitiveRow *PackageStatus
+	for _, ps := range report.packagesStatus {
+		if ps.PackageName != "blocked-name" {
+			continue
+		}
+		switch {
+		case ps.DepRelation == directRelation:
+			directRow = ps
+		case ps.DepRelation == indirectRelation && ps.ParentName == "otherdirect":
+			transitiveRow = ps
+		}
+	}
+	require.NotNil(t, directRow, "blocked-name must appear as a direct edge")
+	require.NotNil(t, transitiveRow, "blocked-name must appear as a transitive edge under otherdirect")
+
+	require.Len(t, directRow.Policy, 1)
+	assert.Equal(t, "Remove this package from your project and replace with an alternate package", directRow.Policy[0].Recommendation)
+
+	require.Len(t, transitiveRow.Policy, 1)
+	assert.Contains(t, transitiveRow.Policy[0].Recommendation, "transitive dependency of otherdirect",
+		"the transitive edge must not get the direct-removal recommendation just because the same name is also a direct dependency elsewhere")
+}
+
+// The ETARGET probe path has the same probe-error-swallowing bug the npmEntryResolved case
+// had (Fix #1) — a transient probe failure must surface as a warning, and must not make the
+// whole report vanish (return originalErr) when it's the only recoverable entry.
+func TestRunNpmLogFallback_ETARGETProbeErrorSurfacesAsWarningNotDiscarded(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logDir := t.TempDir()
+	logsDir := filepath.Join(logDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT flaky-etarget@ OK for: myproj@1.0.0 want: 9.9.9\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("error while running 'npm install': exit status 1")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+	require.NoError(t, err, "a probe failure must not make the whole recovered report vanish")
+	require.Len(t, results, 1)
+
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.NotEmpty(t, report.warnings, "a probe failure must surface as a warning, not vanish silently")
+	assert.Contains(t, strings.Join(report.warnings, "\n"), "flaky-etarget")
+}
+
+// If the log has no placeDep lines at all, the original error is returned unchanged.
+func TestRunNpmLogFallback_NoRecoverableEntries(t *testing.T) {
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	err := ca.runNpmLogFallback(t.TempDir(), techutils.Npm, results, originalErr, false, 0)
+	assert.Equal(t, originalErr, err)
+	assert.Empty(t, results)
+}
+
+// A stale log left over from an earlier, unrelated run (e.g. a shared CI cache) must never be
+// mistaken for this crash's own log — if npm never wrote a NEW log for this invocation (e.g. it
+// failed before writing anything at all, missing binary, bad package.json), the fallback must
+// return originalErr unchanged rather than fabricate a report from someone else's old log.
+func TestRunNpmLogFallback_StaleLogPredatingBaselineIsIgnored(t *testing.T) {
+	logsDir := t.TempDir()
+	staleLogContent := "0 verbose cli node npm\n" +
+		"10 silly placeDep ROOT stale-pkg@1.0.0 OK for: otherproj@1.0.0 want: ^1.0.0\n"
+	staleLogPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(staleLogPath, []byte(staleLogContent), 0644))
+
+	// The baseline is captured AFTER the stale log already exists — exactly like the real
+	// eager-lookup snapshot taken right before an install that then fails without logging.
+	baselineKey, err := npmDebugLogNewestKey(logsDir)
+	require.NoError(t, err)
+	require.NotZero(t, baselineKey)
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm: command not found")
+
+	gotErr := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, baselineKey)
+	assert.Equal(t, originalErr, gotErr, "no log newer than the baseline exists, so the original error must pass through unchanged")
+	assert.Empty(t, results, "must not fabricate a report from a stale pre-existing log")
+
+	// The stale log itself must survive untouched — it's not ours to touch.
+	_, statErr := os.Stat(staleLogPath)
+	assert.NoError(t, statErr)
+}
+
+// When logs-max was 0, only the specific log file read is removed — not the whole directory.
+func TestRunNpmLogFallback_CleansUpLogWhenLogsMaxWasZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+	otherPath := filepath.Join(logsDir, "unrelated-file.txt")
+	require.NoError(t, os.WriteFile(otherPath, []byte("leave me alone\n"), 0644))
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	// No placeDep lines in this fixture, so this hits the "nothing recoverable" early
+	// return — cleanup must still fire on that path, not only on a fully successful one.
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, true, 0)
+	assert.Equal(t, originalErr, err)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the log file itself should have been removed")
+	_, otherStatErr := os.Stat(otherPath)
+	assert.NoError(t, otherStatErr, "an unrelated file in the same directory must not be touched")
+}
+
+// The install-succeeded path forces the same --logs-max=10 override as the failure path, so it
+// must clean up the resulting debug log the same way when the user had configured logs-max=0.
+func TestCleanupForcedNpmDebugLog_RemovesLogWhenLogsMaxWasZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+
+	cleanupForcedNpmDebugLog(logsDir, true, 0)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the forced debug log must be removed when logs-max was actually 0")
+}
+
+// When the user hadn't set logs-max=0 themselves, npm's own rotation already manages the log —
+// nothing forced it into existence, so nothing should be removed here.
+func TestCleanupForcedNpmDebugLog_LeavesLogWhenLogsMaxWasNotZero(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	require.NoError(t, os.WriteFile(logPath, []byte("0 verbose cli npm\n"), 0644))
+
+	cleanupForcedNpmDebugLog(logsDir, false, 0)
+
+	_, statErr := os.Stat(logPath)
+	assert.NoError(t, statErr, "must not remove a log npm would have written anyway")
+}
+
+// A transient npm-config-lookup failure must not abort an install that would've succeeded.
+func TestDoCurationAudit_NpmConfigLookupFailureDoesNotAbortSuccessfulInstall(t *testing.T) {
+	var fixture testCase
+	for _, tt := range getTestCasesForDoCurationAudit() {
+		if tt.name == "npm tree - two blocked package " {
+			fixture = tt
+			break
+		}
+	}
+	require.NotEmpty(t, fixture.name, "expected fixture not found")
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	runFixture := func(t *testing.T) (map[string]*CurationReport, error) {
+		mockServer, config := curationServer(t, fixture.expectedBuildRequest, fixture.expectedRequest, fixture.requestToFail, fixture.requestToError, fixture.serveResources)
+		defer mockServer.Close()
+		cleanUp := createCurationTestEnv(t, basePathToTests, fixture, config)
+		defer cleanUp()
+		return createCurationCmdAndRun(fixture)
+	}
+
+	t.Run("baseline_succeeds_unmodified", func(t *testing.T) {
+		t.Setenv("NPM_CONFIG_CACHE", t.TempDir())
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		assert.NotEmpty(t, results)
+	})
+
+	t.Run("forced_config_lookup_failure_must_not_abort", func(t *testing.T) {
+		t.Setenv("NPM_CONFIG_CACHE", t.TempDir())
+		orig := npmGetConfigValue
+		npmGetConfigValue = func(string, string) (string, error) {
+			return "", errors.New("simulated: npm config get failed")
+		}
+		t.Cleanup(func() { npmGetConfigValue = orig })
+
+		results, err := runFixture(t)
+		assert.NoError(t, err, "a transient npm-config-lookup failure must not abort an audit whose install would otherwise have succeeded")
+		assert.NotEmpty(t, results, "the real, successful install result must still be reported")
+	})
+
+	// End-to-end with real ambient npm config (NPM_CONFIG_CACHE/LOGS_MAX), not just the Go-level mock.
+	t.Run("logs_max_zero_leaves_no_stray_log_after_real_success", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "0")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		entries, readErr := os.ReadDir(filepath.Join(isolatedCache, "_logs"))
+		if readErr != nil {
+			require.True(t, os.IsNotExist(readErr), "unexpected error reading _logs dir: %v", readErr)
+			return
+		}
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		assert.Empty(t, names, "no stray debug log should remain in a fresh, isolated cache after a successful install when logs-max was 0")
+	})
+
+	// A user's own, already-nonzero logs-max retention setting must never be forced down —
+	// only logs-max=0 (which would suppress npm's debug log entirely) justifies an override.
+	t.Run("nonzero_logs_max_is_never_overridden", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		logsDir := filepath.Join(isolatedCache, "_logs")
+		require.NoError(t, os.MkdirAll(logsDir, 0755))
+		// Seed more pre-existing logs than the old forced value (10) ever allowed, in npm's
+		// real filename shape, so npm's own rotation would recognize and count them.
+		for i := 0; i < 20; i++ {
+			name := fmt.Sprintf("2025-01-01T00_00_%02d_000Z-debug-0.log", i)
+			require.NoError(t, os.WriteFile(filepath.Join(logsDir, name), []byte("0 verbose cli npm\n"), 0644))
+		}
+
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "50")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		entries, readErr := os.ReadDir(logsDir)
+		require.NoError(t, readErr)
+		assert.GreaterOrEqual(t, len(entries), 20,
+			"a user's own logs-max=50 must not be overridden/pruned by a smaller forced value")
+	})
+
+	// An independently-configured logs-dir (not <cache>/_logs, npm's own default) must still be
+	// found — assuming the default would silently defeat the whole fallback for anyone who sets it.
+	t.Run("independent_logs_dir_is_respected_not_assumed_from_cache", func(t *testing.T) {
+		isolatedCache := t.TempDir()
+		isolatedLogsDir := t.TempDir()
+		t.Setenv("NPM_CONFIG_CACHE", isolatedCache)
+		t.Setenv("NPM_CONFIG_LOGS_DIR", isolatedLogsDir)
+		t.Setenv("NPM_CONFIG_LOGS_MAX", "0")
+
+		results, err := runFixture(t)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		// The forced-then-cleaned log must have gone to the configured logs-dir, not <cache>/_logs.
+		_, cacheLogsErr := os.ReadDir(filepath.Join(isolatedCache, "_logs"))
+		assert.True(t, os.IsNotExist(cacheLogsErr), "no log should ever land under <cache>/_logs when logs-dir is set independently")
+
+		entries, readErr := os.ReadDir(isolatedLogsDir)
+		require.NoError(t, readErr)
+		assert.Empty(t, entries, "the log written to the independently-configured logs-dir must still be cleaned up when logs-max was 0")
+	})
+}
+
+// A never-contacted dependency must not report the same BlockingReason/Action as a real block.
+// The console warning must not embed npm's own error text (which can include its full
+// captured stdout/stderr) — that goes to log.Debug only, so the console stays a clean one-liner.
+func TestNpmLogPartialReportWarning_DoesNotEmbedRawNpmOutput(t *testing.T) {
+	assert.NotContains(t, npmLogPartialReportWarning, "%s",
+		"must be a fixed string, not a template that could embed npm's raw (potentially huge) error output")
+}
+
+// The "Found N blocked packages" count must not count non-registry "not evaluated" rows as blocked.
+func TestCountBlockedPackages_ExcludesNotEvaluatedRows(t *testing.T) {
+	rows := []*PackageStatus{
+		{PackageName: "real-block", Action: blocked},
+		{PackageName: "is-thirteen", Action: notEvaluated},
+		{PackageName: "another-block", Action: blocked},
+	}
+	assert.Equal(t, 2, countBlockedPackages(rows))
+}
+
+// A not-evaluated row's placeholder Policy{"—","—"} must not leak into the Blocked list.
+func TestGetBlocked_ExcludesNotEvaluatedRows(t *testing.T) {
+	rows := []*PackageStatus{
+		{PackageName: "real-block", PackageVersion: "1.0.0", Action: blocked,
+			Policy: []Policy{{Policy: "cve-high", Condition: "cond1"}}},
+		{PackageName: "git-dep", PackageVersion: "github:foo/bar (not evaluated)", Action: notEvaluated,
+			Policy: []Policy{{Policy: "—", Condition: "—"}}},
+	}
+	blockedList := getBlocked(rows)
+	require.Len(t, blockedList, 1)
+	assert.Equal(t, "cve-high", blockedList[0].Policy)
+	for _, bp := range blockedList {
+		assert.NotContains(t, bp.Packages, getPackageId("git-dep", "github:foo/bar (not evaluated)"))
+	}
+}
+
+// Cleanup must still fire when parsing itself fails partway through (e.g. an oversized line).
+func TestRunNpmLogFallback_CleansUpLogEvenOnScanError(t *testing.T) {
+	cacheDir := t.TempDir()
+	logsDir := filepath.Join(cacheDir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logPath := filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log")
+	oversizedLine := strings.Repeat("a", 9*1024*1024) // exceeds scanner.Buffer's 8MB max token size
+	require.NoError(t, os.WriteFile(logPath, []byte(oversizedLine+"\n"), 0644))
+
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("repo"),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	results := map[string]*CurationReport{}
+	originalErr := errors.New("npm install failed before any resolution")
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, true, 0)
+	assert.Equal(t, originalErr, err)
+
+	_, statErr := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(statErr), "the log file should be removed even though parsing hit a scan error, since logsMaxWasZero means it only exists because of our own --logs-max override")
+}
+
+// TestUniqueReportKey covers the disambiguation loop, including a 3-way collision where both
+// the plain key and its first tech-suffixed candidate are already taken.
+func TestUniqueReportKey(t *testing.T) {
+	results := map[string]*CurationReport{
+		"proj":          {},
+		"proj (pip)":    {},
+		"proj (pip) #2": {},
+	}
+	assert.Equal(t, "proj", uniqueReportKey(map[string]*CurationReport{}, "proj", techutils.Pip), "no collision — key returned as-is")
+	assert.Equal(t, "proj (pip)", uniqueReportKey(map[string]*CurationReport{"proj": {}}, "proj", techutils.Pip), "single collision — first suffixed candidate")
+	assert.Equal(t, "proj (pip) #3", uniqueReportKey(results, "proj", techutils.Pip), "triple collision — must skip to the next free numbered candidate")
+}
+
+// TestSetRepoFromUvTomlNoServerConfigured is a regression test for a garbled error
+// message: ca.ServerDetails() (AuditBasicParams.ServerDetails) always returns a nil
+// error, so wrapping it with %w produced "...: %!w(<nil>)" — a raw Go fmt-verb artifact
+// leaking to the user instead of a clean "no server configured" message.
+func TestSetRepoFromUvTomlNoServerConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// TestAuditTreeSkipsRedundantSetRepoFromUvTomlWhenAlreadySet is a regression test:
+// setRepoFromUvToml() used to run twice per uv run — once via GetAuth(Uv), again
+// unconditionally in auditTree. auditTree now skips it once PackageManagerConfig is set.
+func TestAuditTreeSkipsRedundantSetRepoFromUvTomlWhenAlreadySet(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://host/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{Url: "https://host/", ArtifactoryUrl: "https://host/artifactory/"})
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(origLogger)
+
+	firstServerDetails, err := ca.GetAuth(techutils.Uv)
+	require.NoError(t, err)
+	require.NotNil(t, firstServerDetails)
+	require.NotNil(t, ca.PackageManagerConfig, "GetAuth must populate PackageManagerConfig via setRepoFromUvToml")
+	logCountAfterGetAuth := strings.Count(buf.String(), "using Artifactory URL")
+	assert.Equal(t, 2, logCountAfterGetAuth, "one setRepoFromUvToml() call must log exactly twice: "+
+		"once from GetNativeUvRegistryConfig, once from setRepoFromUvToml itself")
+
+	_ = ca.auditTree(techutils.Uv, map[string]*CurationReport{})
+
+	logCountAfterAuditTree := strings.Count(buf.String(), "using Artifactory URL")
+	assert.Equal(t, logCountAfterGetAuth, logCountAfterAuditTree,
+		"auditTree must not re-read uv.toml when PackageManagerConfig is already set")
+}
+
+// TestSetRepoFromUvTomlRejectsHostMismatch: a pyproject.toml [[tool.uv.index]] entry
+// pointing at a different host than the configured 'jf c' server must not receive that
+// server's credentials.
+func TestSetRepoFromUvTomlRejectsHostMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://attacker.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromUvTomlAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case.
+func TestSetRepoFromUvTomlAcceptsMatchingHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "https://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+	})
+
+	require.NoError(t, ca.setRepoFromUvToml())
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromUvTomlRejectsSchemeDowngrade: a pyproject.toml
+// [[tool.uv.index]] entry pointing at the *same host* as the configured 'jf c' server, but
+// over http instead of https, must not receive that server's credentials — otherwise the
+// host-only check would let a project-local file downgrade them to cleartext.
+func TestSetRepoFromUvTomlRejectsSchemeDowngrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(`[[tool.uv.index]]
+name = "artifactory-repo"
+url = "http://configured-server.example.com/artifactory/api/pypi/uv-test-repo/simple"
+`), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromUvToml()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+// yarnBerryExecutableForTest returns a "yarn" wrapper that resolves via Corepack to the
+// Berry version pinned in the target project's package.json. This avoids relying on
+// whatever "yarn" happens to be on PATH (which may be Classic/V1). Skips if corepack is
+// missing.
+func yarnBerryExecutableForTest(t *testing.T) string {
+	corepackPath, err := exec.LookPath("corepack")
+	if err != nil {
+		t.Skip("corepack not found on PATH; skipping test that requires Yarn Berry (.yarnrc.yml) support")
+	}
+	return writeYarnWrapperScript(t, t.TempDir(),
+		fmt.Sprintf("exec %q yarn \"$@\"\n", corepackPath),
+		fmt.Sprintf("\"%s\" yarn %%*\n", corepackPath))
+}
+
+// writeYarnWrapperScript writes a "yarn" wrapper executable in dir that runs unixBody
+// on Unix (via a #!/bin/sh script) or windowsBody on Windows (via a yarn.cmd batch
+// file, since exec.Command needs a recognized extension to run a file directly on
+// Windows — a plain extensionless file is neither found by LookPath nor executable
+// by CreateProcess). Returns the wrapper's path.
+func writeYarnWrapperScript(t *testing.T, dir, unixBody, windowsBody string) string {
+	if runtime.GOOS == "windows" {
+		wrapperPath := filepath.Join(dir, "yarn.cmd")
+		script := "@echo off\r\n" + windowsBody
+		require.NoError(t, os.WriteFile(wrapperPath, []byte(script), 0o755))
+		return wrapperPath
+	}
+	wrapperPath := filepath.Join(dir, "yarn")
+	script := "#!/bin/sh\n" + unixBody
+	require.NoError(t, os.WriteFile(wrapperPath, []byte(script), 0o755))
+	return wrapperPath
+}
+
+// TestSetRepoFromYarnrcRejectsHostMismatch verifies that a .yarnrc.yml pointing at a
+// different host than the configured 'jf c' server never gets that server's credentials.
+func TestSetRepoFromYarnrcRejectsHostMismatch(t *testing.T) {
+	yarnExecPath := yarnBerryExecutableForTest(t)
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-hostcheck-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://attacker.example.com/artifactory/api/npm/yarn-test-repo/\"\n"), 0644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromYarnrc(yarnExecPath, projectDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// TestSetRepoFromYarnrcAcceptsMatchingHost: the host check must not block the legitimate
+// same-host case, where .yarnrc.yml has no token of its own and falls back to the configured
+// 'jf c' server's credentials for the same Artifactory host.
+func TestSetRepoFromYarnrcAcceptsMatchingHost(t *testing.T) {
+	yarnExecPath := yarnBerryExecutableForTest(t)
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-hostcheck-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarn-test-repo/\"\n"), 0644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	require.NoError(t, ca.setRepoFromYarnrc(yarnExecPath, projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
+// so tests don't need a real Yarn V1 install.
+func fakeYarnV1ExecutableForTest(t *testing.T) string {
+	return writeYarnWrapperScript(t, t.TempDir(), "echo 1.22.19\n", "echo 1.22.19\n")
+}
+
+// TestSetRepoRejectsYarnV1BeforeBerryResolution verifies a Yarn V1 project gets the clear
+// "Yarn V1 is not supported" error, not a confusing .yarnrc.yml error.
+func TestSetRepoRejectsYarnV1BeforeBerryResolution(t *testing.T) {
+	yarnExecPath := fakeYarnV1ExecutableForTest(t)
+	yarnDir := filepath.Dir(yarnExecPath)
+	t.Setenv("PATH", yarnDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origWd)) }()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.SetRepo(techutils.Yarn)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "not supported for Yarn V1",
+		"must surface the actionable V1 message instead of a Berry-config error")
+	assert.NotContains(t, setErr.Error(), ".yarnrc.yml",
+		"must not fall through to the confusing Berry-config error for a V1 project")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoIgnoresYarnYamlWhenYarnrcPresent verifies that a stale yarn.yaml is ignored
+// once a real .yarnrc.yml exists — SetRepo must resolve strictly from .yarnrc.yml.
+func TestSetRepoIgnoresYarnYamlWhenYarnrcPresent(t *testing.T) {
+	corepackPath, err := exec.LookPath("corepack")
+	if err != nil {
+		t.Skip("corepack not found on PATH; skipping test that requires Yarn Berry (.yarnrc.yml) support")
+	}
+	yarnDir := t.TempDir()
+	writeYarnWrapperScript(t, yarnDir,
+		fmt.Sprintf("exec %q yarn \"$@\"\n", corepackPath),
+		fmt.Sprintf("\"%s\" yarn %%*\n", corepackPath))
+	t.Setenv("PATH", yarnDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("HOME", t.TempDir())
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"),
+		[]byte(`{"name":"yarn-yaml-precedence-test","version":"1.0.0","packageManager":"yarn@3.6.4"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarnrc-repo/\"\n"), 0644))
+
+	// Legacy 'jf yarn-config' output, still on disk. If SetRepo ever read this instead of (or
+	// in addition to) .yarnrc.yml, the resolved repo would be "stale-yaml-repo", not "yarnrc-repo".
+	projectsDir := filepath.Join(projectDir, ".jfrog", "projects")
+	require.NoError(t, os.MkdirAll(projectsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"),
+		[]byte("resolver:\n  serverId: some-other-server\n  repo: stale-yaml-repo\n"), 0o644))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	require.NoError(t, ca.SetRepo(techutils.Yarn))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "yarnrc-repo", ca.PackageManagerConfig.TargetRepo(),
+		"repo must come from .yarnrc.yml, not the stale yarn.yaml")
+	assert.Equal(t, "yarnrc-repo", ca.DepsRepo(),
+		"SetDepsRepo (consumed by curation probes) must also reflect .yarnrc.yml, not yarn.yaml")
+}
+
+// TestPipWinsOverStrayUvLock verifies promotePipToUv's "pip-exclusive files win over
+// uv.lock" rule: requirements.txt plus a stray leftover uv.lock must still audit as pip.
+func TestPipWinsOverStrayUvLock(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "requirements.txt"), []byte("requests==2.31.0\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("# stray uv.lock\n"), 0644))
+	t.Chdir(root)
+
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
+
+	assert.Contains(t, techs, techutils.Pip.String(), "a pip-exclusive file (requirements.txt) must win over a stray uv.lock")
+	assert.NotContains(t, techs, techutils.Uv.String(), "must not report uv when a pip-exclusive file is present")
+}
+
+// TestPureUvProjectNotReportedAsPip guards the flip side: since Pip's indicators no
+// longer exclude uv.lock, a plain uv project fires both pip (pyproject.toml) and uv
+// (uv.lock) — promotePipToUv must still collapse that to uv alone.
+func TestPureUvProjectNotReportedAsPip(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
+	t.Chdir(root)
+
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
+
+	assert.Contains(t, techs, techutils.Uv.String(), "uv.lock present, no pip-exclusive files — must report uv")
+	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
+}
+
+// TestTechsToAuditQueuesPep723HintForDeferredLogging: the PEP 723 hint must be queued in pendingWarnings.
+func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte("[project]\nname = \"demo\"\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "uv.lock"), []byte("version = 1\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "script.py"),
+		[]byte("# /// script\n# dependencies = [\"six\"]\n# ///\n\nimport six\n"), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	// techsToAudit's default branch resolves Pip/Uv ambiguity via ca.OriginPath, not the
+	// process's cwd - production sets this from absWd before reaching this point.
+	ca.OriginPath = projectDir
+
+	techs := ca.techsToAudit()
+
+	assert.Equal(t, []string{techutils.Uv.String()}, techs)
+	require.Len(t, ca.pendingWarnings, 1, "the hint must be queued, not logged immediately")
+	assert.Contains(t, ca.pendingWarnings[0], "--script")
+}
+
+// TestRunCvsFallbackNoMatchesFound covers runCvsFallback's empty-recovery branch: when
+// fetchCvsBlockedStatus can't recover a policy for any of cvsErr's packages (e.g. the
+// metadata API has no record of the stripped version), no partial table should be
+// rendered. Instead: a generic curation-block message is joined to the original cause when
+// the tech's forbidden-output pattern matches it, or the bare cvsErr is returned unchanged
+// otherwise. Either way, results must stay untouched — no misleading empty/partial entry.
+func TestRunCvsFallbackNoMatchesFound(t *testing.T) {
+	const repo = "test-pip-repo"
+	// Metadata API 404s for every package/version — fetchCvsBlockedStatus recovers nothing.
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).
+		SetTargetRepo(repo).
+		SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	unresolvedPkg := []python.PinnedRequirement{{Name: "unresolvable-pkg", Version: "9.9.9", ParentName: "unresolvable-pkg", ParentVersion: "9.9.9"}}
+
+	t.Run("forbidden-output cause — wraps cause with generic curation-block message", func(t *testing.T) {
+		cvsErr := &python.CvsBlockedError{
+			Packages: unresolvedPkg,
+			Cause:    errors.New("ERROR: HTTP error 403 while getting https://example.com/simple/unresolvable-pkg/"),
+		}
+		results := map[string]*CurationReport{}
+		err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, cvsErr.Cause, "original cause must still be reachable via errors.Is")
+		assert.Contains(t, err.Error(), fmt.Sprintf(technologies.CurationErrorMsgToUserTemplate, techutils.Pip),
+			"generic curation-block guidance must be joined in when the tech's forbidden-output pattern matches")
+		assert.Empty(t, results, "no partial/empty table entry must be recorded")
+	})
+
+	t.Run("non-forbidden cause — returns cvsErr unchanged", func(t *testing.T) {
+		cvsErr := &python.CvsBlockedError{
+			Packages: unresolvedPkg,
+			Cause:    errors.New("some unrelated resolution failure"),
+		}
+		results := map[string]*CurationReport{}
+		err := ca.runCvsFallback(cvsErr, techutils.Pip, results)
+
+		assert.Same(t, cvsErr, err, "with no recognizable forbidden pattern, the bare cvsErr must be returned as-is")
+		assert.Empty(t, results, "no partial/empty table entry must be recorded")
+	})
+}
+
 // TestEffectiveParentVersion covers all branches of the effectiveParentVersion helper.
 func TestEffectiveParentVersion(t *testing.T) {
 	cases := []struct {
-		name string
-		pin  python.PinnedRequirement
-		want string
+		name                string
+		pin                 python.PinnedRequirement
+		wholePackageBlocked bool
+		want                string
 	}{
-		{"exact direct", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, "1.0"},
-		{"direct range — shows range spec", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, ">=1.4"},
-		{"transitive range — parent ver unknown", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar"}, ""},
-		{"transitive with known parent ver", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar", ParentVersion: "2.3"}, "2.3"},
-		{"ResolutionImpossible — all empty", python.PinnedRequirement{Name: "foo", ParentName: "foo"}, ""},
+		{"exact direct", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, false, "1.0"},
+		{"direct range — shows range spec", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, false, ">=1.4"},
+		{"direct range, whole package blocked — blank, matching npm", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "foo"}, true, ""},
+		// Self-attributed pins have ParentVersion pre-set equal to Version by the production
+		// parser (see python_cvs_fallback.go) — this must still blank out, not fall through.
+		{"exact direct, whole package blocked — blank, matching npm", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "foo", ParentVersion: "1.0"}, true, ""},
+		{"transitive, whole package blocked, parent ver known — parent ver still shown", python.PinnedRequirement{Name: "foo", Version: "1.0", ParentName: "bar", ParentVersion: "2.3"}, true, "2.3"},
+		{"transitive range — parent ver unknown", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar"}, false, ""},
+		{"transitive with known parent ver", python.PinnedRequirement{Name: "foo", VersionRange: ">=1.4", ParentName: "bar", ParentVersion: "2.3"}, false, "2.3"},
+		{"ResolutionImpossible — all empty", python.PinnedRequirement{Name: "foo", ParentName: "foo"}, false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin))
+			assert.Equal(t, tc.want, effectiveParentVersion(tc.pin, tc.wholePackageBlocked))
 		})
 	}
 }
 
+// TestSetRepoFromPipfile_IgnoresPipenvYaml locks in that pipenv, like pip/poetry/uv, has no
+// 'jf pipenv-config' native-config equivalent: a stray or malformed .jfrog/projects/pipenv.yaml
+// (e.g. left over from an earlier version of this feature) must be ignored entirely —
+// resolution always comes from pip.conf, then the Pipfile [[source]], never from yaml.
+// HOME is isolated so this doesn't accidentally pick up the real machine's ~/.pip/pip.conf.
+func TestSetRepoFromPipfile_IgnoresPipenvYaml(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte("resolver: [\n"), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.NoError(t, err, "malformed pipenv.yaml must not break resolution — it's never read")
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "repo", ca.PackageManagerConfig.TargetRepo(),
+		"must resolve from the Pipfile [[source]], not the stray pipenv.yaml")
+}
+
+// TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf locks in the same
+// ignore-pipenv.yaml behavior for a well-formed config, not just a malformed one: even a
+// valid, correctly-configured pipenv.yaml (e.g. from a pre-existing 'jf pipenv-config' setup)
+// is deliberately ignored in favor of the Pipfile [[source]] entry.
+func TestSetRepoFromPipfile_ValidYamlDoesNotOverrideConflictingPipConf(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pipenv.yaml"), []byte(`version: 1
+type: pipenv
+resolver:
+    repo: yaml-configured-repo
+    serverId: test
+`), 0600))
+	require.NoError(t, os.WriteFile("Pipfile", []byte(`[[source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/pipfile-repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipfile()
+	require.NoError(t, err)
+	assert.Equal(t, "pipfile-repo", ca.PackageManagerConfig.TargetRepo(),
+		"pipenv.yaml is deliberately ignored even when valid — resolution always comes from Pipfile/pip.conf")
+}
+
+func TestSetRepoFromPipConfFallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_RejectsCredentialFallbackToDifferentHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://evil.example.com/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err, "must not silently send acme.jfrog.io credentials to evil.example.com")
+	assert.Contains(t, err.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte(`version: 1
+type: pip
+resolver:
+    repo: pip-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pip-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+func TestSetRepoFromPipConf_PipConfOnly_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://user:token@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pypi-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPipConf_RejectsMalformedYaml(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "pip.yaml"), []byte("resolver: [\n"), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PIP_CONFIG_FILE", "")
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_RejectsUnparsablePipConfUrl(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://admin:<token>@acme.jfrog.io/artifactory/api/pypi/pypi-remote/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a valid Artifactory PyPI URL")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPipConf_NonArtifactoryPipConfFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	pipConfPath := filepath.Join(t.TempDir(), "pip.conf")
+	require.NoError(t, os.WriteFile(pipConfPath, []byte(
+		"[global]\nindex-url = https://pypi.org/simple\n"), 0600))
+	t.Setenv("PIP_CONFIG_FILE", pipConfPath)
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPipConf()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "jf pip c")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromPyproject_IgnoresPoetryYaml locks in that poetry, like uv, has no
+// 'jf poetry-config' native-config equivalent: a stray .jfrog/projects/poetry.yaml (e.g.
+// left over from an earlier version of this feature, or copied from a pip/pipenv project)
+// must be ignored entirely — resolution always comes from pyproject.toml's
+// [[tool.poetry.source]], never from yaml.
+func TestSetRepoFromPyproject_IgnoresPoetryYaml(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "poetry.yaml"), []byte(`version: 1
+type: poetry
+resolver:
+    repo: yaml-repo
+    serverId: test
+`), 0600))
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/pyproject-repo/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "pyproject-repo", ca.PackageManagerConfig.TargetRepo(),
+		"must resolve from pyproject.toml, not the stray poetry.yaml")
+}
+
+func TestSetRepoFromPyproject_SourcePresent_UsesEmbeddedCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://user:token@acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "poetry-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "user", serverDetails.GetUser())
+	assert.Equal(t, "token", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_SourcePresent_FallsBackToConfiguredServerCredentials(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://acme.jfrog.io/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPyproject()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "u", serverDetails.GetUser())
+	assert.Equal(t, "p", serverDetails.GetPassword())
+}
+
+func TestSetRepoFromPyproject_RejectsCredentialFallbackToDifferentHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "jfrog"
+url = "https://evil.example.com/artifactory/api/pypi/poetry-remote/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://acme.jfrog.io/artifactory/", User: "u", Password: "p",
+	})
+
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err, "must not silently send acme.jfrog.io credentials to evil.example.com")
+	assert.Contains(t, err.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPyproject_ErrorsWhenNeitherResolves(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Artifactory PyPI resolver")
+	assert.Contains(t, err.Error(), "[[tool.poetry.source]]")
+	assert.NotContains(t, err.Error(), "jf poetry-config", "poetry is always-native now, like uv — no config command to suggest")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSetRepoFromPyproject_NonArtifactorySourceFallsToGenericError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("pyproject.toml", []byte(`[[tool.poetry.source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromPyproject()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Artifactory PyPI resolver")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+			}
+			requestDetails := analyzer.httpClientDetails.Clone()
+			requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+			_, _, err = analyzer.sendBoundedRequest(http.MethodGet,
+				strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
+}
+
+func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*treeAnalyzer) error
+	}{
+		{
+			name: "all versions metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, _, err := analyzer.lookupPypiAllVersions("urllib3")
+				return err
+			},
+		},
+		{
+			name: "version download metadata",
+			call: func(analyzer *treeAnalyzer) error {
+				_, err := analyzer.lookupPypiNormalDownloadURL("urllib3", "2.0.7")
+				return err
+			},
+		},
+	}
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		for _, test := range tests {
+			t.Run(tech.String()+"/"+test.name, func(t *testing.T) {
+				var outsideRequested atomic.Bool
+				var requests atomic.Int32
+				server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+					requests.Add(1)
+					if r.URL.Path == "/api/system/configuration" {
+						outsideRequested.Store(true)
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+				})
+				defer server.Close()
+				rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+				require.NoError(t, err)
+				rtAuth := rtManager.GetConfig().GetServiceDetails()
+				analyzer := &treeAnalyzer{
+					rtManager:         rtManager,
+					httpClientDetails: rtAuth.CreateHttpClientDetails(),
+					url:               rtAuth.GetUrl(),
+					repo:              "repo",
+					tech:              tech,
+				}
+
+				err = test.call(analyzer)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "unsafe redirect")
+				assert.False(t, outsideRequested.Load())
+				assert.Equal(t, int32(1), requests.Load())
+			})
+		}
+	}
+}
+
+// TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects exercises the actual
+// tech-branch in fetchNodeStatus (not sendBoundedRequest directly) to guard against a
+// regression that silently narrows the bounded-redirect condition back to Pipenv only.
+func TestFetchNodeStatusRoutesPipAndPoetryThroughBoundedRedirects(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var outsideRequested atomic.Bool
+			var requests atomic.Int32
+			server, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/api/system/configuration" {
+					outsideRequested.Store(true)
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.Redirect(w, r, "/api/system/configuration", http.StatusFound)
+			})
+			defer server.Close()
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			nodeId := python.PythonPackageTypeIdentifier + "pkg:1.0.0"
+			packageUrl := strings.TrimSuffix(rtAuth.GetUrl(), "/") + "/api/pypi/repo/packages/pkg.whl"
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+				downloadUrls:      map[string]string{nodeId: packageUrl},
+			}
+
+			err = analyzer.fetchNodeStatus(xrayUtils.GraphNode{Id: nodeId}, &sync.Map{})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsafe redirect")
+			assert.False(t, outsideRequested.Load())
+			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
+}
+
+// TestValidateRunNativeForTech checks that --run-native is accepted for the
+// allow-listed native-config techs (npm, pnpm, yarn, uv, NuGet) and rejected for all other
+// techs with an error that names the offending tech.
 func TestValidateRunNativeForTech(t *testing.T) {
-	// Sanity: npm and pnpm are the allow-listed techs. Both flag states pass.
+	// Sanity: npm and pnpm are allow-listed techs. Both flag states pass.
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Npm, false))
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, true))
 	assert.NoError(t, validateRunNativeForTech(techutils.Pnpm, false))
 
-	// The failing-test scenario from the bug report: yarn + --run-native
-	// must exit non-zero with a yarn-named error that points the user at
-	// the supported config flow.
-	t.Run("yarn rejects --run-native with actionable message", func(t *testing.T) {
-		err := validateRunNativeForTech(techutils.Yarn, true)
-		if assert.Error(t, err) {
-			msg := err.Error()
-			// Tech-neutral phrasing — the message must not hard-code
-			// "only supported for npm", because the allow-list is the
-			// source of truth and may grow over time.
-			assert.Contains(t, msg, "--run-native is not supported for 'yarn' projects")
-			assert.Contains(t, msg, "jf yarn-config", "the error must point the user at the supported config flow")
-		}
-		// Without the flag, yarn must pass validation cleanly — the
-		// guard is strictly conditional on --run-native being on.
+	// --run-native has no effect for yarn regardless of version; a warning is emitted in auditTree.
+	t.Run("yarn accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, true))
 		assert.NoError(t, validateRunNativeForTech(techutils.Yarn, false))
+	})
+
+	// uv has no 'jf uv-config', so --run-native must be a no-op like pnpm/yarn
+	t.Run("uv accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Uv, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Uv, false))
+	})
+
+	// pip/pipenv already resolve automatically (yaml, then pip.conf, then — for pipenv —
+	// the Pipfile [[source]]); --run-native has nothing to switch between, so it's
+	// accepted as a no-op, same as pnpm/yarn — a warning is emitted in auditTree.
+	t.Run("pip accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pip, false))
+	})
+	t.Run("pipenv accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Pipenv, false))
+	})
+	t.Run("poetry accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Poetry, false))
+	})
+	t.Run("NuGet accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Nuget, false))
+	})
+	// gem already resolves automatically (ruby.yaml, then ~/.gemrc); --run-native has
+	// nothing to switch between here — accepted as a no-op.
+	t.Run("gem accepts --run-native as a redundant no-op", func(t *testing.T) {
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, true))
+		assert.NoError(t, validateRunNativeForTech(techutils.Gem, false))
 	})
 
 	// Every other supported tech follows the same contract. Catch silent
@@ -2364,10 +4876,7 @@ func TestValidateRunNativeForTech(t *testing.T) {
 	otherTechs := []techutils.Technology{
 		techutils.Gradle,
 		techutils.Maven,
-		techutils.Gem,
-		techutils.Pip,
 		techutils.Go,
-		techutils.Nuget,
 		techutils.Dotnet,
 		techutils.Conan,
 		techutils.Cocoapods,
@@ -2384,113 +4893,174 @@ func TestValidateRunNativeForTech(t *testing.T) {
 			assert.NoError(t, validateRunNativeForTech(tech, false))
 		})
 	}
+
 }
 
-// TestResolveResolverTechForCuration locks in the npm.yaml ↔ yarn.yaml
-// fallback for the resolver-config lookup in auditTree. The exact
-// reason this fallback has to live here, separate from the existing
-// SetRepo fallback, is that auditTree calls
-// SetResolutionRepoInParamsIfExists *before* it reaches SetRepo — and
-// that earlier call is what populates params.DependenciesRepository,
-// which in turn decides whether configureYarnResolutionServerAndRunInstall
-// performs the .yarnrc.yml backup/replace/restore round-trip. Without
-// the round-trip, a 'yarn install' against curation that hits a 403
-// can leave the workspace install state inconsistent and the
-// downstream 'yarn info' enumeration fails with a workspace-assertion
-// error. So the contract under test is twofold:
-//
-//  1. For tech=Yarn with only npm.yaml present, return Npm so the
-//     resolver lookup reads npm.yaml (npm and yarn share the same
-//     Artifactory npm API, so the same repo serves both ecosystems).
-//  2. For any other input (yarn.yaml present, both present, neither
-//     present, or tech≠Yarn) return the input tech unchanged.
-//
-// The Npm-detected case is intentionally not exercised here because
-// resolveNpmYarnTech already upgrades that case to Yarn at the
-// detection layer (see TestResolveNpmYarnTech-style coverage in
-// resolveNpmYarnTech consumers); by the time auditTree sees tech=Npm
-// a matching npm.yaml is guaranteed to exist.
-//
-// Each subtest builds a hermetic .jfrog/projects/ directory, chdirs
-// into it, and isolates JFROG_CLI_HOME_DIR so a real config on the
-// developer's machine can't leak in.
-func TestResolveResolverTechForCuration(t *testing.T) {
-	type setup struct {
-		writeYarnYaml bool
-		writeNpmYaml  bool
+// writeFakeDotnetExecutableForTest writes a "dotnet" executable in dir that, when invoked as
+// 'dotnet nuget list source', prints sourcesOutput to stdout.
+func writeFakeDotnetExecutableForTest(t *testing.T, dir, sourcesOutput string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake dotnet executable is a POSIX shell script")
 	}
-	testCases := []struct {
-		name string
-		tech techutils.Technology
-		setup
-		want techutils.Technology
-	}{
-		{
-			name:  "yarn with yarn.yaml present — no fallback, lookup must use yarn.yaml directly",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name:  "yarn with only npm.yaml — falls back to npm so the resolver lookup reads npm.yaml",
-			tech:  techutils.Yarn,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "yarn with both configs — yarn.yaml wins; fallback only triggers when primary is missing",
-			tech:  techutils.Yarn,
-			setup: setup{writeYarnYaml: true, writeNpmYaml: true},
-			want:  techutils.Yarn,
-		},
-		{
-			name: "yarn with neither config — no fallback target; return Yarn so the downstream lookup no-ops cleanly",
-			tech: techutils.Yarn,
-			want: techutils.Yarn,
-		},
-		{
-			name:  "npm input — never rewritten by this helper (resolveNpmYarnTech owns the inverse direction at the detection layer)",
-			tech:  techutils.Npm,
-			setup: setup{writeYarnYaml: true},
-			want:  techutils.Npm,
-		},
-		{
-			name:  "non-npm/yarn tech is passed through untouched even when npm.yaml exists",
-			tech:  techutils.Maven,
-			setup: setup{writeNpmYaml: true},
-			want:  techutils.Maven,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempProjectDir := t.TempDir()
-			projectsDir := filepath.Join(tempProjectDir, ".jfrog", "projects")
-			require.NoError(t, os.MkdirAll(projectsDir, 0o755))
-			if tc.writeYarnYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "yarn.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-yarn-repo\n"), 0o644))
-			}
-			if tc.writeNpmYaml {
-				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
-			}
-			// Isolate JFROG_CLI_HOME_DIR so a real ~/.jfrog/projects/*.yaml
-			// on the developer's machine can't leak into the fallback
-			// (GetProjectConfFilePath falls back to JFROG_CLI_HOME_DIR
-			// when nothing matches walking up from CWD).
+	path := filepath.Join(dir, "dotnet")
+	script := "#!/bin/sh\ncat <<'EOF'\n" + sourcesOutput + "\nEOF\n"
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+}
+
+// TestSetRepoFromNuGetSourceAcceptsMatchingHost verifies the happy path: a configured NuGet
+// source whose host matches the 'jf c' server is selected, and the resulting
+// PackageManagerConfig carries the 'jf c' credentials plus the repo/URL parsed from the
+// native source list.
+func TestSetRepoFromNuGetSourceAcceptsMatchingHost(t *testing.T) {
+	toolDir := t.TempDir()
+	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+		"  1.  nuget.org [Enabled]\n"+
+		"      https://api.nuget.org/v3/index.json\n"+
+		"  2.  MyArtifactory [Enabled]\n"+
+		"      https://configured-server.example.com/artifactory/api/nuget/v3/nuget-test-repo/index.json\n")
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	require.NoError(t, ca.setRepoFromNuGetSource())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "nuget-test-repo", ca.PackageManagerConfig.TargetRepo())
+	resolvedServer, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "super-secret-token", resolvedServer.AccessToken,
+		"must reuse the 'jf c' server credentials, not require jf nuget-config")
+	assert.Equal(t, "https://configured-server.example.com/artifactory/", resolvedServer.ArtifactoryUrl)
+}
+
+// TestSetRepoFromNuGetSourceNoMatchingHost verifies that when none of the configured NuGet
+// sources match the 'jf c' server's host, setRepoFromNuGetSource falls back to the generic
+// "no config file was found" error, wrapped with the native-source detection failure so the
+// user still sees why the native fallback didn't resolve either, and never attaches credentials.
+func TestSetRepoFromNuGetSourceNoMatchingHost(t *testing.T) {
+	toolDir := t.TempDir()
+	writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+		"  1.  nuget.org [Enabled]\n"+
+		"      https://api.nuget.org/v3/index.json\n")
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+		[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromNuGetSource()
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "no config file was found")
+	assert.Contains(t, setErr.Error(), "native NuGet/.NET CLI source detection failed")
+	assert.Contains(t, setErr.Error(), "could not find a NuGet source configured")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when no source matches")
+}
+
+// TestSetRepoFromNuGetSourceNoServerConfigured verifies the clear error surfaced when
+// auditing NuGet but no 'jf c' server is configured at all.
+func TestSetRepoFromNuGetSourceNoServerConfigured(t *testing.T) {
+	projectDir := t.TempDir()
+	restoreCwd := changeDirForTest(t, projectDir)
+	defer restoreCwd()
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromNuGetSource()
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "requires a configured Artifactory server")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromNuGetSource_YamlPresent_Succeeds verifies nuget.yaml (explicit
+// 'jf nuget-config') takes priority over the native NuGet/.NET CLI source list when present.
+func TestSetRepoFromNuGetSource_YamlPresent_Succeeds(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "nuget.yaml"), []byte(`version: 1
+type: nuget
+resolver:
+    repo: nuget-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromNuGetSource()
+	require.NoError(t, err)
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "nuget-repo", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://acme.jfrog.io/artifactory/", serverDetails.GetArtifactoryUrl())
+}
+
+// TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative is an integration-style check
+// that SetRepo(Nuget) dispatches to setRepoFromNuGetSource, which falls back to the native
+// NuGet/.NET CLI source list when no nuget.yaml is present — regardless of --run-native.
+func TestSetRepoRoutesNuGetToNativeSourceRegardlessOfRunNative(t *testing.T) {
+	for _, runNative := range []bool{true, false} {
+		t.Run(fmt.Sprintf("run-native=%v", runNative), func(t *testing.T) {
+			toolDir := t.TempDir()
+			writeFakeDotnetExecutableForTest(t, toolDir, "Registered Sources:\n"+
+				"  1.  MyArtifactory [Enabled]\n"+
+				"      https://configured-server.example.com/artifactory/api/nuget/v3/nuget-test-repo/index.json\n")
+			t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, "app.csproj"),
+				[]byte(`<Project><ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.1" /></ItemGroup></Project>`), 0o644))
+			restoreCwd := changeDirForTest(t, projectDir)
+			defer restoreCwd()
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()
-			restoreCwd := changeDirForTest(t, tempProjectDir)
-			defer restoreCwd()
 
-			got := resolveResolverTechForCuration(tc.tech)
-			assert.Equal(t, tc.want, got)
+			ca := NewCurationAuditCommand()
+			ca.SetServerDetails(&config.ServerDetails{
+				Url:            "https://configured-server.example.com/",
+				ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+				AccessToken:    "super-secret-token",
+			})
+			ca.SetRunNative(runNative)
+
+			require.NoError(t, ca.SetRepo(techutils.Nuget))
+			require.NotNil(t, ca.PackageManagerConfig)
+			assert.Equal(t, "nuget-test-repo", ca.PackageManagerConfig.TargetRepo())
 		})
 	}
 }
 
 func TestResolveNpmYarnTech(t *testing.T) {
 	type setup struct {
-		writeYarnYaml bool
-		writeNpmYaml  bool
+		writeYarnYaml           bool
+		writeNpmYaml            bool
+		writeLocalYarnrc        bool // write .yarnrc.yml into the project dir (V4 native, local)
+		writeGlobalYarnrc       bool // write .yarnrc.yml into dummyHome (V4 native, global)
+		writePackageLockJSON    bool // write package-lock.json — marks project as npm, blocks promotion
+		writeYarnPackageManager bool // package.json pins yarn via Corepack "packageManager"
 	}
 	testCases := []struct {
 		name  string
@@ -2534,6 +5104,31 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			setup: setup{writeYarnYaml: true},
 			want:  techutils.Maven.String(),
 		},
+		// V4 native-mode paths: no yarn.yaml / npm.yaml, detection via yarn indicator files.
+		{
+			name:  "npm, local .yarnrc.yml present — promoted to yarn (V4 native, local indicator)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeLocalYarnrc: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm, global ~/.yarnrc.yml + package.json pins yarn — promoted to yarn (V4 native, global indicator)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeGlobalYarnrc: true, writeYarnPackageManager: true},
+			want:  techutils.Yarn.String(),
+		},
+		{
+			name:  "npm, global ~/.yarnrc.yml but package.json does NOT pin yarn — stays npm (guard against personal global config)",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeGlobalYarnrc: true},
+			want:  techutils.Npm.String(),
+		},
+		{
+			name:  "npm, yarn indicator present but package-lock.json exists — NOT promoted",
+			tech:  techutils.Npm.String(),
+			setup: setup{writeLocalYarnrc: true, writePackageLockJSON: true},
+			want:  techutils.Npm.String(),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2546,8 +5141,27 @@ func TestResolveNpmYarnTech(t *testing.T) {
 			if tc.setup.writeNpmYaml {
 				require.NoError(t, os.WriteFile(filepath.Join(projectsDir, "npm.yaml"), []byte("resolver:\n  serverId: test\n  repo: irrelevant-npm-repo\n"), 0o644))
 			}
+			if tc.setup.writeLocalYarnrc {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, ".yarnrc.yml"), []byte("npmRegistryServer: https://example.com\n"), 0o644))
+			}
+			if tc.setup.writePackageLockJSON {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, "package-lock.json"), []byte("{}"), 0o644))
+			}
+			if tc.setup.writeYarnPackageManager {
+				require.NoError(t, os.WriteFile(filepath.Join(tempProjectDir, "package.json"), []byte(`{"packageManager":"yarn@4.1.0"}`), 0o644))
+			}
 			restoreHome := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, t.TempDir())
 			defer restoreHome()
+			// resolveNpmYarnTech also probes the OS home (~/.yarnrc.yml) via
+			// os.UserHomeDir(); point it at an empty dir so a real one on the
+			// developer's machine can't leak in and flip "neither yaml" to yarn.
+			// HOME (unix) and USERPROFILE (windows) cover os.UserHomeDir on all OSes.
+			dummyHome := t.TempDir()
+			t.Setenv("HOME", dummyHome)
+			t.Setenv("USERPROFILE", dummyHome)
+			if tc.setup.writeGlobalYarnrc {
+				require.NoError(t, os.WriteFile(filepath.Join(dummyHome, ".yarnrc.yml"), []byte("npmRegistryServer: https://example.com\n"), 0o644))
+			}
 			restoreCwd := changeDirForTest(t, tempProjectDir)
 			defer restoreCwd()
 
@@ -2660,4 +5274,1947 @@ func TestPromotePnpmWorkspaceMember(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFetchCvsBlockedStatusUv verifies the CVS fallback for uv: metadata fetch → HEAD probe → policy parse.
+func TestFetchCvsBlockedStatusUv(t *testing.T) {
+	const (
+		repo            = "test-uv-pypi-repo"
+		blockedPkg      = "requests"
+		blockedVer      = "2.19.1"
+		expectedPolicy  = "immature-30"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/re/qu/requests-2.19.1-py2.py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Uv,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, blockedVer, s.PackageVersion)
+	assert.Equal(t, string(techutils.Uv), s.PkgType, "package type must be uv")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusUvTransitive verifies the CVS fallback for a transitive
+// blocker under uv
+func TestFetchCvsBlockedStatusUvTransitive(t *testing.T) {
+	const (
+		repo            = "test-uv-pypi-repo"
+		blockedPkg      = "langchain-core"
+		blockedVer      = "1.4.7"
+		parentPkg       = "deepagents"
+		parentVer       = "0.6.12"
+		rangeSpec       = ">=1.4.0"
+		expectedPolicy  = "immature-strict"
+		expectedCond    = "Package version is immature (strict)"
+		expectedExpl    = "Package version is 3 days old"
+		expectedRec     = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath = "packages/ab/cd/langchain_core-1.4.7-py3-none-any.whl"
+	)
+
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	blockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	allVersionsJSON := `{"releases":{"1.4.0":[],"1.4.1":[],"1.4.5":[],"1.4.7":[]}}`
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(allVersionsJSON))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	// Zero retries required; see SendWithBoundedRedirects.
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	httpClientDetails := rtAuth.CreateHttpClientDetails()
+
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    httpClientDetails,
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Uv,
+		parallelRequests:     1,
+	}
+
+	pins := []python.PinnedRequirement{
+		{
+			Name:          blockedPkg,
+			VersionRange:  rangeSpec,
+			ParentName:    parentPkg,
+			ParentVersion: parentVer,
+		},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+
+	// Blocked package attribution
+	assert.Equal(t, blockedPkg, s.PackageName, "blocked package name")
+	assert.Equal(t, blockedVer, s.PackageVersion, "blocked package version — newest satisfying range")
+
+	// Parent (direct dep) attribution — must differ from the blocked package.
+	assert.Equal(t, parentPkg, s.ParentName, "direct dependency name")
+	assert.Equal(t, parentVer, s.ParentVersion, "direct dependency version")
+	assert.NotEqual(t, s.PackageName, s.ParentName, "transitive blocker must show a different direct-dependency name")
+
+	assert.Equal(t, string(techutils.Uv), s.PkgType, "package type must be uv")
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlocked verifies a pinned exact version whose
+// whole package is confirmed blocked (Step 0) still gets full policy detail via the
+// per-version probe (Steps 1-3), when the package-level 403 has no parseable policy.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlocked(t *testing.T) {
+	const (
+		blockedPkg      = "requests"
+		blockedVer      = "2.31.0"
+		repo            = "test-pip-repo"
+		expectedPolicy  = "openssf"
+		expectedCond    = "openssf-condition"
+		expectedExpl    = "The OpenSSF value is missing"
+		expectedRec     = "Apply a waiver and install again if suitable for use"
+		whlRelativePath = "packages/2a/c1/requests-2.31.0-py3-none-any.whl"
+	)
+	// Package-level 403: no parseable policy detail (mirrors the real backend gap).
+	wholePackageBlockResponse := `{"errors":[{"status":403,"message":"Package blocked"}]}`
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, expectedPolicy, expectedCond, expectedExpl, expectedRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// All-versions metadata: /api/pypi/<repo>/pypi/<name>/json — confirmed whole-package block.
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		// Version-specific metadata is CVS-unfiltered — still returns the file path.
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(versionBlockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Pinned exact pin — same shape parseCvsFailedPackages produces for "requests==2.31.0".
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion, "pinned + whole-package-blocked must show 'All versions blocked', not the pinned version")
+	assert.Equal(t, blockedPkg, s.ParentName, "direct pin: parent equals package")
+	assert.Equal(t, directRelation, s.DepRelation)
+	assert.Equal(t, blocked, s.Action)
+	require.Len(t, s.Policy, 1, "must recover full policy detail from the per-version download URL, not just the package-level 403")
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, expectedExpl, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRec, s.Policy[0].Recommendation)
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails verifies that when
+// Step 0 confirms a whole-package block but the per-version enrichment probe fails, the
+// row still renders via the package-level fallback — never silently dropped.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedEnrichmentFails(t *testing.T) {
+	const (
+		blockedPkg = "requests"
+		blockedVer = "2.31.0"
+		repo       = "test-pip-repo"
+	)
+	wholePackageBlockResponse := `{"errors":[{"status":403,"message":"Package blocked"}]}`
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		// Version-specific metadata lookup fails (e.g. transient 500) — enrichment
+		// cannot proceed, so the package-level fallback must be used instead.
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1, "whole-package block must never be silently dropped, even if enrichment fails")
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, blocked, s.Action)
+	assert.Equal(t, BlockingReasonUnknown, s.BlockingReason)
+}
+
+// TestFetchCvsBlockedStatusRangedWholePackageBlocked verifies a ranged direct pin whose
+// package is fully blocked renders as "All versions blocked" with full policy detail,
+// using Artifactory's real whole-package-block message format.
+func TestFetchCvsBlockedStatusRangedWholePackageBlocked(t *testing.T) {
+	const (
+		blockedPkg          = "urllib3"
+		repo                = "test-pip-repo"
+		expectedPolicy      = "openssf-jfca"
+		expectedCond        = "openssf"
+		expectedRecTemplate = "Remove this package from your project and replace with an alternate package"
+	)
+	blockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		expectedPolicy, expectedCond,
+	)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s — a whole-package block must never probe a per-version URL", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Ranged direct pin — same shape parseCvsFailedPackages produces for "urllib3>=2.0.0".
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, VersionRange: ">=2.0.0", ParentName: blockedPkg},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1, "ranged whole-package block must no longer be silently dropped")
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, directRelation, s.DepRelation)
+	assert.Equal(t, blocked, s.Action)
+	require.Len(t, s.Policy, 1, "must recover policy detail from the whole-package-block message, not just BlockingReasonUnknown")
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation)
+	assert.Equal(t, expectedRecTemplate, s.Policy[0].Recommendation, "direct dependency must get the 'remove and replace' recommendation")
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggregate covers a
+// pinned version blocked by a DIFFERENT policy than Step 0's aggregate check. The
+// per-version detail must be preserved, not overwritten with the unrelated generic text.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggregate(t *testing.T) {
+	const (
+		blockedPkg       = "deepagents"
+		blockedVer       = "0.7.8"
+		repo             = "test-pip-repo"
+		aggregatePolicy  = "openssf-test"
+		aggregateCond    = "openssf"
+		perVersionPolicy = "immature-30"
+		perVersionCond   = "immature"
+		perVersionExpl   = "Package version is 28 days old"
+		perVersionRec    = "Use an older version or wait until this version is no longer immature"
+		whlRelativePath  = "packages/de/ep/deepagents-0.7.8-py3-none-any.whl"
+	)
+	// Step 0's aggregate probe: confirmed whole-package block, but under a DIFFERENT policy.
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		aggregatePolicy, aggregateCond,
+	)
+	// Steps 1-3's per-version probe: a different, real policy detail for this pinned version.
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, perVersionPolicy, perVersionCond, perVersionExpl, perVersionRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(versionBlockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, perVersionPolicy, s.Policy[0].Policy, "must show the policy actually found for this pinned version, not the aggregate one")
+	assert.Equal(t, perVersionCond, s.Policy[0].Condition)
+	assert.Equal(t, perVersionExpl, s.Policy[0].Explanation, "must preserve the real per-version explanation, not the generic whole-package text")
+	assert.Equal(t, perVersionRec, s.Policy[0].Recommendation, "must preserve the real per-version recommendation, not the generic 'remove and replace' text")
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate: a pinned version
+// always falls through to the per-version probe (only ranged/version-less pins take Step
+// 0's shortcut). When that probe finds the SAME policy as the aggregate, normalize to
+// generic text — don't leak the raw, inconsistently-worded backend message.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *testing.T) {
+	const (
+		blockedPkg      = "urllib3"
+		blockedVer      = "2.0.0"
+		repo            = "test-pip-repo"
+		policyName      = "openssf-jfca-test"
+		condName        = "openssf"
+		rawExpl         = "The OpenSSF value is missing condition is set to 'block in case check value is missing'."
+		rawRec          = "After reviewing the package please apply a waiver and install again if it is deemed suitable for use."
+		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
+	)
+	// Step 0's aggregate probe: confirmed whole-package block under policy openssf-jfca-test/openssf.
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		policyName, condName,
+	)
+	// Steps 1-3's per-version probe: the SAME policy+condition, but with the raw,
+	// inconsistently-worded backend message (as opposed to Step 0's generic phrasing).
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, policyName, condName, rawExpl, rawRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(versionBlockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Pinned exact pin — same shape parseCvsFailedPackages produces for "urllib3==2.0.0".
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	require.Len(t, s.Policy, 1)
+	assert.Equal(t, policyName, s.Policy[0].Policy)
+	assert.Equal(t, condName, s.Policy[0].Condition)
+	assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation,
+		"same policy as aggregate must be normalized to the generic text, not leak the raw inconsistent backend message")
+	assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation,
+		"direct pinned dependency, same policy as aggregate, must get the generic npm-parity recommendation")
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch verifies that
+// when the per-version probe recovers MULTIPLE policies, only the one matching the
+// aggregate is normalized — a genuinely different second policy stays untouched.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch(t *testing.T) {
+	const (
+		blockedPkg      = "urllib3"
+		blockedVer      = "2.0.0"
+		repo            = "test-pip-repo"
+		matchingPolicy  = "openssf-jfca-test"
+		matchingCond    = "openssf"
+		matchingRawExpl = "The OpenSSF value is missing"
+		matchingRawRec  = "Apply a waiver and install again if suitable for use"
+		otherPolicy     = "cve-7-9"
+		otherCond       = "CVE with CVSS score between 7.0 and 8.9"
+		otherExpl       = "Package version contains a known vulnerability"
+		otherRec        = "Upgrade to version 2.6.3"
+		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
+	)
+	// Step 0's aggregate probe: confirmed whole-package block under matchingPolicy/matchingCond only.
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		matchingPolicy, matchingCond,
+	)
+	// Steps 1-3's per-version probe: TWO policies — one matching the aggregate (raw wording),
+	// one genuinely different (a real, unrelated CVE finding for this specific version).
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s},{%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, matchingPolicy, matchingCond, matchingRawExpl, matchingRawRec,
+		otherPolicy, otherCond, otherExpl, otherRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(versionBlockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	require.Len(t, s.Policy, 2, "both policies from the per-version probe must be preserved")
+
+	assert.Equal(t, matchingPolicy, s.Policy[0].Policy)
+	assert.Equal(t, matchingCond, s.Policy[0].Condition)
+	assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation,
+		"the entry matching the aggregate's policy+condition must be normalized")
+	assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation)
+
+	assert.Equal(t, otherPolicy, s.Policy[1].Policy)
+	assert.Equal(t, otherCond, s.Policy[1].Condition)
+	assert.Equal(t, otherExpl, s.Policy[1].Explanation,
+		"a second, genuinely different policy must NOT be overwritten by the aggregate-match normalization")
+	assert.Equal(t, otherRec, s.Policy[1].Recommendation)
+}
+
+// TestFetchCvsBlockedStatusTransitivePinnedWholePackageBlocked verifies a TRANSITIVE blocker
+// with an exact pinned version always falls through to the per-version probe (Steps 1-3).
+// Confirms the real parent's version is still shown (only direct deps blank it) and
+// DepRelation/Recommendation reflect the transitive relationship.
+func TestFetchCvsBlockedStatusTransitivePinnedWholePackageBlocked(t *testing.T) {
+	const (
+		blockedPkg      = "charset-normalizer"
+		blockedVer      = "3.3.2"
+		parentPkg       = "requests"
+		parentVer       = "2.31.0"
+		repo            = "test-pip-repo"
+		policyName      = "openssf-jfca"
+		condName        = "openssf"
+		whlRelativePath = "packages/6d/8c/charset-normalizer-3.3.2-py3-none-any.whl"
+	)
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		policyName, condName,
+	)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(wholePackageBlockResponse))
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(versionMetaJSON))
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+			w.WriteHeader(http.StatusForbidden)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+			// GET probe body is unparsable — falls back to the Step 0 whole-package result.
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`not json`))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// Exact pinned transitive child (e.g. requests==2.31.0 constrains charset-normalizer
+	// to exactly 3.3.2) — Version is set, so this never takes Step 0's shortcut return.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: blockedVer, ParentName: parentPkg, ParentVersion: parentVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1, "must fall through to the per-version probe, then back to the whole-package fallback, never dropped")
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, parentPkg, s.ParentName, "must attribute to the real parent, not self")
+	assert.Equal(t, parentVer, s.ParentVersion, "a transitive blocker's parent version is shown even when the child's whole package is blocked")
+	assert.Equal(t, indirectRelation, s.DepRelation)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusTransitiveWholePackageBlocked verifies a transitive blocker
+// (attributed to a real parent) whose package is fully blocked renders "All versions
+// blocked" with indirect DepRelation and a Recommendation naming the real parent.
+func TestFetchCvsBlockedStatusTransitiveWholePackageBlocked(t *testing.T) {
+	const (
+		blockedPkg     = "charset-normalizer"
+		parentPkg      = "requests"
+		parentVer      = "2.31.0"
+		repo           = "test-pip-repo"
+		expectedPolicy = "openssf-jfca"
+		expectedCond   = "openssf"
+	)
+	blockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		expectedPolicy, expectedCond,
+	)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s — a whole-package block must never probe a per-version URL", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	// ResolutionImpossible name-only entry, attributed to its real direct-dependency parent.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, ParentName: parentPkg, ParentVersion: parentVer},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1, "transitive whole-package block must no longer be silently dropped")
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, parentPkg, s.ParentName, "must attribute to the real direct-dependency parent, not self")
+	assert.Equal(t, parentVer, s.ParentVersion)
+	assert.Equal(t, indirectRelation, s.DepRelation, "transitive whole-package block must be indirect")
+	assert.Equal(t, blocked, s.Action)
+	require.Len(t, s.Policy, 1, "must recover policy detail from the whole-package-block message, not just BlockingReasonUnknown")
+	assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+	assert.Equal(t, expectedCond, s.Policy[0].Condition)
+	assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation)
+	assert.Contains(t, s.Policy[0].Recommendation, parentPkg, "transitive dependency must name the real parent in its recommendation")
+	assert.Contains(t, s.Policy[0].Recommendation, blockedPkg)
+}
+
+// TestFetchCvsBlockedStatusWholePackageBlockedUnparsableBody verifies a confirmed
+// whole-package block with an unparsable 403 body still renders a row (BlockingReasonUnknown)
+// instead of being silently dropped — matching getBlockedPackageDetails's per-version behavior.
+func TestFetchCvsBlockedStatusWholePackageBlockedUnparsableBody(t *testing.T) {
+	const (
+		blockedPkg = "some-pkg"
+		repo       = "test-pip-repo"
+	)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("<html>not json</html>"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Pip,
+	}
+
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, Version: "1.0.0", ParentName: blockedPkg, ParentVersion: "1.0.0"},
+	}
+
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1, "a confirmed 403 must never be silently dropped, even with an unparsable body")
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, BlockingReasonUnknown, s.BlockingReason)
+	assert.Equal(t, blocked, s.Action)
+}
+
+// TestFetchCvsBlockedStatusWholePackageBlockedAcrossTechs verifies the whole-package-block
+// path (Step 0 in fetchCvsBlockedStatus) works identically for poetry, pipenv, and uv.
+func TestFetchCvsBlockedStatusWholePackageBlockedAcrossTechs(t *testing.T) {
+	const (
+		blockedPkg     = "urllib3"
+		repo           = "test-repo"
+		expectedPolicy = "openssf-jfca"
+		expectedCond   = "openssf"
+	)
+	blockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		expectedPolicy, expectedCond,
+	)
+
+	for _, tech := range []techutils.Technology{techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(blockResponse))
+				default:
+					t.Fatalf("unexpected request %s %s — a whole-package block must never probe a per-version URL", r.Method, r.URL.Path)
+				}
+			})
+			defer serverMock.Close()
+
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				rtAuth:               rtAuth,
+				httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+				url:                  rtAuth.GetUrl(),
+				repo:                 repo,
+				tech:                 tech,
+			}
+
+			// Ranged direct pin — the previously-broken case (npm-parity fix), exercised
+			// once per technology to prove Step 0 isn't accidentally pip-specific.
+			pins := []python.PinnedRequirement{
+				{Name: blockedPkg, VersionRange: ">=2.0.0", ParentName: blockedPkg},
+			}
+			statuses := analyzer.fetchCvsBlockedStatus(pins)
+			require.Len(t, statuses, 1, "ranged whole-package block must not be dropped for %s", tech)
+
+			s := statuses[0]
+			assert.Equal(t, blockedPkg, s.PackageName)
+			assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+			assert.Equal(t, string(tech), s.PkgType, "package type must reflect the actual technology")
+			assert.Equal(t, directRelation, s.DepRelation)
+			assert.Equal(t, blocked, s.Action)
+			require.Len(t, s.Policy, 1)
+			assert.Equal(t, expectedPolicy, s.Policy[0].Policy)
+			assert.Equal(t, expectedCond, s.Policy[0].Condition)
+		})
+	}
+}
+
+// TestFetchCvsBlockedStatusPinnedWholePackageBlockedAcrossTechs verifies the pinned-exact
+// enrichment path (Steps 1-3) works identically for pip, poetry, pipenv, and uv — not just
+// the Step 0 ranged short-circuit already covered elsewhere. Guards against a future
+// regression that special-cases pip.
+func TestFetchCvsBlockedStatusPinnedWholePackageBlockedAcrossTechs(t *testing.T) {
+	const (
+		blockedPkg      = "urllib3"
+		blockedVer      = "2.0.0"
+		repo            = "test-repo"
+		policyName      = "openssf-jfca-test"
+		condName        = "openssf"
+		rawExpl         = "The OpenSSF value is missing"
+		rawRec          = "Apply a waiver and install again if suitable for use"
+		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
+	)
+	// Step 0's aggregate probe: confirmed whole-package block.
+	wholePackageBlockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		policyName, condName,
+	)
+	// Steps 1-3's per-version probe: the SAME policy+condition, raw backend wording — must be
+	// normalized to generic text, same as the pip-only regression test above.
+	blockMsg := fmt.Sprintf(
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		blockedPkg, blockedVer, policyName, condName, rawExpl, rawRec,
+	)
+	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+	versionMetaJSON := fmt.Sprintf(`{"urls":[{"packagetype":"bdist_wheel","url":"../../%s"}]}`, whlRelativePath)
+
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(wholePackageBlockResponse))
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pypi/"+blockedPkg+"/"+blockedVer+"/json"):
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(versionMetaJSON))
+				case r.Method == http.MethodHead && strings.Contains(r.URL.Path, whlRelativePath):
+					w.WriteHeader(http.StatusForbidden)
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, whlRelativePath):
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(versionBlockResponse))
+				default:
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+			})
+			defer serverMock.Close()
+
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				rtAuth:               rtAuth,
+				httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+				url:                  rtAuth.GetUrl(),
+				repo:                 repo,
+				tech:                 tech,
+			}
+
+			// Pinned exact pin — same shape parseCvsFailedPackages produces for
+			// "urllib3==2.0.0", regardless of which tool's output was parsed.
+			pins := []python.PinnedRequirement{
+				{Name: blockedPkg, Version: blockedVer, ParentName: blockedPkg, ParentVersion: blockedVer},
+			}
+
+			statuses := analyzer.fetchCvsBlockedStatus(pins)
+			require.Len(t, statuses, 1, "pinned whole-package block must not be dropped for %s", tech)
+
+			s := statuses[0]
+			assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+			assert.Equal(t, string(tech), s.PkgType, "package type must reflect the actual technology")
+			require.Len(t, s.Policy, 1)
+			assert.Equal(t, policyName, s.Policy[0].Policy)
+			assert.Equal(t, condName, s.Policy[0].Condition)
+			assert.Equal(t, allVersionsBlockedText, s.Policy[0].Explanation,
+				"same policy as aggregate must be normalized to generic text for %s too", tech)
+			assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation,
+				"direct pinned dependency, same policy as aggregate, must get the generic npm-parity recommendation for %s too", tech)
+		})
+	}
+}
+
+// TestFetchCvsBlockedStatusUvRangedDirectNoVersionEcho: uv's error text for a blocked
+// ranged direct dep never echoes the range, so only ConfirmedDirect signals it's direct.
+// Without it, DepRelation is misclassified as indirect and the text turns self-referential.
+func TestFetchCvsBlockedStatusUvRangedDirectNoVersionEcho(t *testing.T) {
+	const (
+		blockedPkg     = "urllib3"
+		repo           = "test-repo"
+		expectedPolicy = "openssf-jfca"
+		expectedCond   = "openssf"
+	)
+	blockResponse := fmt.Sprintf(
+		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
+		expectedPolicy, expectedCond,
+	)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/pypi/"+blockedPkg+"/json"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockResponse))
+		default:
+			t.Fatalf("unexpected request %s %s — a whole-package block must never probe a per-version URL", r.Method, r.URL.Path)
+		}
+	})
+	defer serverMock.Close()
+
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	analyzer := treeAnalyzer{
+		rtManager:            rtManager,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+		rtAuth:               rtAuth,
+		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		url:                  rtAuth.GetUrl(),
+		repo:                 repo,
+		tech:                 techutils.Uv,
+	}
+
+	// Self-attributed, no Version, no VersionRange — exactly what uv's parser produces for
+	// this case — but ConfirmedDirect is set from uv's "your project depends on urllib3" text.
+	pins := []python.PinnedRequirement{
+		{Name: blockedPkg, ParentName: blockedPkg, ConfirmedDirect: true},
+	}
+	statuses := analyzer.fetchCvsBlockedStatus(pins)
+	require.Len(t, statuses, 1)
+
+	s := statuses[0]
+	assert.Equal(t, blockedPkg, s.PackageName)
+	assert.Equal(t, allVersionsBlockedText, s.PackageVersion)
+	assert.Equal(t, directRelation, s.DepRelation, "ConfirmedDirect must override the no-version-info heuristic")
+	assert.Equal(t, blockedPkg, s.ParentName, "a direct dependency's parent is itself")
+}
+
+// TestResolveUvTech verifies that pip is promoted to uv when the right config signals are present.
+func TestPromoteYarnWorkspaceMember(t *testing.T) {
+	npm := techutils.Npm.String()
+	yarn := techutils.Yarn.String()
+	other := "maven"
+
+	tests := []struct {
+		name            string
+		techs           []string
+		ancestorFile    string // indicator file created in the ancestor dir ("" = none)
+		expectedHasYarn bool
+		expectedHasNpm  bool
+	}{
+		{
+			name:            "already has yarn — no change",
+			techs:           []string{yarn, npm},
+			expectedHasYarn: true,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "no npm — no change",
+			techs:           []string{other},
+			expectedHasYarn: false,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, no ancestor indicator — no promotion",
+			techs:           []string{npm},
+			expectedHasYarn: false,
+			expectedHasNpm:  true,
+		},
+		{
+			name:            "npm only, ancestor has .yarnrc.yml — promote",
+			techs:           []string{npm},
+			ancestorFile:    ".yarnrc.yml",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm only, ancestor has yarn.lock — promote",
+			techs:           []string{npm},
+			ancestorFile:    "yarn.lock",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+		{
+			name:            "npm + other, ancestor has .yarnrc.yml — npm promoted, other kept",
+			techs:           []string{npm, other},
+			ancestorFile:    ".yarnrc.yml",
+			expectedHasYarn: true,
+			expectedHasNpm:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			sub := filepath.Join(root, "sub")
+			require.NoError(t, os.MkdirAll(sub, 0o755))
+			if tc.ancestorFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, tc.ancestorFile), []byte{}, 0o644))
+			}
+			t.Chdir(sub)
+
+			result := promoteYarnWorkspaceMember(tc.techs)
+
+			hasYarn, hasNpm := false, false
+			for _, tech := range result {
+				switch tech {
+				case yarn:
+					hasYarn = true
+				case npm:
+					hasNpm = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasYarn, hasYarn, "yarn presence mismatch")
+			assert.Equal(t, tc.expectedHasNpm, hasNpm, "npm presence mismatch")
+		})
+	}
+
+	// A personal ~/.yarnrc.yml must not misclassify an npm project under $HOME as a
+	// yarn workspace member: the walk stops at $HOME before statting it.
+	t.Run("indicator at $HOME — no promotion", func(t *testing.T) {
+		home := t.TempDir()
+		sub := filepath.Join(home, "project")
+		require.NoError(t, os.MkdirAll(sub, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte{}, 0o644))
+		// HOME (unix) and USERPROFILE (windows) cover os.UserHomeDir on all OSes.
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
+		t.Chdir(sub)
+
+		result := promoteYarnWorkspaceMember([]string{npm})
+
+		assert.Contains(t, result, npm, "npm should be kept when the only indicator is at $HOME")
+		assert.NotContains(t, result, yarn, "npm must not be promoted to yarn from a $HOME-level indicator")
+	})
+}
+
+// TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
+// [tool.uv]/[[tool.uv.index]]), confirms pip-exclusive files always win, and confirms it
+// collapses a tech list already containing both pip and uv into one. Global ~/.config/uv/uv.toml
+// is not a project signal and must not rewrite pip-only projects.
+func TestPromotePipToUv(t *testing.T) {
+	pip := techutils.Pip.String()
+	uv := techutils.Uv.String()
+	other := "maven"
+
+	tests := []struct {
+		name           string
+		techs          []string
+		pyprojectTOML  string // content written to pyproject.toml; empty = don't create
+		hasPipFile     string // name of a pip-exclusive file to create (e.g. "requirements.txt")
+		hasUvLock      bool   // create uv.lock in the project dir
+		hasUvToml      bool   // create ~/.config/uv/uv.toml
+		expectedHasPip bool
+		expectedHasUv  bool
+	}{
+		{
+			name:  "no pip in techs — no change",
+			techs: []string{other},
+		},
+		{
+			name:           "pip with requirements.txt — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			expectedHasPip: true,
+		},
+		{
+			name:           "pip with setup.py — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "setup.py",
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + uv.lock — promoted to uv",
+			techs:         []string{pip},
+			hasUvLock:     true,
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file takes priority over uv.lock — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			hasUvLock:      true,
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + pyproject.toml with [tool.uv] — promoted to uv",
+			techs:         []string{pip},
+			pyprojectTOML: "[tool.uv]\npython = \"3.12\"\n",
+			expectedHasUv: true,
+		},
+		{
+			name:          "pip + pyproject.toml with [[tool.uv.index]] — promoted to uv",
+			techs:         []string{pip},
+			pyprojectTOML: "[[tool.uv.index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n",
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file takes priority over [tool.uv] in pyproject.toml — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "requirements.txt",
+			pyprojectTOML:  "[tool.uv]\npython = \"3.12\"\n",
+			expectedHasPip: true,
+		},
+		{
+			name:           "pip + ~/.config/uv/uv.toml — stays pip",
+			techs:          []string{pip},
+			hasUvToml:      true,
+			expectedHasPip: true,
+		},
+		{
+			name:           "pip-exclusive file is unaffected by ~/.config/uv/uv.toml — stays pip",
+			techs:          []string{pip},
+			hasPipFile:     "Pipfile",
+			hasUvToml:      true,
+			expectedHasPip: true,
+		},
+		{
+			name:           "plain pip project with bare pyproject.toml — stays pip",
+			techs:          []string{pip},
+			pyprojectTOML:  "[build-system]\nrequires = [\"setuptools\"]\n",
+			expectedHasPip: true,
+		},
+		{
+			name:          "already detected as both pip and uv, uv.lock present — collapses to uv alone",
+			techs:         []string{pip, uv},
+			hasUvLock:     true,
+			expectedHasUv: true,
+		},
+		{
+			name:           "already detected as both pip and uv, pip-exclusive file present — collapses to pip alone",
+			techs:          []string{pip, uv},
+			hasPipFile:     "requirements.txt",
+			expectedHasPip: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			fakeHome := t.TempDir()
+
+			t.Setenv("HOME", fakeHome)
+			t.Setenv("USERPROFILE", fakeHome)
+
+			if tc.hasPipFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, tc.hasPipFile), []byte{}, 0o644))
+			}
+			if tc.hasUvLock {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "uv.lock"), []byte{}, 0o644))
+			}
+			if tc.pyprojectTOML != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "pyproject.toml"), []byte(tc.pyprojectTOML), 0o644))
+			}
+			if tc.hasUvToml {
+				uvCfgDir := filepath.Join(fakeHome, ".config", "uv")
+				require.NoError(t, os.MkdirAll(uvCfgDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n"), 0o644))
+			}
+
+			result := promotePipToUvIn(tc.techs, projectDir)
+
+			hasPip, hasUv := false, false
+			for _, tech := range result {
+				switch tech {
+				case pip:
+					hasPip = true
+				case uv:
+					hasUv = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasPip, hasPip, "pip presence")
+			assert.Equal(t, tc.expectedHasUv, hasUv, "uv presence")
+		})
+	}
+}
+
+// TestDedupeDotnetFromNuget pins the behavior of dedupeDotnetFromNuget: Dotnet is always
+// dropped when present, since Dotnet and Nuget are detected from the same project indicators
+// and auditTree's setRepoFromNuGetSource already handles both .NET CLI and legacy NuGet CLI
+// projects under techutils.Nuget alone. Without this dedup, Dotnet would also surface as an
+// unsupported technology alongside Nuget.
+func TestDedupeDotnetFromNuget(t *testing.T) {
+	nuget := techutils.Nuget.String()
+	dotnet := techutils.Dotnet.String()
+	other := "maven"
+
+	tests := []struct {
+		name     string
+		techs    []string
+		expected []string
+	}{
+		{
+			name:     "nuget + dotnet both detected — dotnet dropped",
+			techs:    []string{nuget, dotnet},
+			expected: []string{nuget},
+		},
+		{
+			name:     "dotnet alone — still dropped",
+			techs:    []string{dotnet},
+			expected: []string{},
+		},
+		{
+			name:     "no dotnet present — unchanged",
+			techs:    []string{nuget, other},
+			expected: []string{nuget, other},
+		},
+		{
+			name:     "empty techs — unchanged",
+			techs:    []string{},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := dedupeDotnetFromNuget(tc.techs)
+			assert.Equal(t, tc.expected, result)
+			assert.NotContains(t, result, dotnet, "dotnet must never remain after dedupeDotnetFromNuget")
+		})
+	}
+}
+
+// =============================================================================
+// Tests for Pipenv support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsPipenv(t *testing.T) {
+	_, ok := supportedTech[techutils.Pipenv]
+	assert.True(t, ok, "techutils.Pipenv must be registered in supportedTech so that 'jf curation-audit' processes pipenv projects")
+}
+
+func TestGetUrlNameAndVersionByTechPipenv(t *testing.T) {
+	const whlUrl = "https://test.jfrog.io/artifactory/api/pypi/pypi-remote/packages/aa/bb/requests-2.31.0-py3-none-any.whl"
+	downloadUrlsMap := map[string]string{"pypi://requests:2.31.0": whlUrl}
+
+	downloadUrls, name, scope, ver := getUrlNameAndVersionByTech(techutils.Pipenv, &xrayUtils.GraphNode{Id: "pypi://requests:2.31.0"}, downloadUrlsMap, "https://test.jfrog.io", "pypi-remote")
+
+	assert.Equal(t, []string{whlUrl}, downloadUrls)
+	assert.Equal(t, "requests", name)
+	assert.Equal(t, "", scope, "python packages have no scope")
+	assert.Equal(t, "2.31.0", ver)
+}
+
+// =============================================================================
+// Tests for Cargo support added to curationaudit.go.
+// =============================================================================
+
+func TestSupportedTechContainsCargo(t *testing.T) {
+	_, ok := supportedTech[techutils.Cargo]
+	assert.True(t, ok, "techutils.Cargo must be registered in supportedTech so that 'jf curation-audit' processes cargo projects")
+}
+
+// Unit-test equivalent of TC-02: an unconfigured server can't trip a version gate that isn't there.
+func TestCargoSupportedRegardlessOfArtifactoryVersion(t *testing.T) {
+	ca := NewCurationAuditCommand()
+
+	supported, err := supportedTech[techutils.Cargo](ca)
+	assert.NoError(t, err)
+	assert.True(t, supported, "Cargo must be supported unconditionally, with no Artifactory/Xray version check")
+
+	// Contrast: Pipenv's gate needs a real server, so it fails under the same unconfigured ca.
+	pipenvSupported, pipenvErr := supportedTech[techutils.Pipenv](ca)
+	assert.Error(t, pipenvErr, "Pipenv's version-gated entry should fail to resolve a version with no server configured")
+	assert.False(t, pipenvSupported)
+}
+
+func Test_getCargoNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "realistic package",
+			id:               "cargo://winapi:0.3.9",
+			artiUrl:          "https://test.jfrog.io/artifactory",
+			repo:             "my-cargo-repo",
+			wantDownloadUrls: []string{"https://test.jfrog.io/artifactory/api/cargo/my-cargo-repo/v1/crates/winapi/0.3.9/download"},
+			wantName:         "winapi",
+			wantScope:        "",
+			wantVersion:      "0.3.9",
+		},
+		{
+			name:             "artifactory url with trailing slash",
+			id:               "cargo://libc:0.2.155",
+			artiUrl:          "https://test.jfrog.io/artifactory/",
+			repo:             "cargo-remote",
+			wantDownloadUrls: []string{"https://test.jfrog.io/artifactory/api/cargo/cargo-remote/v1/crates/libc/0.2.155/download"},
+			wantName:         "libc",
+			wantScope:        "",
+			wantVersion:      "0.2.155",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			downloadUrls, name, scope, version := getCargoNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, downloadUrls)
+			assert.Equal(t, tt.wantName, name)
+			assert.Equal(t, tt.wantScope, scope)
+			assert.Equal(t, tt.wantVersion, version)
+		})
+	}
+}
+
+func writeCargoConfigWithArtifactoryReplace(t *testing.T, dir, artifactoryIndexUrl string) {
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".cargo"), 0755))
+	content := fmt.Sprintf(`[source.crates-io]
+replace-with = "artifactory-repo"
+
+[source.artifactory-repo]
+registry = %q
+`, artifactoryIndexUrl)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".cargo", "config.toml"), []byte(content), 0644))
+}
+
+func TestSetRepoFromCargoConfigNoServerConfigured(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://host/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// A .cargo/config.toml entry pointing at a different host must not receive the configured server's credentials.
+func TestSetRepoFromCargoConfigRejectsHostMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://attacker.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// The host check must not block the legitimate same-host case.
+func TestSetRepoFromCargoConfigAcceptsMatchingHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+https://configured-server.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+	})
+
+	require.NoError(t, ca.setRepoFromCargoConfig())
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// The same host over http instead of https must not receive credentials -- a host-only check would allow this downgrade.
+func TestSetRepoFromCargoConfigRejectsSchemeDowngrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	writeCargoConfigWithArtifactoryReplace(t, projectDir, "sparse+http://configured-server.example.com/artifactory/api/cargo/cargo-test-repo/index/")
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromCargoConfig()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+func writeGemrcWithSource(t *testing.T, homeDir, sourceUrl string) {
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".gemrc"), []byte(":sources:\n- "+sourceUrl+"\n"), 0600))
+}
+
+func TestSetRepoFromGemrcNoServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://host/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.NotContains(t, setErr.Error(), "%!w", "error must not leak a raw Go fmt-verb artifact to the user")
+	assert.Contains(t, setErr.Error(), "no 'jf c' server configured")
+}
+
+// A ~/.gemrc source pointing at a different host must not receive the configured server's credentials.
+func TestSetRepoFromGemrcRejectsHostMismatch(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://attacker.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+}
+
+// The host check must not block the legitimate same-host case, and must fall back to the
+// configured 'jf c' server's credentials when the ~/.gemrc source has none of its own.
+func TestSetRepoFromGemrcAcceptsMatchingHost(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "fallback-token",
+	})
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "fallback-token", serverDetails.AccessToken, "must fall back to the configured server's credentials")
+}
+
+// The same host over http instead of https must not receive credentials -- a host-only check would allow this downgrade.
+func TestSetRepoFromGemrcRejectsSchemeDowngrade(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "http://configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+
+	setErr := ca.setRepoFromGemrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be downgraded to a cleartext http URL on the same host")
+}
+
+// Embedded credentials in the ~/.gemrc source URL must be used as-is, with no 'jf c' server required at all.
+func TestSetRepoFromGemrcUsesEmbeddedCredentialsWithoutServerConfigured(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHome, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	ca := NewCurationAuditCommand()
+
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	serverDetails, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "admin", serverDetails.User)
+	assert.Equal(t, "mytoken", serverDetails.Password)
+}
+
+// ruby.yaml (an explicit 'jf ruby-config') must win over ~/.gemrc when both are present.
+func TestSetRepoFromGemrc_RubyYamlPresent_TakesPriorityOverGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	WriteServerDetailsConfigFileBytes(t, "https://acme.jfrog.io/artifactory/", tempHomeDir, false)
+
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://acme.jfrog.io/artifactory/api/gems/gemrc-repo/")
+
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(".jfrog", "projects"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(".jfrog", "projects", "ruby.yaml"), []byte(`version: 1
+type: ruby
+resolver:
+    repo: yaml-repo
+    serverId: test
+`), 0600))
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "yaml-repo", ca.PackageManagerConfig.TargetRepo(), "ruby.yaml must take priority over ~/.gemrc")
+}
+
+// With no ruby.yaml, ~/.gemrc must still be used as the fallback.
+func TestSetRepoFromGemrc_NoRubyYaml_FallsBackToGemrc(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	writeGemrcWithSource(t, tempHomeDir, "https://admin:mytoken@configured-server.example.com/artifactory/api/gems/ruby-remote/")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	require.NoError(t, ca.setRepoFromGemrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "ruby-remote", ca.PackageManagerConfig.TargetRepo())
+}
+
+// With neither ruby.yaml nor a usable ~/.gemrc source, the same generic "no config file was
+// found" error used by every other unconfigured tech is returned — not a gemrc-specific one.
+func TestSetRepoFromGemrc_NoYamlNoGemrc_ReturnsGenericConfigError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file was found")
+	assert.Contains(t, err.Error(), "'jf ruby c'")
+	assert.NotContains(t, err.Error(), "gemrc")
+}
+
+// A ~/.gemrc that exists but fails to parse (malformed YAML) is a real misconfiguration, not
+// "nothing set up yet" -- the specific parse failure must be surfaced directly instead of being
+// collapsed into the generic "no config file was found" message, which wouldn't fix it.
+func TestSetRepoFromGemrc_MalformedGemrcYaml_ReturnsSpecificParseError(t *testing.T) {
+	tempHomeDir := t.TempDir()
+	t.Setenv("HOME", tempHomeDir)
+	t.Setenv("USERPROFILE", tempHomeDir)
+	t.Setenv("GEMRC", "")
+	require.NoError(t, os.WriteFile(filepath.Join(tempHomeDir, ".gemrc"), []byte(":sources: [unterminated"), 0600))
+
+	t.Chdir(t.TempDir())
+
+	ca := NewCurationAuditCommand()
+	err := ca.setRepoFromGemrc()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse", "the real parse error must be surfaced")
+	assert.NotContains(t, err.Error(), "no config file was found",
+		"a real parse failure must not be masked as 'nothing configured'")
+}
+
+func TestHasCargoProject(t *testing.T) {
+	t.Run("Cargo.toml present", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "Cargo.toml"), []byte(""), 0600))
+		assert.True(t, hasCargoProject(dir))
+	})
+
+	t.Run("Cargo.lock present without Cargo.toml", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "Cargo.lock"), []byte(""), 0600))
+		assert.True(t, hasCargoProject(dir))
+	})
+
+	t.Run("neither present", func(t *testing.T) {
+		assert.False(t, hasCargoProject(t.TempDir()))
+	})
+}
+
+// TestDoCurationAudit_Nuget is a full integration test: it runs a real 'dotnet restore' against
+// the mock Artifactory server. This exercises the native-fallback path (no nuget.yaml present —
+// see TestDoCurationAudit_Nuget_YamlConfigured for the 'jf nuget-config' priority-1 path); the
+// registry is discovered by matching the mock server's dynamic URL against a real, generated
+// NuGet.Config (own harness, like TestDoCurationAudit_Cargo, since the URL/port isn't known
+// until the mock server starts).
+func TestDoCurationAudit_Nuget(t *testing.T) {
+	skipIfDotnetNet6RuntimeUnavailable(t)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation")
+
+	requestToFail := map[string]bool{
+		"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"curated-nuget/index.json": filepath.Join(basePathToTests, pathToProject, "resources", "feed.json"),
+		"index.json":               filepath.Join(basePathToTests, pathToProject, "resources", "index.json"),
+		"13.0.3":                   filepath.Join(basePathToTests, pathToProject, "resources", "newtonsoft.json.13.0.3.nupkg"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject, allowInsecureTls: true}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	require.NoError(t, os.Remove(filepath.Join(testDirPath, ".jfrog", "projects", "nuget.yaml")))
+
+	nugetConfig := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="Artifactory" value="%sapi/nuget/v3/curated-nuget/index.json" />
+  </packageSources>
+</configuration>
+`, serverConfig.ArtifactoryUrl)
+	require.NoError(t, os.WriteFile(filepath.Join(testDirPath, "NuGet.Config"), []byte(nugetConfig), 0600))
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"dotnet-curation": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action:            "blocked",
+					ParentName:        "Newtonsoft.Json",
+					ParentVersion:     "13.0.3",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+					PackageName:       "Newtonsoft.Json",
+					PackageVersion:    "13.0.3",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "nuget",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
+}
+
+// TestDoCurationAudit_Nuget_YamlConfigured is a full integration test for NuGet's priority-1
+// path: the fixture's checked-in .jfrog/projects/nuget.yaml (an explicit 'jf nuget-config')
+// resolves the repo directly, with no NuGet.Config file or native CLI probe involved at all.
+// Restores the end-to-end yaml route coverage that existed before this PR (formerly the
+// "dotnet tree" case in the old shared testCase table), which the switch to a dedicated
+// native-fallback test dropped.
+//
+// TestDoCurationAudit_Nuget deliberately removes this same fixture's nuget.yaml from its own
+// temp copy so it can exercise the no-yaml native-fallback path instead — see its comment.
+func TestDoCurationAudit_Nuget_YamlConfigured(t *testing.T) {
+	skipIfDotnetNet6RuntimeUnavailable(t)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation")
+
+	requestToFail := map[string]bool{
+		"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"curated-nuget/index.json": filepath.Join(basePathToTests, pathToProject, "resources", "feed.json"),
+		"index.json":               filepath.Join(basePathToTests, pathToProject, "resources", "index.json"),
+		"13.0.3":                   filepath.Join(basePathToTests, pathToProject, "resources", "newtonsoft.json.13.0.3.nupkg"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject, allowInsecureTls: true}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	_, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"dotnet-curation": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action:            "blocked",
+					ParentName:        "Newtonsoft.Json",
+					ParentVersion:     "13.0.3",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+					PackageName:       "Newtonsoft.Json",
+					PackageVersion:    "13.0.3",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "nuget",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
+}
+
+// skipIfCargoUnavailable skips t if cargo can't actually run -- exec.LookPath alone isn't enough,
+// since a rustup shim can exist on PATH with no default toolchain configured (e.g. some CI images).
+func skipIfCargoUnavailable(t *testing.T) {
+	t.Helper()
+	if exec.Command("cargo", "--version").Run() != nil {
+		t.Skip("cargo not available")
+	}
+}
+
+func skipIfDotnetNet6RuntimeUnavailable(t *testing.T) {
+	t.Helper()
+	output, err := exec.Command("dotnet", "--list-runtimes").CombinedOutput()
+	if err != nil {
+		t.Skip("dotnet SDK not available")
+	}
+	if !strings.Contains(string(output), "Microsoft.NETCore.App 6.") {
+		t.Skip("dotnet 6.x runtime/targeting pack not installed; test fixture pins net6.0")
+	}
+}
+
+// A stale PackageManagerConfig from a prior --working-dirs entry must not suppress Cargo's own resolution.
+func TestAuditTreeCargoAlwaysResolvesFreshIgnoringStalePackageManagerConfig(t *testing.T) {
+	skipIfCargoUnavailable(t)
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, "src"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "src", "lib.rs"), []byte(""), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "Cargo.toml"), []byte(`
+[package]
+name = "probe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+leaf = { path = "leaf" }
+`), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, "leaf", "src"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "leaf", "src", "lib.rs"), []byte(""), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "leaf", "Cargo.toml"), []byte(`
+[package]
+name = "leaf"
+version = "0.1.0"
+edition = "2021"
+`), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".cargo"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".cargo", "config.toml"), []byte(`
+[source.crates-io]
+replace-with = "artifactory-remote"
+
+[source.artifactory-remote]
+registry = "sparse+https://127.0.0.1:1/artifactory/api/cargo/real-repo/index/"
+`), 0600))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(prevWd)) }()
+
+	ca := NewCurationAuditCommand()
+	ca.SetIsCurationCmd(true)
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://127.0.0.1:1/",
+		ArtifactoryUrl: "https://127.0.0.1:1/artifactory/",
+		AccessToken:    "real-token",
+	})
+	// Simulate stale state left over from a prior working directory's (different) tech.
+	stale := (&project.RepositoryConfig{}).SetTargetRepo("stale-npm-repo").SetServerDetails(&config.ServerDetails{
+		ArtifactoryUrl: "https://stale-server.example.com/artifactory/",
+	})
+	ca.setPackageManagerConfig(stale)
+
+	_ = ca.auditTree(techutils.Cargo, map[string]*CurationReport{})
+
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.Equal(t, "real-repo", ca.PackageManagerConfig.TargetRepo(),
+		"stale PackageManagerConfig from a prior working dir must not suppress Cargo's own repo resolution")
+}
+
+// Own harness: Cargo's native .cargo/config.toml needs the mock server's dynamic URL, unlike the shared harness's yaml-based techs.
+func TestDoCurationAudit_Cargo(t *testing.T) {
+	skipIfCargoUnavailable(t)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "cargo", "curation-project")
+
+	requestToFail := map[string]bool{
+		"/api/cargo/cargo-test-repo/v1/crates/widget/1.0.0/download": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"config.json":  filepath.Join(basePathToTests, pathToProject, "resources", "config.json"),
+		"wi/dg/widget": filepath.Join(basePathToTests, pathToProject, "resources", "widget-index"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	// Cargo has no 'jf cargo-config'; wire the registry via .cargo/config.toml with the mock server's real URL.
+	require.NoError(t, os.MkdirAll(filepath.Join(testDirPath, ".cargo"), 0755))
+	cargoConfig := fmt.Sprintf(`[source.crates-io]
+replace-with = "artifactory-remote"
+
+[source.artifactory-remote]
+registry = "sparse+%s/api/cargo/cargo-test-repo/index/"
+`, strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/"))
+	require.NoError(t, os.WriteFile(filepath.Join(testDirPath, ".cargo", "config.toml"), []byte(cargoConfig), 0600))
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"probe:0.1.0": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action: "blocked",
+					// A direct dependency's ParentName/Version mirror its own identity (see the gem-tree test).
+					ParentName:        "widget",
+					ParentVersion:     "1.0.0",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/cargo/cargo-test-repo/v1/crates/widget/1.0.0/download",
+					PackageName:       "widget",
+					PackageVersion:    "1.0.0",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "cargo",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
 }

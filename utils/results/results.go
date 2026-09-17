@@ -27,6 +27,7 @@ const (
 	CmdStepSca                = "SCA Scan"
 	CmdStepContextualAnalysis = "Contextual Analysis Enrichment"
 	CmdStepIaC                = "IaC Scan"
+	CmdStepServices           = "Services Scan"
 	CmdStepSecrets            = "Secret Detection Scan"
 	CmdStepSast               = "Static Application Security Testing (SAST)"
 	CmdStepMaliciousCode      = "Malicious Code"
@@ -50,17 +51,18 @@ type SecurityCommandResults struct {
 
 type ResultsMetaData struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId         string                         `json:"multi_scan_id,omitempty"`
-	XrayVersion         string                         `json:"xray_version"`
-	XscVersion          string                         `json:"xsc_version,omitempty"`
-	Entitlements        Entitlements                   `json:"entitlements"`
-	SecretValidation    bool                           `json:"secret_validation"`
-	CmdType             utils.CommandType              `json:"command_type"`
-	ResultContext       ResultContext                  `json:"result_context"`
-	GitContext          *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime           time.Time                      `json:"start_time"`
-	ResultsPlatformUrl  string                         `json:"results_platform_url,omitempty"`
-	AllowPartialResults bool                           `json:"allow_partial_results,omitempty"`
+	MultiScanId          string                         `json:"multi_scan_id,omitempty"`
+	XrayVersion          string                         `json:"xray_version"`
+	XscVersion           string                         `json:"xsc_version,omitempty"`
+	Entitlements         Entitlements                   `json:"entitlements"`
+	SecretValidation     bool                           `json:"secret_validation"`
+	CmdType              utils.CommandType              `json:"command_type"`
+	ResultContext        ResultContext                  `json:"result_context"`
+	GitContext           *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime            time.Time                      `json:"start_time"`
+	ResultsPlatformUrl   string                         `json:"results_platform_url,omitempty"`
+	AllowPartialResults  bool                           `json:"allow_partial_results,omitempty"`
+	UploadedArtifactPath string                         `json:"uploaded_artifact_path,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralErrors []SkippableError `json:"general_errors,omitempty"`
 }
@@ -103,6 +105,8 @@ type ResultContext struct {
 	ProjectKey string `json:"project_key,omitempty"`
 	// (Resource) If gitRepository is provided we will fetch the watches defined on the git repository.
 	GitRepoHttpsCloneUrl string `json:"git_repo_key,omitempty"`
+	// (Resource) Optional workspace name used together with GitRepoHttpsCloneUrl when fetching the config profile from the platform.
+	WorkspaceName string `json:"workspace_name,omitempty"`
 	// If non of the above is provided or requested, the results will include vulnerabilities
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
@@ -120,14 +124,39 @@ func (rc *ResultContext) HasViolationContext() bool {
 }
 
 type ResultsStatus struct {
+	// When adding a new scan status field here, also add a corresponding branch in GetExecutedScanTypes below.
 	SbomScanStatusCode           *int `json:"sbom,omitempty"`
 	ScaScanStatusCode            *int `json:"sca,omitempty"`
 	ContextualAnalysisStatusCode *int `json:"contextual_analysis,omitempty"`
 	SecretsScanStatusCode        *int `json:"secrets,omitempty"`
 	IacScanStatusCode            *int `json:"iac,omitempty"`
+	ServicesScanStatusCode       *int `json:"services,omitempty"`
 	SastScanStatusCode           *int `json:"sast,omitempty"`
 	MaliciousScanStatusCode      *int `json:"malicious_code,omitempty"`
 	ViolationsStatusCode         *int `json:"violations,omitempty"`
+}
+
+func (r ResultsStatus) GetExecutedScanTypes() []utils.SubScanType {
+	var scanTypes []utils.SubScanType
+	if r.ScaScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ScaScan)
+	}
+	if r.ContextualAnalysisStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ContextualAnalysisScan)
+	}
+	if r.SecretsScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.SecretsScan)
+	}
+	if r.ServicesScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.ServicesScan)
+	}
+	if r.IacScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.IacScan)
+	}
+	if r.SastScanStatusCode != nil {
+		scanTypes = append(scanTypes, utils.SastScan)
+	}
+	return scanTypes
 }
 
 func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
@@ -142,6 +171,8 @@ func (status *ResultsStatus) IsScanFailed(step SecurityCommandStep) bool {
 		return isScanFailed(status.SecretsScanStatusCode)
 	case CmdStepIaC:
 		return isScanFailed(status.IacScanStatusCode)
+	case CmdStepServices:
+		return isScanFailed(status.ServicesScanStatusCode)
 	case CmdStepSast:
 		return isScanFailed(status.SastScanStatusCode)
 	case CmdStepMaliciousCode:
@@ -173,6 +204,10 @@ func (status *ResultsStatus) UpdateStatus(step SecurityCommandStep, statusCode *
 	case CmdStepSecrets:
 		if shouldUpdateStatus(status.SecretsScanStatusCode, statusCode) {
 			status.SecretsScanStatusCode = statusCode
+		}
+	case CmdStepServices:
+		if shouldUpdateStatus(status.ServicesScanStatusCode, statusCode) {
+			status.ServicesScanStatusCode = statusCode
 		}
 	case CmdStepIaC:
 		if shouldUpdateStatus(status.IacScanStatusCode, statusCode) {
@@ -233,6 +268,7 @@ type JasScansResults struct {
 type JasScanResults struct {
 	SecretsScanResults   []*sarif.Run `json:"secrets,omitempty"`
 	IacScanResults       []*sarif.Run `json:"iac,omitempty"`
+	ServicesScanResults  []*sarif.Run `json:"services,omitempty"`
 	SastScanResults      []*sarif.Run `json:"sast,omitempty"`
 	MaliciousScanResults []*sarif.Run `json:"malicious_code,omitempty"`
 }
@@ -329,6 +365,10 @@ func (st ScanTarget) IsScanRequestedByCentralConfig(scanType utils.SubScanType) 
 			if module.ScanConfig.IacScannerConfig.EnableIacScan {
 				return utils.NewBoolPtr(true)
 			}
+		case utils.ServicesScan:
+			if module.ScanConfig.ServicesScannerConfig.EnableServicesScan {
+				return utils.NewBoolPtr(true)
+			}
 		case utils.SecretsScan:
 			if module.ScanConfig.SecretsScannerConfig.EnableSecretsScan {
 				return utils.NewBoolPtr(true)
@@ -357,6 +397,14 @@ func (st ScanTarget) ShouldValidateSecrets(cliRequested bool) bool {
 	return cliRequested
 }
 
+func (st ScanTarget) GetCentralConfigSastExcludeRules() []string {
+	excludeRules := datastructures.MakeSet[string]()
+	for _, module := range st.CentralConfigModules {
+		excludeRules.AddElements(module.ScanConfig.SastScannerConfig.ExcludeRules...)
+	}
+	return excludeRules.ToSlice()
+}
+
 func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []string {
 	exclusions := datastructures.MakeSet[string]()
 	for _, module := range st.CentralConfigModules {
@@ -370,6 +418,8 @@ func (st ScanTarget) GetCentralConfigExclusions(scanType utils.SubScanType) []st
 			exclusions.AddElements(module.ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns...)
 		case utils.IacScan:
 			exclusions.AddElements(module.ScanConfig.IacScannerConfig.ExcludePatterns...)
+		case utils.ServicesScan:
+			exclusions.AddElements(module.ScanConfig.ServicesScannerConfig.ExcludePatterns...)
 		case utils.SecretsScan:
 			exclusions.AddElements(module.ScanConfig.SecretsScannerConfig.ExcludePatterns...)
 		case utils.SastScan:
@@ -453,6 +503,7 @@ func (r *SecurityCommandResults) IsJASRequested(requestedScans ...utils.SubScanT
 	return utils.IsScanRequested(r.CmdType, utils.ContextualAnalysisScan, r.IsScanRequestedByCentralConfig(utils.ContextualAnalysisScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.SecretsScan, r.IsScanRequestedByCentralConfig(utils.SecretsScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.IacScan, r.IsScanRequestedByCentralConfig(utils.IacScan), requestedScans...) ||
+		utils.IsScanRequested(r.CmdType, utils.ServicesScan, r.IsScanRequestedByCentralConfig(utils.ServicesScan), requestedScans...) ||
 		utils.IsScanRequested(r.CmdType, utils.SastScan, r.IsScanRequestedByCentralConfig(utils.SastScan), requestedScans...)
 }
 
@@ -509,6 +560,11 @@ func (r *SecurityCommandResults) SetAllowPartialResults(allowPartialResults bool
 
 func (r *SecurityCommandResults) SetResultsPlatformUrl(resultsPlatformUrl string) *SecurityCommandResults {
 	r.ResultsPlatformUrl = resultsPlatformUrl
+	return r
+}
+
+func (r *SecurityCommandResults) SetUploadedArtifactPath(path string) *SecurityCommandResults {
+	r.UploadedArtifactPath = path
 	return r
 }
 
@@ -670,6 +726,7 @@ func (r *SecurityCommandResults) GetStatusCodes() ResultsStatus {
 		status.UpdateStatus(CmdStepSca, targetResults.ResultsStatus.ScaScanStatusCode)
 		status.UpdateStatus(CmdStepContextualAnalysis, targetResults.ResultsStatus.ContextualAnalysisStatusCode)
 		status.UpdateStatus(CmdStepSecrets, targetResults.ResultsStatus.SecretsScanStatusCode)
+		status.UpdateStatus(CmdStepServices, targetResults.ResultsStatus.ServicesScanStatusCode)
 		status.UpdateStatus(CmdStepIaC, targetResults.ResultsStatus.IacScanStatusCode)
 		status.UpdateStatus(CmdStepSast, targetResults.ResultsStatus.SastScanStatusCode)
 		status.UpdateStatus(CmdStepMaliciousCode, targetResults.ResultsStatus.MaliciousScanStatusCode)
@@ -714,13 +771,17 @@ func (sr *TargetResults) GetErrors() (err error) {
 	return
 }
 
-func (sr *TargetResults) GetDescriptors() []string {
+func (sr *TargetResults) GetDescriptors(rootDir string) []string {
 	if sr.ScaResults == nil {
 		return nil
 	}
+	if rootDir == "" {
+		// Fall back to the target's own directory if no root directory is provided.
+		rootDir = sr.Target
+	}
 	descriptors := datastructures.MakeSet[string]()
 	for _, descriptor := range sr.ScaResults.Descriptors {
-		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(sr.Target)))
+		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(rootDir)))
 	}
 	return descriptors.ToSlice()
 }
@@ -838,6 +899,12 @@ func (sr *TargetResults) AddJasScanResults(scanType jasutils.JasScanType, vulner
 			sr.JasResults.JasVulnerabilities.SecretsScanResults = append(sr.JasResults.JasVulnerabilities.SecretsScanResults, vulnerabilitiesRuns...)
 			sr.JasResults.JasViolations.SecretsScanResults = append(sr.JasResults.JasViolations.SecretsScanResults, violationsRuns...)
 		}
+	case jasutils.Services:
+		sr.ResultsStatus.UpdateStatus(CmdStepServices, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.ServicesScanResults = append(sr.JasResults.JasVulnerabilities.ServicesScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.ServicesScanResults = append(sr.JasResults.JasViolations.ServicesScanResults, violationsRuns...)
+		}
 	case jasutils.IaC:
 		sr.ResultsStatus.UpdateStatus(CmdStepIaC, &exitCode)
 		if sr.JasResults != nil {
@@ -941,6 +1008,8 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 	switch scanType {
 	case jasutils.Secrets:
 		return jsr.JasVulnerabilities.SecretsScanResults
+	case jasutils.Services:
+		return jsr.JasVulnerabilities.ServicesScanResults
 	case jasutils.IaC:
 		return jsr.JasVulnerabilities.IacScanResults
 	case jasutils.Sast:
@@ -955,6 +1024,8 @@ func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) 
 	switch scanType {
 	case jasutils.Secrets:
 		return jsr.JasViolations.SecretsScanResults
+	case jasutils.Services:
+		return jsr.JasViolations.ServicesScanResults
 	case jasutils.IaC:
 		return jsr.JasViolations.IacScanResults
 	case jasutils.Sast:

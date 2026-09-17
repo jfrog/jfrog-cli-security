@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -31,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 
 	"golang.org/x/exp/slices"
 
@@ -155,7 +157,7 @@ func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion 
 		return
 	}
 	// Get the defined and active watches from the platform.
-	manager, err := xsc.CreateXscService(serverDetails, xrayutils.WithScopedProjectKey(projectKey))
+	manager, err := xsc.CreateXscService(serverDetails, corexray.WithScopedProjectKey(projectKey))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to create Xray services manager: %s", err.Error()))
 		return
@@ -292,14 +294,14 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.Entitlements.Jas {
-		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', 'Services', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" && auditCmd.gitContext != nil {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))
 	}
 	var tableNotes []string
 	if cmdResults.Entitlements.Jas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
-		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
+		tableNotes = []string{"Note: The following vulnerability violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Services (Misconfiguration)\n- Static Application Security Testing (SAST)"}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -421,7 +423,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		return cmdResults.AddGeneralError(err, false)
 	}
 	// Send entitlement requests
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
@@ -473,6 +475,13 @@ func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.Xray
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
 	// Populate x scan targets based on the provided parameters.
 	detectScanTargets(cmdResults, params)
+	if detectedTechsGuardCallback := params.DetectedTechnologiesGuardCallback(); detectedTechsGuardCallback != nil {
+		if err := detectedTechsGuardCallback(cmdResults.GetTechnologies()); err != nil {
+			// allowSkippingError is hardcoded to false: this check must never be bypassable via AllowPartialResults.
+			cmdResults.AddGeneralError(err, false)
+			return
+		}
+	}
 	// Populate target information for the scans
 	for _, targetResult := range cmdResults.Targets {
 		// Generate SBOM for the target if requested or for SCA scans.
@@ -480,7 +489,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			continue
 		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(
-			buildinfo.WithDescriptors(targetResult.GetDescriptors()),
+			buildinfo.WithDescriptors(targetResult.GetDescriptors(params.RootDir())),
 			xrayplugin.WithSnippetDetection(shouldIncludeSnippetDetection(params)),
 		),
 			bom.SbomGeneratorParams{
@@ -669,11 +678,33 @@ func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditPar
 			log.Warn(fmt.Sprintf("Couldn't detect technologies in '%s' directory: %s", included, err.Error()))
 			continue
 		}
-		for tech := range techToWorkingDirs {
+		for _, tech := range technologiesAfterPipUvPromotion(techToWorkingDirs) {
 			detectedTechnologies.Add(tech)
 		}
 	}
 	return detectedTechnologies.ToSlice()
+}
+
+func technologiesAfterPipUvPromotion(techToWorkingDirs map[techutils.Technology]map[string][]string) []techutils.Technology {
+	workingDirs := datastructures.MakeSet[string]()
+	for _, dirs := range techToWorkingDirs {
+		for dir := range dirs {
+			workingDirs.Add(dir)
+		}
+	}
+	promoted := datastructures.MakeSet[techutils.Technology]()
+	for _, dir := range workingDirs.ToSlice() {
+		dirTechs := make([]techutils.Technology, 0)
+		for tech, dirs := range techToWorkingDirs {
+			if _, ok := dirs[dir]; ok {
+				dirTechs = append(dirTechs, tech)
+			}
+		}
+		for _, tech := range techutils.PromotePipToUv(dirTechs, dir) {
+			promoted.Add(tech)
+		}
+	}
+	return promoted.ToSlice()
 }
 
 func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
@@ -692,6 +723,48 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 		// PathFromRoot is always '.'
 		targetResult.CentralConfigModules = centralProfile.Modules
 	}
+}
+
+// filterAmbiguousPipUvTargets applies techutils.PromotePipToUv to every Pip working
+// directory, including directories that have no Uv detector hit yet. Uv's shared
+// indicator is uv.lock, so a pyproject.toml with [tool.uv] and no lockfile is detected
+// as Pip only; promotion still rewrites that directory to Uv, matching
+// detectTechnologiesInTarget.
+func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[string][]string) map[techutils.Technology]map[string][]string {
+	pipDirs, hasPip := techToWorkingDirs[techutils.Pip]
+	if !hasPip {
+		return techToWorkingDirs
+	}
+	uvDirs := techToWorkingDirs[techutils.Uv]
+	if uvDirs == nil {
+		uvDirs = map[string][]string{}
+	}
+	for dir, descriptors := range pipDirs {
+		dirTechs := []techutils.Technology{techutils.Pip}
+		if _, ok := uvDirs[dir]; ok {
+			dirTechs = append(dirTechs, techutils.Uv)
+		}
+		promoted := techutils.PromotePipToUv(dirTechs, dir)
+		if !slices.Contains(promoted, techutils.Pip) {
+			delete(pipDirs, dir)
+		}
+		if slices.Contains(promoted, techutils.Uv) {
+			if _, ok := uvDirs[dir]; !ok {
+				uvDirs[dir] = descriptors
+			}
+		} else {
+			delete(uvDirs, dir)
+		}
+	}
+	if len(pipDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Pip)
+	}
+	if len(uvDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Uv)
+	} else {
+		techToWorkingDirs[techutils.Uv] = uvDirs
+	}
+	return techToWorkingDirs
 }
 
 // Old flow: creates targets from technologies detected in the working directories.
@@ -719,47 +792,50 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		dirsToDetect = append(dirsToDetect, requestedDirectory)
 	}
 	for _, requestedDirectory := range dirsToDetect {
+		targetsBefore := len(cmdResults.Targets)
 		// Detect descriptors and technologies in the requested directory.
 		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), utils.GetExcludePattern(exclusions, utils.DefaultScaExcludePatterns, params.IsRecursiveScan()))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
-			continue
-		}
-		// Create scans to perform
-		for tech, workingDirs := range techToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
-			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-				scanTarget := createScanTarget(requestedDirectory, exclusions)
-				if scanTarget == nil {
+		} else {
+			techToWorkingDirs = filterAmbiguousPipUvTargets(techToWorkingDirs)
+			// Create scans to perform
+			for tech, workingDirs := range techToWorkingDirs {
+				if tech == techutils.Dotnet {
+					// We detect Dotnet and Nuget the same way, if one detected so does the other.
+					// We don't need to scan for both and get duplicate results.
 					continue
 				}
-				scanTarget.Technologies = []techutils.Technology{tech}
+				// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
+				if len(workingDirs) == 0 {
+					// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
+					scanTarget := createScanTarget(requestedDirectory, exclusions)
+					if scanTarget == nil {
+						continue
+					}
+					scanTarget.Technologies = []techutils.Technology{tech}
+					cmdResults.NewScanResults(*scanTarget)
+				}
+				for workingDir, descriptors := range workingDirs {
+					// Add scan for each detected working directory.
+					scanTarget := createScanTarget(workingDir, exclusions)
+					if scanTarget == nil {
+						continue
+					}
+					scanTarget.Technologies = []techutils.Technology{tech}
+					targetResults := cmdResults.NewScanResults(*scanTarget)
+					if tech != techutils.NoTech {
+						targetResults.SetDescriptors(descriptors...)
+					}
+				}
+			}
+		}
+		// If this working dir produced no targets (e.g. JAS-only with no package managers),
+		// still create a target so secrets/IaC/SAST can run.
+		if len(cmdResults.Targets) == targetsBefore {
+			if scanTarget := createScanTarget(requestedDirectory, exclusions); scanTarget != nil {
 				cmdResults.NewScanResults(*scanTarget)
 			}
-			for workingDir, descriptors := range workingDirs {
-				// Add scan for each detected working directory.
-				scanTarget := createScanTarget(workingDir, exclusions)
-				if scanTarget == nil {
-					continue
-				}
-				scanTarget.Technologies = []techutils.Technology{tech}
-				targetResults := cmdResults.NewScanResults(*scanTarget)
-				if tech != techutils.NoTech {
-					targetResults.SetDescriptors(descriptors...)
-				}
-			}
-		}
-	}
-	// If no scan targets were detected, we should still proceed with the scans.
-	if len(dirsToDetect) == 1 && params.IsRecursiveScan() && len(cmdResults.Targets) == 0 {
-		if scanTarget := createScanTarget(dirsToDetect[0], exclusions); scanTarget != nil {
-			cmdResults.NewScanResults(*scanTarget)
 		}
 	}
 	// Load deprecated apps config information for all targets
@@ -983,19 +1059,21 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	uploadPath := ""
 	if params.uploadCdxResults {
 		log.Debug("Finished scanning. Uploading scan results to Artifactory")
-		if params.rtResultRepository == "" {
+		if params.GetRtResultRepositoryWithProjectKey() == "" {
 			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
-		}
-		rtResultRepository := params.rtResultRepository
-		if params.resultsContext.ProjectKey != "" {
-			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
 		}
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
 		}
-		uploadPath, err = uploadCdxResults(params, cmdResults, rtResultRepository)
+		uploadPath, err = uploadCdxResults(params, cmdResults)
 		if err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		}
+		cmdResults.SetUploadedArtifactPath(filepath.Join(params.GetRtResultRepositoryWithProjectKey(), uploadPath))
+		if uiRoute, err := getScanResultsUiRoute(params, uploadPath); err != nil {
+			log.Warn(fmt.Sprintf("failed to get scan results UI route: %s", err.Error()))
+		} else if uiRoute != "" {
+			cmdResults.SetResultsPlatformUrl(uiRoute)
 		}
 	}
 	// Violations fetching
@@ -1003,30 +1081,50 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
-		rtResultRepository := params.rtResultRepository
-		if rtResultRepository != "" && params.resultsContext.ProjectKey != "" {
-			rtResultRepository = fmt.Sprintf("%s-%s", params.resultsContext.ProjectKey, rtResultRepository)
-		}
-		if err = fetchViolations(uploadPath, cmdResults, params, rtResultRepository); err != nil {
+		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to get violations: %s", err.Error()), cmdResults.AllowPartialResults)
 		}
 	}
 	return cmdResults
 }
 
-func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults, rtResultRepository string) (uploadPath string, err error) {
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
-	if uploadPath, err = output.UploadCommandResults(serverDetails, rtResultRepository, cmdResults); err != nil {
-		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
+	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.GetRtResultRepositoryWithProjectKey(), cmdResults, auditParams.GetXrayVersion()); err != nil {
+		err = fmt.Errorf("failed to upload scan results: %s", err.Error())
 	}
 	return
 }
 
-func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams, rtResultRepository string) (err error) {
+func getScanResultsUiRoute(auditParams *AuditParams, uploadPath string) (string, error) {
+	if auditParams.GitContext() == nil {
+		return "", nil
+	}
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		return "", fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	xrayManager, err := corexray.CreateXrayServiceManager(serverDetails, corexray.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to create Xray service manager: %s", err.Error())
+	}
+	if err = artifact.WaitForArtifactScanStatus(xrayManager, auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath, artifact.ScanStarted()); err != nil {
+		return "", fmt.Errorf("failed to wait for artifact scan status: %s", err.Error())
+	}
+	return xsc.GetScanResultsUiRoute(&xsc.ScanResultsUiRouteParams{
+		XrayVersion:            auditParams.GetXrayVersion(),
+		ServerDetails:          serverDetails,
+		ProjectKey:             auditParams.resultsContext.ProjectKey,
+		GitContext:             auditParams.GitContext(),
+		ScanResultArtifactPath: fmt.Sprintf("%s/%s", auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath),
+	})
+}
+
+func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams) (err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return fmt.Errorf("failed to get server details: %s", err.Error())
@@ -1035,7 +1133,7 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		local.WithAllowedLicenses(auditParams.allowedLicenses),
 		enforcer.WithServerDetails(serverDetails),
 		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
-		enforcer.WithArtifactParams(rtResultRepository, uploadPath),
+		enforcer.WithArtifactParams(auditParams.GetRtResultRepositoryWithProjectKey(), uploadPath),
 		enforcer.WithWatches(auditParams.resultsContext.Watches),
 		enforcer.WithResultsOutputDir(auditParams.scanResultsOutputDir),
 	)

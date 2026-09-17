@@ -58,12 +58,14 @@ const (
 	Iac       = "iac"
 	Sast      = "sast"
 	Secrets   = "secrets"
+	Services  = "services"
 	WithoutCA = "without-contextual-analysis"
 
 	auditSca        = auditPrefix + Sca
 	auditIac        = auditPrefix + Iac
 	auditSast       = auditPrefix + Sast
 	auditSecrets    = auditPrefix + Secrets
+	auditServices   = auditPrefix + Services
 	auditWithoutCA  = auditPrefix + WithoutCA
 	binarySca       = scanPrefix + Sca
 	binarySecrets   = scanPrefix + Secrets
@@ -119,7 +121,6 @@ const (
 	Watches             = "watches"
 	RepoPath            = "repo-path"
 	UploadRepoPath      = "rt-" + RepoPath
-	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
 	Snippet             = "snippet"
@@ -160,11 +161,13 @@ const (
 	// Unique curation flags
 	CurationOutput        = "curation-format"
 	DockerImageName       = "image"
+	HuggingFaceModel      = "hugging-face-model"
 	SolutionPath          = "solution-path"
 	IncludeCachedPackages = "include-cached-packages"
 	LegacyPeerDeps        = "legacy-peer-deps"
 	RunNative             = "run-native"
 	MvnIncludePluginDeps  = "mvn-include-plugin-deps"
+	Script                = "script"
 
 	// Unique git flags
 	gitPrefix       = "git-"
@@ -180,6 +183,7 @@ const (
 	GitThreads      = gitPrefix + Threads
 
 	UseConfigProfile = "use-config-profile"
+	Workspace        = "workspace"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -208,8 +212,8 @@ var commandFlags = map[string][]string{
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Snippet, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath, UseIncludedBuilds, AddSastRules,
+		auditSca, auditIac, auditSast, auditSecrets, auditServices, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UseIncludedBuilds, AddSastRules,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -220,15 +224,15 @@ var commandFlags = map[string][]string{
 		// Violations params
 		scanProjectKey, Watches, Snippet, ScanVuln, Fail,
 		// Scan params
-		Threads, ExclusionsAudit, WorkingDirs,
-		auditSca, auditIac, auditSast, auditSecrets, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
+		Threads, ExclusionsAudit, WorkingDirs, Workspace,
+		auditSca, auditIac, auditSast, auditSecrets, auditServices, auditWithoutCA, SecretValidation, Sbom, UseConfigProfile,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
+		Licenses, OutputFormat, ExtendedTable, OutputDir,
 		// Scan Logic params
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, AddSastRules,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
@@ -347,20 +351,21 @@ var flagsMap = map[string]components.Flag{
 	AnalyzerManagerCustomPath:     components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
 	XrayLibPluginBinaryCustomPath: components.NewStringFlag(XrayLibPluginBinaryCustomPath, "Defines the custom path to the xray-lib-plugin binary.", components.SetHiddenStrFlag()),
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
-	UploadRtRepoPath:              components.NewStringFlag(UploadRtRepoPath, fmt.Sprintf("Artifactory repository name or path to upload the scan results to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray. only relevant when using --%s", StaticSca), components.WithStrDefaultValue("cli-scan-results"), components.SetHiddenStrFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
-	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln) to use when multiple solution files are present in the directory."),
+	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln or .slnx) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
-	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are included in the curation evaluation. Requires two additional Maven invocations (help:effective-pom, dependency:resolve-plugins) which may slow down the scan. By default only project dependencies are scanned."),
+	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are resolved and included in the curation evaluation. By default only project dependencies are scanned."),
 	LegacyPeerDeps:                components.NewBoolFlag(LegacyPeerDeps, "[npm] Pass --legacy-peer-deps to npm install to bypass peer-dependency version conflicts."),
 	RunNative:                     components.NewBoolFlag(RunNative, "[npm] Use the native npm client for dependency resolution. Reads Artifactory URL and repository from the project's .npmrc registry — no 'jf npm-config' required. Respects .npmrc and Volta configuration."),
+	Script:                        components.NewStringFlag(Script, "[uv] Path to a PEP 723 inline-script .py file to audit standalone, instead of scanning the working directory for a pyproject.toml/uv.lock project."),
 	binarySca:                     components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s.", Sca, Sca, WithoutCA, Secrets)),
 	binarySecrets:                 components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s.", Sca)),
 	binaryWithoutCA:               components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
-	auditSca:                      components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
-	auditIac:                      components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
-	auditSast:                     components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
-	auditSecrets:                  components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
+	auditSca:                      components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s and --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac, Services)),
+	auditIac:                      components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Sast, Services)),
+	auditSast:                     components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Iac, Services)),
+	auditSecrets:                  components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Sast, Iac, Services)),
+	auditServices:                 components.NewBoolFlag(Services, fmt.Sprintf("Selective scanners mode: Execute Services sub-scan. Can be combined with --%s, --%s, --%s and --%s.", Sca, Secrets, Sast, Iac)),
 	auditWithoutCA:                components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
@@ -368,9 +373,11 @@ var flagsMap = map[string]components.Flag{
 	Port:         components.NewStringFlag(Port, "Specifies the port to run the SAST server on.", components.SetMandatory()),
 
 	UseConfigProfile: components.NewBoolFlag(UseConfigProfile, "Set to false to override config profile for the audit.", components.WithBoolDefaultValue(true), components.SetHiddenBoolFlag()),
+	Workspace:        components.NewStringFlag(Workspace, "Optional workspace name for repositories with multiple config profiles. Used with the repository URL to fetch the matching config profile from the JFrog Platform."),
 
 	// Docker flags
-	DockerImageName: components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
+	DockerImageName:  components.NewStringFlag(DockerImageName, "Specifies the Docker image name to audit. Uses the same format as the Docker CLI, including Artifactory-hosted images."),
+	HuggingFaceModel: components.NewStringFlag(HuggingFaceModel, "Hugging Face model(s) to audit, in '<repo-id>[:revision]' format. Multiple models can be comma-separated."),
 
 	// Git flags
 	InputFile: components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

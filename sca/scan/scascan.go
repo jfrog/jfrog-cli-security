@@ -90,10 +90,16 @@ func createScaScanTaskWithRunner(auditParallelRunner *utils.SecurityParallelRunn
 	return func(threadId int) (err error) {
 		defer auditParallelRunner.ScaScansWg.Done()
 		params.ThreadId = threadId
-		auditParallelRunner.ResultsMu.Lock()
-		defer auditParallelRunner.ResultsMu.Unlock()
 		return scaScanTask(strategy, params)
 	}
+}
+
+func (params ScaScanParams) withResultsLock(write func()) {
+	if params.Runner != nil {
+		params.Runner.ResultsMu.Lock()
+		defer params.Runner.ResultsMu.Unlock()
+	}
+	write()
 }
 
 func shouldRunScan(params ScaScanParams) (bool, error) {
@@ -152,7 +158,9 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		params.ScanResults.ScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+		params.withResultsLock(func() {
+			params.ScanResults.ScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+		})
 		if err != nil {
 			return err
 		}
@@ -162,7 +170,9 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
 	bomWithVulnerabilities, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
+	params.withResultsLock(func() {
+		params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}

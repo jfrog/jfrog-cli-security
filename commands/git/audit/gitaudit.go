@@ -52,6 +52,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
+	gitInfo.WorkspaceName = gaCmd.resultsContext.WorkspaceName
 	gaCmd.SetGitContext(gitInfo)
 	// Get the config profile if applicable
 	configProfile, err := getJPDConfigProfile(gaCmd.GitAuditParams)
@@ -81,8 +82,8 @@ func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error)
 		// Already set, use it
 		return params.configProfile, nil
 	}
-	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s", params.gitContext.Source.GitRepoHttpsCloneUrl))
-	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey)
+	log.Debug(fmt.Sprintf("Fetching config profile for git repo URL: %s (workspace: %q)", params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.WorkspaceName))
+	configProfile, err := xsc.GetConfigProfileByUrl(params.xrayVersion, params.serverDetails, params.gitContext.Source.GitRepoHttpsCloneUrl, params.resultsContext.ProjectKey, params.resultsContext.WorkspaceName)
 	if err != nil || configProfile == nil {
 		return nil, fmt.Errorf("failed to get config profile for git audit: %v", err)
 	}
@@ -91,7 +92,7 @@ func getJPDConfigProfile(params GitAuditParams) (*services.ConfigProfile, error)
 
 func verifyConfigProfile(configProfile *services.ConfigProfile) error {
 	if len(configProfile.Modules) != 1 {
-		return fmt.Errorf("more than one module was found '%s' profile. Frogbot currently supports only one module per config profile", configProfile.ProfileName)
+		return fmt.Errorf("expected exactly 1 module in '%s' profile, found %d. Frogbot currently supports only one module per config profile", configProfile.ProfileName, len(configProfile.Modules))
 	}
 	if configProfile.Modules[0].PathFromRoot != "." {
 		return fmt.Errorf("module '%s' in profile '%s' contains the following path from root: '%s'. Frogbot currently supports only a single module with a '.' path from root", configProfile.Modules[0].ModuleName, configProfile.ProfileName, configProfile.Modules[0].PathFromRoot)
@@ -182,7 +183,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.Entitlements.Jas {
-		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf git audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("In addition to SCA, the ‘jf git audit’ command supports the following Advanced Security scans: 'Contextual Analysis', 'Secrets Detection', 'IaC', 'Services', and ‘SAST’.\nThese scans are available within Advanced Security license. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if cmdResults.ResultsPlatformUrl != "" {
 		messages = append(messages, output.GetCommandResultsPlatformUrlMessage(cmdResults, true))

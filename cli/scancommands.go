@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -34,6 +35,7 @@ import (
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
@@ -42,7 +44,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/sast_server"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
@@ -573,7 +574,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	}
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy).SetViolationGenerator(violationGenerator).SetIncludeSbom(shouldIncludeSbom(c, format))
-	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
+	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(utils.DefaultXrayCdxUploadRepoName)
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
@@ -727,6 +728,16 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 }
 
 func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, error) {
+	scriptPath := c.GetStringFlagValue(flags.Script)
+	if scriptPath != "" && c.GetStringFlagValue(flags.WorkingDirs) != "" {
+		return nil, errorutils.CheckErrorf("--script and --working-dirs cannot be used together; run separate curation-audit commands for each")
+	}
+	if scriptPath != "" && c.GetStringFlagValue(flags.DockerImageName) != "" {
+		return nil, errorutils.CheckErrorf("--script and --docker-image cannot be used together; run separate curation-audit commands for each")
+	}
+	if scriptPath != "" && c.IsFlagSet(flags.HuggingFaceModel) {
+		return nil, errorutils.CheckErrorf("--script and --hugging-face-model cannot be used together; run separate curation-audit commands for each")
+	}
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return nil, err
@@ -754,10 +765,20 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetSolutionFilePath(c.GetStringFlagValue(flags.SolutionPath))
 	curationAuditCommand.SetDockerImageName(c.GetStringFlagValue(flags.DockerImageName))
+	if c.IsFlagSet(flags.HuggingFaceModel) {
+		hfModel := c.GetStringFlagValue(flags.HuggingFaceModel)
+		if hfModel == "" {
+			return nil, errorutils.CheckErrorf(
+				"--hugging-face-model value cannot be empty; expected '<repo-id>[:<revision>]' (revision defaults to 'main'), comma-separated for multiple (e.g. 'mcpotato/42-eicar-street:main,bert-base-uncased')",
+			)
+		}
+		curationAuditCommand.SetHuggingFaceModel(hfModel)
+	}
 	curationAuditCommand.SetIncludeCachedPackages(c.GetBoolFlagValue(flags.IncludeCachedPackages))
 	curationAuditCommand.SetMvnIncludePluginDeps(c.GetBoolFlagValue(flags.MvnIncludePluginDeps))
 	curationAuditCommand.SetLegacyPeerDeps(c.GetBoolFlagValue(flags.LegacyPeerDeps))
 	curationAuditCommand.SetRunNative(c.GetBoolFlagValue(flags.RunNative))
+	curationAuditCommand.SetScriptPath(scriptPath)
 	return curationAuditCommand, nil
 }
 

@@ -31,5 +31,25 @@ Gotchas:
 - Technology flags (--mvn, --gradle, --npm, --go, --pip, --pipenv, --nuget, --yarn) restrict the scan; otherwise auto-detection runs every detected stack.
 - --add-sast-rules requires --sast to be active.
 
-Related: jf scan, jf build-scan, jf curation-audit, jf sbom-enrich`
+Related: jf scan, jf build-scan, jf curation-audit, jf sbom-enrich
+
+QA:
+Q: How can I audit the project in the current directory using the policies defined for 'project-1' in JFrog Xray?
+A: jf audit --project 'project-1'
+
+Q: What is the command to audit the project in the current directory using the policies defined for 'libs-local/release-artifacts/' path in Xray?
+A: jf audit --repo-path 'libs-local/release-artifacts/'
+
+Q: How can I audit the code project in the current directory excluding all files inside the 'node_modules' directory and files with the 'to_exclude' suffix in the repo?
+A: jf audit --exclusions '*node_modules*;*to_exclude'
+
+Q: What is the command to audit the project in the current directory using 'watch1' and 'watch2' defined in JFrog Xray?
+A: jf audit --watches 'watch1,watch2'
+
+Q: How can I audit the project in the current directory and show only maven and npm vulnerabilities?
+A: jf audit --mvn --npm
+
+Q: How can I scan my local sources and show only go and gradle vulnerabilities?
+A: jf audit --go --gradle
+`
 }

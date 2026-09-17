@@ -187,6 +187,7 @@ func TestGenerateViolations(t *testing.T) {
 			assert.ElementsMatch(t, converted.Sast, tc.expected.Sast)
 			assert.ElementsMatch(t, converted.Secrets, tc.expected.Secrets)
 			assert.ElementsMatch(t, converted.Iac, tc.expected.Iac)
+			assert.ElementsMatch(t, converted.Services, tc.expected.Services)
 		})
 	}
 }

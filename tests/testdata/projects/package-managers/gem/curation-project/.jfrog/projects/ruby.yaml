@@ -1,5 +1,5 @@
 version: 1
-type: gem
+type: ruby
 resolver:
-  repo: ruby-remote
-  serverId: test
+    repo: ruby-yaml-repo
+    serverId: test

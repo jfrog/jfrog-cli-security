@@ -57,6 +57,8 @@ var (
 	TestAuditCocoapods  *bool
 	TestAuditSwift      *bool
 
+	TestRemediation *bool
+
 	JfrogUrl         *string
 	JfrogUser        *string
 	JfrogPassword    *string
@@ -126,6 +128,7 @@ func init() {
 	TestAuditCocoapods = flag.Bool("test.audit.Cocoapods", false, "Run Cocoapods technologies audit integration tests")
 	TestAuditSwift = flag.Bool("test.audit.Swift", false, "Run Swift technologies audit integration tests")
 	TestMaliciousScan = flag.Bool("test.maliciousScan", false, "Run Malicious scan command integration tests")
+	TestRemediation = flag.Bool("test.remediation", false, "Run package updater remediation integration tests")
 
 	JfrogUrl = flag.String("jfrog.url", getTestUrlDefaultValue(), "JFrog platform url")
 	JfrogUser = flag.String("jfrog.user", getTestUserDefaultValue(), "JFrog platform  username")
@@ -142,7 +145,7 @@ func init() {
 func InitTestFlags() {
 	flag.Parse()
 	// If no test types flags were set, run all types
-	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditNewSca, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestMaliciousScan, TestGit)
+	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditNewSca, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestMaliciousScan, TestGit, TestRemediation)
 	if shouldRunAllTests {
 		log.Info("Running all tests. To run only specific tests, please specify the desired test flags.")
 		*TestUnit = true
@@ -165,6 +168,7 @@ func InitTestFlags() {
 		*TestEnrich = true
 		*TestMaliciousScan = true
 		*TestGit = true
+		*TestRemediation = true
 	}
 }
 

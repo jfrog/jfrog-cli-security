@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -100,4 +101,30 @@ func TestJasRunner_Target_AnalyzerManagerReturnsError(t *testing.T) {
 	)
 	// Expect error:
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
+}
+
+func TestSastChangedFilesMode(t *testing.T) {
+	profileWithDiffMode := &services.ConfigProfile{Modules: []services.Module{{
+		ScanConfig: services.ScanConfig{SastScannerConfig: services.SastScannerConfig{EnableFastDiffMode: true}},
+	}}}
+	profileWithoutDiffMode := &services.ConfigProfile{Modules: []services.Module{{
+		ScanConfig: services.ScanConfig{SastScannerConfig: services.SastScannerConfig{EnableSastScan: true}},
+	}}}
+
+	tests := []struct {
+		name     string
+		params   JasRunnerParams
+		expected bool
+	}{
+		{name: "no profile and no flag", params: JasRunnerParams{}},
+		{name: "flag only", params: JasRunnerParams{SastChangedFilesMode: true}, expected: true},
+		{name: "profile differential scanning enabled", params: JasRunnerParams{ConfigProfile: profileWithDiffMode}, expected: true},
+		{name: "profile differential scanning disabled", params: JasRunnerParams{ConfigProfile: profileWithoutDiffMode}},
+		{name: "profile without modules", params: JasRunnerParams{ConfigProfile: &services.ConfigProfile{}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.params.sastChangedFilesMode())
+		})
+	}
 }

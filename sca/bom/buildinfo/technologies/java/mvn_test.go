@@ -1,14 +1,18 @@
 package java
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/beevik/etree"
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -66,14 +70,14 @@ const (
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <servers>
         <server>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
             <username>testUser</username>
             <password>testPass</password>
         </server>
     </servers>
     <mirrors>
         <mirror>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
             <url>https://myartifactory.com/artifactory/api/curation/audit/testRepo</url>
             <mirrorOf>*</mirrorOf>
         </mirror>
@@ -85,16 +89,16 @@ const (
                     <snapshots>
                         <enabled>true</enabled>
                     </snapshots>
-                    <id>artifactory</id>
+                    <id>jfrog-curation-audit</id>
                     <name>mavenRepo</name>
                     <url>https://myartifactory.com/artifactory/api/curation/audit/testRepo</url>
                 </repository>
             </repositories>
-            <id>artifactory</id>
+            <id>jfrog-curation-audit</id>
         </profile>
     </profiles>
     <activeProfiles>
-        <activeProfile>artifactory</activeProfile>
+        <activeProfile>jfrog-curation-audit</activeProfile>
     </activeProfiles>
 </settings>`
 	//#nosec G101 - dummy token for testing
@@ -339,9 +343,12 @@ func TestDepTreeWithDedicatedCache(t *testing.T) {
 }
 
 func TestGetMavenPluginInstallationArgs(t *testing.T) {
-	args := GetMavenPluginInstallationGoals("testPlugin")
-	assert.Equal(t, "org.apache.maven.plugins:maven-install-plugin:3.1.1:install-file", args[0])
-	assert.Equal(t, "-Dfile=testPlugin", args[1])
+	expected := []string{
+		"org.apache.maven.plugins:maven-install-plugin:3.1.1:install-file",
+		"-Dfile=testPlugin",
+		"-B",
+	}
+	assert.Equal(t, expected, GetMavenPluginInstallationGoals("testPlugin"))
 }
 
 func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
@@ -355,6 +362,9 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 			},
 			depsRepo: "testRepo",
 		},
+		// Point to a non-existent path so the test always exercises the template
+		// code path regardless of whether ~/.m2/settings.xml exists on the CI machine.
+		userSettingsXmlPath: filepath.Join(t.TempDir(), "no-settings.xml"),
 	}
 	// Create a temporary directory for testing and settings.xml creation
 	tempDir := t.TempDir()
@@ -401,6 +411,251 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 	assert.Equal(t, settingsXmlWithAccessToken, string(actualContent))
 }
 
+// TestCreateSettingsXmlPreservesExistingProxy verifies that when the user already has a
+// settings.xml (containing e.g. a <proxies> block), the curation-audit temp file is
+// seeded from that file so the proxy configuration is preserved.
+func TestCreateSettingsXmlPreservesExistingProxy(t *testing.T) {
+	t.Parallel()
+	//#nosec G101 - test credentials only
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <proxies>
+        <proxy>
+            <id>corp-proxy</id>
+            <active>true</active>
+            <protocol>http</protocol>
+            <host>10.56.80.80</host>
+            <port>8080</port>
+        </proxy>
+    </proxies>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	resultBytes, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	result := string(resultBytes)
+
+	// Proxy must be preserved from the user's original settings.
+	assert.Contains(t, result, "10.56.80.80", "proxy host must be preserved")
+	assert.Contains(t, result, "corp-proxy", "proxy id must be preserved")
+
+	// Curation entries must be injected.
+	assert.Contains(t, result, "api/curation/audit/testRepo", "curation mirror URL must be present")
+	assert.Contains(t, result, "<mirrorOf>*</mirrorOf>", "catch-all mirror must be present")
+	assert.Contains(t, result, "testUser", "username must be present")
+	assert.Contains(t, result, "testPass", "password must be present")
+	assert.Contains(t, result, "<activeProfile>"+curationSettingsID+"</activeProfile>", "activeProfile must be present")
+
+	// The user's original settings.xml must be untouched.
+	originalContent, err := os.ReadFile(userSettingsPath)
+	require.NoError(t, err)
+	assert.Equal(t, userSettings, string(originalContent), "user's settings.xml must not be modified")
+}
+
+// TestCreateSettingsXmlIdempotent verifies that calling createSettingsXmlWithConfiguredArtifactory
+// multiple times with the same user settings does not create duplicate entries in the temp file.
+func TestCreateSettingsXmlIdempotent(t *testing.T) {
+	t.Parallel()
+	//#nosec G101 - test credentials only
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <proxies>
+        <proxy>
+            <id>corp-proxy</id>
+            <active>true</active>
+            <protocol>http</protocol>
+            <host>10.56.80.80</host>
+            <port>8080</port>
+        </proxy>
+    </proxies>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	// Run twice — each invocation reads the unchanged user settings and writes to tempDir.
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	firstRun, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	secondRun, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+
+	// Both runs must produce identical output — no duplicate entries.
+	assert.Equal(t, string(firstRun), string(secondRun), "second run must produce identical output (no duplicates)")
+
+	result := string(secondRun)
+	// Structural uniqueness: exactly one <server>, one <mirror>, one top-level <profile>,
+	// and one <activeProfile> entry with the curation ID.
+	assert.Equal(t, 1, strings.Count(result, "<server>"), "expected exactly one <server> block")
+	assert.Equal(t, 1, strings.Count(result, "<mirror>"), "expected exactly one <mirror> block")
+	assert.Equal(t, 1, strings.Count(result, "<activeProfile>"+curationSettingsID+"</activeProfile>"),
+		"expected exactly one curation <activeProfile>")
+}
+
+// TestCreateSettingsXmlCurationMirrorIsFirst verifies that when the user already has a
+// catch-all <mirror> (mirrorOf=*), the curation mirror is inserted first so Maven's
+// document-order selection routes through curation. It also covers the id-collision case:
+// the pre-existing mirror uses id="artifactory", which must not be overwritten.
+func TestCreateSettingsXmlCurationMirrorIsFirst(t *testing.T) {
+	t.Parallel()
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <mirrors>
+        <mirror>
+            <id>artifactory</id>
+            <url>https://existing-internal.corp/artifactory/repo</url>
+            <mirrorOf>*</mirrorOf>
+        </mirror>
+    </mirrors>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	doc := etree.NewDocument()
+	require.NoError(t, doc.ReadFromFile(filepath.Join(tempDir, settingsXmlFile)))
+	mirrorEls := doc.SelectElement("settings").SelectElement("mirrors").SelectElements("mirror")
+	require.Len(t, mirrorEls, 2, "both the curation mirror and the user's mirror must be present")
+
+	// The curation mirror must come first so Maven picks it for the '*' match.
+	firstID := mirrorEls[0].SelectElement("id").Text()
+	assert.Equal(t, curationSettingsID, firstID, "curation mirror must be the first <mirror>")
+	assert.Contains(t, mirrorEls[0].SelectElement("url").Text(), "api/curation/audit/testRepo")
+
+	// The user's pre-existing mirror (id=artifactory) must be preserved untouched.
+	assert.Equal(t, "artifactory", mirrorEls[1].SelectElement("id").Text())
+	assert.Equal(t, "https://existing-internal.corp/artifactory/repo", mirrorEls[1].SelectElement("url").Text())
+}
+
+// TestCreateSettingsXmlFromExistingIsPrivate verifies the generated temp settings.xml,
+// which carries credentials, is written with restrictive 0600 permissions.
+func TestCreateSettingsXmlFromExistingIsPrivate(t *testing.T) {
+	t.Parallel()
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 http://maven.apache.org/xsd/settings-1.2.0.xsd">
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	info, err := os.Stat(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	if !coreutils.IsWindows() {
+		// Windows does not enforce Unix permission bits — skip the mode check there.
+		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "temp settings.xml must be private (0600)")
+	}
+}
+
+// TestCreateSettingsXmlFallsBackWhenNoHome verifies that an unresolvable home directory
+// falls back to the built-in template instead of failing the whole scan.
+func TestCreateSettingsXmlFallsBackWhenNoHome(t *testing.T) {
+	if coreutils.IsWindows() {
+		t.Skip("os.UserHomeDir resolves home from different env vars on Windows")
+	}
+	// Empty HOME makes os.UserHomeDir return an error on unix-like systems.
+	t.Setenv("HOME", "")
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server: &config.ServerDetails{
+				ArtifactoryUrl: "https://myartifactory.com/artifactory",
+				User:           "testUser",
+				Password:       "testPass",
+			},
+			depsRepo: "testRepo",
+		},
+		// isCurationCmd must be true so this test actually reaches the os.UserHomeDir()
+		// lookup below; non-curation runs short-circuit to the template before that point.
+		isCurationCmd: true,
+		// userSettingsXmlPath left empty so the default (home-based) lookup runs and fails.
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	actualContent, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	actualContent = []byte(strings.ReplaceAll(string(actualContent), "\r\n", "\n"))
+	// Template fallback for a curation run still uses the curation-specific id.
+	assert.Equal(t, settingsXmlWithUsernameAndPasswordAndCurationDedicatedAPi, string(actualContent))
+}
+
 func TestRunProjectsCmd(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example"))
@@ -442,278 +697,6 @@ func TestRemoveMavenConfig(t *testing.T) {
 	assert.FileExists(t, mavenConfigPath)
 }
 
-func TestParseMavenPluginDeps(t *testing.T) {
-	t.Parallel()
-	// Realistic "mvn dependency:resolve-plugins" output from Maven 3.9.x.
-	mvnOutput := `
-[INFO] Scanning for projects...
-[INFO]
-[INFO] --- dependency:3.7.0:resolve-plugins (default-cli) @ test-ignore-rules ---
-[INFO]
-[INFO] The following plugins have been resolved:
-[INFO]    org.apache.maven.plugins:maven-clean-plugin:maven-plugin:3.2.0:runtime
-[INFO]       org.apache.maven.plugins:maven-clean-plugin:jar:3.2.0
-[INFO]       org.apache.maven.shared:maven-shared-utils:jar:3.3.4
-[INFO]    org.apache.maven.plugins:maven-resources-plugin:maven-plugin:3.4.0:runtime
-[INFO]       org.apache.maven.plugins:maven-resources-plugin:jar:3.4.0
-[INFO]       org.codehaus.plexus:plexus-utils:jar:4.0.2
-[INFO]       org.apache.commons:commons-lang3:jar:3.20.0
-[INFO]       commons-io:commons-io:jar:2.16.1
-[INFO]    org.apache.maven.plugins:maven-compiler-plugin:maven-plugin:3.15.0:runtime
-[INFO]       org.apache.maven.plugins:maven-compiler-plugin:jar:3.15.0
-[INFO]       org.ow2.asm:asm:jar:9.7
-[INFO]    org.apache.maven.plugins:maven-site-plugin:maven-plugin:3.12.1:runtime
-[INFO]       org.eclipse.sisu:org.eclipse.sisu.plexus:jar:0.3.5
-[INFO]       org.sonatype.sisu:sisu-guice:jar:no_aop:3.2.3
-[INFO]
-[INFO] BUILD SUCCESS
-`
-	deps := parseMavenPluginDeps(mvnOutput, nil)
-
-	expectedKeys := []string{
-		"org.apache.maven.plugins:maven-clean-plugin:3.2.0",
-		"org.apache.maven.shared:maven-shared-utils:3.3.4",
-		"org.apache.maven.plugins:maven-resources-plugin:3.4.0",
-		"org.codehaus.plexus:plexus-utils:4.0.2",
-		"org.apache.commons:commons-lang3:3.20.0",
-		"commons-io:commons-io:2.16.1",
-		"org.apache.maven.plugins:maven-compiler-plugin:3.15.0",
-		"org.ow2.asm:asm:9.7",
-		"org.eclipse.sisu:org.eclipse.sisu.plexus:0.3.5",
-		"org.sonatype.sisu:sisu-guice:3.2.3", // classifier "no_aop" — version must be 3.2.3
-	}
-	assert.Len(t, deps, len(expectedKeys))
-	for _, key := range expectedKeys {
-		assert.Contains(t, deps, key, "expected plugin dep %q to be parsed", key)
-		if node, ok := deps[key]; ok {
-			assert.NotNil(t, node.Types, "expected Types to be set for %q", key)
-			assert.NotEmpty(t, *node.Types, "expected at least one type for %q", key)
-		}
-	}
-	// plexus-utils must carry type "jar" so the curation HEAD check builds the correct URL
-	plexusNode := deps["org.codehaus.plexus:plexus-utils:4.0.2"]
-	if assert.NotNil(t, plexusNode) && assert.NotNil(t, plexusNode.Types) {
-		assert.Contains(t, *plexusNode.Types, "jar")
-	}
-}
-
-func TestParseMavenPluginDepsEmpty(t *testing.T) {
-	t.Parallel()
-	assert.Empty(t, parseMavenPluginDeps("", nil))
-	assert.Empty(t, parseMavenPluginDeps("[INFO] BUILD SUCCESS\n[INFO] some random line", nil))
-}
-
-func TestParseMavenPluginDepsScopeSuffix(t *testing.T) {
-	t.Parallel()
-	// Verifies that a known Maven scope in the 5th colon-field is not mistaken for a version.
-	// A line like "g:a:jar:1.0:compile" must produce key "g:a:1.0", not "g:a:compile".
-	output := "[INFO]       commons-io:commons-io:jar:2.16.1:compile\n" +
-		"[INFO]       org.sonatype.sisu:sisu-guice:jar:no_aop:3.2.3\n"
-	deps := parseMavenPluginDeps(output, nil)
-	assert.Contains(t, deps, "commons-io:commons-io:2.16.1", "scope suffix should not become the version")
-	assert.NotContains(t, deps, "commons-io:commons-io:compile", "version must not be the scope")
-	assert.Contains(t, deps, "org.sonatype.sisu:sisu-guice:3.2.3", "classifier path (no_aop) must still resolve correctly")
-}
-
-func TestParseMavenPluginDepsSkipsNonCoordinateLines(t *testing.T) {
-	t.Parallel()
-	output := `
-[INFO] Building my-project 1.0-SNAPSHOT
-[INFO] --- dependency:3.7.0:resolve-plugins @ my-project ---
-[INFO]    org.apache.maven.plugins:maven-jar-plugin:maven-plugin:3.3.0:runtime
-[INFO]       org.apache.maven.plugins:maven-jar-plugin:jar:3.3.0
-[INFO]       org.apache.maven.shared:maven-shared-utils:jar:3.3.4
-[WARNING] Some warning line
-[ERROR] some error that should be skipped
-`
-	deps := parseMavenPluginDeps(output, nil)
-	assert.Len(t, deps, 2)
-	assert.Contains(t, deps, "org.apache.maven.plugins:maven-jar-plugin:3.3.0")
-	assert.Contains(t, deps, "org.apache.maven.shared:maven-shared-utils:3.3.4")
-}
-
-func TestParseMavenPluginDepsFiltersByAllowList(t *testing.T) {
-	t.Parallel()
-	// Same realistic Maven 3.9 output as TestParseMavenPluginDeps; allow-list excludes
-	// maven-site-plugin so its transitive deps (sisu.plexus, sisu-guice) must be dropped.
-	mvnOutput := `
-[INFO] --- dependency:3.7.0:resolve-plugins (default-cli) @ test-ignore-rules ---
-[INFO]    org.apache.maven.plugins:maven-resources-plugin:maven-plugin:3.4.0:runtime
-[INFO]       org.apache.maven.plugins:maven-resources-plugin:jar:3.4.0
-[INFO]       org.codehaus.plexus:plexus-utils:jar:4.0.2
-[INFO]    org.apache.maven.plugins:maven-site-plugin:maven-plugin:3.12.1:runtime
-[INFO]       org.eclipse.sisu:org.eclipse.sisu.plexus:jar:0.3.5
-[INFO]       org.sonatype.sisu:sisu-guice:jar:no_aop:3.2.3
-[INFO]    org.apache.maven.plugins:maven-compiler-plugin:maven-plugin:3.15.0:runtime
-[INFO]       org.ow2.asm:asm:jar:9.7
-`
-	allowed := map[string]struct{}{
-		"org.apache.maven.plugins:maven-resources-plugin": {},
-		"org.apache.maven.plugins:maven-compiler-plugin":  {},
-	}
-	deps := parseMavenPluginDeps(mvnOutput, allowed)
-
-	assert.Contains(t, deps, "org.apache.maven.plugins:maven-resources-plugin:3.4.0")
-	assert.Contains(t, deps, "org.codehaus.plexus:plexus-utils:4.0.2")
-	assert.Contains(t, deps, "org.ow2.asm:asm:9.7")
-	assert.NotContains(t, deps, "org.eclipse.sisu:org.eclipse.sisu.plexus:0.3.5", "site-plugin transitive dep must be filtered out")
-	assert.NotContains(t, deps, "org.sonatype.sisu:sisu-guice:3.2.3", "site-plugin transitive dep must be filtered out")
-}
-
-func TestParseEffectivePomPluginCoordinates(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name     string
-		xmlData  string
-		wantNil  bool
-		included []string
-		excluded []string
-	}{
-		{
-			name: "install-lifecycle plugins included, post-install plugins excluded",
-			xmlData: `<?xml version="1.0"?>
-<project>
-  <build>
-    <plugins>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.4.0</version></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.15.0</version></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-deploy-plugin</artifactId><version>3.1.4</version></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-site-plugin</artifactId><version>3.12.1</version></plugin>
-    </plugins>
-  </build>
-</project>`,
-			included: []string{
-				"org.apache.maven.plugins:maven-resources-plugin",
-				"org.apache.maven.plugins:maven-compiler-plugin",
-			},
-			excluded: []string{
-				"org.apache.maven.plugins:maven-deploy-plugin",
-				"org.apache.maven.plugins:maven-site-plugin",
-			},
-		},
-		{
-			name: "user rebinds deploy-plugin to install-lifecycle phase — included",
-			xmlData: `<?xml version="1.0"?>
-<project>
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-deploy-plugin</artifactId>
-        <version>3.1.4</version>
-        <executions><execution><id>custom-pkg</id><phase>package</phase></execution></executions>
-      </plugin>
-    </plugins>
-  </build>
-</project>`,
-			included: []string{"org.apache.maven.plugins:maven-deploy-plugin"},
-		},
-		{
-			name: "user plugin with only post-install executions — excluded",
-			xmlData: `<?xml version="1.0"?>
-<project>
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>com.example</groupId>
-        <artifactId>my-deploy-only-plugin</artifactId>
-        <version>1.0</version>
-        <executions><execution><id>only-on-deploy</id><phase>deploy</phase></execution></executions>
-      </plugin>
-    </plugins>
-  </build>
-</project>`,
-			excluded: []string{"com.example:my-deploy-only-plugin"},
-		},
-		{
-			// mvn install does not invoke the Clean lifecycle; a plugin bound only to it
-			// must not contribute its transitive deps to the curation evaluation.
-			name: "user plugin bound only to clean phase — excluded",
-			xmlData: `<?xml version="1.0"?>
-<project>
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>com.example</groupId>
-        <artifactId>my-clean-only-plugin</artifactId>
-        <version>1.0</version>
-        <executions><execution><id>only-on-clean</id><phase>clean</phase></execution></executions>
-      </plugin>
-    </plugins>
-  </build>
-</project>`,
-			excluded: []string{"com.example:my-clean-only-plugin"},
-		},
-		{
-			name: "multi-module: plugins from every <project> accumulate",
-			xmlData: `<?xml version="1.0"?>
-<projects>
-  <project><build><plugins>
-    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId></plugin>
-  </plugins></build></project>
-  <project><build><plugins>
-    <plugin><groupId>com.example</groupId><artifactId>custom-plugin</artifactId></plugin>
-  </plugins></build></project>
-</projects>`,
-			included: []string{
-				"org.apache.maven.plugins:maven-compiler-plugin",
-				"com.example:custom-plugin",
-			},
-		},
-		{
-			name:    "empty input returns nil (callers fall back to no-filter)",
-			xmlData: "",
-			wantNil: true,
-		},
-		{
-			name:    "non-XML input returns nil",
-			xmlData: "not xml at all",
-			wantNil: true,
-		},
-		{
-			// Real maven-help-plugin output declares xmlns="http://maven.apache.org/POM/4.0.0".
-			// Without stripping xmlns, encoding/xml returns an empty allow-list and silently
-			// disables the filter.
-			name: "default Maven namespace is stripped before parsing",
-			xmlData: `<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>org.example</groupId>
-  <artifactId>test-ignore-rules</artifactId>
-  <version>1.0-SNAPSHOT</version>
-  <build>
-    <plugins>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.4.0</version></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-deploy-plugin</artifactId><version>3.1.4</version></plugin>
-    </plugins>
-  </build>
-</project>`,
-			included: []string{"org.apache.maven.plugins:maven-resources-plugin"},
-			excluded: []string{"org.apache.maven.plugins:maven-deploy-plugin"},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := parseEffectivePomPluginCoordinates(tc.xmlData)
-			if tc.wantNil {
-				assert.Nil(t, got)
-				return
-			}
-			assert.NotNil(t, got, "non-empty XML must produce a non-nil allow-list")
-			for _, k := range tc.included {
-				assert.Contains(t, got, k)
-			}
-			for _, k := range tc.excluded {
-				assert.NotContains(t, got, k)
-			}
-		})
-	}
-}
-
 func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 	t.Parallel()
 	server := &config.ServerDetails{ArtifactoryUrl: "https://test.jfrog.io/artifactory"}
@@ -721,6 +704,7 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 		UseWrapper:              true,
 		Server:                  server,
 		DepsRepo:                "test-repo",
+		InsecureTls:             true,
 		IsMavenDepTreeInstalled: true,
 		IsCurationCmd:           true,
 		CurationCacheFolder:     "/tmp/cache",
@@ -740,6 +724,227 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 	assert.Equal(t, "/tmp/cache", manager.curationCacheFolder)
 	assert.Equal(t, Tree, manager.cmdName)
 	assert.True(t, manager.mvnIncludePluginDeps, "MvnIncludePluginDeps must be propagated from params into the manager")
+	assert.True(t, manager.insecureTls, "InsecureTls must be propagated from params into the manager")
+}
+
+// writeFakeMvnw writes both a POSIX mvnw and a Windows mvnw.cmd, since getMavenExecPath picks
+// the extension by OS. posixBody/windowsBody are the script bodies, without shebang/@echo off.
+func writeFakeMvnw(t *testing.T, posixBody, windowsBody string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile("mvnw", []byte("#!/bin/sh\n"+posixBody), 0644))
+	require.NoError(t, os.WriteFile("mvnw.cmd", []byte("@echo off\r\n"+windowsBody), 0644))
+}
+
+// TestInsecureTlsAddsWagonSslFlags locks in that --insecure-tls reaches the spawned mvn
+// process. Before this fix the flag only affected the CLI's own HTTP clients (Xray/Catalog/
+// Artifactory) and had no effect on the internally-invoked mvn subprocess, so a MITM proxy
+// that the CLI's own TLS bypass couldn't help with would still fail the plugin resolution.
+// Uses a fake mvnw that echoes its args, so no real Maven or network call is needed.
+func TestInsecureTlsAddsWagonSslFlags(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	writeFakeMvnw(t, "echo \"$@\"\n", "echo %*\r\n")
+
+	insecure := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, InsecureTls: true}, Tree)
+	out, err := insecure.RunMvnCmd([]string{"some-goal"})
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.insecure=true")
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.allowall=true")
+	assert.Contains(t, string(out), "-Dmaven.wagon.http.ssl.ignore.validity.dates=true")
+	// Maven 3.9.0+ defaults to the native resolver transport, which ignores the wagon.* properties
+	// above and reads this one instead — both must be set for --insecure-tls to work regardless of
+	// which transport the resolved Maven version defaults to.
+	assert.Contains(t, string(out), "-Daether.connector.https.securityMode=insecure")
+
+	secure := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	out, err = secure.RunMvnCmd([]string{"some-goal"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "-Dmaven.wagon.http.ssl")
+	assert.NotContains(t, string(out), "-Daether.connector.https.securityMode")
+}
+
+// TestRunMvnCmdErrorIncludesCapturedOutput locks in that a failing mvn command's returned
+// error contains the process's actual stdout/stderr, not just Go's generic "exit status 1".
+// Before this fix that output was only ever logged at the Verbose level (above Debug), so
+// even a debug log wouldn't show the real Maven failure reason.
+func TestRunMvnCmdErrorIncludesCapturedOutput(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	writeFakeMvnw(t, "echo 'a distinctive maven failure marker' >&2\nexit 1\n", "echo a distinctive maven failure marker 1>&2\r\nexit /b 1\r\n")
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a distinctive maven failure marker")
+}
+
+// TestRunMvnCmdErrorTruncatesLargeOutput locks in that embedding captured output into the error
+// (added by this same fix) doesn't let an unbounded, noisy Maven run bloat the returned error
+// indefinitely. The tail is kept, since a failing run's [ERROR] block is typically at the end.
+func TestRunMvnCmdErrorTruncatesLargeOutput(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	posixScript := "i=0\nwhile [ $i -lt 2000 ]; do\n  echo \"filler line $i of noisy maven info output\"\n  i=$((i+1))\ndone\necho 'a distinctive tail marker'\nexit 1\n"
+	windowsScript := "for /l %%i in (0,1,1999) do echo filler line %%i of noisy maven info output\r\necho a distinctive tail marker\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a distinctive tail marker", "the tail of the output, where a real [ERROR] block lives, must survive truncation")
+	assert.Less(t, len(err.Error()), 2*maxCapturedOutputInError, "error must be bounded even when the underlying command produces a large amount of output")
+	assert.Contains(t, err.Error(), "truncated", "a truncated error should say so")
+}
+
+// TestTruncateForErrorDoesNotSplitMultiByteRune: the naive byte-count cut lands mid-emoji here.
+func TestTruncateForErrorDoesNotSplitMultiByteRune(t *testing.T) {
+	t.Parallel()
+	const emoji = "🔥" // 4-byte UTF-8 rune
+	prefix := strings.Repeat("a", 8)
+	suffix := strings.Repeat("b", maxCapturedOutputInError-2)
+	output := prefix + emoji + suffix // naive cut at len(output)-maxCapturedOutputInError == 10, 2 bytes into the emoji
+
+	result := truncateForError(output)
+	assert.True(t, utf8.ValidString(result), "truncated output must be valid UTF-8, never a dangling continuation byte")
+}
+
+// TestRunMvnCmdErrorNoTrailingNewlineWhenOutputEmpty: no captured output shouldn't leave a dangling "\n".
+func TestRunMvnCmdErrorNoTrailingNewlineWhenOutputEmpty(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	writeFakeMvnw(t, "exit 1\n", "exit /b 1\r\n")
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.False(t, strings.HasSuffix(err.Error(), "\n"), "error must not have a dangling trailing newline when there is no captured output")
+}
+
+// TestRunMvnCmdMasksCredentialsInError: server credentials must never appear verbatim in the error.
+func TestRunMvnCmdMasksCredentialsInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	posixScript := "echo 'auth failed for user secret-user-42 with password s3cr3t-p4ss!' >&2\nexit 1\n"
+	windowsScript := "echo auth failed for user secret-user-42 with password s3cr3t-p4ss! 1>&2\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
+
+	server := &config.ServerDetails{User: "secret-user-42", Password: "s3cr3t-p4ss!"}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "s3cr3t-p4ss!", "password must never appear verbatim in the returned error")
+	assert.NotContains(t, err.Error(), "secret-user-42", "username must never appear verbatim in the returned error")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdMasksPercentEncodedCredentialsInError: a password can also leak in its
+// percent-encoded form if Maven's transport layer echoes a userinfo-embedded URL.
+func TestRunMvnCmdMasksPercentEncodedCredentialsInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	//#nosec G101 - dummy credentials for testing
+	posixScript := "echo 'Transfer failed for https://bob:p%40ss%21@artifactory.example.com/repo' >&2\nexit 1\n"
+	//#nosec G101 - dummy credentials for testing
+	windowsScript := "echo Transfer failed for https://bob:p%%40ss%%21@artifactory.example.com/repo 1>&2\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
+
+	server := &config.ServerDetails{User: "bob", Password: "p@ss!"}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "p%40ss%21", "the percent-encoded password must also be redacted")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdMasksAccessTokenInError: GetAuthenticationCredentials returns the access token as
+// the password value for token-only setups; it must be masked the same way.
+func TestRunMvnCmdMasksAccessTokenInError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	const token = "secret-access-token-abc123"
+	writeFakeMvnw(t, "echo 'auth failed with token "+token+"' >&2\nexit 1\n", "echo auth failed with token "+token+" 1>&2\r\nexit /b 1\r\n")
+
+	server := &config.ServerDetails{AccessToken: token}
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, Server: server}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), token, "access token must never appear verbatim in the returned error")
+	assert.Contains(t, err.Error(), "***")
+}
+
+// TestRunMvnCmdErrorWrapsExitError: errors.As must be able to recover the underlying *exec.ExitError.
+func TestRunMvnCmdErrorWrapsExitError(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	writeFakeMvnw(t, "echo 'some output'\nexit 1\n", "echo some output\r\nexit /b 1\r\n")
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	var exitErr *exec.ExitError
+	assert.True(t, errors.As(err, &exitErr), "the underlying *exec.ExitError must be recoverable via errors.As")
+}
+
+// TestRunMvnCmdCurationBlockUnaffectedByTruncation: the curation-block branch's fixed message
+// must stay independent of the truncation logic in the adjacent branch.
+func TestRunMvnCmdCurationBlockUnaffectedByTruncation(t *testing.T) {
+	// No t.Parallel(): this test changes the process-wide working directory.
+	tmpDir := t.TempDir()
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	restoreDir := tests.ChangeDirWithCallback(t, currentDir, tmpDir)
+	defer restoreDir()
+
+	// well over maxCapturedOutputInError
+	posixScript := "i=0\nwhile [ $i -lt 2000 ]; do\n  echo \"noisy maven output line $i\"\n  i=$((i+1))\ndone\necho 'status code: 403'\nexit 1\n"
+	windowsScript := "for /l %%i in (0,1,1999) do echo noisy maven output line %%i\r\necho status code: 403\r\nexit /b 1\r\n"
+	writeFakeMvnw(t, posixScript, windowsScript)
+
+	manager := NewMavenDepTreeManager(&DepTreeParams{UseWrapper: true, IsCurationCmd: true}, Tree)
+	_, err = manager.RunMvnCmd([]string{"some-goal"})
+	require.Error(t, err)
+	assert.Less(t, len(err.Error()), 500, "the curation-block message is a fixed template, not proportional to output size")
+	assert.NotContains(t, err.Error(), "truncated", "the curation-block branch must never invoke the truncation logic")
 }
 
 // TestInjectPluginDeps locks in the dedup guard and the module-root fan-out
@@ -747,17 +952,19 @@ func TestNewMavenDepTreeManagerPreservesAllParams(t *testing.T) {
 func TestInjectPluginDeps(t *testing.T) {
 	t.Parallel()
 	jarType := func() *[]string { t := []string{"jar"}; return &t }
+	strPtr := func(s string) *string { return &s }
 
 	existing := &xray.DepTreeNode{Types: jarType()}
 
 	cases := []struct {
-		name             string
-		uniqueDeps       map[string]*xray.DepTreeNode
-		dependencyTree   []*xrayUtils.GraphNode
-		pluginDeps       map[string]*xray.DepTreeNode
-		wantUniqueDeps   []string
-		wantRootChildren map[string][]string
-		wantExistingKept bool
+		name                string
+		uniqueDeps          map[string]*xray.DepTreeNode
+		dependencyTree      []*xrayUtils.GraphNode
+		pluginDeps          map[string]*xray.DepTreeNode
+		wantUniqueDeps      []string
+		wantRootChildren    map[string][]string
+		wantExistingKept    bool
+		wantChildClassifier map[string]string
 	}{
 		{
 			name:           "empty plugin deps is a no-op",
@@ -800,6 +1007,23 @@ func TestInjectPluginDeps(t *testing.T) {
 				"gav://org.example:m2:1.0": {"gav://commons-io:commons-io:2.11.0"},
 			},
 		},
+		{
+			name:       "classifier is propagated to the fanned-out module-root node",
+			uniqueDeps: map[string]*xray.DepTreeNode{},
+			dependencyTree: []*xrayUtils.GraphNode{
+				{Id: "gav://org.example:m1:1.0"},
+			},
+			pluginDeps: map[string]*xray.DepTreeNode{
+				"org.ow2.asm:asm:9.8": {Types: jarType(), Classifier: strPtr("tests")},
+			},
+			wantUniqueDeps: []string{"gav://org.ow2.asm:asm:9.8"},
+			wantRootChildren: map[string][]string{
+				"gav://org.example:m1:1.0": {"gav://org.ow2.asm:asm:9.8"},
+			},
+			wantChildClassifier: map[string]string{
+				"gav://org.ow2.asm:asm:9.8": "tests",
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -822,6 +1046,11 @@ func TestInjectPluginDeps(t *testing.T) {
 				var childIDs []string
 				for _, child := range root.Nodes {
 					childIDs = append(childIDs, child.Id)
+					if want, ok := tc.wantChildClassifier[child.Id]; ok {
+						if assert.NotNilf(t, child.Classifier, "classifier for %s on root %s", child.Id, root.Id) {
+							assert.Equalf(t, want, *child.Classifier, "classifier for %s on root %s", child.Id, root.Id)
+						}
+					}
 				}
 				assert.ElementsMatch(t, tc.wantRootChildren[root.Id], childIDs,
 					"children attached to module root %s", root.Id)
@@ -830,28 +1059,113 @@ func TestInjectPluginDeps(t *testing.T) {
 	}
 }
 
-// TestTailStringValidUTF8 guards against splitting a multibyte rune mid-sequence.
-// Without the rune-boundary nudge, byte slicing "xあy" with n=3 yields the
-// continuation bytes "\x81\x82y" — invalid UTF-8.
-func TestTailStringValidUTF8(t *testing.T) {
+// TestCreateSettingsXmlMalformedFallsBackToTemplate verifies that a settings.xml that
+// cannot be parsed (e.g. mid-write by an IDE or CI script) is treated as absent and the
+// built-in template is used, rather than aborting the whole scan (Finding 5).
+func TestCreateSettingsXmlMalformedFallsBackToTemplate(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		name string
-		in   string
-		n    int
-		want string
-	}{
-		{"shorter than n returns full string", "abc", 10, "abc"},
-		{"pure ASCII tail", "abcdefghij", 4, "...ghij"},
-		{"multibyte cut mid-rune produces valid UTF-8 (reviewer's repro)", "xあy", 3, "...y"},
-		{"multibyte cut on rune boundary is preserved", "xあy", 4, "...あy"},
+	malformed := `<?xml version="1.0"?><settings><UNCLOSED`
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(malformed), 0600))
+
+	mdt := MavenDepTreeManager{
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+		DepTreeManager: DepTreeManager{
+			server:   &config.ServerDetails{ArtifactoryUrl: "https://example.jfrog.io/artifactory/", User: "u", Password: "p"},
+			depsRepo: "testRepo",
+		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := tailString(tc.in, tc.n)
-			assert.Equal(t, tc.want, got)
-			assert.True(t, utf8.ValidString(got), "result must be valid UTF-8, got %q", got)
-		})
+	tempDir := t.TempDir()
+	err := mdt.createSettingsXmlWithConfiguredArtifactory(tempDir)
+	require.NoError(t, err, "malformed user settings.xml must not abort the scan")
+
+	result, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "testRepo", "template output must contain the repo")
+}
+
+// TestCreateSettingsXmlNoRootFallsBackToTemplate verifies that a settings.xml missing the
+// <settings> root element is treated as absent and falls back to the built-in template.
+func TestCreateSettingsXmlNoRootFallsBackToTemplate(t *testing.T) {
+	t.Parallel()
+	noRoot := `<?xml version="1.0"?><notSettings><foo/></notSettings>`
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(noRoot), 0600))
+
+	mdt := MavenDepTreeManager{
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+		DepTreeManager: DepTreeManager{
+			server:   &config.ServerDetails{ArtifactoryUrl: "https://example.jfrog.io/artifactory/", User: "u", Password: "p"},
+			depsRepo: "testRepo",
+		},
 	}
+	tempDir := t.TempDir()
+	err := mdt.createSettingsXmlWithConfiguredArtifactory(tempDir)
+	require.NoError(t, err, "settings.xml with no <settings> root must not abort the scan")
+
+	result, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "testRepo")
+}
+
+// TestNonCurationSkipsUserSettingsXml verifies that a plain jf audit --deps-repo run
+// uses the built-in template directly without consulting ~/.m2/settings.xml, so the
+// jf audit code path is fully unaffected by the proxy-preservation feature (Finding 6).
+func TestNonCurationSkipsUserSettingsXml(t *testing.T) {
+	t.Parallel()
+	// Point userSettingsXmlPath at a file with valid but distinct proxy config.
+	// If the code incorrectly reads it, the proxy host would appear in the output.
+	userSettings := `<?xml version="1.0"?><settings><proxies><proxy><id>should-not-appear</id><host>1.2.3.4</host></proxy></proxies></settings>`
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		isCurationCmd:       false, // plain jf audit
+		userSettingsXmlPath: userSettingsPath,
+		DepTreeManager: DepTreeManager{
+			server:   &config.ServerDetails{ArtifactoryUrl: "https://example.jfrog.io/artifactory/", User: "u", Password: "p"},
+			depsRepo: "testRepo",
+		},
+	}
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	result, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	assert.NotContains(t, string(result), "should-not-appear", "non-curation run must not seed from user settings.xml")
+	assert.NotContains(t, string(result), "1.2.3.4", "non-curation run must not seed from user settings.xml")
+}
+
+// TestCreateSettingsXmlStatErrorFallsBackToTemplate verifies that a stat error on
+// ~/.m2/settings.xml (e.g. EACCES on a volume owned by a different UID in containerised
+// CI) falls back to the built-in template rather than aborting the scan.
+func TestCreateSettingsXmlStatErrorFallsBackToTemplate(t *testing.T) {
+	t.Parallel()
+	if os.Getuid() == 0 {
+		t.Skip("running as root — permission checks do not apply")
+	}
+	// Create a directory where settings.xml would live, then chmod it 000 so stat fails.
+	unreadableDir := t.TempDir()
+	userSettingsPath := filepath.Join(unreadableDir, "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(`<?xml version="1.0"?><settings></settings>`), 0600))
+	require.NoError(t, os.Chmod(unreadableDir, 0000))
+	defer func() { _ = os.Chmod(unreadableDir, 0700) }()
+
+	mdt := MavenDepTreeManager{
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+		DepTreeManager: DepTreeManager{
+			server:   &config.ServerDetails{ArtifactoryUrl: "https://example.jfrog.io/artifactory/", User: "u", Password: "p"},
+			depsRepo: "testRepo",
+		},
+	}
+	tempDir := t.TempDir()
+	err := mdt.createSettingsXmlWithConfiguredArtifactory(tempDir)
+	require.NoError(t, err, "stat error on settings.xml must not abort the scan")
+
+	result, err := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "testRepo")
 }

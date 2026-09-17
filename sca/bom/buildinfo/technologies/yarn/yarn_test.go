@@ -2,9 +2,10 @@ package yarn
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -24,6 +26,130 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess runs
+// configureYarnResolutionServerAndRunInstall end-to-end against a fake yarn executable, using
+// a curation fallback credential (no token in .yarnrc.yml, only params.ServerDetails). It
+// asserts the subprocess actually receives YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH, and that
+// YARN_NPM_REGISTRY_SERVER is never set (registry must keep coming from .yarnrc.yml).
+func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake yarn executable is a POSIX shell script")
+	}
+	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockArtifactory.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
+	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
+	fakeYarnScript := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
+		"env > " + envCaptureFile + "\n" +
+		"exit 0\n"
+	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+
+	//#nosec G101 -- test fixture, not a real secret
+	const fallbackToken = "fallback-jf-c-token-xyz"
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:               true,
+		DependenciesRepository:      "tst-yarn-repo",
+		YarnCredentialsFromFallback: true,
+		ServerDetails: &config.ServerDetails{
+			ArtifactoryUrl: mockArtifactory.URL + "/artifactory/",
+			AccessToken:    fallbackToken,
+		},
+	}
+
+	require.NoError(t, configureYarnResolutionServerAndRunInstall(params, curWd, fakeYarnPath))
+
+	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
+	require.NoError(t, readErr, "the install subprocess (not just the --version probe) must have run")
+	capturedEnv := string(capturedEnvBytes)
+
+	assert.Contains(t, capturedEnv, "YARN_NPM_AUTH_TOKEN="+fallbackToken,
+		"the fallback credential resolved from params.ServerDetails must reach the yarn subprocess's env")
+	assert.Contains(t, capturedEnv, "YARN_NPM_ALWAYS_AUTH=true")
+	assert.NotContains(t, capturedEnv, "YARN_NPM_REGISTRY_SERVER=",
+		"registry must keep coming from .yarnrc.yml — this injection must never set it")
+
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		_, exists := os.LookupEnv(key)
+		assert.False(t, exists, "%s must be restored (unset) after the subprocess exits", key)
+	}
+}
+
+// TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback verifies that
+// when .yarnrc.yml already has its own token (YarnCredentialsFromFallback is false),
+// injectCurationFallbackAuthEnv is skipped — no GetYarnAuthDetails call is made. Proven by
+// pointing ServerDetails at a server that always 500s: if the gate ever fires unconditionally
+// again, that call would fail and the install would error.
+func TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake yarn executable is a POSIX shell script")
+	}
+	var artifactoryCalled bool
+	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		artifactoryCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockArtifactory.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
+	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
+	fakeYarnScript := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
+		"env > " + envCaptureFile + "\n" +
+		"exit 0\n"
+	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+
+	//#nosec G101 -- test fixture, not a real secret
+	const yarnrcToken = "yarnrc-own-token-abc"
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:               true,
+		DependenciesRepository:      "tst-yarn-repo",
+		YarnCredentialsFromFallback: false,
+		ServerDetails: &config.ServerDetails{
+			ArtifactoryUrl: mockArtifactory.URL + "/artifactory/",
+			AccessToken:    yarnrcToken,
+		},
+	}
+
+	require.NoError(t, configureYarnResolutionServerAndRunInstall(params, curWd, fakeYarnPath),
+		"must succeed even though the mock server 500s — GetYarnAuthDetails must never be called")
+	assert.False(t, artifactoryCalled,
+		"no request should reach Artifactory: .yarnrc.yml already has its own token, so no fallback injection is needed")
+
+	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
+	require.NoError(t, readErr, "the install subprocess must have run")
+	assert.NotContains(t, string(capturedEnvBytes), "YARN_NPM_AUTH_TOKEN="+yarnrcToken,
+		"the token already lives in .yarnrc.yml; env injection is redundant when not falling back")
+}
+
+// TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials verifies that with no usable
+// credentials, injectCurationFallbackAuthEnv sets no env vars and its restore is a no-op —
+// the anonymous-resolution case is unchanged.
+func TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials(t *testing.T) {
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		require.NoError(t, os.Unsetenv(key))
+	}
+
+	restore, err := injectCurationFallbackAuthEnv(nil, "some-repo")
+	require.NoError(t, err)
+	require.NotNil(t, restore)
+	require.NoError(t, restore())
+
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		_, exists := os.LookupEnv(key)
+		assert.False(t, exists, "%s must not be set when serverDetails has no credentials", key)
+	}
+}
+
 func TestParseYarnDependenciesMap(t *testing.T) {
 	npmId := techutils.Npm.GetXrayPackageTypeId()
 
@@ -31,6 +157,7 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 		name               string
 		yarnDependencies   map[string]*bibuildutils.YarnDependency
 		rootXrayId         string
+		isCurationCmd      bool
 		expectedTree       *xrayUtils.GraphNode
 		expectedUniqueDeps []string
 		errorExpected      bool
@@ -66,6 +193,57 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			errorExpected:      false,
 		},
 		{
+			// Workspace members are local packages, not registry artifacts: they must
+			// stay in the graph (so their deps attribute to them) but be dropped from
+			// the flat uniqueDeps list curation HEAD-checks, otherwise a coincidental
+			// public package of the same name/version is reported as a false positive.
+			// Curation-only; see the next case for the non-curation behavior.
+			name: "Workspace member excluded from uniqueDeps but kept in tree (curation)",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
+				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
+				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
+			},
+			rootXrayId:    npmId + "root:1.0.0",
+			isCurationCmd: true,
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "root:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: npmId + "ui:0.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "express:3.0.1",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			// ui (workspace member) is absent; root and express remain.
+			expectedUniqueDeps: []string{npmId + "root:1.0.0", npmId + "express:3.0.1"},
+			errorExpected:      false,
+		},
+		{
+			// Same shape, non-curation: workspace member must stay in uniqueDeps.
+			name: "Workspace member kept in uniqueDeps for jf audit/jf scan (non-curation)",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "ui@workspace:packages/ui"}}}},
+				"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "express@npm:3.0.1"}}}},
+				"express@npm:3.0.1":        {Value: "express@npm:3.0.1", Details: bibuildutils.YarnDepDetails{Version: "3.0.1"}},
+			},
+			rootXrayId:    npmId + "root:1.0.0",
+			isCurationCmd: false,
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "root:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: npmId + "ui:0.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "express:3.0.1",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			expectedUniqueDeps: []string{npmId + "root:1.0.0", npmId + "ui:0.0.0", npmId + "express:3.0.1"},
+			errorExpected:      false,
+		},
+		{
 			name: "Incorrect formatted dependency name - error expected",
 			yarnDependencies: map[string]*bibuildutils.YarnDependency{
 				"@privateDep": {Value: "", Details: bibuildutils.YarnDepDetails{Version: "privateDep"}},
@@ -77,7 +255,7 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(testcase.yarnDependencies, testcase.rootXrayId)
+			xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(testcase.yarnDependencies, testcase.rootXrayId, testcase.isCurationCmd)
 			if !testcase.errorExpected {
 				assert.NoError(t, err)
 				assert.ElementsMatch(t, uniqueDeps, testcase.expectedUniqueDeps, "First is actual, Second is Expected")
@@ -87,6 +265,22 @@ func TestParseYarnDependenciesMap(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStripWorkspaceUseLocalSuffix(t *testing.T) {
+	deps := map[string]*bibuildutils.YarnDependency{
+		"ui@workspace:packages/ui": {Value: "ui@workspace:packages/ui", Details: bibuildutils.YarnDepDetails{Version: "0.0.0-use.local"}},
+		"root@workspace:.":         {Value: "root@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "1.0.0"}},
+		"axios@npm:1.6.0":          {Value: "axios@npm:1.6.0", Details: bibuildutils.YarnDepDetails{Version: "1.6.0"}},
+	}
+	stripWorkspaceUseLocalSuffix(deps)
+
+	// Workspace member: suffix stripped.
+	assert.Equal(t, "0.0.0", deps["ui@workspace:packages/ui"].Details.Version)
+	// Workspace root with a real version: unchanged.
+	assert.Equal(t, "1.0.0", deps["root@workspace:."].Details.Version)
+	// Registry package: never touched.
+	assert.Equal(t, "1.6.0", deps["axios@npm:1.6.0"].Details.Version)
 }
 
 func TestIsInstallRequired(t *testing.T) {
@@ -200,13 +394,11 @@ func TestIsYarnLockStale(t *testing.T) {
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
 
-	// Neither file present => staleness is undefined; treat as not stale so
-	// the check never forces an install on its own.
+	// Neither file present => not stale (caller handles missing lockfile separately).
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
-	// Only package.json present => same "undefined => not stale" contract
-	// (the caller handles missing-lockfile via fileutils.IsFileExists).
+	// Only package.json present => not stale.
 	assert.False(t, isYarnLockStale(tempDirPath))
 
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
@@ -215,10 +407,51 @@ func TestIsYarnLockStale(t *testing.T) {
 	assert.NoError(t, os.Chtimes(pkgJsonPath, older, older))
 	assert.False(t, isYarnLockStale(tempDirPath))
 
-	// package.json edited after lockfile written => stale.
+	// package.json newer than lockfile AND lockfile covers all declared deps => fresh.
+	// Simulates 'yarn install' writing yarn.lock then stamping packageManager in package.json.
+	lockBerry := `__metadata:
+  version: 8
+
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+`
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21"}}`), 0o644))
+	assert.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
 	newer := time.Now().Add(1 * time.Hour)
 	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
-	assert.True(t, isYarnLockStale(tempDirPath))
+	assert.False(t, isYarnLockStale(tempDirPath), "lockfile covers all deps — must not be stale even when package.json is newer")
+
+	// package.json newer AND a dep is missing from lockfile => stale.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`), 0o644))
+	assert.NoError(t, os.Chtimes(pkgJsonPath, newer, newer))
+	assert.True(t, isYarnLockStale(tempDirPath), "missing dep in lockfile must be stale")
+}
+
+// TestYarnLockMissesDeclaredDeps verifies all four dependency sections are
+// checked, so a missing peer/optional dep also reports the lockfile as stale.
+func TestYarnLockMissesDeclaredDeps(t *testing.T) {
+	lockBerry := "__metadata:\n  version: 8\n\n\"lodash@npm:^4.17.21\":\n  version: 4.17.21\n"
+
+	cases := []struct {
+		name    string
+		pkgJSON string
+		want    bool
+	}{
+		{"all declared deps covered", `{"dependencies":{"lodash":"^4.17.21"}}`, false},
+		{"missing dependency", `{"dependencies":{"lodash":"^4.17.21","express":"^5.0.0"}}`, true},
+		{"missing devDependency", `{"dependencies":{"lodash":"^4.17.21"},"devDependencies":{"jest":"^29.0.0"}}`, true},
+		{"missing optionalDependency", `{"dependencies":{"lodash":"^4.17.21"},"optionalDependencies":{"fsevents":"^2.3.0"}}`, true},
+		{"missing peerDependency", `{"dependencies":{"lodash":"^4.17.21"},"peerDependencies":{"react":"^18.0.0"}}`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			lockPath := filepath.Join(dir, "yarn.lock")
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(tc.pkgJSON), 0o644))
+			require.NoError(t, os.WriteFile(lockPath, []byte(lockBerry), 0o644))
+			assert.Equal(t, tc.want, yarnLockMissesDeclaredDeps(dir, lockPath))
+		})
+	}
 }
 
 // TestIsInstallRequiredOverwriteYarnLock covers the overwriteYarnLock branch
@@ -231,7 +464,10 @@ func TestIsInstallRequiredOverwriteYarnLock(t *testing.T) {
 
 	pkgJsonPath := filepath.Join(tempDirPath, "package.json")
 	lockPath := filepath.Join(tempDirPath, "yarn.lock")
-	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x"}`), 0o644))
+	// A declared dep that the (empty) lockfile does not cover, so the
+	// specifier-coverage check in isYarnLockStale reports staleness once
+	// package.json is the newer file.
+	assert.NoError(t, os.WriteFile(pkgJsonPath, []byte(`{"name":"x","dependencies":{"lodash":"^4.17.21"}}`), 0o644))
 	assert.NoError(t, os.WriteFile(lockPath, []byte(""), 0o644))
 
 	// yarn.lock is newer than package.json => fresh in either overwrite mode.
@@ -383,256 +619,6 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestNormalizeNpmVersion(t *testing.T) {
-	cases := []struct {
-		in       string
-		wantVer  string
-		wantOK   bool
-		describe string
-	}{
-		{"1.0.0", "1.0.0", true, "exact pinned version"},
-		{"  1.2.3  ", "1.2.3", true, "trims whitespace"},
-		{"^1.2.3", "1.2.3", true, "strips caret"},
-		{"~4.5.6", "4.5.6", true, "strips tilde"},
-		{">=2.0.0", "2.0.0", true, "strips >="},
-		{"<=2.0.0", "2.0.0", true, "strips <="},
-		{">3.0.0", "3.0.0", true, "strips >"},
-		{"<3.0.0", "3.0.0", true, "strips <"},
-		{"=4.0.0", "4.0.0", true, "strips ="},
-		{"^^1.0.0", "1.0.0", true, "strips multiple leading operators"},
-		{"4.0.0-beta.1", "4.0.0-beta.1", true, "preserves prerelease"},
-		{"", "", false, "empty"},
-		{"   ", "", false, "whitespace only"},
-		{"latest", "", false, "dist-tag rejected"},
-		{"next", "", false, "dist-tag rejected"},
-		{"1.x", "", false, "wildcard rejected"},
-		{"*", "", false, "star rejected"},
-		{">=1.0.0 <2.0.0", "", false, "compound range rejected"},
-		{"1.0.0 || 2.0.0", "", false, "OR-range rejected"},
-		{"file:./local-pkg", "", false, "file: spec rejected"},
-		{"link:../sibling", "", false, "link: spec rejected"},
-		{"workspace:^1.0.0", "", false, "workspace: spec rejected"},
-		{"git+https://github.com/foo/bar.git", "", false, "git+ spec rejected"},
-		{"https://example.com/pkg.tgz", "", false, "https url rejected"},
-		{"npm:other-pkg@1.0.0", "", false, "npm: alias rejected"},
-		{"patch:left-pad@1.3.0#./left-pad.patch", "", false, "patch: spec rejected"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.describe, func(t *testing.T) {
-			got, ok := normalizeNpmVersion(tc.in)
-			assert.Equal(t, tc.wantOK, ok, "ok mismatch for input %q", tc.in)
-			if tc.wantOK {
-				assert.Equal(t, tc.wantVer, got, "version mismatch for input %q", tc.in)
-			}
-		})
-	}
-}
-
-func TestBuildNpmTarballURL(t *testing.T) {
-	cases := []struct {
-		name, version, want string
-	}{
-		{"lodash", "4.17.21", "https://arti.example.com/api/npm/tst-yarn-repo/lodash/-/lodash-4.17.21.tgz"},
-		{"@scope/pkg", "1.0.0", "https://arti.example.com/api/npm/tst-yarn-repo/@scope/pkg/-/pkg-1.0.0.tgz"},
-		{"@jfrog/dummy", "0.0.1-beta", "https://arti.example.com/api/npm/tst-yarn-repo/@jfrog/dummy/-/dummy-0.0.1-beta.tgz"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, buildNpmTarballURL("https://arti.example.com", "tst-yarn-repo", tc.name, tc.version))
-		})
-	}
-}
-
-func TestParseProbe403Body(t *testing.T) {
-	t.Run("empty body falls back to unknown_403", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		parseProbe403Body(nil, &dep)
-		assert.Equal(t, "unknown_403", dep.reason)
-	})
-	t.Run("non-json body falls back to unknown_403", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		parseProbe403Body([]byte("<html>503 bad gateway</html>"), &dep)
-		assert.Equal(t, "unknown_403", dep.reason)
-	})
-	t.Run("non-curation 403 falls back to unknown_403", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		parseProbe403Body([]byte(`{"errors":[{"status":403,"message":"some other reason"}]}`), &dep)
-		assert.Equal(t, "unknown_403", dep.reason)
-	})
-	t.Run("not-being-found marks as not_found", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to it not being found in the index"}]}`)
-		parseProbe403Body(body, &dep)
-		assert.Equal(t, "not_found", dep.reason)
-	})
-	t.Run("policy quartet is parsed", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package and replace with an alternate}."}]}`)
-		parseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.reason)
-		if assert.Len(t, dep.policies, 1) {
-			assert.Equal(t, "mal-policy", dep.policies[0].policy)
-			assert.Equal(t, "Malicious package", dep.policies[0].condition)
-			// makeLegibleProbePolicyDetail rewrites the first ": " into ":\n" — mirror curation's
-			// V3 layout. Our fixtures here have no ": " so the strings pass through unchanged.
-			assert.Equal(t, "Package version is malicious", dep.policies[0].explanation)
-			assert.Equal(t, "Remove the malicious package and replace with an alternate", dep.policies[0].recommendation)
-		}
-	})
-	t.Run("partial policy info parses what it can", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package foo:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {short-policy, short-condition}."}]}`)
-		parseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.reason)
-		if assert.Len(t, dep.policies, 1) {
-			assert.Equal(t, "short-policy", dep.policies[0].policy)
-			assert.Equal(t, "short-condition", dep.policies[0].condition)
-			assert.Empty(t, dep.policies[0].explanation)
-			assert.Empty(t, dep.policies[0].recommendation)
-		}
-	})
-	t.Run("multiple policy quartets are all captured", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package},{cvss-policy, CVE with CVSS score of 9 or above, Package version contains the following vulnerability(s), Upgrade to the following version(s): 4.18.0}."}]}`)
-		parseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.reason)
-		if assert.Len(t, dep.policies, 2) {
-			assert.Equal(t, "mal-policy", dep.policies[0].policy)
-			assert.Equal(t, "cvss-policy", dep.policies[1].policy)
-			assert.Equal(t, "CVE with CVSS score of 9 or above", dep.policies[1].condition)
-		}
-	})
-	t.Run("legible-detail normalisation matches curation V3 layout", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {cvss-policy, CVSS score above 9, Vulnerability: CVE-2026-4800 | CVE-2026-9999, Upgrade to: 4.18.0 | 5.0.0}."}]}`)
-		parseProbe403Body(body, &dep)
-		if assert.Len(t, dep.policies, 1) {
-			assert.Equal(t, "Vulnerability:\nCVE-2026-4800\nCVE-2026-9999", dep.policies[0].explanation)
-			assert.Equal(t, "Upgrade to:\n4.18.0\n5.0.0", dep.policies[0].recommendation)
-		}
-	})
-	// Real-world body captured from the user's Artifactory instance for
-	// 'Express@3.0.1' against the 'End of Life' curation policy. This is
-	// the body that, in production, ended up rendered as empty Policy /
-	// Condition / Recommendation columns — i.e. the parser failed to
-	// extract the quartet from it. Pinning the exact body here ensures
-	// any regression is caught the moment it happens.
-	t.Run("real-world Express EOL body parses to full quartet", func(t *testing.T) {
-		dep := blockedDirectDep{}
-		body := []byte(`{
-  "errors" : [ {
-    "status" : 403,
-    "message" : "package Express:3.0.1 download was blocked by jfrog packages curation service due to the following policies violated {End of Life,Blocking Express as it is EOL,This package version is part of a pre-defined banned list. The following versions are banned:<br/> - 3.0.1,Replace the package with an alternative one or try to find a version of the current one that is not on the banned list.}. For details and alternatives, visit: https://example.jfrogdev.org/ui/catalog/packages/details/npm/Express/3.0.1?showVersions=true"
-  } ]
-}`)
-		parseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.reason)
-		if assert.Len(t, dep.policies, 1, "expected exactly one parsed policy from the canonical curation envelope") {
-			assert.Equal(t, "End of Life", dep.policies[0].policy)
-			assert.Equal(t, "Blocking Express as it is EOL", dep.policies[0].condition)
-			assert.Contains(t, dep.policies[0].explanation, "pre-defined banned list",
-				"explanation must be populated, not collapsed into the 'response could not be parsed' fallback")
-			assert.Contains(t, dep.policies[0].recommendation, "Replace the package",
-				"recommendation must be populated, not collapsed into the 'response could not be parsed' fallback")
-		}
-	})
-}
-
-func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
-	t.Run("empty input yields no rows", func(t *testing.T) {
-		assert.Nil(t, buildBlockedDirectDepsTableRows(nil))
-		assert.Nil(t, buildBlockedDirectDepsTableRows([]blockedDirectDep{}))
-	})
-	t.Run("single dep with one policy renders one row mirroring curation columns", func(t *testing.T) {
-		rows := buildBlockedDirectDepsTableRows([]blockedDirectDep{{
-			name: "jfrog-curation-malicious-dummy", declaredVersion: "^1.0.0", probedVersion: "1.0.0",
-			reason: "blocked_policy",
-			policies: []probedPolicy{{policy: "mal-policy", condition: "Malicious package",
-				explanation: "Package version is malicious", recommendation: "Remove the malicious package"}},
-		}})
-		if assert.Len(t, rows, 1) {
-			r := rows[0]
-			assert.Equal(t, "1 ", r.ID)
-			assert.Equal(t, "jfrog-curation-malicious-dummy ", r.ParentName)
-			assert.Equal(t, "1.0.0 ", r.ParentVersion)
-			assert.Equal(t, "jfrog-curation-malicious-dummy ", r.PackageName)
-			assert.Equal(t, "1.0.0 ", r.PackageVersion)
-			assert.Equal(t, string(techutils.Yarn)+" ", r.PkgType)
-			assert.Equal(t, "mal-policy", r.Policy)
-			assert.Equal(t, "Malicious package", r.Condition)
-			assert.Equal(t, "Package version is malicious", r.Explanation)
-			assert.Equal(t, "Remove the malicious package", r.Recommendation)
-		}
-	})
-	t.Run("dep with multiple policies renders one row per policy with shared package columns", func(t *testing.T) {
-		rows := buildBlockedDirectDepsTableRows([]blockedDirectDep{{
-			name: "lodash", declaredVersion: "^4.17.21", probedVersion: "4.17.21",
-			reason: "blocked_policy",
-			policies: []probedPolicy{
-				{policy: "mal-policy", condition: "Malicious package"},
-				{policy: "cvss-policy", condition: "CVE with CVSS score of 9 or above"},
-			},
-		}})
-		if assert.Len(t, rows, 2) {
-			assert.Equal(t, rows[0].ParentName, rows[1].ParentName, "both rows must share the package columns so auto-merge can collapse them")
-			assert.Equal(t, rows[0].ID, rows[1].ID)
-			assert.Equal(t, "mal-policy", rows[0].Policy)
-			assert.Equal(t, "cvss-policy", rows[1].Policy)
-		}
-	})
-	t.Run("alternating space separator prevents accidental merge across packages", func(t *testing.T) {
-		rows := buildBlockedDirectDepsTableRows([]blockedDirectDep{
-			{name: "a", probedVersion: "1.0.0", reason: "blocked_policy", policies: []probedPolicy{{policy: "p1", condition: "c1"}}},
-			{name: "b", probedVersion: "2.0.0", reason: "blocked_policy", policies: []probedPolicy{{policy: "p2", condition: "c2"}}},
-		})
-		if assert.Len(t, rows, 2) {
-			// Index 0 (uniqLineSep=" ") and index 1 (uniqLineSep="") must produce IDs that differ
-			// even with the same row count, so adjacent packages do not auto-merge by accident.
-			assert.Equal(t, "1 ", rows[0].ID)
-			assert.Equal(t, "2", rows[1].ID)
-		}
-	})
-	t.Run("not_found and unknown_403 produce explanation-only rows when policies slice is empty", func(t *testing.T) {
-		rows := buildBlockedDirectDepsTableRows([]blockedDirectDep{
-			{name: "missing-pkg", probedVersion: "1.0.0", reason: "not_found"},
-			{name: "weird-pkg", probedVersion: "2.0.0", reason: "unknown_403"},
-		})
-		if assert.Len(t, rows, 2) {
-			assert.Equal(t, "Package not found in curation repository", rows[0].Explanation)
-			assert.Equal(t, "Blocked by curation (response could not be parsed)", rows[1].Explanation)
-			assert.Empty(t, rows[0].Policy)
-			assert.Empty(t, rows[1].Policy)
-		}
-	})
-	t.Run("direct-row: name and version match in both Direct and Blocked columns", func(t *testing.T) {
-		rows := buildBlockedDirectDepsTableRows([]blockedDirectDep{{
-			name: "lodash", declaredVersion: "^4.17.21", probedVersion: "4.17.21",
-			reason:   "blocked_policy",
-			policies: []probedPolicy{{policy: "cvss-policy", condition: "CVE with CVSS score of 9 or above"}},
-		}})
-		if assert.Len(t, rows, 1) {
-			assert.Equal(t, "lodash ", rows[0].ParentName)
-			assert.Equal(t, rows[0].ParentName, rows[0].PackageName)
-			assert.Equal(t, rows[0].ParentVersion, rows[0].PackageVersion)
-		}
-	})
-}
-
-func TestMergeDirectDeps(t *testing.T) {
-	pi := &bibuildutils.PackageInfo{
-		Dependencies:         map[string]string{"lodash": "^4.17.21", "shared": "1.0.0"},
-		DevDependencies:      map[string]string{"jest": "29.0.0", "shared": "2.0.0"},
-		OptionalDependencies: map[string]string{"fsevents": "2.3.0"},
-		PeerDependencies:     map[string]string{"react": "18.0.0", "lodash": "9.9.9"},
-	}
-	merged := mergeDirectDeps(pi)
-	assert.Equal(t, "^4.17.21", merged["lodash"], "deps wins over peerDeps")
-	assert.Equal(t, "1.0.0", merged["shared"], "deps wins over devDeps")
-	assert.Equal(t, "29.0.0", merged["jest"])
-	assert.Equal(t, "2.3.0", merged["fsevents"])
-	assert.Equal(t, "18.0.0", merged["react"])
 }
 
 func TestHandleCurationInstallError(t *testing.T) {
@@ -818,10 +804,7 @@ func TestExpandYarnWorkspaceDirsNoWorkspaces(t *testing.T) {
 	}
 }
 
-// TestCollectDeclaredDirectDepsAcrossWorkspaces checks that collectDeclaredDirectDeps
-// reads only the root package.json. When jf ca is run from the root without
-// --working-dirs, only root-level direct dependencies are considered; workspace
-// member deps are excluded (use --working-dirs to audit them individually).
+// TestCollectDeclaredDirectDepsAcrossWorkspaces verifies collectDeclaredDirectDeps merges the root package.json's direct deps with every workspace member's, with a member's spec overriding the root's on a name conflict.
 func TestCollectDeclaredDirectDepsAcrossWorkspaces(t *testing.T) {
 	root := t.TempDir()
 	assert.NoError(t, os.MkdirAll(filepath.Join(root, "packages", "admin-ui"), 0755))
@@ -845,10 +828,11 @@ func TestCollectDeclaredDirectDepsAcrossWorkspaces(t *testing.T) {
 
 	declared := collectDeclaredDirectDeps(root)
 
-	assert.Equal(t, "^5.2.1", declared["express"], "root dep must be present")
-	assert.Equal(t, "4.17.23", declared["lodash"], "root dep must be present")
-	assert.NotContains(t, declared, "jsdom", "workspace member dep must not be included — root-only scope")
-	assert.Len(t, declared, 2, "got: %v", declared)
+	// express differs between root and admin-ui; members are merged after root and win on conflict.
+	assert.Equal(t, "^3.0.1", declared["express"], "workspace member's spec wins over root's for the same package name")
+	assert.Equal(t, "4.17.23", declared["lodash"], "root-only dep must be present")
+	assert.Equal(t, "^26.0.0", declared["jsdom"], "workspace member's dep must be merged into the root scope")
+	assert.Len(t, declared, 3, "got: %v", declared)
 }
 
 // TestEnumerateAfterCurationInstallErrorMessage pins the user-visible
@@ -861,6 +845,81 @@ func TestCollectDeclaredDirectDepsAcrossWorkspaces(t *testing.T) {
 // probe table here — that runs as a side effect (printed to stdout) and
 // is covered by the probe-collection tests above; this test focuses on
 // the error string the user sees AFTER the table.
+// TestCurationNoLockfileErrorNeutralWhenUnrelatedToCuration verifies that when the probe finds
+// no blocked deps (no declared deps here) and installErr's text carries no curation-block
+// signal (no "403"/"forbidden"), curationNoLockfileError returns a neutral "unrelated failure"
+// message instead of blaming curation.
+func TestCurationNoLockfileErrorNeutralWhenUnrelatedToCuration(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("EACCES: permission denied, mkdir '/tmp/.yarn/berry/cache'")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "unrelated to a curation block")
+	assert.NotContains(t, msg, "curation is blocking manifests")
+	assert.Contains(t, msg, installErr.Error(), "must propagate the underlying error for traceability")
+}
+
+// TestCurationNoLockfileErrorBlamesCurationOnHttp403 verifies that when installErr's text does
+// carry a curation-block signal (HTTP 403), curationNoLockfileError keeps the curation-blaming
+// wording — this is a regression guard against over-correcting the fix above.
+func TestCurationNoLockfileErrorBlamesCurationOnHttp403(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("YN0035: Response Code: 403 (Forbidden)")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unrelated to a curation block")
+}
+
+// TestCurationNoLockfileErrorDoesNotMatchBare403InUnrelatedText verifies a "403" appearing
+// incidentally in unrelated text (e.g. a port number) isn't mistaken for an HTTP 403 curation
+// block. Only the actual "Response Code: 403" shape yarn emits should match.
+func TestCurationNoLockfileErrorDoesNotMatchBare403InUnrelatedText(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("connect ECONNREFUSED 127.0.0.1:8403")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unrelated to a curation block",
+		"a bare '403' inside a port number must not be mistaken for an HTTP 403 curation block")
+}
+
+func TestCurationNoLockfileErrorDoesNotMatchBareForbiddenInUnrelatedText(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "tst-yarn-repo",
+	}
+	installErr := errors.New("fatal: unable to access 'https://github.com/example/repo.git/': remote: Forbidden")
+
+	err := curationNoLockfileError(params, root, "", "", installErr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unrelated to a curation block",
+		"the word 'forbidden' alone, without a 'Response Code: 403' curation signal, must not be mistaken for a curation block")
+}
+
 func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
 	root := t.TempDir()
 	assert.NoError(t, os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"root"}`), 0644))
@@ -903,44 +962,47 @@ func TestEnumerateAfterCurationInstallErrorMessage(t *testing.T) {
 	}
 }
 
-// TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly is the regression
-// guard for the scope contract: the workspace-member re-routing in
-// BuildDependencyTree must fire only when params.IsCurationCmd is true.
-// Generic 'jf audit' / 'jf scan' invocations must keep operating on the
-// original currentDir so this change cannot regress them. We can't drive
-// BuildDependencyTree end-to-end here (it shells out to yarn), but we can
-// pin the gate by directly reading the gated condition in the source:
-// the test fails compile-time if the IsCurationCmd guard is removed, and
-// fails at runtime if findClaimingYarnWorkspaceRoot accidentally side-
-// effects the rest of the audit. The helper itself is tested below; this
-// test asserts the call-site gate is in place.
-// TestRootResolutionAppliesToAuditAndScan pins two contracts:
+// TestRootResolutionAppliesToAuditAndScan pins three contracts:
 //
-//  1. findYarnWorkspaceRoot is NOT gated behind IsCurationCmd in BuildDependencyTree —
-//     it improves root identification for every caller (jf audit, jf scan, jf ca).
+//  1. resolveYarnRoot runs only when params.IsCurationCmd is true (regression
+//     guard for #759, which ran it unconditionally and broke 'jf audit'/
+//     'jf scan' on Yarn workspace members).
 //
-//  2. For Yarn V2+ projects the @workspace:. label is authoritative and takes
-//     precedence over build-info-go's name-based heuristic. This matters for nameless
-//     projects (no "name" in package.json) where the heuristic can fail.
+//  2. @workspace:. is authoritative over build-info-go's heuristic, for
+//     'jf ca' only.
+//
+//  3. stripWorkspaceUseLocalSuffix, unlike resolveYarnRoot, is NOT gated on
+//     IsCurationCmd — applies to all callers.
 func TestRootResolutionAppliesToAuditAndScan(t *testing.T) {
-	t.Run("source contract: findYarnWorkspaceRoot is not gated on IsCurationCmd", func(t *testing.T) {
+	t.Run("source contract: resolveYarnRoot is called only when IsCurationCmd is true", func(t *testing.T) {
 		src, err := os.ReadFile("yarn.go")
 		require.NoError(t, err)
 		txt := string(src)
-		overrideIdx := strings.Index(txt, "if workspaceRoot := findYarnWorkspaceRoot(")
-		require.NotEqual(t, -1, overrideIdx,
-			"findYarnWorkspaceRoot override must be present in BuildDependencyTree")
-		// Look at the 200 characters immediately before the call site.
-		// If IsCurationCmd appears there, the override is gated — which would
-		// mean it no longer applies to jf audit/scan and this test should fail.
-		windowStart := overrideIdx - 200
+		callIdx := strings.Index(txt, "root = resolveYarnRoot(")
+		require.NotEqual(t, -1, callIdx,
+			"resolveYarnRoot call must be present in BuildDependencyTree")
+		windowStart := callIdx - 200
 		if windowStart < 0 {
 			windowStart = 0
 		}
-		context := txt[windowStart:overrideIdx]
-		assert.NotContains(t, context, "IsCurationCmd",
-			"findYarnWorkspaceRoot must not be gated on IsCurationCmd — "+
-				"root resolution applies to jf audit/scan as well as jf ca")
+		context := txt[windowStart:callIdx]
+		assert.Contains(t, context, "if params.IsCurationCmd {",
+			"resolveYarnRoot must only run for 'jf ca', not jf audit/jf scan")
+	})
+
+	t.Run("source contract: stripWorkspaceUseLocalSuffix is called unconditionally", func(t *testing.T) {
+		// Must sit at top level (one leading tab), not nested under IsCurationCmd.
+		src, err := os.ReadFile("yarn.go")
+		require.NoError(t, err)
+		txt := string(src)
+		callStr := "stripWorkspaceUseLocalSuffix(dependenciesMap)"
+		callIdx := strings.Index(txt, callStr)
+		require.NotEqual(t, -1, callIdx,
+			"stripWorkspaceUseLocalSuffix call must be present in BuildDependencyTree")
+		lineStart := strings.LastIndex(txt[:callIdx], "\n") + 1
+		line := txt[lineStart : callIdx+len(callStr)]
+		assert.Equal(t, "\t"+callStr, line,
+			"stripWorkspaceUseLocalSuffix must run unconditionally, not nested inside an if block")
 	})
 
 	t.Run("Yarn V2 named project: @workspace:. root is found", func(t *testing.T) {
@@ -985,6 +1047,55 @@ func TestRootResolutionAppliesToAuditAndScan(t *testing.T) {
 	})
 }
 
+// TestResolveYarnRootDoesNotOverrideWorkspaceMemberRoot unit-tests the
+// resolveYarnRoot helper (curation-only; see TestRootResolutionAppliesToAuditAndScan
+// for the IsCurationCmd gate at its call site).
+func TestResolveYarnRootDoesNotOverrideWorkspaceMemberRoot(t *testing.T) {
+	projectRoot := &bibuildutils.YarnDependency{Value: "jf-audit-yarn-ws-repro@workspace:.", Details: bibuildutils.YarnDepDetails{Version: "0.0.0"}}
+	memberRoot := &bibuildutils.YarnDependency{
+		Value:   "@repro/app@workspace:app",
+		Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "lodash@npm:4.17.21"}}},
+	}
+	lodash := &bibuildutils.YarnDependency{Value: "lodash@npm:4.17.21", Details: bibuildutils.YarnDepDetails{Version: "4.17.21"}}
+	deps := map[string]*bibuildutils.YarnDependency{
+		"jf-audit-yarn-ws-repro@workspace:.": projectRoot,
+		"@repro/app@workspace:app":           memberRoot,
+		"lodash@npm:4.17.21":                 lodash,
+	}
+
+	t.Run("named workspace member: build-info-go's own root is kept, not clobbered by the outer project root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, memberRoot, "@repro/app")
+		assert.Same(t, memberRoot, got)
+	})
+
+	t.Run("named project root: build-info-go's own root is kept", func(t *testing.T) {
+		got := resolveYarnRoot(deps, projectRoot, "jf-audit-yarn-ws-repro")
+		assert.Same(t, projectRoot, got)
+	})
+
+	t.Run("nameless package.json: falls back to the @workspace:. root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, nil, "")
+		require.NotNil(t, got)
+		assert.Equal(t, "jf-audit-yarn-ws-repro@workspace:.", got.Value)
+	})
+
+	t.Run("nil heuristic root with a name: still falls back to the @workspace:. root", func(t *testing.T) {
+		got := resolveYarnRoot(deps, nil, "@repro/app")
+		require.NotNil(t, got)
+		assert.Equal(t, "jf-audit-yarn-ws-repro@workspace:.", got.Value)
+	})
+
+	t.Run("Yarn V1 (no @workspace:. entries): heuristic result passes through untouched, even nil", func(t *testing.T) {
+		v1Deps := map[string]*bibuildutils.YarnDependency{
+			"lodash": {Value: "lodash", Details: bibuildutils.YarnDepDetails{Version: "4.17.23"}},
+		}
+		assert.Nil(t, resolveYarnRoot(v1Deps, nil, ""))
+	})
+}
+
+// TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly guards that the
+// workspace-member walk-up in BuildDependencyTree fires only for 'jf ca';
+// 'jf audit'/'jf scan' must keep operating on the original currentDir.
 func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 	// Synthesise a workspace structure that *would* be claimed by the
 	// walk-up helper, so any future caller that forgets to gate on
@@ -1008,23 +1119,24 @@ func TestBuildDependencyTreeWorkspaceRerouteIsCurationOnly(t *testing.T) {
 
 	// The actual scope contract: the re-routing block in
 	// BuildDependencyTree wraps the helper call in 'if params.IsCurationCmd'.
-	// Read the source and assert the gate is present so a future
-	// refactor that drops the guard fails this test loudly.
+	// Assert the guard sits directly before this specific call so a future
+	// refactor that drops it fails loudly.
 	src, err := os.ReadFile("yarn.go")
 	if assert.NoError(t, err, "must be able to read yarn.go to verify the curation-only gate") {
-		// Look for the exact gate pattern. Two things together: the
-		// IsCurationCmd predicate AND the helper call inside it. A weaker
-		// substring check would pass if either drifted to a different
-		// site, so we anchor on both.
+		// Anchor on the helper call and scan only the lines immediately before
+		// it for the gate. A plain strings.Index for the gate would match the
+		// *first* of several 'if params.IsCurationCmd {' blocks in this file and
+		// pass even if this specific call lost its guard.
 		txt := string(src)
-		gateIdx := strings.Index(txt, "if params.IsCurationCmd {")
 		helperIdx := strings.Index(txt, "findClaimingYarnWorkspaceRoot(currentDir)")
-		assert.NotEqual(t, -1, gateIdx, "BuildDependencyTree must contain 'if params.IsCurationCmd' guard for the workspace re-route")
-		assert.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
-		if gateIdx != -1 && helperIdx != -1 {
-			assert.Less(t, gateIdx, helperIdx,
-				"the IsCurationCmd guard must come BEFORE findClaimingYarnWorkspaceRoot — otherwise the re-routing fires for non-curation flows too")
+		require.NotEqual(t, -1, helperIdx, "BuildDependencyTree must call findClaimingYarnWorkspaceRoot")
+		windowStart := helperIdx - 200
+		if windowStart < 0 {
+			windowStart = 0
 		}
+		context := txt[windowStart:helperIdx]
+		assert.Contains(t, context, "if params.IsCurationCmd {",
+			"findClaimingYarnWorkspaceRoot must be wrapped in an 'if params.IsCurationCmd' guard — otherwise the re-routing fires for non-curation flows too")
 	}
 }
 
@@ -1188,12 +1300,7 @@ func TestFilterYarnDepMapToWorkspaceMember(t *testing.T) {
 	})
 }
 
-// TestCollectDeclaredDirectDepsForMember pins the scoping contract for
-// the probe collector. With an empty memberRel the helper returns only the
-// root package.json deps (root-only scope; use --working-dirs to audit
-// individual members). With a non-empty memberRel it returns ONLY that
-// member's direct deps. The table rendered from this slice must reflect
-// exactly what 'jf ca --working-dirs=<member>' targeted.
+// TestCollectDeclaredDirectDepsForMember pins the scoping contract for the probe collector: an empty memberRel merges the root package.json's direct deps with every workspace member's (member's spec overriding the root's on a name conflict), while a non-empty memberRel returns ONLY that member's direct deps.
 func TestCollectDeclaredDirectDepsForMember(t *testing.T) {
 	root := t.TempDir()
 	assert.NoError(t, os.MkdirAll(filepath.Join(root, "packages", "admin-ui"), 0755))
@@ -1212,12 +1319,12 @@ func TestCollectDeclaredDirectDepsForMember(t *testing.T) {
 		"dependencies": {"jsdom": "^26.0.0"}
 	}`), 0644))
 
-	t.Run("empty memberRel returns root-only deps", func(t *testing.T) {
+	t.Run("empty memberRel returns deps merged across the whole workspace", func(t *testing.T) {
 		got := collectDeclaredDirectDepsForMember(root, "")
-		assert.Equal(t, "4.17.21", got["lodash"])
-		assert.NotContains(t, got, "express", "workspace member dep must not be included")
-		assert.NotContains(t, got, "jsdom", "workspace member dep must not be included")
-		assert.Len(t, got, 1)
+		assert.Equal(t, "4.17.21", got["lodash"], "root dep must be present")
+		assert.Equal(t, "^3.0.1", got["express"], "admin-ui member's dep must be merged in")
+		assert.Equal(t, "^26.0.0", got["jsdom"], "web member's dep must be merged in")
+		assert.Len(t, got, 3)
 	})
 
 	t.Run("memberRel scopes to that member only", func(t *testing.T) {
@@ -1237,53 +1344,6 @@ func TestCollectDeclaredDirectDepsForMember(t *testing.T) {
 		got := collectDeclaredDirectDepsForMember(root, "packages/does-not-exist")
 		assert.Empty(t, got, "must not fall back to the unscoped collector when the targeted member is missing — silently widening the scope would be a confusing UX surprise")
 	})
-}
-
-// TestClassifyNpmVersionSpec pins the three-way classification: probe-able
-// fixed version, range/tag that needs resolution we cannot perform, or a
-// non-registry protocol that is out of scope for the curation HEAD-check
-// entirely. reconcileDeclaredDirectDepsAgainstTree branches on this so the
-// distinction has to be airtight; the previous (binary) normalizeNpmVersion
-// signature swept ranges and protocols into the same "skip silently"
-// bucket, which is why semver-range misses used to be invisible.
-func TestClassifyNpmVersionSpec(t *testing.T) {
-	cases := []struct {
-		spec        string
-		wantVer     string
-		wantProbe   bool
-		wantIsRange bool
-	}{
-		{"3.0.1", "3.0.1", true, false},
-		{"^3.0.1", "3.0.1", true, false},
-		{"~1.2.3", "1.2.3", true, false},
-		{"=1.0.0", "1.0.0", true, false},
-		{">=2.0.0", "2.0.0", true, false},
-		{"1.2.3-beta.1", "1.2.3-beta.1", true, false},
-		{"1.x", "", false, true},
-		{"1.0.x", "", false, true},
-		{"*", "", false, true},
-		{"latest", "", false, true},
-		{"next", "", false, true},
-		{"1.0.0 || 2.0.0", "", false, true},
-		{"file:./local-pkg", "", false, false},
-		{"link:../sibling", "", false, false},
-		{"workspace:*", "", false, false},
-		{"workspace:^", "", false, false},
-		{"patch:react@npm%3A18.0.0", "", false, false},
-		{"git+https://github.com/foo/bar.git", "", false, false},
-		{"https://example.com/pkg.tgz", "", false, false},
-		{"npm:other-name@1.0.0", "", false, false},
-		{"", "", false, false},
-		{"   ", "", false, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.spec, func(t *testing.T) {
-			ver, probe, isRange := classifyNpmVersionSpec(tc.spec)
-			assert.Equal(t, tc.wantVer, ver, "version after stripping operators")
-			assert.Equal(t, tc.wantProbe, probe, "probeable flag")
-			assert.Equal(t, tc.wantIsRange, isRange, "range/tag flag")
-		})
-	}
 }
 
 // TestReconcileDeclaredDirectDepsAgainstTree pins the synthesis contract
@@ -1400,6 +1460,29 @@ func TestReconcileDeclaredDirectDepsAgainstTree(t *testing.T) {
 		assert.Empty(t, root.Details.Dependencies, "must not duplicate a dep that yarn.lock already covers")
 	})
 
+	t.Run("same name resolved at a different version is still synthesised", func(t *testing.T) {
+		root := mkRoot()
+		// express@4.17.1 is already resolved elsewhere in the tree (e.g. a transitive
+		// dependency of some other package) — unrelated to the express@3.0.1 the user
+		// declared directly and that curation just blocked.
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":   root,
+			"express@npm:4.17.1": {Value: "express@npm:4.17.1", Details: bibuildutils.YarnDepDetails{Version: "4.17.1"}},
+		}
+		declared := map[string]string{"express": "3.0.1"}
+		reconcileDeclaredDirectDepsAgainstTree(depMap, root, declared)
+
+		synth, ok := depMap["express@npm:3.0.1"]
+		if assert.True(t, ok, "the declared (blocked) version must be synthesised even though a package of the same name resolved at a different version elsewhere in the tree") {
+			assert.Equal(t, "3.0.1", synth.Details.Version)
+		}
+		var rootChildLocators []string
+		for _, ptr := range root.Details.Dependencies {
+			rootChildLocators = append(rootChildLocators, ptr.Locator)
+		}
+		assert.Contains(t, rootChildLocators, "express@npm:3.0.1")
+	})
+
 	t.Run("nil root is a no-op (defensive)", func(t *testing.T) {
 		depMap := map[string]*bibuildutils.YarnDependency{}
 		// Must not panic, must not mutate the (empty) map.
@@ -1476,94 +1559,6 @@ func TestBuildDependencyTreeReconciliationIsCurationOnly(t *testing.T) {
 	})
 }
 
-func TestYarnCurationRegistry(t *testing.T) {
-	cases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "standard artifactory url is rewritten",
-			input:    "https://myhost.jfrog.io/artifactory/api/npm/my-npm-repo",
-			expected: "https://myhost.jfrog.io/artifactory/api/curation/audit/my-npm-repo",
-		},
-		{
-			name:     "scoped url (trailing slash preserved)",
-			input:    "https://myhost.jfrog.io/artifactory/api/npm/my-npm-repo/",
-			expected: "https://myhost.jfrog.io/artifactory/api/curation/audit/my-npm-repo/",
-		},
-		{
-			name:     "only first occurrence is replaced (idempotent-like)",
-			input:    "https://host/artifactory/api/npm/repo/api/npm/other",
-			expected: "https://host/artifactory/api/curation/audit/repo/api/npm/other",
-		},
-		{
-			name:     "url already pointing at curation endpoint is unchanged",
-			input:    "https://host/artifactory/api/curation/audit/my-npm-repo",
-			expected: "https://host/artifactory/api/curation/audit/my-npm-repo",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, yarnCurationRegistry(tc.input))
-		})
-	}
-}
-
-// TestBlockedDepJSONRowTagsMatchPackageStatus pins the JSON field contract of
-// blockedDepJSONRow and blockedDepPolicyJSON against the expected tags of
-// commands/curation.PackageStatus and commands/curation.Policy. An import cycle
-// prevents referencing those types directly, so we assert the tags by value here.
-//
-// When PackageStatus or Policy JSON tags change, update the expected maps below
-// AND update blockedDepJSONRow / blockedDepPolicyJSON to match.
-func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
-	expectedRowTags := map[string]string{
-		"Action":         "action",
-		"ParentName":     "direct_dependency_package_name",
-		"ParentVersion":  "direct_dependency_package_version",
-		"PackageName":    "blocked_package_name",
-		"PackageVersion": "blocked_package_version",
-		"BlockingReason": "blocking_reason",
-		"DepRelation":    "dependency_relation",
-		"PkgType":        "type",
-		"WaiverAllowed":  "waiver_allowed",
-		"Policy":         "policies,omitempty",
-	}
-	expectedPolicyTags := map[string]string{
-		"Policy":         "policy",
-		"Condition":      "condition",
-		"Explanation":    "explanation",
-		"Recommendation": "recommendation",
-	}
-
-	rowType := reflect.TypeOf(blockedDepJSONRow{})
-	assert.Len(t, expectedRowTags, rowType.NumField(),
-		"blockedDepJSONRow field count changed — update expectedRowTags and sync with commands/curation.PackageStatus")
-	for i := range rowType.NumField() {
-		field := rowType.Field(i)
-		expected, ok := expectedRowTags[field.Name]
-		assert.True(t, ok, "unexpected field %s in blockedDepJSONRow — update expectedRowTags and sync with PackageStatus", field.Name)
-		if ok {
-			assert.Equal(t, expected, field.Tag.Get("json"),
-				"blockedDepJSONRow.%s json tag mismatch — keep in sync with commands/curation.PackageStatus", field.Name)
-		}
-	}
-
-	policyType := reflect.TypeOf(blockedDepPolicyJSON{})
-	assert.Len(t, expectedPolicyTags, policyType.NumField(),
-		"blockedDepPolicyJSON field count changed — update expectedPolicyTags and sync with commands/curation.Policy")
-	for i := range policyType.NumField() {
-		field := policyType.Field(i)
-		expected, ok := expectedPolicyTags[field.Name]
-		assert.True(t, ok, "unexpected field %s in blockedDepPolicyJSON — update expectedPolicyTags and sync with Policy", field.Name)
-		if ok {
-			assert.Equal(t, expected, field.Tag.Get("json"),
-				"blockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
-		}
-	}
-}
-
 func TestProbeBlockedDirectDeps(t *testing.T) {
 	curationBody := `{"errors":[{"status":403,"message":"Package lodash:4.17.21 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove it}."}]}`
 	nonCurationBody := `{"errors":[{"status":403,"message":"403 Forbidden"}]}`
@@ -1633,14 +1628,190 @@ func TestProbeBlockedDirectDeps(t *testing.T) {
 			assert.Equal(t, tt.wantTotal, totalProbed)
 			assert.Len(t, blocked, tt.wantBlocked)
 			if tt.wantBlocked > 0 {
-				assert.Equal(t, "lodash", blocked[0].name)
-				assert.Equal(t, "4.17.21", blocked[0].probedVersion)
-				assert.Equal(t, tt.wantReason, blocked[0].reason)
-				if tt.wantPolicy != "" && assert.Len(t, blocked[0].policies, 1) {
-					assert.Equal(t, tt.wantPolicy, blocked[0].policies[0].policy)
-					assert.Equal(t, tt.wantCondition, blocked[0].policies[0].condition)
+				assert.Equal(t, "lodash", blocked[0].Name)
+				assert.Equal(t, "4.17.21", blocked[0].ProbedVersion)
+				assert.Equal(t, tt.wantReason, blocked[0].Reason)
+				if tt.wantPolicy != "" && assert.Len(t, blocked[0].Policies, 1) {
+					assert.Equal(t, tt.wantPolicy, blocked[0].Policies[0].Policy)
+					assert.Equal(t, tt.wantCondition, blocked[0].Policies[0].Condition)
 				}
 			}
 		})
 	}
+}
+
+func TestRegisterYarnPluginInYarnrc(t *testing.T) {
+	const spec = "@yarnpkg/plugin-jfrog-yarn-resolve-lockfile"
+	const yarnrcName = ".yarnrc.yml"
+
+	t.Run("creates yarnrc when absent", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+		assert.Contains(t, string(data), spec)
+	})
+
+	t.Run("idempotent - no duplicate entry", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Equal(t, 1, strings.Count(string(data), resolveLockfilePluginRelPath))
+	})
+
+	t.Run("preserves unrelated settings", func(t *testing.T) {
+		curWd := t.TempDir()
+		yarnrc := "npmRegistryServer: \"https://example.com/artifactory/api/npm/repo/\"\nnpmAuthToken: secret-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte(yarnrc), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "npmRegistryServer")
+		assert.Contains(t, string(data), "secret-token")
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+	})
+
+	t.Run("recovers from malformed yaml", func(t *testing.T) {
+		curWd := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(curWd, yarnrcName), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, registerYarnPluginInYarnrc(curWd))
+		data, err := os.ReadFile(filepath.Join(curWd, yarnrcName))
+		require.NoError(t, err)
+		assert.Contains(t, string(data), resolveLockfilePluginRelPath)
+	})
+}
+
+func TestAttachWorkspaceMembersToRoot(t *testing.T) {
+	newDep := func(value string, childLocators ...string) *bibuildutils.YarnDependency {
+		ptrs := make([]bibuildutils.YarnDependencyPointer, 0, len(childLocators))
+		for _, locator := range childLocators {
+			ptrs = append(ptrs, bibuildutils.YarnDependencyPointer{Locator: locator})
+		}
+		return &bibuildutils.YarnDependency{Value: value, Details: bibuildutils.YarnDepDetails{Dependencies: ptrs}}
+	}
+	rootChildLocators := func(root *bibuildutils.YarnDependency) []string {
+		var locs []string
+		for _, p := range root.Details.Dependencies {
+			locs = append(locs, p.Locator)
+		}
+		return locs
+	}
+
+	t.Run("attaches unlinked workspace members in deterministic (sorted-key) order", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":           root,
+			"ui@workspace:packages/ui":   newDep("ui@workspace:packages/ui"),
+			"api@workspace:packages/api": newDep("api@workspace:packages/api"),
+			"lodash@npm:4.17.21":         newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		// Keys "api@workspace:packages/api" < "ui@workspace:packages/ui" so api comes first.
+		assert.Equal(t, []string{"api@workspace:packages/api", "ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("dedups already-linked members", func(t *testing.T) {
+		root := newDep("root@workspace:.", "ui@workspace:packages/ui")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":         root,
+			"ui@workspace:packages/ui": newDep("ui@workspace:packages/ui"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Equal(t, []string{"ui@workspace:packages/ui"}, rootChildLocators(root))
+	})
+
+	t.Run("skips non-workspace deps and the root itself", func(t *testing.T) {
+		root := newDep("root@workspace:.")
+		depMap := map[string]*bibuildutils.YarnDependency{
+			"root@workspace:.":   root,
+			"lodash@npm:4.17.21": newDep("lodash@npm:4.17.21"),
+		}
+		attachWorkspaceMembersToRoot(depMap, root)
+		assert.Empty(t, rootChildLocators(root))
+	})
+
+	t.Run("nil root is a no-op", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			attachWorkspaceMembersToRoot(map[string]*bibuildutils.YarnDependency{}, nil)
+		})
+	})
+}
+
+func TestReadNpmAuthTokenFromYarnrcFiles(t *testing.T) {
+	const registryURL = "https://example.com/artifactory/api/npm/repo/"
+	scopedYarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\nnpmAuthToken: top-level-token\n"
+
+	// setHome points os.UserHomeDir() at dir on every OS (HOME on unix,
+	// USERPROFILE on windows) so a real ~/.yarnrc.yml can't leak in.
+	setHome := func(t *testing.T, dir string) {
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+	}
+
+	t.Run("scoped registry entry wins over top-level", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(scopedYarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("falls back to top-level npmAuthToken", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: top-level-token\n"), 0o600))
+		assert.Equal(t, "top-level-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("global ~/.yarnrc.yml used when project file absent", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("project file takes priority over global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmAuthToken: project-token\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "project-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("malformed project yaml falls through to global", func(t *testing.T) {
+		wd := t.TempDir()
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("{ not : valid : yaml ["), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte("npmAuthToken: global-token\n"), 0o600))
+		assert.Equal(t, "global-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("no token anywhere returns empty", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		assert.Empty(t, readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	// Scoped lookup must tolerate a trailing-slash mismatch in both directions.
+	t.Run("scoped entry resolves when key omits trailing slash but query has it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		const keyNoSlash = "https://example.com/artifactory/api/npm/repo"
+		yarnrc := "npmRegistries:\n  \"" + keyNoSlash + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(registryURL, wd))
+	})
+
+	t.Run("scoped entry resolves when key has trailing slash but query omits it", func(t *testing.T) {
+		wd := t.TempDir()
+		setHome(t, t.TempDir())
+		yarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(strings.TrimSuffix(registryURL, "/"), wd))
+	})
 }

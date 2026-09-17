@@ -34,7 +34,7 @@ func TestGetScaExcludePattern(t *testing.T) {
 		{
 			name:            "Test no exclude pattern recursive",
 			isRecursiveScan: true,
-			expected:        "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+			expected:        "(^.*\\.git$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
 			name:       "Test exclude pattern not recursive",
@@ -43,7 +43,7 @@ func TestGetScaExcludePattern(t *testing.T) {
 		},
 		{
 			name:     "Test no exclude pattern",
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+			expected: "(^.*\\.git$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
 			name:       "Test exclude patterns from config profile",
@@ -143,6 +143,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
 	goOutput := "Failed running Go command: 403 Forbidden"
 	poetryOutput := "because of HTTP error 403 Client Error: Forbidden for url"
+	uvOutput := "error: Failed to fetch: `https://example.jfrog.io/api/pypi/repo/packages/urllib3-1.23.whl`\n  Caused by: HTTP status client error (403 Forbidden) for url (...)"
 
 	tests := []struct {
 		name          string
@@ -203,6 +204,19 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 			isCurationCmd: true,
 			tech:          techutils.Poetry,
 			output:        "http error 401",
+		},
+		{
+			name:          "uv 403 error (pass-through blocked package)",
+			isCurationCmd: true,
+			tech:          techutils.Uv,
+			output:        uvOutput,
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Uv),
+		},
+		{
+			name:          "uv not pass through error",
+			isCurationCmd: true,
+			tech:          techutils.Uv,
+			output:        "error: network timeout",
 		},
 		{
 			name:          "not a supported tech",

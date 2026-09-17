@@ -11,6 +11,57 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func intPtr(i int) *int {
+	return &i
+}
+
+func TestResultsStatus_GetExecutedScanTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   ResultsStatus
+		expected []utils.SubScanType
+	}{
+		{
+			name:     "no scans ran",
+			status:   ResultsStatus{},
+			expected: nil,
+		},
+		{
+			name: "all five scan types ran",
+			status: ResultsStatus{
+				ScaScanStatusCode:            intPtr(0),
+				ContextualAnalysisStatusCode: intPtr(0),
+				SecretsScanStatusCode:        intPtr(0),
+				IacScanStatusCode:            intPtr(0),
+				SastScanStatusCode:           intPtr(0),
+			},
+			expected: []utils.SubScanType{utils.ScaScan, utils.ContextualAnalysisScan, utils.SecretsScan, utils.IacScan, utils.SastScan},
+		},
+		{
+			name: "only sca and secrets ran",
+			status: ResultsStatus{
+				ScaScanStatusCode:     intPtr(0),
+				SecretsScanStatusCode: intPtr(1),
+			},
+			expected: []utils.SubScanType{utils.ScaScan, utils.SecretsScan},
+		},
+		{
+			name: "sbom, malicious, violations never reported as their own action",
+			status: ResultsStatus{
+				SbomScanStatusCode:      intPtr(0),
+				MaliciousScanStatusCode: intPtr(0),
+				ViolationsStatusCode:    intPtr(0),
+			},
+			expected: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.GetExecutedScanTypes())
+		})
+	}
+}
+
 func TestScanTarget_String(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -67,12 +118,61 @@ func TestScanTarget_String(t *testing.T) {
 	}
 }
 
+func TestTargetResults_GetDescriptors(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   *TargetResults
+		rootDir  string
+		expected []string
+	}{
+		{
+			name:     "No sca results",
+			target:   &TargetResults{ScanTarget: ScanTarget{Target: "/repo/Server"}},
+			rootDir:  "/repo",
+			expected: nil,
+		},
+		{
+			name: "Descriptor in a subdirectory, relative to repo root",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo/Server"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/Server/package.json"}},
+			},
+			rootDir:  "/repo",
+			expected: []string{"Server/package.json"},
+		},
+		{
+			name: "No root dir provided, falls back to the target's own directory",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo/Server"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/Server/package.json"}},
+			},
+			rootDir:  "",
+			expected: []string{"package.json"},
+		},
+		{
+			name: "Descriptor at the repo root",
+			target: &TargetResults{
+				ScanTarget: ScanTarget{Target: "/repo"},
+				ScaResults: &ScaScanResults{Descriptors: []string{"/repo/package.json"}},
+			},
+			rootDir:  "/repo",
+			expected: []string{"package.json"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tt.expected, tt.target.GetDescriptors(tt.rootDir))
+		})
+	}
+}
+
 func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 	enabledModule := xscServices.Module{
 		ScanConfig: xscServices.ScanConfig{
 			ScaScannerConfig:                xscServices.ScaScannerConfig{EnableScaScan: true},
 			ContextualAnalysisScannerConfig: xscServices.CaScannerConfig{EnableCaScan: true},
 			IacScannerConfig:                xscServices.IacScannerConfig{EnableIacScan: true},
+			ServicesScannerConfig:           xscServices.ServicesScannerConfig{EnableServicesScan: true},
 			SecretsScannerConfig:            xscServices.SecretsScannerConfig{EnableSecretsScan: true},
 			SastScannerConfig:               xscServices.SastScannerConfig{EnableSastScan: true},
 		},
@@ -100,6 +200,12 @@ func TestScanTarget_IsScanRequestedByCentralConfig(t *testing.T) {
 			name:     "IaC enabled",
 			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
 			scanType: utils.IacScan,
+			expected: utils.NewBoolPtr(true),
+		},
+		{
+			name:     "Services enabled",
+			target:   ScanTarget{CentralConfigModules: []xscServices.Module{enabledModule}},
+			scanType: utils.ServicesScan,
 			expected: utils.NewBoolPtr(true),
 		},
 		{
@@ -288,6 +394,16 @@ func TestScanTarget_GetCentralConfigExclusions(t *testing.T) {
 			expected: []string{"**/test-infra/**"},
 		},
 		{
+			name: "Services exclusions",
+			target: ScanTarget{CentralConfigModules: []xscServices.Module{{
+				ScanConfig: xscServices.ScanConfig{
+					ServicesScannerConfig: xscServices.ServicesScannerConfig{ExcludePatterns: []string{"**/.github/workflows/**"}},
+				},
+			}}},
+			scanType: utils.ServicesScan,
+			expected: []string{"**/.github/workflows/**"},
+		},
+		{
 			name: "SAST exclusions",
 			target: ScanTarget{CentralConfigModules: []xscServices.Module{{
 				ScanConfig: xscServices.ScanConfig{
@@ -373,4 +489,9 @@ func TestScanTarget_GetDeprecatedAppsConfigModuleExclusions(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, tt.target.GetDeprecatedAppsConfigModuleExclusions(tt.scanType))
 		})
 	}
+}
+
+func TestSecurityCommandResults_SetUploadedArtifactPath(t *testing.T) {
+	cmdResults := NewCommandResults(utils.SourceCode).SetUploadedArtifactPath("myproject-frogbot/git.com/org/repo/commits/results.cdx.json")
+	assert.Equal(t, "myproject-frogbot/git.com/org/repo/commits/results.cdx.json", cmdResults.UploadedArtifactPath)
 }

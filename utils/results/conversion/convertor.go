@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
@@ -70,6 +71,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(secrets ...[]*sarif.Run) error
+	ParseServices(services ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
 	ParseMalicious(malicious ...[]*sarif.Run) error
@@ -217,12 +219,16 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if err = parser.ParseSecrets(targetResults.JasResults.JasVulnerabilities.SecretsScanResults); err != nil {
 		return
 	}
+	// Parsing JAS Services results
+	if err = parser.ParseServices(targetResults.JasResults.JasVulnerabilities.ServicesScanResults); err != nil {
+		return
+	}
 	// Parsing JAS IAC results
 	if err = parser.ParseIacs(targetResults.JasResults.JasVulnerabilities.IacScanResults); err != nil {
 		return
 	}
 	// Parsing JAS SAST results
-	if err = parser.ParseSast(targetResults.JasResults.JasVulnerabilities.SastScanResults); err != nil {
+	if err = parser.ParseSast(sarifutils.GroupResultsByLocation(targetResults.JasResults.JasVulnerabilities.SastScanResults)); err != nil {
 		return
 	}
 	// Parsing JAS Malicious Code results

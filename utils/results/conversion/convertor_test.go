@@ -146,16 +146,16 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	}
 	if unique {
 		// Only count CVE findings, not impacted components
-		expected.Total.Vulnerabilities = 7
+		expected.Total.Vulnerabilities = 8
 		expected.Vulnerabilities = &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 4, Iac: 1, Secrets: 2},
+			ValidateScan:                &validations.ScanCount{Sca: 4, Iac: 1, Services: 1, Secrets: 2},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 2, NotCovered: 1},
 		}
 	} else {
 		// Count all findings (pair of issueId+impactedComponent)
-		expected.Total.Vulnerabilities = 8
+		expected.Total.Vulnerabilities = 9
 		expected.Vulnerabilities = &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 5, Iac: 1, Secrets: 2},
+			ValidateScan:                &validations.ScanCount{Sca: 5, Iac: 1, Services: 1, Secrets: 2},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 3, NotCovered: 1},
 		}
 	}
@@ -359,6 +359,18 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummyJasResult("aws_cloudfront_tls_only", severityutils.LevelError, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "req_sw_terraform_aws_cloudfront_tls_only.tf"), StartLine: 2, StartColumn: 1, EndLine: 21, EndColumn: 1, Snippet: "viewer_protocol_policy..."}),
+			},
+		}},
+		// No Violations
+		[]*sarif.Run{}, 0,
+	)
+	// Services scan results
+	npmTargetResults.AddJasScanResults(jasutils.Services,
+		[]*sarif.Run{{
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.ServicesToolName, validations.CreateDummyJasRule("GITHUB-ACTIONS-permissions-write-all"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
+			Results: []*sarif.Result{
+				validations.CreateDummyJasResult("GITHUB-ACTIONS-permissions-write-all", severityutils.LevelError, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", ".github", "workflows", "services.yml"), StartLine: 10, StartColumn: 1, EndLine: 10, EndColumn: 20, Snippet: "permissions: write-all"}),
 			},
 		}},
 		// No Violations

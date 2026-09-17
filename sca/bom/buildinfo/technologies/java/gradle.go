@@ -60,13 +60,15 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
-	isCurationCmd bool
+	isCurationCmd           bool
+	excludeTestDependencies bool
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
 	manager := &gradleDepTreeManager{
-		DepTreeManager: NewDepTreeManager(params),
-		isCurationCmd:  params.IsCurationCmd,
+		DepTreeManager:          NewDepTreeManager(params),
+		isCurationCmd:           params.IsCurationCmd,
+		excludeTestDependencies: params.GradleExcludeTestDependencies,
 	}
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
@@ -171,7 +173,11 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
 		"-Dcom.jfrog.includeAllBuildFiles=true",
-		fmt.Sprintf("-Dcom.jfrog.includeIncludedBuilds=%t", gdt.useIncludedBuilds)}
+		fmt.Sprintf("-Dcom.jfrog.includeIncludedBuilds=%t", gdt.useIncludedBuilds),
+	}
+	if gdt.excludeTestDependencies {
+		tasks = append(tasks, "-Dcom.jfrog.excludeConfigurationsPattern=(?i)test")
+	}
 
 	// Add curation audit mode for pass-through functionality if this is a curation command
 	if gdt.isCurationCmd {
