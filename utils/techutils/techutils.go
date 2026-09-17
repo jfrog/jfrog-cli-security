@@ -264,8 +264,8 @@ var technologiesData = map[Technology]TechData{
 	},
 	Nuget: {
 		formal:             "NuGet",
-		indicators:         []string{".sln", ".slnx", ".csproj"},
-		packageDescriptors: []string{".sln", ".slnx", ".csproj"},
+		indicators:         []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj"},
+		packageDescriptors: []string{".sln", ".slnx", ".csproj", ".fsproj", ".vbproj"},
 		// .NET CLI is used for NuGet projects
 		execCommand:                "dotnet",
 		packageInstallationCommand: "add",
