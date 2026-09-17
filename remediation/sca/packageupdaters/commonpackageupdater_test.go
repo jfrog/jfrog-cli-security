@@ -101,6 +101,30 @@ func TestUpdateDependency(t *testing.T) {
 				fixSupported:       true,
 				descriptorsToCheck: []string{"Pipfile"},
 			},
+			{
+				fixDetails:   createFixDetails(techutils.Uv, "urllib3", "", "1.25.9", false, ""),
+				fixSupported: false,
+			},
+			{
+				fixDetails:         createFixDetails(techutils.Uv, "pyjwt", "", "2.4.0", true, ""),
+				fixSupported:       true,
+				descriptorsToCheck: []string{"pyproject.toml"},
+			},
+			{
+				testcaseInfo:       "dependency-groups",
+				fixDetails:         createFixDetails(techutils.Uv, "pyjwt", "", "2.4.0", true, ""),
+				fixSupported:       true,
+				projectSubDir:      "dependency-groups",
+				descriptorsToCheck: []string{"pyproject.toml"},
+			},
+			{
+				testcaseInfo:               "workspace-member-not-found-safe-failure",
+				fixDetails:                 createFixDetails(techutils.Uv, "pyjwt", "", "2.4.0", true, ""),
+				fixSupported:               true,
+				projectSubDir:              "workspace",
+				errorExpected:              true,
+				descriptorToVerifyNoChange: "pyproject.toml",
+			},
 		},
 
 		// Npm test cases
@@ -1004,6 +1028,7 @@ func TestGetCompatiblePackageUpdater(t *testing.T) {
 		{techutils.Poetry, true, &PythonPackageUpdater{}},
 		{techutils.Pipenv, true, &PythonPackageUpdater{}},
 		{techutils.Nuget, true, &NugetPackageUpdater{}},
+		{techutils.Uv, true, &PythonPackageUpdater{}},
 		{techutils.Yarn, true, &YarnPackageUpdater{}},
 		{techutils.Gradle, false, nil},
 		{techutils.Conan, false, nil},

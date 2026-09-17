@@ -1,0 +1,8 @@
+[project]
+name = "uv-project"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "pexpect==4.8.0",
+    "pyjwt==1.7.1",
+]
