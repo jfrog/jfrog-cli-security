@@ -246,15 +246,15 @@ func updatePackageReferenceVersion(content []byte, packageName, fixedVersion str
 		}
 	})
 
-	if fixedAny {
-		return updatedContent, nil
-	}
 	if foundWithoutVersion {
 		return nil, &ErrUnsupportedFix{
 			PackageName:  packageName,
 			FixedVersion: fixedVersion,
 			ErrorType:    NoInlineVersionFixNotSupported,
 		}
+	}
+	if fixedAny {
+		return updatedContent, nil
 	}
 	return nil, fmt.Errorf("dependency %s not found", packageName)
 }

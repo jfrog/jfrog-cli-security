@@ -907,3 +907,18 @@ func TestNugetUpdateDependencyPreservesPreexistingObjDir(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "keep-me", string(sentinel))
 }
+
+func TestUpdatePackageReferenceVersionRejectsMixedInlineAndNonInline(t *testing.T) {
+	content := []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+</Project>`)
+
+	updated, err := updatePackageReferenceVersion(content, "Newtonsoft.Json", "13.0.1")
+	assert.Nil(t, updated)
+	var unsupportedErr *ErrUnsupportedFix
+	assert.True(t, errors.As(err, &unsupportedErr))
+	assert.Equal(t, NoInlineVersionFixNotSupported, unsupportedErr.ErrorType)
+}
