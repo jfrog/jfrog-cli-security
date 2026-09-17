@@ -85,6 +85,10 @@ const (
 
 	extractPoliciesRegexTemplate = "({.*?})"
 
+	// allVersionsBlockedMsgPattern matches Artifactory's whole-package-block message, e.g.
+	// "All versions blocked - {policy:openssf-jfca,condition:openssf}".
+	allVersionsBlockedMsgPattern = `(?i)all versions blocked\s*-\s*\{\s*policy:([^,}]+),condition:([^}]+)\}`
+
 	errorTemplateHeadRequest = "failed sending HEAD request to %s for package '%s:%s'. Status-code: %v. Cause: %v"
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
@@ -103,13 +107,11 @@ const (
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
 
-	// cvsPartialReportWarning is shown when pip or poetry resolution failed because CVS
-	// stripped a required version from the simple index, but the metadata-API
-	// fallback succeeded in recovering at least one policy violation.
-	cvsPartialReportWarning = "The curation audit was unable to fully resolve the dependency tree because one or more pinned package versions " +
-		"are blocked by the curation policy. Details of the policy violations are shown in the table below.\n" +
-		"Dependency analysis cannot proceed until these issues are addressed.\n" +
-		"Once you switch to an approved version and re-run the audit, additional results will be available."
+	// cvsPartialReportWarningTemplate is shown when a curation-blocked resolution still
+	// recovered a partial report. %s is the technology name, filled in at print time.
+	cvsPartialReportWarningTemplate = "%s could not fully resolve the dependency tree because one or more packages " +
+		"are blocked by the curation policy, so this report may be incomplete. Dependencies of blocked packages " +
+		"could not be analyzed because their metadata was unavailable."
 
 	// hfUnresolvedReportKey is used when an HF scan found only dynamic references — no table, just warnings.
 	hfUnresolvedReportKey = "huggingface (unresolved references)"
@@ -127,6 +129,7 @@ const (
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 var osGetwd = os.Getwd
 var npmGetConfigValue = npmtech.GetNpmConfigValue
+var allVersionsBlockedMsgRegex = regexp.MustCompile(allVersionsBlockedMsgPattern)
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
@@ -484,10 +487,12 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	}
 	for projectPath, report := range results {
 		if report.isPartial {
-			warningText := cvsPartialReportWarning
+			var warningText string
 			if report.npmLogPartial {
 				warningText = npmLogPartialReportWarning
 				log.Debug(fmt.Sprintf("[%s] underlying npm error: %s", projectPath, report.npmLogOriginalErr))
+			} else {
+				warningText = fmt.Sprintf(cvsPartialReportWarningTemplate, cvsFallbackTechName(report))
 			}
 			log.Warn(fmt.Sprintf("[%s] %s", projectPath, warningText))
 		}
@@ -2475,6 +2480,15 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 	return nil
 }
 
+// cvsFallbackTechName returns the package-manager name to show in
+// cvsPartialReportWarningTemplate, taken from the first row's PkgType.
+func cvsFallbackTechName(report *CurationReport) string {
+	if len(report.packagesStatus) > 0 && report.packagesStatus[0].PkgType != "" {
+		return report.packagesStatus[0].PkgType
+	}
+	return "the package manager"
+}
+
 // cleanupForcedNpmDebugLog removes the log our forced --logs-max override caused npm to write,
 // when logs-max=0. Success-path counterpart to runNpmLogFallback's cleanup; baselineKey (see
 // npmDebugLogNewestKey) ensures a stale pre-existing log is never removed by mistake.
@@ -2684,61 +2698,98 @@ func wholePackageBlockedStatus(entry npmLogEntry, info npmBlockedInfo, tech tech
 	}
 }
 
-// applyTransitiveAwareRecommendation: "remove and replace" is only actionable when the
-// blocked package is itself a direct dependency; otherwise name the real direct dependency.
-// ps.Policy is reassigned, not mutated in place — fillGraphRelations clones *PackageStatus
-// per edge via a shallow copy, so edges sharing a preProcessMap entry share the same array.
+// applyTransitiveAwareRecommendation normalizes every ps.Policy entry to generic,
+// direct/transitive-aware text for a whole-package block (matches npm). Only safe when
+// all entries are already whole-package (e.g. Step 0). For a per-version probe result,
+// use normalizeMatchingWholePackagePolicies instead.
 func applyTransitiveAwareRecommendation(ps *PackageStatus, isDirectDependency bool) {
 	policies := make([]Policy, len(ps.Policy))
 	copy(policies, ps.Policy)
 	for i := range policies {
-		if isDirectDependency {
-			policies[i].Recommendation = "Remove this package from your project and replace with an alternate package"
-		} else {
-			policies[i].Recommendation = fmt.Sprintf(
-				"%s is a transitive dependency of %s and cannot be removed directly. Apply a waiver if acceptable, or replace %s with an alternative that doesn't depend on %s.",
-				ps.PackageName, ps.ParentName, ps.ParentName, ps.PackageName)
-		}
+		normalizeWholePackagePolicy(&policies[i], ps, isDirectDependency)
 	}
 	ps.Policy = policies
 }
 
-// lookupPypiAllVersions calls the Artifactory PyPI metadata API for a package
-// name (no version — returns all releases) and returns all available version
-// strings. This endpoint is NOT filtered by CVS, so it includes versions that
-// have been stripped from the simple index.
-func (nc *treeAnalyzer) lookupPypiAllVersions(name string) ([]string, error) {
-	metadataURL := fmt.Sprintf("%s/api/pypi/%s/pypi/%s/json",
-		strings.TrimSuffix(nc.url, "/"), nc.repo, name)
+// normalizeMatchingWholePackagePolicies normalizes only entries in ps.Policy matching
+// aggregatePolicies by Policy+Condition — the same block Step 0 confirmed. A genuinely
+// different per-version policy is left untouched.
+func normalizeMatchingWholePackagePolicies(ps *PackageStatus, aggregatePolicies []Policy, isDirectDependency bool) {
+	policies := make([]Policy, len(ps.Policy))
+	copy(policies, ps.Policy)
+	for i := range policies {
+		if !matchesAnyPolicy(policies[i], aggregatePolicies) {
+			continue
+		}
+		normalizeWholePackagePolicy(&policies[i], ps, isDirectDependency)
+	}
+	ps.Policy = policies
+}
+
+// matchesAnyPolicy reports whether p shares the same Policy+Condition as any of candidates.
+func matchesAnyPolicy(p Policy, candidates []Policy) bool {
+	for _, c := range candidates {
+		if p.Policy == c.Policy && p.Condition == c.Condition {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeWholePackagePolicy rewrites a single Policy entry's Explanation/Recommendation
+// to the generic, direct/transitive-aware text for a whole-package block.
+func normalizeWholePackagePolicy(p *Policy, ps *PackageStatus, isDirectDependency bool) {
+	p.Explanation = allVersionsBlockedText
+	if isDirectDependency {
+		p.Recommendation = "Remove this package from your project and replace with an alternate package"
+	} else {
+		p.Recommendation = fmt.Sprintf(
+			"%s is a transitive dependency of %s and cannot be removed directly. Apply a waiver if acceptable, or replace %s with an alternative that doesn't depend on %s.",
+			ps.PackageName, ps.ParentName, ps.ParentName, ps.PackageName)
+	}
+}
+
+// pypiAllVersionsMetadataURL builds the package-level (all-versions) PyPI metadata URL —
+// shared by lookupPypiAllVersions and the whole-package-block recovery in fetchCvsBlockedStatus.
+func pypiAllVersionsMetadataURL(artiUrl, repo, name string) string {
+	return fmt.Sprintf("%s/api/pypi/%s/pypi/%s/json", strings.TrimSuffix(artiUrl, "/"), repo, name)
+}
+
+// lookupPypiAllVersions fetches all available versions for a package from Artifactory's
+// PyPI metadata API. A 403 means every version is blocked; allBlocked flags that case.
+func (nc *treeAnalyzer) lookupPypiAllVersions(name string) (versions []string, allBlocked bool, err error) {
+	metadataURL := pypiAllVersionsMetadataURL(nc.url, nc.repo, name)
 
 	requestDetails := nc.httpClientDetails.Clone()
 	var resp *http.Response
 	var body []byte
-	var err error
 	if nc.tech == techutils.Pip || nc.tech == techutils.Poetry || nc.tech == techutils.Pipenv || nc.tech == techutils.Uv {
 		resp, body, err = nc.sendBoundedRequest(http.MethodGet, metadataURL, requestDetails)
 	} else {
 		resp, body, _, err = nc.rtManager.Client().SendGet(metadataURL, true, requestDetails)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
+		return nil, false, fmt.Errorf("all-versions metadata API request failed for %s: %w", name, err)
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, true, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("all-versions metadata API returned HTTP %d for %s", resp.StatusCode, name)
+		return nil, false, fmt.Errorf("all-versions metadata API returned HTTP %d for %s", resp.StatusCode, name)
 	}
 
 	var meta struct {
 		Releases map[string]json.RawMessage `json:"releases"`
 	}
 	if err := json.Unmarshal(body, &meta); err != nil {
-		return nil, fmt.Errorf("failed to parse all-versions metadata for %s: %w", name, err)
+		return nil, false, fmt.Errorf("failed to parse all-versions metadata for %s: %w", name, err)
 	}
 
-	versions := make([]string, 0, len(meta.Releases))
+	versions = make([]string, 0, len(meta.Releases))
 	for v := range meta.Releases {
 		versions = append(versions, v)
 	}
-	return versions, nil
+	return versions, false, nil
 }
 
 // lookupPypiNormalDownloadURL calls the Artifactory PyPI metadata API for
@@ -2797,31 +2848,76 @@ func (nc *treeAnalyzer) lookupPypiNormalDownloadURL(name, ver string) (string, e
 
 // fetchCvsBlockedStatus recovers the curation policy for each CVS-blocked package:
 //
-//  1. For range-based blockers (PinnedRequirement.VersionRange set): resolve the
-//     newest version satisfying the range via the unfiltered all-versions metadata API.
+//  0. Whole-package check (every pin): query the all-versions metadata API. If every
+//     version is blocked, render directly as "All versions blocked" (mirrors npm's
+//     wholePackageBlockedStatus). Takes priority over steps 1-3.
+//  1. Otherwise, for range-based or version-less blockers: resolve the newest version
+//     satisfying the range from step 0's all-versions list.
 //  2. Call the version-specific metadata API to get the normal download URL.
-//  3. Probe the normal (non-audit) download URL via getBlockedPackageDetails.
+//  3. Probe that download URL via getBlockedPackageDetails.
 //
-// A blocker that cannot be confirmed as curation-blocked (its version is absent
-// from the metadata API — e.g. removed from the index, or a typo/nonexistent
-// version) is NOT rendered as a row; with no recoverable blockers the command
-// falls back to the graceful PR #761 message listing affected package(s), so a
-// version that is not in the metadata API is never shown as a fake "blocked" row.
+// A blocker that can't be confirmed as curation-blocked (version absent from the
+// metadata API) is not rendered as a row — falls back to the graceful "affected
+// package(s)" message instead of a fake "blocked" row.
 //
-// HTTP calls are sequential per pin. This path is an error-recovery path that
-// typically processes 1-3 packages, so parallelism is not worth the complexity.
+// HTTP calls are sequential per pin: this error-recovery path handles only 1-3
+// packages, so parallelism isn't worth the complexity.
 func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) []*PackageStatus {
 	var statuses []*PackageStatus
 	for _, pin := range pins {
+		depRelation := directRelation
+		if effectiveParent(pin) != pin.Name {
+			depRelation = indirectRelation
+		} else if pin.Version == "" && pin.VersionRange == "" && !pin.ConfirmedDirect {
+			depRelation = indirectRelation
+		}
+
+		allVersions, allBlocked, avErr := nc.lookupPypiAllVersions(pin.Name)
+		wholePackageBlocked := false
+		var wholePackageFallback *PackageStatus
+		if allBlocked {
+			wholePackageBlocked = true
+			metadataURL := pypiAllVersionsMetadataURL(nc.url, nc.repo, pin.Name)
+			pkStatus, getErr := nc.getBlockedPackageDetails(metadataURL, pin.Name, allVersionsBlockedText)
+			if getErr != nil {
+				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: whole-package policy recovery failed for %s: %v",
+					pin.Name, getErr))
+			}
+			if pkStatus == nil {
+				pkStatus = &PackageStatus{
+					PackageName:       pin.Name,
+					BlockedPackageUrl: metadataURL,
+					Action:            blocked,
+					BlockingReason:    BlockingReasonUnknown,
+					PkgType:           string(nc.tech),
+				}
+			}
+			pkStatus.PackageName = pin.Name
+			pkStatus.PackageVersion = allVersionsBlockedText
+			pkStatus.ParentName = effectiveParent(pin)
+			pkStatus.ParentVersion = effectiveParentVersion(pin, true)
+			pkStatus.DepRelation = depRelation
+
+			if len(pkStatus.Policy) > 0 {
+				applyTransitiveAwareRecommendation(pkStatus, depRelation == directRelation)
+			}
+			wholePackageFallback = pkStatus
+
+			if pin.VersionRange != "" || pin.Version == "" {
+				statuses = append(statuses, wholePackageFallback)
+				continue
+			}
+		}
+
 		// ── Step 1: resolve range / no-version → exact version ───────────────
 		resolvedVersion := pin.Version
-		if pin.VersionRange != "" || resolvedVersion == "" {
+		if !wholePackageBlocked && (pin.VersionRange != "" || resolvedVersion == "") {
 			// Either a range spec or a ResolutionImpossible entry with no version.
-			// Use the unfiltered all-versions metadata API to find the newest match.
-			allVersions, err := nc.lookupPypiAllVersions(pin.Name)
-			if err != nil {
+			// Reuse the all-versions list already fetched in step 0 — not
+			// whole-package-blocked, so avErr (if any) is a real, non-403 failure.
+			if avErr != nil {
 				log.Debug(fmt.Sprintf("curation-blocked resolution fallback: all-versions lookup failed for %s%s: %v",
-					pin.Name, pin.VersionRange, err))
+					pin.Name, pin.VersionRange, avErr))
 				continue
 			}
 			if pin.VersionRange != "" {
@@ -2838,17 +2934,24 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: resolved %s%s → %s",
 				pin.Name, pin.VersionRange, resolvedVersion))
 		}
+		// A pinned exact pin already has its version and never needed the
+		// all-versions list at all, so any avErr above (a transient, non-403
+		// failure) is deliberately ignored here rather than dropping the pin.
 
 		// ── Step 2: metadata API → normal download URL ────────────────────────
 		dlURL, err := nc.lookupPypiNormalDownloadURL(pin.Name, resolvedVersion)
 		if err != nil {
+			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
+				pin.Name, resolvedVersion, err))
+			if wholePackageBlocked {
+				statuses = append(statuses, wholePackageFallback)
+				continue
+			}
 			// Version is absent from the metadata API (removed from the index, or
 			// a typo/nonexistent version). There is no recoverable policy to show,
 			// so skip it: with no recoverable blockers the command falls back to
 			// the graceful "Affected package(s)" message (PR #761 behaviour),
 			// rather than rendering a misleading empty table row.
-			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: metadata lookup failed for %s==%s: %v — treating as unresolved",
-				pin.Name, resolvedVersion, err))
 			continue
 		}
 
@@ -2864,12 +2967,21 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		if headErr != nil && (headResp == nil || headResp.StatusCode != http.StatusForbidden) {
 			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe failed for %s==%s: %v",
 				pin.Name, resolvedVersion, headErr))
+			if wholePackageBlocked {
+				statuses = append(statuses, wholePackageFallback)
+			}
 			continue
 		}
 		// Package is accessible — CVS cache may be stale; not currently blocked.
+		// If the whole package was already confirmed blocked in Step 0, trust that
+		// package-level result over this single stale-looking probe rather than
+		// silently dropping the row.
 		if headErr == nil && headResp != nil && headResp.StatusCode != http.StatusForbidden {
 			log.Debug(fmt.Sprintf("curation-blocked resolution fallback: HEAD probe returned %d for %s==%s — not CVS-blocked, skipping",
 				headResp.StatusCode, pin.Name, resolvedVersion))
+			if wholePackageBlocked {
+				statuses = append(statuses, wholePackageFallback)
+			}
 			continue
 		}
 
@@ -2883,15 +2995,11 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 					pin.Name, resolvedVersion, getErr))
 			}
 		}
-		depRelation := directRelation
-		if effectiveParent(pin) != pin.Name {
-			depRelation = indirectRelation
-		} else if pin.Version == "" && pin.VersionRange == "" {
-			// Name-only entry from ResolutionImpossible — parent attribution is
-			// unknown but these are always transitive deps by definition.
-			depRelation = indirectRelation
-		}
 		if pkStatus == nil {
+			if wholePackageBlocked {
+				statuses = append(statuses, wholePackageFallback)
+				continue
+			}
 			// HEAD returned 403 but GET probe errored — CVS stripped the version
 			// from the index but policy details aren't available via this path;
 			// record with unknown reason so the package is never silently dropped.
@@ -2899,7 +3007,7 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 				PackageName:       pin.Name,
 				PackageVersion:    resolvedVersion,
 				ParentName:        effectiveParent(pin),
-				ParentVersion:     effectiveParentVersion(pin),
+				ParentVersion:     effectiveParentVersion(pin, false),
 				DepRelation:       depRelation,
 				BlockedPackageUrl: dlURL,
 				Action:            blocked,
@@ -2910,13 +3018,26 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		}
 
 		// Policy recovered — set parent attribution from the parsed blocker.
+		// When the whole package was confirmed blocked in Step 0, label the row
+		// "All versions blocked" (like npm) even though the rich policy detail
+		// below came from probing this one pinned version's own download URL.
 		pkStatus.PackageName = pin.Name
-		pkStatus.PackageVersion = resolvedVersion
+		if wholePackageBlocked {
+			pkStatus.PackageVersion = allVersionsBlockedText
+		} else {
+			pkStatus.PackageVersion = resolvedVersion
+		}
 		pkStatus.ParentName = effectiveParent(pin)
-		pkStatus.ParentVersion = effectiveParentVersion(pin)
+		pkStatus.ParentVersion = effectiveParentVersion(pin, wholePackageBlocked)
 		pkStatus.DepRelation = depRelation
+		// Normalize only the entries that match the aggregate's policy+condition — a
+		// second, genuinely different real policy in the same probe must be preserved.
+		if wholePackageBlocked && wholePackageFallback != nil && len(wholePackageFallback.Policy) > 0 {
+			normalizeMatchingWholePackagePolicies(pkStatus, wholePackageFallback.Policy, depRelation == directRelation)
+		}
 		statuses = append(statuses, pkStatus)
 	}
+
 	return statuses
 }
 
@@ -2932,18 +3053,21 @@ func effectiveParent(pin python.PinnedRequirement) string {
 }
 
 // effectiveParentVersion returns the version to show in the "Direct Dependency
-// Version" column. For exact pins it is the pinned version.
+// Version" column.
 //
-// For a ranged DIRECT dependency (parent == package, e.g. requirements.txt has
-// "langchain-core>=1.4.0") the range spec itself is shown so the column is not
-// blank. For a TRANSITIVE blocker (parent differs from the package) the range
-// describes the blocked package, not the parent — so it must not be shown in
-// the parent column; we leave it blank when the parent version is unknown.
-func effectiveParentVersion(pin python.PinnedRequirement) string {
-	if pin.ParentVersion != "" {
+// For a TRANSITIVE blocker (parent differs from the package), the parent's own
+// version is shown regardless — it resolved fine.
+//
+// For a DIRECT dependency, a whole-package block leaves this blank. Otherwise
+// exact pins show their pinned version, and a ranged spec is shown so it's not blank.
+func effectiveParentVersion(pin python.PinnedRequirement, wholePackageBlocked bool) string {
+	if pin.ParentName != "" && pin.ParentName != pin.Name {
 		return pin.ParentVersion
 	}
-	if pin.VersionRange != "" && (pin.ParentName == "" || pin.ParentName == pin.Name) {
+	if wholePackageBlocked {
+		return ""
+	}
+	if pin.VersionRange != "" {
 		return pin.VersionRange
 	}
 	return pin.Version
@@ -3025,6 +3149,21 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				BlockingReason:    blockingReason,
 				WaiverAllowed:     strings.Contains(respError.Errors[0].Message, "[waivers allowed]"),
 				PkgType:           string(nc.tech),
+			}, nil
+		}
+		if m := allVersionsBlockedMsgRegex.FindStringSubmatch(respError.Errors[0].Message); m != nil {
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    BlockingReasonPolicy,
+				Policy: []Policy{{
+					Policy:      strings.TrimSpace(m[1]),
+					Condition:   strings.TrimSpace(m[2]),
+					Explanation: allVersionsBlockedText,
+				}},
+				PkgType: string(nc.tech),
 			}, nil
 		}
 	}

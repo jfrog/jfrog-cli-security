@@ -1,7 +1,11 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -12,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-artifactory/utils/tests"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -27,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	commonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -300,6 +306,44 @@ func testXrayBinaryScanJASArtifact(t *testing.T, artifact string, inTempDir bool
 		params,
 		false,
 	)
+}
+
+func TestXrayBinaryScanDependencyFreePackage(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	// TestMain disables usage reporting; without it MultiScanId is empty and XSC is never used.
+	restoreUsage := clientTestUtils.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer restoreUsage()
+	output := testXrayBinaryScan(t, binaryScanParams{
+		BinaryPattern: createDependencyFreeNpmPackage(t),
+		Format:        format.SimpleJson,
+		WithLicense:   true,
+	}, false)
+	var results formats.SimpleJsonResults
+	require.NoError(t, json.Unmarshal([]byte(output), &results))
+	require.NotNil(t, results.Statuses.ScaStatusCode, "SCA scan did not run, the package was not indexed: %s", output)
+	require.NotEmpty(t, results.MultiScanId, "analytics event was not sent, so the scan did not exercise the XSC graph path: %s", output)
+	assert.Equal(t, 0, *results.Statuses.ScaStatusCode)
+	assert.Empty(t, results.Errors)
+}
+
+func createDependencyFreeNpmPackage(t *testing.T) string {
+	packageJson := `{"name":"nodes-regression","version":"1.0.0"}`
+	var archive bytes.Buffer
+	gzipWriter := gzip.NewWriter(&archive)
+	tarWriter := tar.NewWriter(gzipWriter)
+	require.NoError(t, tarWriter.WriteHeader(&tar.Header{
+		Name: "package/package.json",
+		Mode: 0600,
+		Size: int64(len(packageJson)),
+	}))
+	_, err := tarWriter.Write([]byte(packageJson))
+	require.NoError(t, err)
+	require.NoError(t, tarWriter.Close())
+	require.NoError(t, gzipWriter.Close())
+
+	packagePath := filepath.Join(t.TempDir(), "nodes-regression-1.0.0.tgz")
+	require.NoError(t, os.WriteFile(packagePath, archive.Bytes(), 0600))
+	return packagePath
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
