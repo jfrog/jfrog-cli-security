@@ -1343,3 +1343,108 @@ func TestCargoHasNoSharedDetectionIndicator(t *testing.T) {
 		assert.False(t, isIndicator, "%q must not be a shared-detection indicator for Cargo", name)
 	}
 }
+
+func TestPromotePipToUv(t *testing.T) {
+	tests := []struct {
+		name           string
+		techs          []Technology
+		files          map[string]string
+		homeUvToml     bool
+		expectedHasPip bool
+		expectedHasUv  bool
+	}{
+		{
+			name:  "no pip in techs — no change",
+			techs: []Technology{Maven},
+		},
+		{
+			name:           "pip with requirements.txt — stays pip",
+			techs:          []Technology{Pip},
+			files:          map[string]string{"requirements.txt": ""},
+			expectedHasPip: true,
+		},
+		{
+			name:          "pip + uv.lock — promoted to uv",
+			techs:         []Technology{Pip},
+			files:         map[string]string{"uv.lock": ""},
+			expectedHasUv: true,
+		},
+		{
+			name:           "pip-exclusive file wins over uv.lock",
+			techs:          []Technology{Pip, Uv},
+			files:          map[string]string{"requirements.txt": "", "uv.lock": ""},
+			expectedHasPip: true,
+		},
+		{
+			name:          "pyproject.toml [tool.uv] promotes to uv",
+			techs:         []Technology{Pip},
+			files:         map[string]string{"pyproject.toml": "[tool.uv]\npython = \"3.12\"\n"},
+			expectedHasUv: true,
+		},
+		{
+			name:          "pyproject.toml [tool.uv.sources] promotes to uv",
+			techs:         []Technology{Pip},
+			files:         map[string]string{"pyproject.toml": "[tool.uv.sources]\nfoo = { git = \"https://example.com/foo.git\" }\n"},
+			expectedHasUv: true,
+		},
+		{
+			name:          "pyproject.toml [[tool.uv.index]] promotes to uv",
+			techs:         []Technology{Pip},
+			files:         map[string]string{"pyproject.toml": "[[tool.uv.index]]\nurl = \"https://example.com/simple\"\n"},
+			expectedHasUv: true,
+		},
+		{
+			name:           "comment mentioning [tool.uv] does not promote",
+			techs:          []Technology{Pip},
+			files:          map[string]string{"pyproject.toml": "[project]\nname = \"demo\"\n# [tool.uv]\n"},
+			expectedHasPip: true,
+		},
+		{
+			name:           "global ~/.config/uv/uv.toml does not promote",
+			techs:          []Technology{Pip},
+			files:          map[string]string{"pyproject.toml": "[project]\nname = \"demo\"\n"},
+			homeUvToml:     true,
+			expectedHasPip: true,
+		},
+		{
+			name:          "both pip and uv with uv.lock collapses to uv",
+			techs:         []Technology{Pip, Uv, Maven},
+			files:         map[string]string{"pyproject.toml": "[project]\nname = \"demo\"\n", "uv.lock": ""},
+			expectedHasUv: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.homeUvToml {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				t.Setenv("USERPROFILE", home)
+				uvCfgDir := filepath.Join(home, ".config", "uv")
+				require.NoError(t, os.MkdirAll(uvCfgDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.com/simple\"\n"), 0o644))
+			}
+			for name, content := range tc.files {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+			}
+
+			result := PromotePipToUv(tc.techs, dir)
+
+			hasPip, hasUv := false, false
+			for _, tech := range result {
+				switch tech {
+				case Pip:
+					hasPip = true
+				case Uv:
+					hasUv = true
+				}
+			}
+			assert.Equal(t, tc.expectedHasPip, hasPip)
+			assert.Equal(t, tc.expectedHasUv, hasUv)
+			if containsTechnology(tc.techs, Maven) {
+				assert.Contains(t, result, Maven)
+			}
+		})
+	}
+}
