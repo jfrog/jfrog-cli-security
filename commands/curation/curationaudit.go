@@ -46,6 +46,7 @@ import (
 	cargotech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cargo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
 	gemtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface"
 	hfdiscovery "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/huggingface/discovery"
 	npmtech "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
@@ -714,45 +715,18 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	}
 }
 
-// Rule, in order:
-//  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
-//     poetry.lock) → Pip wins, Uv is dropped.
-//  2. Otherwise, any uv signal (uv.lock, pyproject.toml [tool.uv]/[[tool.uv.index]], or
-//     ~/.config/uv/uv.toml) → Uv wins, Pip is dropped.
-func promotePipToUv(techs []string) []string {
-	if !slices.Contains(techs, techutils.Pip.String()) {
+// promotePipToUvIn applies techutils.PromotePipToUv against dir. Callers must pass the
+// project directory; an empty dir is a no-op so this never falls back to the process cwd.
+func promotePipToUvIn(techs []string, dir string) []string {
+	if dir == "" {
 		return techs
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return techs
+	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), dir)
+	result := make([]string, 0, len(promoted))
+	for _, t := range promoted {
+		result = append(result, t.String())
 	}
-	for _, pipOnlyFile := range []string{"requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"} {
-		if _, statErr := os.Stat(filepath.Join(dir, pipOnlyFile)); statErr == nil {
-			return removeTech(techs, techutils.Uv.String())
-		}
-	}
-
-	uvSignal := ""
-	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
-		uvSignal = "uv.lock detected"
-	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
-		(strings.Contains(string(data), "[tool.uv]") || strings.Contains(string(data), "[[tool.uv.index]]")) {
-		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.index]])"
-	} else if home, homeErr := os.UserHomeDir(); homeErr == nil {
-		if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
-			uvSignal = "~/.config/uv/uv.toml detected"
-		}
-	}
-	if uvSignal == "" {
-		return techs
-	}
-	log.Info(uvSignal + " — treating project as uv.")
-	techs = removeTech(techs, techutils.Pip.String())
-	if !slices.Contains(techs, techutils.Uv.String()) {
-		techs = append(techs, techutils.Uv.String())
-	}
-	return techs
+	return result
 }
 
 // dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.
@@ -788,7 +762,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 	default:
 		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
 		techs = promoteYarnWorkspaceMember(techs)
-		techs = promotePipToUv(techs)
+		techs = promotePipToUvIn(techs, ca.OriginPath)
 		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
@@ -3298,10 +3272,16 @@ func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []strin
 // output: downloadUrl: <artiUrl>/api/go/go/github.com/kennygrant/sanitize/@v/v1.2.4.zip
 func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, techutils.Go.String()+"://")
+	// A module satisfied by a filesystem 'replace' directive was never published - skip probing it.
+	isLocalReplace := strings.HasSuffix(id, _go.LocalReplaceMarker)
+	id = strings.TrimSuffix(id, _go.LocalReplaceMarker)
 	nameVersion := strings.Split(id, ":")
 	name = nameVersion[0]
 	if len(nameVersion) > 1 {
 		version = nameVersion[1]
+	}
+	if isLocalReplace {
+		return nil, name, "", version
 	}
 	url := strings.TrimSuffix(artiUrl, "/") + "/api/go/" + repo + "/" + name + "/@v/" + version + ".zip"
 	return []string{url}, name, "", version

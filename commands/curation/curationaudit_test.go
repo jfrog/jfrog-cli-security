@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
@@ -695,11 +696,31 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
+			// example.com/localmod is a tripwire, not an expected call: it's local-replaced and must never
+			// be probed. If a regression ever probes it, this mock 403s it, breaking expectedResp below.
 			requestToFail: map[string]bool{
-				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip":       false,
+				"/api/go/go-virtual/example.com/localmod/@v/v0.0.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"github.com/you/hello": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "example.com/localmod",
+						ParentVersion:     "v0.0.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "indirect",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",
@@ -735,7 +756,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
-					totalNumberOfPackages: 3,
+					totalNumberOfPackages: 4,
 				},
 			},
 		},
@@ -1229,6 +1250,15 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
 			compName:     "github.com/kennygrant/sanitize",
 			version:      "v1.2.4",
+		},
+		{
+			name:         "local replace go component id is skipped",
+			compId:       "go://github.com/example/localmod:v0.0.0" + _go.LocalReplaceMarker,
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: nil,
+			compName:     "github.com/example/localmod",
+			version:      "v0.0.0",
 		},
 	}
 	for _, tt := range tests {
@@ -4238,7 +4268,7 @@ func TestPipWinsOverStrayUvLock(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("# stray uv.lock\n"), 0644))
 	t.Chdir(root)
 
-	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
 
 	assert.Contains(t, techs, techutils.Pip.String(), "a pip-exclusive file (requirements.txt) must win over a stray uv.lock")
 	assert.NotContains(t, techs, techutils.Uv.String(), "must not report uv when a pip-exclusive file is present")
@@ -4253,7 +4283,7 @@ func TestPureUvProjectNotReportedAsPip(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0644))
 	t.Chdir(root)
 
-	techs := promotePipToUv(techutils.DetectedTechnologiesListForCurationAudit())
+	techs := promotePipToUvIn(techutils.DetectedTechnologiesListForCurationAudit(), root)
 
 	assert.Contains(t, techs, techutils.Uv.String(), "uv.lock present, no pip-exclusive files — must report uv")
 	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
@@ -4272,6 +4302,9 @@ func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
 	defer clienttestutils.ChangeDirAndAssert(t, prevWd)
 
 	ca := NewCurationAuditCommand()
+	// techsToAudit's default branch resolves Pip/Uv ambiguity via ca.OriginPath, not the
+	// process's cwd - production sets this from absWd before reaching this point.
+	ca.OriginPath = projectDir
 
 	techs := ca.techsToAudit()
 
@@ -6328,8 +6361,9 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 }
 
 // TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
-// [tool.uv]/[[tool.uv.index]], ~/.config/uv/uv.toml), confirms pip-exclusive files always
-// win, and confirms it collapses a tech list already containing both pip and uv into one.
+// [tool.uv]/[[tool.uv.index]]), confirms pip-exclusive files always win, and confirms it
+// collapses a tech list already containing both pip and uv into one. Global ~/.config/uv/uv.toml
+// is not a project signal and must not rewrite pip-only projects.
 func TestPromotePipToUv(t *testing.T) {
 	pip := techutils.Pip.String()
 	uv := techutils.Uv.String()
@@ -6394,13 +6428,13 @@ func TestPromotePipToUv(t *testing.T) {
 			expectedHasPip: true,
 		},
 		{
-			name:          "pip + ~/.config/uv/uv.toml — promoted to uv",
-			techs:         []string{pip},
-			hasUvToml:     true,
-			expectedHasUv: true,
+			name:           "pip + ~/.config/uv/uv.toml — stays pip",
+			techs:          []string{pip},
+			hasUvToml:      true,
+			expectedHasPip: true,
 		},
 		{
-			name:           "pip-exclusive file takes priority over ~/.config/uv/uv.toml — stays pip",
+			name:           "pip-exclusive file is unaffected by ~/.config/uv/uv.toml — stays pip",
 			techs:          []string{pip},
 			hasPipFile:     "Pipfile",
 			hasUvToml:      true,
@@ -6433,7 +6467,6 @@ func TestPromotePipToUv(t *testing.T) {
 
 			t.Setenv("HOME", fakeHome)
 			t.Setenv("USERPROFILE", fakeHome)
-			t.Chdir(projectDir)
 
 			if tc.hasPipFile != "" {
 				require.NoError(t, os.WriteFile(filepath.Join(projectDir, tc.hasPipFile), []byte{}, 0o644))
@@ -6450,7 +6483,7 @@ func TestPromotePipToUv(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.jfrog.io/api/pypi/pypi-virtual/simple\"\n"), 0o644))
 			}
 
-			result := promotePipToUv(tc.techs)
+			result := promotePipToUvIn(tc.techs, projectDir)
 
 			hasPip, hasUv := false, false
 			for _, tech := range result {

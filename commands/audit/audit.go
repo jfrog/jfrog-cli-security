@@ -678,11 +678,33 @@ func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditPar
 			log.Warn(fmt.Sprintf("Couldn't detect technologies in '%s' directory: %s", included, err.Error()))
 			continue
 		}
-		for tech := range techToWorkingDirs {
+		for _, tech := range technologiesAfterPipUvPromotion(techToWorkingDirs) {
 			detectedTechnologies.Add(tech)
 		}
 	}
 	return detectedTechnologies.ToSlice()
+}
+
+func technologiesAfterPipUvPromotion(techToWorkingDirs map[techutils.Technology]map[string][]string) []techutils.Technology {
+	workingDirs := datastructures.MakeSet[string]()
+	for _, dirs := range techToWorkingDirs {
+		for dir := range dirs {
+			workingDirs.Add(dir)
+		}
+	}
+	promoted := datastructures.MakeSet[techutils.Technology]()
+	for _, dir := range workingDirs.ToSlice() {
+		dirTechs := make([]techutils.Technology, 0)
+		for tech, dirs := range techToWorkingDirs {
+			if _, ok := dirs[dir]; ok {
+				dirTechs = append(dirTechs, tech)
+			}
+		}
+		for _, tech := range techutils.PromotePipToUv(dirTechs, dir) {
+			promoted.Add(tech)
+		}
+	}
+	return promoted.ToSlice()
 }
 
 func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResults, centralProfile *xscServices.ConfigProfile) {
@@ -701,6 +723,48 @@ func matchCentralConfigModulesForOldFlow(cmdResults *results.SecurityCommandResu
 		// PathFromRoot is always '.'
 		targetResult.CentralConfigModules = centralProfile.Modules
 	}
+}
+
+// filterAmbiguousPipUvTargets applies techutils.PromotePipToUv to every Pip working
+// directory, including directories that have no Uv detector hit yet. Uv's shared
+// indicator is uv.lock, so a pyproject.toml with [tool.uv] and no lockfile is detected
+// as Pip only; promotion still rewrites that directory to Uv, matching
+// detectTechnologiesInTarget.
+func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[string][]string) map[techutils.Technology]map[string][]string {
+	pipDirs, hasPip := techToWorkingDirs[techutils.Pip]
+	if !hasPip {
+		return techToWorkingDirs
+	}
+	uvDirs := techToWorkingDirs[techutils.Uv]
+	if uvDirs == nil {
+		uvDirs = map[string][]string{}
+	}
+	for dir, descriptors := range pipDirs {
+		dirTechs := []techutils.Technology{techutils.Pip}
+		if _, ok := uvDirs[dir]; ok {
+			dirTechs = append(dirTechs, techutils.Uv)
+		}
+		promoted := techutils.PromotePipToUv(dirTechs, dir)
+		if !slices.Contains(promoted, techutils.Pip) {
+			delete(pipDirs, dir)
+		}
+		if slices.Contains(promoted, techutils.Uv) {
+			if _, ok := uvDirs[dir]; !ok {
+				uvDirs[dir] = descriptors
+			}
+		} else {
+			delete(uvDirs, dir)
+		}
+	}
+	if len(pipDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Pip)
+	}
+	if len(uvDirs) == 0 {
+		delete(techToWorkingDirs, techutils.Uv)
+	} else {
+		techToWorkingDirs[techutils.Uv] = uvDirs
+	}
+	return techToWorkingDirs
 }
 
 // Old flow: creates targets from technologies detected in the working directories.
@@ -734,6 +798,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 		} else {
+			techToWorkingDirs = filterAmbiguousPipUvTargets(techToWorkingDirs)
 			// Create scans to perform
 			for tech, workingDirs := range techToWorkingDirs {
 				if tech == techutils.Dotnet {

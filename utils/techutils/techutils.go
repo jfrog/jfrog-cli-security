@@ -345,6 +345,10 @@ var (
 	pyProjectTomlFlitRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"flit_core[^\]]*.*]`)
 	// `pdm-pep517` in the [build-system] section
 	pyProjectTomlPdmRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"pdm-pep517".*]`)
+	// [tool.uv] or dotted tables such as [tool.uv.sources]
+	pyProjectTomlUvTableRegex = regexp.MustCompile(`(?m)^\[tool\.uv(?:\.[^\]]+)?\]`)
+	// [[tool.uv.index]] (and other uv array-of-tables)
+	pyProjectTomlUvArrayTableRegex = regexp.MustCompile(`(?m)^\[\[tool\.uv(?:\.[^\]]+)?\]\]`)
 )
 
 func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
@@ -874,6 +878,59 @@ func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string]
 	if len(npmDirs) == 0 {
 		delete(technologiesDetected, Npm)
 	}
+}
+
+// PromotePipToUv resolves the ambiguity between Pip and Uv for a single working directory:
+// Pip's generic "pyproject.toml" indicator also matches a uv-managed project, since a uv
+// pyproject.toml carries neither a [tool.poetry] section nor a hatch/flit/pdm build-backend.
+// Rule, in order:
+//  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
+//     poetry.lock) → Pip wins, Uv is dropped.
+//  2. Otherwise, a project-local uv signal (uv.lock or a pyproject.toml [tool.uv] /
+//     [[tool.uv.*]] table) → Uv wins, Pip is dropped.
+//
+// Machine-global ~/.config/uv/uv.toml is not a project signal: it is common on developer
+// machines and must not rewrite a pip-only PEP 621 project to Uv.
+//
+// dir is the working directory being evaluated - callers must pass it explicitly rather
+// than relying on the process's current directory, since a single process may evaluate
+// several targets without changing it.
+func PromotePipToUv(techs []Technology, dir string) []Technology {
+	if !containsTechnology(techs, Pip) {
+		return techs
+	}
+	for _, pipOnlyFile := range []string{"requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"} {
+		if _, statErr := os.Stat(filepath.Join(dir, pipOnlyFile)); statErr == nil {
+			return removeTechnology(techs, Uv)
+		}
+	}
+
+	uvSignal := ""
+	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
+		uvSignal = "uv.lock detected"
+	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
+		(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
+		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
+	}
+	if uvSignal == "" {
+		return techs
+	}
+	log.Debug(uvSignal + " — treating project as uv.")
+	techs = removeTechnology(techs, Pip)
+	if !containsTechnology(techs, Uv) {
+		techs = append(techs, Uv)
+	}
+	return techs
+}
+
+func removeTechnology(techs []Technology, tech Technology) []Technology {
+	filtered := make([]Technology, 0, len(techs))
+	for _, t := range techs {
+		if t != tech {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
 }
 
 // isYarnWorkspaceMemberDir reports whether dir is a yarn workspace member —

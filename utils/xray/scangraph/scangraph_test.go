@@ -1,14 +1,108 @@
 package scangraph
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestUseXscGraphScan(t *testing.T) {
+	tests := []struct {
+		name   string
+		params *services.XrayGraphScanParams
+		want   bool
+	}{
+		{name: "nil params", params: nil, want: false},
+		{
+			name: "dependency with analytics uses XSC",
+			params: &services.XrayGraphScanParams{
+				ScanType:    services.Dependency,
+				XscVersion:  "1.16.0",
+				MultiScanId: "msi",
+			},
+			want: true,
+		},
+		{
+			name: "binary never uses XSC even with analytics ids",
+			params: &services.XrayGraphScanParams{
+				ScanType:    services.Binary,
+				XscVersion:  "1.16.0",
+				MultiScanId: "msi",
+			},
+			want: false,
+		},
+		{
+			name: "dependency without multi scan id stays on Xray",
+			params: &services.XrayGraphScanParams{
+				ScanType:   services.Dependency,
+				XscVersion: "1.16.0",
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, useXscGraphScan(tt.params))
+		})
+	}
+}
+
+func TestDisableXscForBinaryScan(t *testing.T) {
+	binary := &services.XrayGraphScanParams{ScanType: services.Binary, XscVersion: "1.16.0", MultiScanId: "msi"}
+	disableXscForBinaryScan(binary)
+	assert.Empty(t, binary.XscVersion)
+	assert.Empty(t, binary.MultiScanId)
+
+	dep := &services.XrayGraphScanParams{ScanType: services.Dependency, XscVersion: "1.16.0", MultiScanId: "msi"}
+	disableXscForBinaryScan(dep)
+	assert.Equal(t, "1.16.0", dep.XscVersion)
+	assert.Equal(t, "msi", dep.MultiScanId)
+}
+
+func TestBinaryScanWithEmptyGraphTargetsXrayEndpoint(t *testing.T) {
+	var postPath, postBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			postPath = r.URL.Path
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err)
+			postBody = string(body)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"scan_id":"scan-1"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	params := NewScanGraphParams().
+		SetServerDetails(&config.ServerDetails{XrayUrl: server.URL + "/"}).
+		SetXrayGraphScanParams(&services.XrayGraphScanParams{
+			ScanType:    services.Binary,
+			XrayVersion: "3.120.0",
+			XscVersion:  "1.16.0",
+			MultiScanId: "msi-from-analytics",
+			BinaryGraph: &xrayUtils.BinaryGraphNode{Id: "npm://left-pad:1.3.0", Sha256: "abc"},
+		})
+	xrayManager, err := coreXray.CreateXrayServiceManager(params.ServerDetails())
+	assert.NoError(t, err)
+
+	_, err = RunScanGraphAndGetResults(params, xrayManager)
+	assert.NoError(t, err)
+	assert.Contains(t, postPath, "api/v1/scan/graph")
+	assert.NotContains(t, postPath, "sca/scan/graph")
+	assert.Contains(t, postBody, "npm://left-pad:1.3.0")
+}
 
 func TestScanGraphParamsCloneDoesNotShareMutableGraph(t *testing.T) {
 	original := NewScanGraphParams().

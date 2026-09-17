@@ -552,7 +552,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	targetCompId = binaryTree.Id
 
 	// Prepare parameters for the SCA scan
-	scanGraphParams := scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId)
+	scanGraphParams := scanCmd.getXrayScanGraphParams()
 	scanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
 	scanGraphParams.XrayGraphScanParams().BinaryGraph = binaryTree
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
@@ -578,15 +578,13 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	return
 }
 
-func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGraphParams {
+func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams {
 	params := &services.XrayGraphScanParams{
 		Watches:                scanCmd.resultsContext.Watches,
 		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
 		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
-		MultiScanId:            msi,
-		XscVersion:             scanCmd.xscVersion,
 		XrayVersion:            scanCmd.xrayVersion,
 	}
 	return scangraph.NewScanGraphParams().
