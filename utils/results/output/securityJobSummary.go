@@ -12,9 +12,15 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
+
 	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -23,10 +29,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 const (
@@ -149,6 +151,16 @@ func NewAuditScanSummary(cmdResults *results.SecurityCommandResults, serverDetai
 func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
 	summary.ResultType = utils.Curation
 	summary.Summary = cmdResult
+	return
+}
+
+// NewCurationActionsSummary wraps a GitHub Actions curation report for the job-summary
+// pipeline.
+func NewCurationActionsSummary(actions []formats.CuratedAction, attributed bool) (summary ScanCommandResultSummary) {
+	summary.ResultType = utils.CurationActions
+	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{
+		CuratedActions: &formats.CuratedActions{Actions: actions, Attributed: attributed},
+	}}}
 	return
 }
 
@@ -394,13 +406,25 @@ func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGene
 	return EmptyMarkdownGenerator{}
 }
 
-// Generate the Security section (Curation)
+// GenerateMarkdownFromFiles - Generate the Security section (Curation, GitHub Actions Curation)
 func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
 	curationData, _, err := loadContent(dataFilePaths, utils.Curation)
 	if err != nil {
 		return
 	}
-	return GenerateSecuritySectionMarkdown(curationData)
+	if markdown, err = GenerateSecuritySectionMarkdown(curationData); err != nil {
+		return
+	}
+	actionsData, _, err := loadContent(dataFilePaths, utils.CurationActions)
+	if err != nil {
+		return
+	}
+	actionsMarkdown, err := GenerateActionsCurationSectionMarkdown(actionsData)
+	if err != nil {
+		return
+	}
+	markdown += actionsMarkdown
+	return
 }
 
 func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (markdown string, err error) {
@@ -420,6 +444,62 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 	}
 	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 Curation Audit", markdown)
 	return
+}
+
+// GenerateActionsCurationSectionMarkdown renders the GitHub Actions curation report as its own
+// collapsible block. The Parent column appears only when every scan was attributed. Mixed data drops it, since one
+// table cannot honestly caption both.
+func GenerateActionsCurationSectionMarkdown(actionsData []formats.ResultsSummary) (markdown string, err error) {
+	if !hasCurationActionsCommand(actionsData) {
+		return
+	}
+	withParent := allCuratedActionsAttributed(actionsData)
+	if withParent {
+		markdown += "\n\n| Action | Ref | Parent | Status | Notes |\n|--------|-----|--------|--------|-------|"
+	} else {
+		markdown += "\n\n| Action | Ref | Status | Notes |\n|--------|-----|--------|-------|"
+	}
+	for i := range actionsData {
+		for _, summary := range actionsData[i].Scans {
+			if !summary.HasCuratedActions() {
+				continue
+			}
+			for _, action := range summary.CuratedActions.Actions {
+				cell := formats.EscapeMarkdownTableCell
+				if withParent {
+					markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Parent), cell(action.Status), cell(action.Notes))
+					continue
+				}
+				markdown += fmt.Sprintf("\n| %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Status), cell(action.Notes))
+			}
+		}
+	}
+	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 GitHub Actions Curation", markdown)
+	return
+}
+
+// allCuratedActionsAttributed reports whether every scan carrying curated actions was
+// attributed against a workflow file.
+func allCuratedActionsAttributed(data []formats.ResultsSummary) bool {
+	for _, summary := range data {
+		for _, scan := range summary.Scans {
+			if scan.HasCuratedActions() && !scan.CuratedActions.Attributed {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func hasCurationActionsCommand(data []formats.ResultsSummary) bool {
+	for _, summary := range data {
+		for _, scan := range summary.Scans {
+			if scan.HasCuratedActions() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func hasCurationCommand(data []formats.ResultsSummary) bool {
