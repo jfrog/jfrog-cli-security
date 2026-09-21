@@ -660,20 +660,9 @@ func CurationCmd(c *components.Context) error {
 
 // CurationActionsCmd curates the GitHub Actions resolved on this job's runner.
 func CurationActionsCmd(c *components.Context) error {
-	curationActionsCommand := curation.NewCurationActionsCommand()
-	if c.IsFlagSet(flags.ActionsCacheDir) {
-		curationActionsCommand.SetActionsCacheDir(c.GetStringFlagValue(flags.ActionsCacheDir))
-	}
-	if c.IsFlagSet(flags.WorkflowFile) {
-		curationActionsCommand.SetWorkflowFile(c.GetStringFlagValue(flags.WorkflowFile))
-	}
-	if c.IsFlagSet(flags.WorkflowJob) {
-		curationActionsCommand.SetJobID(c.GetStringFlagValue(flags.WorkflowJob))
-	}
-	if c.IsFlagSet(flags.GithubRepo) {
-		curationActionsCommand.SetGithubRepo(c.GetStringFlagValue(flags.GithubRepo))
-	}
-	return curationActionsCommand.Run()
+	// No flags: every input comes from the runner environment. The setters the command
+	// exposes are for tests, which construct it directly rather than through the CLI.
+	return curation.NewCurationActionsCommand().Run()
 }
 
 var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](

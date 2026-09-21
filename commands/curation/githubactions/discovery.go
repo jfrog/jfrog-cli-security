@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
@@ -23,6 +24,15 @@ const (
 	// GithubRepoEnvVar is the repository running the job, as "<owner>/<repo>".
 	GithubRepoEnvVar = "GITHUB_REPOSITORY"
 )
+
+const errCacheNotReadable = "cannot read the GitHub Actions cache derived from " + RunnerWorkspaceEnvVar + ", so this job " +
+	"cannot be reported as curated - this command must run as a step on a GitHub Actions runner, where the action " +
+	"invoking it has already resolved"
+
+// ErrCacheNotReadable reports a cache that is absent, or that resolved to no action at all
+func ErrCacheNotReadable() error {
+	return errorutils.CheckError(errors.New(errCacheNotReadable))
+}
 
 // ActionRef is one resolved action instance found in the runner's action cache.
 type ActionRef struct {
@@ -64,7 +74,7 @@ func (s ActionCacheScan) UnaccountedError() error {
 	for _, entry := range s.Unaccounted {
 		fmt.Fprintf(&msg, "\n  %s: %s", entry.Path, entry.Reason)
 	}
-	return errors.New(msg.String())
+	return errorutils.CheckError(errors.New(msg.String()))
 }
 
 // DiscoverActionCache walks actionsCacheDir (the runner's _work/_actions root) and returns one
@@ -87,9 +97,9 @@ func DiscoverActionCache(actionsCacheDir string) (ActionCacheScan, error) {
 	ownerEntries, err := os.ReadDir(actionsCacheDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return scan, nil
+			return ActionCacheScan{}, errorutils.CheckError(errors.New(errCacheNotReadable))
 		}
-		return ActionCacheScan{}, fmt.Errorf("reading actions cache dir %q: %w", actionsCacheDir, err)
+		return ActionCacheScan{}, errorutils.CheckError(fmt.Errorf("reading the GitHub Actions cache derived from %s: %w", RunnerWorkspaceEnvVar, err))
 	}
 
 	for _, ownerEntry := range ownerEntries {
@@ -134,8 +144,8 @@ func DiscoverActionCache(actionsCacheDir string) (ActionCacheScan, error) {
 	// Distinct from Unaccounted: every entry here was understood, and none of them held an action.
 	// Odd enough in a populated cache to say once, and cheaper than a per-entry log nobody reads.
 	if len(scan.Refs) == 0 && len(scan.Unaccounted) == 0 && len(ownerEntries) > 0 {
-		log.Warn(fmt.Sprintf("github-actions curation: %q holds %d entries but none resolved to an <owner>/<repo>/<ref> action, "+
-			"so nothing will be curated. The debug log names every entry that was skipped.", actionsCacheDir, len(ownerEntries)))
+		log.Warn(fmt.Sprintf("github-actions curation: the cache holds %d entries but none resolved to an <owner>/<repo>/<ref> action, "+
+			"so nothing will be curated. The debug log names every entry that was skipped.", len(ownerEntries)))
 	}
 	return scan, nil
 }
@@ -310,7 +320,7 @@ func walkableDir(path, level string) (bool, error) {
 func DefaultActionsCacheDir() (string, error) {
 	runnerWorkspace := os.Getenv(RunnerWorkspaceEnvVar)
 	if runnerWorkspace == "" {
-		return "", fmt.Errorf("%s is not set - cannot derive the actions cache directory", RunnerWorkspaceEnvVar)
+		return "", errorutils.CheckErrorf("%s is not set - cannot derive the actions cache directory", RunnerWorkspaceEnvVar)
 	}
 	return filepath.Join(runnerWorkspace, "..", "_actions"), nil
 }
@@ -348,23 +358,4 @@ func DefaultJobID() string {
 // or "" when unset.
 func DefaultGithubRepo() string {
 	return os.Getenv(GithubRepoEnvVar)
-}
-
-const (
-	deliveryActionOwner = "jfrog"
-	deliveryActionRepo  = "setup-jfrog-cli"
-)
-
-// ExcludeDeliveryAction drops jfrog/setup-jfrog-cli from refs, at any ref, so it is neither
-// decided nor reported. Owner and repo are matched case-insensitively.
-func ExcludeDeliveryAction(refs []ActionRef) []ActionRef {
-	kept := make([]ActionRef, 0, len(refs))
-	for _, ref := range refs {
-		if strings.EqualFold(ref.Owner, deliveryActionOwner) && strings.EqualFold(ref.Repo, deliveryActionRepo) {
-			log.Debug(fmt.Sprintf("github-actions curation: skipping %s/%s@%s - it delivers and invokes this check rather than being subject to it", ref.Owner, ref.Repo, ref.Ref))
-			continue
-		}
-		kept = append(kept, ref)
-	}
-	return kept
 }

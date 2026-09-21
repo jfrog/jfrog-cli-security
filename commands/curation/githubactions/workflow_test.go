@@ -19,12 +19,17 @@ func TestParseWorkflowUses(t *testing.T) {
 	uses, err := ParseWorkflowUses(workflowPath, "build")
 	assert.NoError(t, err)
 
-	sort.Slice(uses, func(i, j int) bool { return uses[i].Owner+uses[i].Repo < uses[j].Owner+uses[j].Repo })
+	remote := uses.Remote
+	sort.Slice(remote, func(i, j int) bool { return remote[i].Owner+remote[i].Repo < remote[j].Owner+remote[j].Repo })
 
-	if assert.Len(t, uses, 2) {
-		assert.Equal(t, WorkflowUse{Owner: "actions", Repo: "checkout", Ref: "v4", Raw: "actions/checkout@v4"}, uses[0])
-		assert.Equal(t, WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "analyze", Ref: "v3", Raw: "github/codeql-action/analyze@v3"}, uses[1])
+	if assert.Len(t, remote, 2) {
+		assert.Equal(t, WorkflowUse{Owner: "actions", Repo: "checkout", Ref: "v4", Raw: "actions/checkout@v4"}, remote[0])
+		assert.Equal(t, WorkflowUse{Owner: "github", Repo: "codeql-action", Subpath: "analyze", Ref: "v3", Raw: "github/codeql-action/analyze@v3"}, remote[1])
 	}
+	// The local step is not a reference to curate, but it is the reason the cache is not the
+	// whole story - it has to survive parsing for the report to be able to say so.
+	assert.Equal(t, []LocalUse{{Raw: "./.github/actions/build-prep"}}, uses.Local,
+		"the job's own workflow declares it, so there is no declaring action to attribute it to")
 }
 
 func TestParseUsesString(t *testing.T) {
@@ -214,7 +219,7 @@ func TestCrossReference(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CrossReference(buildDiscovered(t, tt.discovered), tt.used)
+			got, _ := CrossReference(buildDiscovered(t, tt.discovered), JobUses{Remote: tt.used})
 
 			byRepo := make(map[string]ActionRef, len(got))
 			repos := make([]string, len(got))
@@ -255,7 +260,10 @@ func TestParseCompositeActionUses(t *testing.T) {
 			dir := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "action.yml"), []byte(tt.yaml), 0600))
 
-			assert.Empty(t, parseCompositeActionUses(dir), tt.why)
+			got := parseCompositeActionUses(dir, "org/declarer@v1")
+
+			assert.Empty(t, got.Remote, tt.why)
+			assert.Empty(t, got.Local, "and no local step either - "+tt.why)
 		})
 	}
 }
@@ -294,7 +302,8 @@ func TestParseWorkflowUses_JobMustBeIdentified(t *testing.T) {
 			uses, err := ParseWorkflowUses(workflowPath, tt.jobID)
 
 			assert.ErrorIs(t, err, ErrJobUnknown)
-			assert.Empty(t, uses, "no uses: may be returned from jobs that ran on other runners")
+			assert.Empty(t, uses.Remote, "no uses: may be returned from jobs that ran on other runners")
+			assert.Empty(t, uses.Local, "nor may a local step, for the same reason")
 			for _, want := range tt.wantErrContains {
 				assert.ErrorContains(t, err, want)
 			}
@@ -308,9 +317,9 @@ func TestCrossReference_LongChainFullyAttributedWithNoFixedDepthLimit(t *testing
 	// len(discovered), so every hop must be attributed regardless of chain length.
 	const n = 6
 	discovered := buildChain(t, n)
-	used := []WorkflowUse{{Owner: "org", Repo: "action1", Ref: "v1"}}
+	used := JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "action1", Ref: "v1"}}}
 
-	got := CrossReference(discovered, used)
+	got, _ := CrossReference(discovered, used)
 
 	byRepo := map[string]ActionRef{}
 	for _, ref := range got {
@@ -334,10 +343,13 @@ func TestCrossReference_CycleDoesNotHang(t *testing.T) {
 		{Owner: "org", Repo: "action1", Ref: "v1", Path: path1},
 		{Owner: "org", Repo: "action2", Ref: "v1", Path: path2},
 	}
-	used := []WorkflowUse{{Owner: "org", Repo: "action1", Ref: "v1"}}
+	used := JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "action1", Ref: "v1"}}}
 
 	done := make(chan []ActionRef, 1)
-	go func() { done <- CrossReference(discovered, used) }()
+	go func() {
+		got, _ := CrossReference(discovered, used)
+		done <- got
+	}()
 	select {
 	case got := <-done:
 		byRepo := map[string]ActionRef{}
@@ -358,16 +370,16 @@ func TestCrossReference_SharedChildParentFollowsWorkflowOrder(t *testing.T) {
 
 	seen := map[string]bool{}
 	for range 200 {
-		got := CrossReference(
+		got, _ := CrossReference(
 			[]ActionRef{
 				{Owner: "org", Repo: "parent-a", Ref: "v1", Path: pathA},
 				{Owner: "org", Repo: "parent-b", Ref: "v1", Path: pathB},
 				{Owner: "org", Repo: "shared-child", Ref: "v1", Path: pathChild},
 			},
-			[]WorkflowUse{
+			JobUses{Remote: []WorkflowUse{
 				{Owner: "org", Repo: "parent-a", Ref: "v1"},
 				{Owner: "org", Repo: "parent-b", Ref: "v1"},
-			})
+			}})
 		for _, ref := range got {
 			if ref.Repo == "shared-child" {
 				seen[ref.Parent] = true
@@ -389,10 +401,10 @@ func TestCrossReference_SubpathsDoNotBleedBetweenRefsOfOneRepo(t *testing.T) {
 		{key: "github/codeql-action@v3"},
 	})
 
-	got := CrossReference(discovered, []WorkflowUse{
+	got, _ := CrossReference(discovered, JobUses{Remote: []WorkflowUse{
 		{Owner: "github", Repo: "codeql-action", Ref: "v2", Subpath: "init"},
 		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
-	})
+	}})
 
 	byRef := map[string][]string{}
 	for _, ref := range got {
@@ -413,7 +425,7 @@ func TestCrossReference_TransitiveParentAttributedFromCompositeActionYml(t *test
 	used, err := ParseWorkflowUses(workflowPath, "build")
 	assert.NoError(t, err)
 
-	got := CrossReference(discovered, used)
+	got, _ := CrossReference(discovered, used)
 
 	byRepo := map[string]ActionRef{}
 	for _, ref := range got {
@@ -439,10 +451,10 @@ func TestCrossReference_RootAndSubpathBothUsed_BothMetadataLocationsAreRead(t *t
 		{key: "org/from-init@v1"},
 	})
 
-	got := CrossReference(discovered, []WorkflowUse{
+	got, _ := CrossReference(discovered, JobUses{Remote: []WorkflowUse{
 		{Owner: "github", Repo: "codeql-action", Ref: "v3"},
 		{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "init"},
-	})
+	}})
 
 	byRepo := map[string]ActionRef{}
 	for _, ref := range got {
@@ -465,10 +477,10 @@ func TestCrossReference_ChildReferencedByTwoParentsAtDifferentSubpaths_BothAreSc
 		{key: "org/from-sub@v1"},
 	})
 
-	got := CrossReference(discovered, []WorkflowUse{
+	got, _ := CrossReference(discovered, JobUses{Remote: []WorkflowUse{
 		{Owner: "org", Repo: "parent-a", Ref: "v1"},
 		{Owner: "org", Repo: "parent-b", Ref: "v1"},
-	})
+	}})
 
 	byRepo := map[string]ActionRef{}
 	for _, ref := range got {
@@ -520,7 +532,7 @@ func TestParseWorkflowUses_ScopesToTheRunningJob(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			uses, err := ParseWorkflowUses(workflowPath, tt.jobID)
 			require.NoError(t, err)
-			assert.ElementsMatch(t, tt.wantRepos, repoNames(uses))
+			assert.ElementsMatch(t, tt.wantRepos, repoNames(uses.Remote))
 		})
 	}
 }
@@ -538,7 +550,7 @@ func TestParseWorkflowUses_SubpathOrderIsStable(t *testing.T) {
 	for range 200 {
 		used, err := ParseWorkflowUses(workflowPath, "build")
 		require.NoError(t, err)
-		got := CrossReference([]ActionRef{{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: "/nonexistent"}}, used)
+		got, _ := CrossReference([]ActionRef{{Owner: "github", Repo: "codeql-action", Ref: "v3", Path: "/nonexistent"}}, used)
 		seen[NewActionReportRow(got[0], ActionCurationResult{Status: ActionApproved}).Action] = true
 	}
 	assert.Equal(t, map[string]bool{"github/codeql-action (init, analyze)": true}, seen,
@@ -554,4 +566,261 @@ func repoNames(uses []WorkflowUse) []string {
 		repos[i] = u.Repo
 	}
 	return repos
+}
+
+// compositeYAMLWithSteps is an action.yml for a composite action with several uses: steps, for
+// mixing remote references and local ones in a single action.
+func compositeYAMLWithSteps(uses ...string) string {
+	yaml := "runs:\n  using: composite\n  steps:\n"
+	for _, use := range uses {
+		yaml += "    - uses: " + use + "\n"
+	}
+	return yaml
+}
+
+func TestCrossReference_LocalStepsDeclaredByCompositeActionsAreCollected(t *testing.T) {
+	// A relative uses: inside a composite action names a path in the CALLER's repository, so the
+	// runner resolves it from the workspace when that step runs rather than into the action cache
+	// this command read. It is the same coverage gap as a local step in the workflow, one level
+	// down, and only this walk can see it - so it has to come back out of here.
+	tests := []struct {
+		name       string
+		discovered []discoveredAction
+		used       JobUses
+		want       []LocalUse
+	}{
+		{
+			name: "verify when a composite action declares a local step then it is reported against that action",
+			discovered: []discoveredAction{
+				{key: "some-org/wrapper@v1", yamls: map[string]string{"": compositeYAML("./scripts/build")}},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "some-org", Repo: "wrapper", Ref: "v1"}}},
+			want: []LocalUse{{Raw: "./scripts/build", DeclaredBy: "some-org/wrapper@v1"}},
+		},
+		{
+			name: "verify when the local step sits several hops out then the walk still reaches it",
+			discovered: []discoveredAction{
+				{key: "org/outer@v1", yamls: map[string]string{"": compositeYAML("org/inner@v1")}},
+				{key: "org/inner@v1", yamls: map[string]string{"": compositeYAML("./deep/local")}},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "outer", Ref: "v1"}}},
+			want: []LocalUse{{Raw: "./deep/local", DeclaredBy: "org/inner@v1"}},
+		},
+		{
+			name: "verify when a composite mixes remote and local steps then only the local one is reported uncovered",
+			discovered: []discoveredAction{
+				{key: "org/wrapper@v1", yamls: map[string]string{
+					"": compositeYAMLWithSteps("actions/setup-node@v4", "./scripts/build"),
+				}},
+				{key: "actions/setup-node@v4"},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}}},
+			want: []LocalUse{{Raw: "./scripts/build", DeclaredBy: "org/wrapper@v1"}},
+		},
+		{
+			name: "verify when the metadata lives at a subpath then the local step under it is still found",
+			// The root action.yml is not the one invoked, so a local step declared only by the
+			// subpath's metadata is exactly the one a root-only read would miss.
+			discovered: []discoveredAction{
+				{key: "github/codeql-action@v3", yamls: map[string]string{
+					"":        compositeYAML("org/from-root@v1"),
+					"analyze": compositeYAML("./scripts/analyze"),
+				}},
+				{key: "org/from-root@v1"},
+			},
+			used: JobUses{Remote: []WorkflowUse{
+				{Owner: "github", Repo: "codeql-action", Ref: "v3", Subpath: "analyze"},
+			}},
+			want: []LocalUse{{Raw: "./scripts/analyze", DeclaredBy: "github/codeql-action@v3"}},
+		},
+		{
+			name: "verify when the job and a composite both declare local steps then the job's comes first",
+			// Order is the report's reading order: what the workflow itself declares is what a
+			// reader can act on directly, so it should not be buried under transitive findings.
+			discovered: []discoveredAction{
+				{key: "org/wrapper@v1", yamls: map[string]string{"": compositeYAML("./from-composite")}},
+			},
+			used: JobUses{
+				Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}},
+				Local:  []LocalUse{{Raw: "./from-workflow"}},
+			},
+			want: []LocalUse{
+				{Raw: "./from-workflow"},
+				{Raw: "./from-composite", DeclaredBy: "org/wrapper@v1"},
+			},
+		},
+		{
+			name: "verify when two composites declare the same path then both declarers are reported",
+			// "./x" resolves against the workspace either way, so it is one action reached two
+			// ways - but a reader chasing it needs to know both places it is referenced from.
+			discovered: []discoveredAction{
+				{key: "org/parent-a@v1", yamls: map[string]string{"": compositeYAML("./shared")}},
+				{key: "org/parent-b@v1", yamls: map[string]string{"": compositeYAML("./shared")}},
+			},
+			used: JobUses{Remote: []WorkflowUse{
+				{Owner: "org", Repo: "parent-a", Ref: "v1"},
+				{Owner: "org", Repo: "parent-b", Ref: "v1"},
+			}},
+			want: []LocalUse{
+				{Raw: "./shared", DeclaredBy: "org/parent-a@v1"},
+				{Raw: "./shared", DeclaredBy: "org/parent-b@v1"},
+			},
+		},
+		{
+			name: "verify when one composite declares the same local step twice then it is reported once",
+			discovered: []discoveredAction{
+				{key: "org/wrapper@v1", yamls: map[string]string{
+					"": compositeYAMLWithSteps("./scripts/build", "./scripts/build"),
+				}},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}}},
+			want: []LocalUse{{Raw: "./scripts/build", DeclaredBy: "org/wrapper@v1"}},
+		},
+		{
+			name: "verify when an action.yml cannot be parsed then no local step is invented from it",
+			discovered: []discoveredAction{
+				{key: "org/wrapper@v1", yamls: map[string]string{"": unreadableYAML}},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}}},
+			want: nil,
+		},
+		{
+			name: "verify when no composite declares a local step then nothing is reported uncovered",
+			discovered: []discoveredAction{
+				{key: "org/wrapper@v1", yamls: map[string]string{"": compositeYAML("actions/setup-node@v4")}},
+				{key: "actions/setup-node@v4"},
+			},
+			used: JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}}},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, got := CrossReference(buildDiscovered(t, tt.discovered), tt.used)
+
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCrossReference_LocalStepsDoNotDisturbAttribution(t *testing.T) {
+	// The local steps are collected on the same walk that attributes Parent. A composite whose
+	// steps are part local, part remote must still attribute the remote ones.
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "org/wrapper@v1", yamls: map[string]string{
+			"": compositeYAMLWithSteps("./scripts/build", "org/child@v1"),
+		}},
+		{key: "org/child@v1"},
+	})
+
+	got, localUses := CrossReference(discovered, JobUses{
+		Remote: []WorkflowUse{{Owner: "org", Repo: "wrapper", Ref: "v1"}},
+	})
+
+	byRepo := map[string]ActionRef{}
+	for _, ref := range got {
+		byRepo[ref.Repo] = ref
+	}
+	assert.Equal(t, "org/wrapper@v1", byRepo["child"].Parent, "a local sibling step must not cost the remote one its parent")
+	assert.Equal(t, []LocalUse{{Raw: "./scripts/build", DeclaredBy: "org/wrapper@v1"}}, localUses)
+}
+
+func TestCrossReference_SubpathChainLongerThanTheCacheIsFullyWalked(t *testing.T) {
+	// ONE cache entry reached through a chain of its own subpaths: every hop is a new (key,
+	// location) pair on the same key, so the walk needs more rounds than the cache has entries.
+	// Any bound derived from the entry count truncates this, and does it invisibly - the
+	// unscanned subpath is still listed in Subpaths, so the Action cell reads as complete while
+	// the local step that subpath's metadata declares is never collected.
+	tests := []struct {
+		name          string
+		yamls         map[string]string
+		wantSubpaths  []string
+		wantLocalUses []LocalUse
+	}{
+		{
+			name: "verify when the chain is two subpaths deep then the last one's metadata is read",
+			yamls: map[string]string{
+				"":   compositeYAML("org/mono/s1@v1"),
+				"s1": compositeYAML("org/mono/s2@v1"),
+				"s2": compositeYAML("./local-at-s2"),
+			},
+			wantSubpaths:  []string{"s1", "s2"},
+			wantLocalUses: []LocalUse{{Raw: "./local-at-s2", DeclaredBy: "org/mono@v1"}},
+		},
+		{
+			name: "verify when the chain is four subpaths deep then the walk still reaches the end",
+			yamls: map[string]string{
+				"":   compositeYAML("org/mono/s1@v1"),
+				"s1": compositeYAML("org/mono/s2@v1"),
+				"s2": compositeYAML("org/mono/s3@v1"),
+				"s3": compositeYAML("org/mono/s4@v1"),
+				"s4": compositeYAML("./local-at-s4"),
+			},
+			wantSubpaths:  []string{"s1", "s2", "s3", "s4"},
+			wantLocalUses: []LocalUse{{Raw: "./local-at-s4", DeclaredBy: "org/mono@v1"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			discovered := buildDiscovered(t, []discoveredAction{{key: "org/mono@v1", yamls: tt.yamls}})
+
+			got, localUses := CrossReference(discovered, JobUses{
+				Remote: []WorkflowUse{{Owner: "org", Repo: "mono", Ref: "v1"}},
+			})
+
+			assert.Equal(t, tt.wantSubpaths, got[0].Subpaths)
+			assert.Equal(t, tt.wantLocalUses, localUses,
+				"a subpath listed in the report must have had its metadata read, or the report overstates coverage")
+		})
+	}
+}
+
+func TestCrossReference_ChainLongerThanTheCacheAttributesEveryHop(t *testing.T) {
+	// The Parent half of the same shape: two cache entries, but the chain to the second runs
+	// through three subpath locations, so attribution needs more rounds than there are entries.
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "org/mono@v1", yamls: map[string]string{
+			"":   compositeYAML("org/mono/s1@v1"),
+			"s1": compositeYAML("org/mono/s2@v1"),
+			"s2": compositeYAML("org/mono/s3@v1"),
+			"s3": compositeYAML("org/leaf@v1"),
+		}},
+		{key: "org/leaf@v1"},
+	})
+
+	got, _ := CrossReference(discovered, JobUses{
+		Remote: []WorkflowUse{{Owner: "org", Repo: "mono", Ref: "v1"}},
+	})
+
+	byRepo := map[string]ActionRef{}
+	for _, ref := range got {
+		byRepo[ref.Repo] = ref
+	}
+	assert.Equal(t, "org/mono@v1", byRepo["leaf"].Parent, "every hop must be attributed, however long the chain")
+}
+
+func TestCrossReference_SubpathCycleDoesNotHang(t *testing.T) {
+	// Termination rests entirely on markLocation. A cycle through SUBPATHS of one key is the
+	// hardest case for it: every hop is a new location on a key that is already attributed, so
+	// nothing but the location dedup stops the walk.
+	discovered := buildDiscovered(t, []discoveredAction{
+		{key: "org/mono@v1", yamls: map[string]string{
+			"":   compositeYAML("org/mono/s1@v1"),
+			"s1": compositeYAML("org/mono/s2@v1"),
+			"s2": compositeYAML("org/mono/s1@v1"), // back to s1
+		}},
+	})
+	used := JobUses{Remote: []WorkflowUse{{Owner: "org", Repo: "mono", Ref: "v1"}}}
+
+	done := make(chan []string, 1)
+	go func() {
+		got, _ := CrossReference(discovered, used)
+		done <- got[0].Subpaths
+	}()
+	select {
+	case subpaths := <-done:
+		assert.Equal(t, []string{"s1", "s2"}, subpaths, "each location is scanned once, and the cycle adds nothing new")
+	case <-time.After(5 * time.Second):
+		t.Fatal("CrossReference did not return - a subpath cycle must terminate on markLocation alone")
+	}
 }
