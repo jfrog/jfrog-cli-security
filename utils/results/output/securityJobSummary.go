@@ -156,11 +156,9 @@ func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandRe
 
 // NewCurationActionsSummary wraps a GitHub Actions curation report for the job-summary
 // pipeline.
-func NewCurationActionsSummary(actions []formats.CuratedAction, attributed bool) (summary ScanCommandResultSummary) {
+func NewCurationActionsSummary(curated formats.CuratedActions) (summary ScanCommandResultSummary) {
 	summary.ResultType = utils.CurationActions
-	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{
-		CuratedActions: &formats.CuratedActions{Actions: actions, Attributed: attributed},
-	}}}
+	summary.Summary = formats.ResultsSummary{Scans: []formats.ScanSummary{{CuratedActions: &curated}}}
 	return
 }
 
@@ -450,56 +448,52 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 // collapsible block. The Parent column appears only when every scan was attributed. Mixed data drops it, since one
 // table cannot honestly caption both.
 func GenerateActionsCurationSectionMarkdown(actionsData []formats.ResultsSummary) (markdown string, err error) {
-	if !hasCurationActionsCommand(actionsData) {
+	curated := collectCuratedActions(actionsData)
+	if len(curated) == 0 {
 		return
 	}
-	withParent := allCuratedActionsAttributed(actionsData)
+	// Scoped to the table: it decides whether a Parent column can be captioned honestly, and
+	// nothing else may borrow it to mean that the report is complete.
+	withParent := true
+	for _, actions := range curated {
+		if !actions.Attributed {
+			withParent = false
+			break
+		}
+	}
 	if withParent {
 		markdown += "\n\n| Action | Ref | Parent | Status | Notes |\n|--------|-----|--------|--------|-------|"
 	} else {
 		markdown += "\n\n| Action | Ref | Status | Notes |\n|--------|-----|--------|-------|"
 	}
-	for i := range actionsData {
-		for _, summary := range actionsData[i].Scans {
-			if !summary.HasCuratedActions() {
+	for _, actions := range curated {
+		for _, action := range actions.Actions {
+			cell := formats.EscapeMarkdownTableCell
+			if withParent {
+				markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Parent), cell(action.Status), cell(action.Notes))
 				continue
 			}
-			for _, action := range summary.CuratedActions.Actions {
-				cell := formats.EscapeMarkdownTableCell
-				if withParent {
-					markdown += fmt.Sprintf("\n| %s | %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Parent), cell(action.Status), cell(action.Notes))
-					continue
-				}
-				markdown += fmt.Sprintf("\n| %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Status), cell(action.Notes))
-			}
+			markdown += fmt.Sprintf("\n| %s | %s | %s | %s |", cell(action.Action), cell(action.Ref), cell(action.Status), cell(action.Notes))
 		}
 	}
+	markdown += formats.RenderActionsException(curated)
 	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 GitHub Actions Curation", markdown)
 	return
 }
 
-// allCuratedActionsAttributed reports whether every scan carrying curated actions was
-// attributed against a workflow file.
-func allCuratedActionsAttributed(data []formats.ResultsSummary) bool {
+// collectCuratedActions returns the curated-actions data of every scan carrying any, in the
+// order the summary files were read. The facts go to the renderers as they are: what each one
+// needs to conclude from them is the renderer's to decide, not this function's.
+func collectCuratedActions(data []formats.ResultsSummary) (curated []formats.CuratedActions) {
 	for _, summary := range data {
 		for _, scan := range summary.Scans {
-			if scan.HasCuratedActions() && !scan.CuratedActions.Attributed {
-				return false
+			if !scan.HasCuratedActions() {
+				continue
 			}
+			curated = append(curated, *scan.CuratedActions)
 		}
 	}
-	return true
-}
-
-func hasCurationActionsCommand(data []formats.ResultsSummary) bool {
-	for _, summary := range data {
-		for _, scan := range summary.Scans {
-			if scan.HasCuratedActions() {
-				return true
-			}
-		}
-	}
-	return false
+	return
 }
 
 func hasCurationCommand(data []formats.ResultsSummary) bool {

@@ -9,16 +9,12 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/commands/curation/githubactions"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-)
-
-const (
-	flagGithubRepo   = "github-repo"
-	flagWorkflowFile = "workflow-file"
 )
 
 // CurationActionsCommand curates the GitHub Actions that actually resolved on this job's
@@ -95,7 +91,7 @@ func (c *CurationActionsCommand) CommandName() string {
 // action, prints and records the report, and returns an error unless every action was Approved.
 // Only that exact status clears the gate - a rejection withholds the job, and so would a status
 // this code does not recognize, which is what keeps a future decider's unhandled outcome from
-// reading as a pass. The delivery action (jfrog/setup-jfrog-cli) is always excluded.
+// reading as a pass.
 //
 // If any action cannot be decided at all Run returns that error and produces no report and no job summary.
 //
@@ -132,24 +128,18 @@ func (c *CurationActionsCommand) Run() (err error) {
 	}
 	discovered := scan.Refs
 	if len(discovered) == 0 {
-		log.Info("No GitHub Actions found in the runner's action cache - nothing to curate.")
-		return nil
+		return githubactions.ErrCacheNotReadable()
 	}
 
 	used, attributed, err := c.parseWorkflowUses(workingDir)
 	if err != nil {
 		return err
 	}
+	var localUses []githubactions.LocalUse
 	if attributed {
-		discovered = githubactions.CrossReference(discovered, used)
+		discovered, localUses = githubactions.CrossReference(discovered, used)
 	}
-	discovered = githubactions.ExcludeDeliveryAction(discovered)
-	if len(discovered) == 0 {
-		log.Info("The runner's action cache holds only the action delivering this check - nothing to curate.")
-		return nil
-	}
-
-	// Resolved once, after the early returns above: a job with nothing to curate makes no call.
+	// Resolved once, after the early return above: a job with nothing to curate makes no call.
 	artifactoryVcsRepo, err := c.resolveArtifactoryVcsRepo(ctx)
 	if err != nil {
 		return err
@@ -169,12 +159,14 @@ func (c *CurationActionsCommand) Run() (err error) {
 		return decideErrs
 	}
 
-	log.Info(fmt.Sprintf("GitHub Actions Curation Report:\n%s", githubactions.RenderMarkdownTable(rows, attributed)))
+	curated := curatedActions(rows, attributed, localUses)
+	caveat := formats.RenderActionsException([]formats.CuratedActions{curated})
+	log.Info(fmt.Sprintf("GitHub Actions Curation Report:\n%s%s", githubactions.RenderReportTable(rows, attributed), caveat))
 
 	// Warn rather than fail: every action above was decided, so the verdicts are complete and
 	// already reported. Only the job summary is lost, and failing a job over the summary
 	// directory being unwritable would fail it for a reporting problem rather than a curation one.
-	if recordErr := c.recordSummary(rows, attributed); recordErr != nil {
+	if recordErr := c.recordSummary(curated); recordErr != nil {
 		log.Warn(fmt.Sprintf("Failed to record the GitHub Actions curation summary, so the job summary will not show "+
 			"the curation section - the report above is the complete result: %v", recordErr))
 	}
@@ -196,72 +188,76 @@ func (c *CurationActionsCommand) Run() (err error) {
 // parseWorkflowUses resolves which workflow file to attribute against, returning its uses:
 // refs and whether attribution is possible at all. Resolution order:
 //
-//  1. --workflow-file (+ --workflow-job) - explicit, so a file that cannot be read is an error:
-//     the caller asserted it exists. It must be absolute: the caller named one specific file, so
-//     there is deliberately nothing for it to be resolved against.
+//  1. SetWorkflowFile (+ SetJobID) - set explicitly, by a test. The path must be absolute: the
+//     caller named one specific file, so there is deliberately nothing to resolve it against.
 //  2. GITHUB_WORKFLOW_REF (+ GITHUB_JOB) - the running workflow and job on a runner. GitHub sets
 //     this to a repo-relative path, so it resolves against workingDir - the process's working
-//     directory, which is the runner's workspace. Absent from disk falls back to structure-only.
-//  3. neither - structure-only.
+//     directory, which is the runner's workspace.
+//  3. neither.
 //
-// Whether the file can be read is the caller's assertion to get wrong, so it is fatal for an
-// explicit path. What the file turns out to contain is not: a workflow this parser cannot parse,
-// or one not declaring the job, costs attribution and nothing else, whichever way the path was
-// resolved. The cache is still the complete account of what will execute, and every entry in it
-// is decided either way - so the run degrades to structure-only rather than failing. That also
-// matches parseCompositeActionUses, which takes the same view of an action.yml it cannot read.
-func (c *CurationActionsCommand) parseWorkflowUses(workingDir string) (used []githubactions.WorkflowUse, attributed bool, err error) {
+// Nothing about the workflow file fails the command. Curating the cache is the job; attribution
+// only explains what is already being curated, so a file that is absent, unreadable, unparsable
+// or silent about this job costs the Parent column and nothing else - the cache is still the
+// complete account of what will execute, and every entry in it is decided either way. That holds
+// for an explicitly set file too: a job gated on this command must not fail because a path
+// was wrong. It is not silent either way, because a run without attribution says so in the
+// report - see formats.RenderActionsException.
+//
+// The one error returned is an explicitly set path that is not absolute, which is a malformed
+// argument rather than a condition of the run, and is rejected before anything is read.
+//
+// This also matches parseCompositeActionUses, which takes the same view of an action.yml it
+// cannot read.
+func (c *CurationActionsCommand) parseWorkflowUses(workingDir string) (used githubactions.JobUses, attributed bool, err error) {
 	jobID := c.jobID
 	if jobID == "" {
 		jobID = githubactions.DefaultJobID()
 	}
-	// Whether the caller named the file matters below: an explicit path is an assertion that
-	// it exists, a derived one is not.
-	workflowFile, explicit := c.workflowFile, c.workflowFile != ""
-	if explicit {
+	workflowFile := c.workflowFile
+	if explicit := workflowFile != ""; explicit {
 		if !filepath.IsAbs(workflowFile) {
-			return nil, false, fmt.Errorf("--%s must be an absolute path, got %q", flagWorkflowFile, workflowFile)
+			return githubactions.JobUses{}, false, errorutils.CheckErrorf("the workflow file must be an absolute path, got %q", workflowFile)
 		}
 	} else {
 		workflowFile = githubactions.DefaultWorkflowFile()
 		if workflowFile == "" {
 			log.Info("No workflow file was identified - curating the runner's action cache as-is, without parent attribution.")
-			return nil, false, nil
+			return githubactions.JobUses{}, false, nil
 		}
 		workflowFile = filepath.Join(workingDir, workflowFile)
 	}
-	used, err = githubactions.ParseWorkflowUses(workflowFile, jobID)
-	if err == nil {
+	if used, err = githubactions.ParseWorkflowUses(workflowFile, jobID); err == nil {
 		return used, true, nil
 	}
-	if errors.Is(err, githubactions.ErrJobUnknown) {
+	switch {
+	case errors.Is(err, githubactions.ErrJobUnknown):
 		log.Info(fmt.Sprintf("Cannot identify job %q in workflow file %q - curating the runner's action cache as-is, without parent attribution.", jobID, workflowFile))
-		return nil, false, nil
-	}
-	if errors.Is(err, githubactions.ErrWorkflowUnparsable) {
+	case errors.Is(err, githubactions.ErrWorkflowUnparsable):
 		log.Warn(fmt.Sprintf("Cannot parse workflow file %q - curating the runner's action cache as-is, without parent attribution: %v", workflowFile, err))
-		return nil, false, nil
+	case errors.Is(err, os.ErrNotExist):
+		log.Warn(fmt.Sprintf("Workflow file %q is not on disk - curating the runner's action cache as-is, without parent attribution. "+
+			"The workspace has no checkout this early in the job, so there is nothing to attribute against.",
+			workflowFile))
+	default:
+		// Permissions, an I/O error, a path that is a directory. Distinct from the cases above
+		// only in cause, not in consequence: nothing can be attributed, and everything is still
+		// curated.
+		log.Warn(fmt.Sprintf("Cannot read workflow file %q - curating the runner's action cache as-is, without parent attribution: %v", workflowFile, err))
 	}
-	if explicit || !errors.Is(err, os.ErrNotExist) {
-		return nil, false, err
-	}
-	log.Warn(fmt.Sprintf("Workflow file %q (from %s) is not on disk - curating the runner's action cache as-is, without parent attribution. "+
-		"The workspace has no checkout this early in the job; pass --workflow-file to attribute against a copy fetched over the API.",
-		workflowFile, githubactions.WorkflowRefEnvVar))
-	return nil, false, nil
+	return githubactions.JobUses{}, false, nil
 }
 
 // resolveArtifactoryVcsRepo returns the Artifactory VCS repository whose curation policies
 // govern this job, looked up from the GitHub repository running it. GITHUB_REPOSITORY is set on
-// every runner; the --github-repo override exists for local and test invocations.
+// every runner; SetGithubRepo overrides it for tests.
 func (c *CurationActionsCommand) resolveArtifactoryVcsRepo(ctx context.Context) (string, error) {
 	githubRepo := c.githubRepo
 	if githubRepo == "" {
 		githubRepo = githubactions.DefaultGithubRepo()
 	}
 	if githubRepo == "" {
-		return "", fmt.Errorf("cannot determine which GitHub repository this job belongs to: "+
-			"neither --%s nor %s is set", flagGithubRepo, githubactions.GithubRepoEnvVar)
+		return "", errorutils.CheckErrorf("cannot determine which GitHub repository this job belongs to: "+
+			"%s is not set", githubactions.GithubRepoEnvVar)
 	}
 	repo, err := c.vcsRepoResolver.Resolve(ctx, githubRepo)
 	if err != nil {
@@ -271,8 +267,13 @@ func (c *CurationActionsCommand) resolveArtifactoryVcsRepo(ctx context.Context) 
 	return repo, nil
 }
 
-// recordSummary records the report through the "security" job-summary manager
-func (c *CurationActionsCommand) recordSummary(rows []githubactions.ActionReportRow, attributed bool) error {
+// curatedActions assembles this run's result in the job summary's wire shape - the facts the
+// report is rendered from, in one value, so the console report and the job summary are given
+// the same thing rather than each being handed a different summary of it.
+//
+// Converted rather than shared: one set of types is this command's view, the other is what gets
+// serialized, and a field added to either should have to be reconciled at compile time.
+func curatedActions(rows []githubactions.ActionReportRow, attributed bool, localUses []githubactions.LocalUse) formats.CuratedActions {
 	actions := make([]formats.CuratedAction, 0, len(rows))
 	for _, row := range rows {
 		// A conversion rather than a field-by-field copy: the two types are deliberately separate -
@@ -281,5 +282,15 @@ func (c *CurationActionsCommand) recordSummary(rows []githubactions.ActionReport
 		// time rather than silently dropping a column from the job summary.
 		actions = append(actions, formats.CuratedAction(row))
 	}
-	return output.RecordSecurityCommandSummary(output.NewCurationActionsSummary(actions, attributed))
+	converted := formats.CuratedActions{Actions: actions, Attributed: attributed}
+	for _, use := range localUses {
+		converted.LocalCompositeActions = append(converted.LocalCompositeActions,
+			formats.LocalCompositeAction{Path: use.Raw, DeclaredBy: use.DeclaredBy})
+	}
+	return converted
+}
+
+// recordSummary records the report through the "security" job-summary manager
+func (c *CurationActionsCommand) recordSummary(curated formats.CuratedActions) error {
+	return output.RecordSecurityCommandSummary(output.NewCurationActionsSummary(curated))
 }

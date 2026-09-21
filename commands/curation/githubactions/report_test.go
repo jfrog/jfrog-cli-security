@@ -48,7 +48,7 @@ func TestNewActionReportRow(t *testing.T) {
 	}
 }
 
-func TestRenderMarkdownTable(t *testing.T) {
+func TestRenderReportTable(t *testing.T) {
 	tests := []struct {
 		name       string
 		rows       []ActionReportRow
@@ -88,7 +88,7 @@ func TestRenderMarkdownTable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RenderMarkdownTable(tt.rows, tt.withParent)
+			got := RenderReportTable(tt.rows, tt.withParent)
 
 			assert.Equal(t, tt.want, got)
 			for _, line := range strings.Split(strings.TrimSuffix(got, "\n"), "\n") {
@@ -136,7 +136,7 @@ func TestNotApproved(t *testing.T) {
 	}
 }
 
-func TestRenderMarkdownTable_CellsThatWouldReshapeTheTableAreEscaped(t *testing.T) {
+func TestRenderReportTable_CellsThatWouldReshapeTheTableAreEscaped(t *testing.T) {
 	// Ref is a directory name the runner created and "|" is legal in a git refname; Notes comes
 	// from the decision service. Unescaped, either would add a column or split the row, so the
 	// table would report a status against the wrong action.
@@ -144,7 +144,7 @@ func TestRenderMarkdownTable_CellsThatWouldReshapeTheTableAreEscaped(t *testing.
 		{Action: "some-org/some-action", Ref: "feature|v2", Parent: "org/wrap|per@v1", Status: "Rejected", Notes: "blocked:\nCVE-2024-0001"},
 	}
 
-	got := RenderMarkdownTable(rows, true)
+	got := RenderReportTable(rows, true)
 
 	lines := strings.Split(strings.TrimSuffix(got, "\n"), "\n")
 	if assert.Len(t, lines, 3, "header, separator, one data row") {
@@ -153,6 +153,9 @@ func TestRenderMarkdownTable_CellsThatWouldReshapeTheTableAreEscaped(t *testing.
 	}
 	assert.Contains(t, got, `feature\|v2`)
 	assert.Contains(t, got, `org/wrap\|per@v1`)
-	assert.Contains(t, got, "blocked:<br>CVE-2024-0001")
+	// The row is still one line, but as text a terminal can read: this table is printed to the
+	// job log, where "<br>" would show verbatim.
+	assert.Contains(t, got, "blocked: CVE-2024-0001")
+	assert.NotContains(t, got, "<br>", "markdown markup must not reach the console report")
 	assert.NotContains(t, got, "\nCVE-2024-0001", "a newline in Notes must never end the row early")
 }

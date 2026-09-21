@@ -40,7 +40,7 @@ type rawStep struct {
 // github/codeql-action/analyze@v3). Returns false for shapes that don't resolve to at least an
 // owner/repo/ref triple
 func parseUsesString(raw string) (WorkflowUse, bool) {
-	if raw == "" || strings.HasPrefix(raw, "./") || strings.HasPrefix(raw, "docker://") {
+	if raw == "" || IsLocalUse(raw) || strings.HasPrefix(raw, "docker://") {
 		return WorkflowUse{}, false
 	}
 	atIdx := strings.LastIndex(raw, "@")
@@ -59,6 +59,26 @@ func parseUsesString(raw string) (WorkflowUse, bool) {
 	return WorkflowUse{Owner: segments[0], Repo: segments[1], Subpath: subpath, Ref: ref, Raw: raw}, true
 }
 
+func IsLocalUse(raw string) bool {
+	return strings.HasPrefix(raw, "./")
+}
+
+// LocalUse is one `uses: ./...` step the job will run, and who declared it.
+type LocalUse struct {
+	// Raw is the `uses:` value verbatim, e.g. "./.github/actions/setup".
+	Raw string
+	// DeclaredBy is the composite action that declares this step, as "<owner>/<repo>@<ref>"
+	DeclaredBy string
+}
+
+// JobUses is what one job's steps reference.
+type JobUses struct {
+	// Remote holds the owner/repo/ref references this job declares, in file order.
+	Remote []WorkflowUse
+	// Local holds the `uses: ./...` steps, in file order, deduplicated per declarer.
+	Local []LocalUse
+}
+
 // ErrJobUnknown reports that the job being curated could not be identified in this workflow
 // file - either no job id was given, or the file does not declare the one that was. It is not a
 // failure of the run: callers treat it as "cannot attribute" and curate the cache as-is.
@@ -72,37 +92,60 @@ var ErrJobUnknown = errors.New("cannot identify the job being curated in the wor
 var ErrWorkflowUnparsable = errors.New("cannot parse the workflow file")
 
 // ParseWorkflowUses parses the step-level `uses:` values of ONE job in a workflow YAML file.
-// Local actions (uses: ./path) and Docker-URI actions (uses: docker://...) are skipped.
+// Docker-URI actions (uses: docker://...) are skipped - the runner pulls those images during job
+// setup rather than into the action cache. Local actions (uses: ./path) are not parsed as
+// references either, but are returned in JobUses.Local so the report can declare them uncovered.
 //
 // jobID must name a job the file declares; otherwise it returns ErrJobUnknown and parses
 // nothing. There is deliberately no fallback to the file's other jobs: each ran on its own
 // runner with its own cache, so attributing from them would label an entry with a parent that
 // never pulled it in. Attribution therefore needs both a file and a job id - no constraint on a
 // runner, where GITHUB_JOB is always set.
-func ParseWorkflowUses(workflowPath, jobID string) ([]WorkflowUse, error) {
+//
+// KNOWN FAILURE - a called reusable workflow can attribute against the wrong job because
+// GITHUB_WORKFLOW_REF holds the caller file name and GITHUB_JOB holds the callee job id.
+// only attribution error and is unfixed at the moment.
+func ParseWorkflowUses(workflowPath, jobID string) (JobUses, error) {
 	data, err := os.ReadFile(workflowPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading workflow file %q: %w", workflowPath, err)
+		return JobUses{}, fmt.Errorf("reading workflow file %q: %w", workflowPath, err)
 	}
 	var wf rawWorkflow
 	if err = yaml.Unmarshal(data, &wf); err != nil {
-		return nil, fmt.Errorf("%w %q: %w", ErrWorkflowUnparsable, workflowPath, err)
+		return JobUses{}, fmt.Errorf("%w %q: %w", ErrWorkflowUnparsable, workflowPath, err)
 	}
 	if jobID == "" {
-		return nil, fmt.Errorf("%w: no job id given for %q", ErrJobUnknown, workflowPath)
+		return JobUses{}, fmt.Errorf("%w: no job id given for %q", ErrJobUnknown, workflowPath)
 	}
 	job, declared := wf.Jobs[jobID]
 	if !declared {
-		return nil, fmt.Errorf("%w: %q is not among %v in %q", ErrJobUnknown, jobID, slices.Sorted(maps.Keys(wf.Jobs)), workflowPath)
+		return JobUses{}, fmt.Errorf("%w: %q is not among %v in %q", ErrJobUnknown, jobID, slices.Sorted(maps.Keys(wf.Jobs)), workflowPath)
 	}
 	// One job's steps: a slice, so the order is the file's, with no map iteration to sort away.
-	var uses []WorkflowUse
-	for _, step := range job.Steps {
+	// DeclaredBy is left empty: the job's own workflow declares these.
+	return parseSteps(job.Steps, ""), nil
+}
+
+// parseSteps splits one steps: list into the remote references to curate and the local steps
+// that cannot be, attributing the local ones to declaredBy ("" for a job's own steps).
+//
+// Local steps are deduplicated because the report names each once: two steps invoking the same
+// local action are one uncovered action, not two.
+func parseSteps(steps []rawStep, declaredBy string) (uses JobUses) {
+	seenLocal := map[string]bool{}
+	for _, step := range steps {
+		if IsLocalUse(step.Uses) {
+			if !seenLocal[step.Uses] {
+				seenLocal[step.Uses] = true
+				uses.Local = append(uses.Local, LocalUse{Raw: step.Uses, DeclaredBy: declaredBy})
+			}
+			continue
+		}
 		if parsed, ok := parseUsesString(step.Uses); ok {
-			uses = append(uses, parsed)
+			uses.Remote = append(uses.Remote, parsed)
 		}
 	}
-	return uses, nil
+	return uses
 }
 
 type rawActionFile struct {
@@ -115,15 +158,11 @@ type rawActionRuns struct {
 }
 
 // parseCompositeActionUses reads <actionPath>/action.yml (or action.yaml) and, if it's a
-// composite action, returns every owner/repo/ref its own steps reference - one hop outward from
-// actionPath. CrossReference calls this repeatedly, once per action per round, to walk
-// arbitrarily many hops; this function itself only ever looks at the one action.yml it's given.
+// composite action, returns what its own steps reference - one hop outward from actionPath.
 //
-// There is no error return because there is no failure: absent metadata, metadata this parser
-// cannot read, and a non-composite action all mean the same thing here - nothing to attribute
-// from - and none of them may fail the run. The result is always "the references found", which
-// is legitimately none.
-func parseCompositeActionUses(actionPath string) []WorkflowUse {
+// JobUses.Remote is what the walk attributes from. JobUses.Local is the part which are detected
+// and reported as not curated.
+func parseCompositeActionUses(actionPath, declaredBy string) JobUses {
 	for _, name := range []string{"action.yml", "action.yaml"} {
 		data, err := os.ReadFile(filepath.Join(actionPath, name))
 		if err != nil {
@@ -131,39 +170,23 @@ func parseCompositeActionUses(actionPath string) []WorkflowUse {
 		}
 		var af rawActionFile
 		if err := yaml.Unmarshal(data, &af); err != nil {
-			// The runner already accepted this file, so a parse failure here is a divergence
-			// between its YAML reader and ours, not a broken action. Nothing is attributed from
-			// it - the entries it pulled in stay unattributed and are still curated - but the
-			// reason has to be greppable, or the missing Parent column looks like a design choice.
 			log.Debug(fmt.Sprintf("github-actions curation: cannot parse %q - no transitive references attributed from it: %v", filepath.Join(actionPath, name), err))
-			return nil
+			return JobUses{}
 		}
 		if af.Runs.Using != "composite" {
-			return nil
+			return JobUses{}
 		}
-		var uses []WorkflowUse
-		for _, step := range af.Runs.Steps {
-			if parsed, ok := parseUsesString(step.Uses); ok {
-				uses = append(uses, parsed)
-			}
-		}
-		return uses
+		return parseSteps(af.Runs.Steps, declaredBy)
 	}
-	return nil
+	return JobUses{}
 }
 
-// CrossReference enriches discovered entries with Subpaths and best-effort Parent metadata,
-// and returns the enriched slice.
-//
-// Attribution is purely additive: it only ever adds metadata, never removes an entry. One it
-// cannot place keeps an empty Parent and is still curated - an action the runner resolved will
-// execute whether or not this code can explain why it is there.
+// CrossReference enriches discovered entries with Subpaths and best-effort Parent metadata, and
+// returns the enriched slice along with every local step it met on the way out.
+// The local steps are a coverage statement, not attribution.
 //
 // A directly-used entry takes its Subpaths from the job's own uses: lines. Every other entry is
-// attributed by walking outward one level at a time, reading the action.yml of each composite
-// action resolved at the current depth: a step referencing an unresolved entry makes that
-// entry's Parent the composite action's "<owner>/<repo>@<ref>" (first parent wins - see
-// hasParent below), and that entry a source for the next level.
+// attributed by parsing the action.yaml of composite actions.
 //
 // An action key can be invoked through more than one metadata location - its cache root, and/or
 // one or more subpaths - and not always by the same parent: two different composites may each
@@ -171,16 +194,34 @@ func parseCompositeActionUses(actionPath string) []WorkflowUse {
 // is scanned, regardless of which parent gets credited as Parent; only the Parent field is
 // first-wins.
 //
-// The walk has no fixed depth limit - it stops when the frontier runs dry. What guarantees that
-// is markLocation: a (key, location) pair is scanned at most once, so every round must consume a
-// pair not seen before, and the pairs are finite. A cycle terminates for that same reason rather
-// than by being detected. Note the pair count is not len(discovered) - one key contributes a pair
-// per location it is referenced through - so maxRounds below is a backstop, not the real bound.
+// Rounds are consumed by pairs, not by cache entries: one key contributes a pair per location it
+// is referenced through, so a monorepo action reached through a chain of its own subpaths can
+// need more rounds than the cache holds entries. Any bound derived from the entry count is
+// therefore too small, and truncates silently - the unscanned subpath is still listed in
+// Subpaths, so the result reads as complete.
 //
 // KNOWN LIMITATION: an action pulling others in via a run: step rather than its own uses:, and
 // actions used by a called reusable workflow (jobs.<id>.uses:), are never attributed - Parent
-// stays empty, never guessed. Unattributed is not unreported; those entries are still curated.
-func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
+// stays empty, never guessed.
+func CrossReference(discovered []ActionRef, used JobUses) ([]ActionRef, []LocalUse) {
+	var localUses []LocalUse
+	// Deduplicated on the pair, not on the path: the same "./x" declared by two different
+	// composite actions is one uncovered action reached two ways, and a reader chasing it needs
+	// both declarers, while a repeat of the identical statement is noise.
+	seenLocal := map[LocalUse]bool{}
+	recordLocal := func(uses []LocalUse) {
+		for _, use := range uses {
+			if seenLocal[use] {
+				continue
+			}
+			seenLocal[use] = true
+			localUses = append(localUses, use)
+		}
+	}
+
+	// The job's own local steps first, so the report lists them before the ones found deeper.
+	recordLocal(used.Local)
+
 	byKey := make(map[string]int, len(discovered))
 	for i := range discovered {
 		byKey[refKey(discovered[i].Owner, discovered[i].Repo, discovered[i].Ref)] = i
@@ -226,7 +267,7 @@ func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
 
 	var frontier []pending
 	frontierIdx := map[string]int{}
-	for _, u := range used {
+	for _, u := range used.Remote {
 		key := refKey(u.Owner, u.Repo, u.Ref)
 		hasParent[key] = true // directly used by the job itself - no Parent to attribute
 		isNew := markLocation(key, u.Subpath)
@@ -238,10 +279,7 @@ func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
 		}
 	}
 
-	// A second, independent bound: a regression in the dedup above would hit a hard stop rather
-	// than spin. It is not a limit on legitimate nesting depth.
-	maxRounds := len(discovered) + 1
-	for depth := 0; depth < maxRounds && len(frontier) > 0; depth++ {
+	for len(frontier) > 0 {
 		var nextFrontier []pending
 		nextIdx := map[string]int{}
 
@@ -260,7 +298,9 @@ func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
 				if location != "" {
 					metadataDir = filepath.Join(metadataDir, location)
 				}
-				for _, cu := range parseCompositeActionUses(metadataDir) {
+				compositeUses := parseCompositeActionUses(metadataDir, parentIdentity)
+				recordLocal(compositeUses.Local)
+				for _, cu := range compositeUses.Remote {
 					childKey := refKey(cu.Owner, cu.Repo, cu.Ref)
 					childIdx, ok := byKey[childKey]
 					if !ok {
@@ -282,7 +322,7 @@ func CrossReference(discovered []ActionRef, used []WorkflowUse) []ActionRef {
 		}
 		frontier = nextFrontier
 	}
-	return discovered
+	return discovered, localUses
 }
 
 func refKey(owner, repo, ref string) string {

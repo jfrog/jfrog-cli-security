@@ -33,9 +33,14 @@ func NewActionReportRow(ref ActionRef, result ActionCurationResult) ActionReport
 	}
 }
 
-// RenderMarkdownTable renders rows as a GitHub-flavored markdown table. withParent controls
-// whether the Parent column appears at all.
-func RenderMarkdownTable(rows []ActionReportRow, withParent bool) string {
+// RenderReportTable renders rows as the console report's table. withParent controls whether the
+// Parent column appears at all.
+//
+// Pipe-delimited like the job summary's table, so the two read alike and either can be pasted
+// where the other is expected - but the cells are escaped for a terminal, because this one is
+// printed to the job log and read there. The job summary renders its own table from the recorded
+// summary files; the shared piece is the cell escaping, not the table.
+func RenderReportTable(rows []ActionReportRow, withParent bool) string {
 	var sb strings.Builder
 	if withParent {
 		sb.WriteString("| Action | Ref | Parent | Status | Notes |\n")
@@ -46,17 +51,17 @@ func RenderMarkdownTable(rows []ActionReportRow, withParent bool) string {
 	}
 	for _, row := range rows {
 		sb.WriteString("| ")
-		sb.WriteString(formats.EscapeMarkdownTableCell(row.Action))
+		sb.WriteString(formats.EscapeTerminalTableCell(row.Action))
 		sb.WriteString(" | ")
-		sb.WriteString(formats.EscapeMarkdownTableCell(row.Ref))
+		sb.WriteString(formats.EscapeTerminalTableCell(row.Ref))
 		if withParent {
 			sb.WriteString(" | ")
-			sb.WriteString(formats.EscapeMarkdownTableCell(row.Parent))
+			sb.WriteString(formats.EscapeTerminalTableCell(row.Parent))
 		}
 		sb.WriteString(" | ")
-		sb.WriteString(formats.EscapeMarkdownTableCell(row.Status))
+		sb.WriteString(formats.EscapeTerminalTableCell(row.Status))
 		sb.WriteString(" | ")
-		sb.WriteString(formats.EscapeMarkdownTableCell(row.Notes))
+		sb.WriteString(formats.EscapeTerminalTableCell(row.Notes))
 		sb.WriteString(" |\n")
 	}
 	return sb.String()

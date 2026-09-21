@@ -32,8 +32,6 @@ const fixturesRoot = "../../../tests/testdata/projects/githubactions"
 // here links at those higher levels to stand for an action - that would describe a cache nothing
 // produces. The higher-level links below are all dangling, used only to fabricate an entry that
 // exists but cannot be classified, which a broken mount or a pruned target produces just as well.
-// --actions-cache-dir does not widen any of this: it is a local-testing override pointing at a
-// directory shaped the same way.
 const archiveCacheSHA = "e1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
 // symlinkOrSkip links newname -> oldname, skipping the test where the OS won't allow it
@@ -122,8 +120,11 @@ func TestDiscoverActionCache(t *testing.T) {
 			wantEntries: []string{"actions/checkout@v4", "github/codeql-action@v3", "some-org/transitive-action@v1"},
 		},
 		{
-			name:  "verify when the cache directory does not exist then the result is empty and no error",
-			cache: actionCache{fixture: "does-not-exist"},
+			// An absent cache is not an empty one: this command is invoked by an action, which is
+			// itself an entry, so a cache without any is not the cache this job resolved from.
+			name:    "verify when the cache directory does not exist then the walk fails rather than reporting an empty cache",
+			cache:   actionCache{fixture: "does-not-exist"},
+			wantErr: true,
 		},
 		{
 			// stray-file.txt (owner level), actions/stray-file-at-repo-level.txt (repo level) and
@@ -506,86 +507,4 @@ func TestDefaultGithubRepo(t *testing.T) {
 
 	t.Setenv(GithubRepoEnvVar, "")
 	assert.Empty(t, DefaultGithubRepo())
-}
-
-func TestExcludeDeliveryAction(t *testing.T) {
-	tests := []struct {
-		name      string
-		refs      []ActionRef
-		wantRepos []string
-	}{
-		{
-			name: "verify when the delivery action is present at any ref then it is dropped",
-			refs: []ActionRef{
-				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
-				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "9a4c2881"},
-				{Owner: "actions", Repo: "checkout", Ref: "v4"},
-			},
-			wantRepos: []string{"checkout"},
-		},
-		{
-			// GitHub resolves owner and repo case-insensitively and the runner names the cache
-			// directory from the uses: line verbatim, so this spelling really reaches disk.
-			name: "verify when the delivery action is spelled with different casing then it is still dropped",
-			refs: []ActionRef{
-				{Owner: "JFrog", Repo: "setup-jfrog-cli", Ref: "v4"},
-				{Owner: "JFROG", Repo: "Setup-JFrog-CLI", Ref: "v4"},
-				{Owner: "actions", Repo: "checkout", Ref: "v4"},
-			},
-			wantRepos: []string{"checkout"},
-		},
-		{
-			name: "verify when another jfrog action is present then it is kept",
-			refs: []ActionRef{
-				{Owner: "jfrog", Repo: "frogbot", Ref: "v2"},
-				{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
-			},
-			wantRepos: []string{"frogbot"},
-		},
-		{
-			name: "verify when another owner ships a same-named action then it is kept",
-			refs: []ActionRef{
-				{Owner: "not-jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
-			},
-			wantRepos: []string{"setup-jfrog-cli"},
-		},
-		{
-			name:      "verify when only the delivery action is present then nothing is left to curate",
-			refs:      []ActionRef{{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"}},
-			wantRepos: nil,
-		},
-		{
-			name:      "verify when there are no refs then the result stays empty",
-			refs:      nil,
-			wantRepos: nil,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			kept := ExcludeDeliveryAction(tt.refs)
-			repos := make([]string, len(kept))
-			for i, ref := range kept {
-				repos[i] = ref.Repo
-			}
-			if tt.wantRepos == nil {
-				assert.Empty(t, repos)
-				return
-			}
-			assert.Equal(t, tt.wantRepos, repos)
-		})
-	}
-}
-
-func TestExcludeDeliveryAction_PreservesTransitiveAttribution(t *testing.T) {
-	// Excluding the delivery action must not orphan anything it pulled in: attribution runs
-	// before this filter, so a child keeps its Parent even though that parent is not reported.
-	kept := ExcludeDeliveryAction([]ActionRef{
-		{Owner: "jfrog", Repo: "setup-jfrog-cli", Ref: "v4"},
-		{Owner: "some-org", Repo: "pulled-in-by-delivery", Ref: "v1", Parent: "jfrog/setup-jfrog-cli@v4"},
-	})
-
-	if assert.Len(t, kept, 1) {
-		assert.Equal(t, "pulled-in-by-delivery", kept[0].Repo)
-		assert.Equal(t, "jfrog/setup-jfrog-cli@v4", kept[0].Parent, "attribution must survive the exclusion")
-	}
 }
