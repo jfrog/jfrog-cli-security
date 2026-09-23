@@ -62,30 +62,9 @@ const (
 	poetryCommandTimeout = 5 * time.Minute
 )
 
-// handlePoetry fixes a direct dependency without going through 'poetry add', which rewrites
-// whatever constraint form was declared (range, table-with-extras, group) into an exact pin,
-// and without a bare 'poetry update', which is unscoped (drifts unrelated transitives) and,
-// without --lock, installs into the environment. Renovate has the same problem today and
-// hasn't solved it (github.com/renovatebot/renovate/discussions/41206): it runs
-// 'poetry update --lock' against the constraint as-is, so it resolves to the newest version
-// the constraint allows, not necessarily the fix version.
-//
-// Sequence, verified against Poetry 1.8.5 and 2.5.1:
-//  1. Pin the dependency to the exact fix version in pyproject.toml, wherever its existing
-//     declaration is (main dependencies, a [tool.poetry.group.*] table, table-form with
-//     extras, or a PEP 621 native [project.dependencies] entry).
-//  2. 'poetry update <pkg> --lock --no-interaction' - scoped, lock-only.
-//  3. Restore pyproject.toml verbatim. If the original constraint admits the fix version,
-//     this is enough: only poetry.lock changes, and the manifest stays byte-identical.
-//  4. Re-sync the lock's content-hash without re-resolving ('poetry lock' on 2.x,
-//     'poetry lock --no-update' on 1.x - the flag for "don't touch existing resolutions" was
-//     inverted as poetry 2.0's new default).
-//  5. Verify the locked version actually equals the fix version - restoring a constraint that
-//     doesn't admit the fix version silently reverts the lock back to the old version, and
-//     'poetry check --lock' still exits 0 in that case (verified: with jinja2 pinned "^2.11"
-//     and a fix of 3.1.6, this exact sequence reverted to 2.11.3 with no error). When that
-//     happens, re-apply the exact-pin from step 1 instead of the original constraint and
-//     re-sync again - the pin form itself already admits the fix version by construction.
+// handlePoetry avoids 'poetry add' (rewrites the constraint to an exact pin) and a bare
+// 'poetry update' (unscoped, installs without --lock) - see fixPoetryDependency for the
+// pin/update/restore-or-widen sequence and why the locked version is asserted directly.
 func (py *PythonPackageUpdater) handlePoetry(fixDetails *FixDetails) error {
 	descriptorPaths := py.CollectVulnerabilityDescriptorPaths(fixDetails, []string{poetryPyprojectFile}, nil)
 	if len(descriptorPaths) == 0 {

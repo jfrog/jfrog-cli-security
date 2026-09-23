@@ -33,9 +33,6 @@ func TestPipPackageRegex(t *testing.T) {
 	}
 }
 
-// TestHandlePoetryPreservesRangeConstraintWhenItAdmitsFix guards the byte-identical
-// acceptance criterion: when the declared range already admits the fix version, only
-// poetry.lock should change - pyproject.toml must come back out exactly as it went in.
 func TestHandlePoetryPreservesRangeConstraintWhenItAdmitsFix(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "poetry", true, "range-admits-fix")
@@ -57,10 +54,6 @@ func TestHandlePoetryPreservesRangeConstraintWhenItAdmitsFix(t *testing.T) {
 	assert.Equal(t, "2.32.4", lockedVersion, "the lock must land on the fix version, not merely the newest version the range allows")
 }
 
-// TestHandlePoetryWidensConstraintWhenItDoesNotAdmitFix guards against the silent-revert
-// failure mode: restoring a constraint that doesn't admit the fix version reverts the lock
-// back to the old version while 'poetry check --lock' still exits 0. The fix must widen the
-// constraint instead and verify the locked version directly, not trust that exit code.
 func TestHandlePoetryWidensConstraintWhenItDoesNotAdmitFix(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "poetry", true, "range-below-fix")
@@ -75,10 +68,6 @@ func TestHandlePoetryWidensConstraintWhenItDoesNotAdmitFix(t *testing.T) {
 	assert.Equal(t, "3.1.6", lockedVersion, "the original ^2.11 constraint doesn't admit 3.1.6 - the fix must widen it rather than silently reverting")
 }
 
-// TestHandlePoetryTargetsGroupDependencyWithoutDuplicating guards against the same class of
-// bug 'poetry add' has: adding a dependency without --group duplicates it into the main
-// [tool.poetry.dependencies] table while leaving the original group declaration untouched,
-// corrupting the manifest with two conflicting constraints for the same package.
 func TestHandlePoetryTargetsGroupDependencyWithoutDuplicating(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "poetry", true, "group-dependency")
@@ -98,8 +87,6 @@ func TestHandlePoetryTargetsGroupDependencyWithoutDuplicating(t *testing.T) {
 	assert.Equal(t, "2.32.4", lockedVersion)
 }
 
-// TestHandleUvSubstringCollisionSafe guards against fixing "attrs" from also matching
-// (and wrongly bumping) "cattrs", which shares "attrs" as a suffix.
 func TestHandleUvSubstringCollisionSafe(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "uv", true, "substring-collision")
@@ -115,9 +102,6 @@ func TestHandleUvSubstringCollisionSafe(t *testing.T) {
 	assert.Contains(t, string(content), `attrs==24.1.0`, "the actual impacted package must be fixed")
 }
 
-// TestHandleUvFixesAllDeclarations guards against fixing only the first of several
-// declarations of the same package (e.g. in both [project].dependencies and a
-// [dependency-groups] table), which would leave 'uv lock' unsatisfiable.
 func TestHandleUvFixesAllDeclarations(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "uv", true, "duplicate-declaration")
