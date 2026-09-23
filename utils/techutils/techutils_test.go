@@ -1063,19 +1063,6 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 	}
 }
 
-// TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers pins
-// the scoping contract for the workspace-member detector fixup: the
-// generic file-based detector that 'jf audit', 'jf scan' etc. depend on
-// must NOT promote bare-package.json members from Npm to Yarn. Only
-// curation has opted into that behaviour via DetectedTechnologiesList-
-// ForCurationAudit. Without this test a careless future change could
-// re-introduce the promotion at the generic layer and silently flip the
-// audit detection result for every yarn-workspace user.
-// TestDetectTechnologiesDescriptorsPoetryPep621WithoutLock guards against a Poetry 2.x
-// project using the native PEP 621 [project] table (no legacy [tool.poetry] section) being
-// misdetected as Pip when poetry.lock isn't present - e.g. before the first lock, or when
-// the lock file is gitignored. [tool.poetry]-based detection alone can't see this; the
-// [build-system]'s poetry-core requirement is the only signal available.
 func TestDetectTechnologiesDescriptorsPoetryPep621WithoutLock(t *testing.T) {
 	root := t.TempDir()
 	assert.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(`[project]
@@ -1094,6 +1081,35 @@ build-backend = "poetry.core.masonry.api"
 	assert.NotContains(t, detected, Pip, "must not also fall through to Pip's default-true branch")
 }
 
+func TestDetectTechnologiesDescriptorsPoetryCoreOutsideRequiresArrayDoesNotMatch(t *testing.T) {
+	root := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(`[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["requests==2.6.0"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = ["poetry-core>=2.2.1"]
+`), 0644))
+
+	detected, err := DetectTechnologiesDescriptors(root, false, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+	assert.Contains(t, detected, Pip, "a setuptools project must stay Pip regardless of a poetry-core dev-dependency elsewhere in the file")
+	assert.NotContains(t, detected, Poetry, "poetry-core outside the [build-system] requires array must not be treated as the build backend")
+}
+
+// TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers pins
+// the scoping contract for the workspace-member detector fixup: the
+// generic file-based detector that 'jf audit', 'jf scan' etc. depend on
+// must NOT promote bare-package.json members from Npm to Yarn. Only
+// curation has opted into that behaviour via DetectedTechnologiesList-
+// ForCurationAudit. Without this test a careless future change could
+// re-introduce the promotion at the generic layer and silently flip the
+// audit detection result for every yarn-workspace user.
 func TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers(t *testing.T) {
 	root := t.TempDir()
 	member := filepath.Join(root, "packages", "admin-ui")

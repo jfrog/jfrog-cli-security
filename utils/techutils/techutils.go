@@ -339,10 +339,10 @@ var technologiesData = map[Technology]TechData{
 var (
 	// [tool.poetry] section
 	pyProjectTomlPoetryRegex = regexp.MustCompile(`(?ms)^\[tool\.poetry\]`)
-	// `poetry-core` in the [build-system] section - present on Poetry 2.x projects using the
-	// native PEP 621 [project] table instead of legacy [tool.poetry], which have no
-	// [tool.poetry] section for pyProjectTomlPoetryRegex to match.
-	pyProjectTomlPoetryCoreRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"poetry-core[^\]]*.*]`)
+	// `poetry-core` in the [build-system] section's requires array - present on Poetry 2.x
+	// projects using the native PEP 621 [project] table, which have no [tool.poetry] section
+	// for pyProjectTomlPoetryRegex to match.
+	pyProjectTomlPoetryCoreRegex = regexp.MustCompile(`(?ms)^\[build-system\][^\[]*requires\s*=\s*\[[^\]]*["']poetry-core`)
 	// `hatchling` in the [build-system] section
 	pyProjectTomlHatchRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"hatchling".*]`)
 	// `flit_core` in the [build-system] section
