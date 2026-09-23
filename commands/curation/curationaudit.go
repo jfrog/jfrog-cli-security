@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -322,6 +323,8 @@ type CurationAuditCommand struct {
 	// pendingWarnings collects log.Warn messages that must be emitted after the
 	// progress spinner stops; otherwise the spinner's ANSI clear codes overwrite them.
 	pendingWarnings []string
+	// auditId is generated once per Run(), shared across every --working-dirs project in that invocation, and sent as utils.CurationAuditIdHeader on every curation request.
+	auditId string
 	audit.AuditParamsInterface
 }
 
@@ -428,7 +431,16 @@ func (ca *CurationAuditCommand) SetScriptPath(scriptPath string) *CurationAuditC
 	return ca
 }
 
+// createHttpClientDetails tags request details with this run's auditId.
+func (ca *CurationAuditCommand) createHttpClientDetails(rtAuth auth.ServiceDetails) httputils.HttpClientDetails {
+	clientDetails := rtAuth.CreateHttpClientDetails()
+	clientDetails.AddHeader(utils.CurationAuditIdHeader, ca.auditId)
+	return clientDetails
+}
+
 func (ca *CurationAuditCommand) Run() (err error) {
+	ca.auditId = uuid.New().String()
+	log.Debug(fmt.Sprintf("Curation audit ID: %s (sent as %s on curation requests)", ca.auditId, utils.CurationAuditIdHeader))
 	rootDir, err := os.Getwd()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -1048,6 +1060,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
 		IsCurationCmd:        true,
+		AuditId:              ca.auditId,
 		MvnIncludePluginDeps: ca.mvnIncludePluginDeps,
 		ParallelRequests:     ca.parallelRequests,
 		OutputFormat:         ca.OutputFormat(),
@@ -1360,7 +1373,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		rtManager:             rtManager,
 		extractPoliciesRegex:  ca.extractPoliciesRegex,
 		rtAuth:                rtAuth,
-		httpClientDetails:     rtAuth.CreateHttpClientDetails(),
+		httpClientDetails:     ca.createHttpClientDetails(rtAuth),
 		url:                   rtAuth.GetUrl(),
 		repo:                  ca.PackageManagerConfig.TargetRepo(),
 		tech:                  tech,
@@ -1460,8 +1473,8 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 	if err != nil {
 		return nil, err
 	}
-	clientDetails := rtAuth.CreateHttpClientDetails()
-	clientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = msg
+	clientDetails := ca.createHttpClientDetails(rtAuth)
+	clientDetails.AddHeader("X-Artifactory-Curation-Request-Waiver", msg)
 	for _, pkg := range pkgs {
 		response, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
 		if err != nil {
@@ -2426,7 +2439,7 @@ func (ca *CurationAuditCommand) runCvsFallback(cvsErr *python.CvsBlockedError, t
 		rtManager:            rtManager,
 		extractPoliciesRegex: ca.extractPoliciesRegex,
 		rtAuth:               rtAuth,
-		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		httpClientDetails:    ca.createHttpClientDetails(rtAuth),
 		url:                  rtAuth.GetUrl(),
 		repo:                 ca.PackageManagerConfig.TargetRepo(),
 		tech:                 tech,
@@ -2539,7 +2552,7 @@ func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils
 		rtManager:            rtManager,
 		extractPoliciesRegex: ca.extractPoliciesRegex,
 		rtAuth:               rtAuth,
-		httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+		httpClientDetails:    ca.createHttpClientDetails(rtAuth),
 		url:                  rtAuth.GetUrl(),
 		repo:                 ca.PackageManagerConfig.TargetRepo(),
 		tech:                 tech,
