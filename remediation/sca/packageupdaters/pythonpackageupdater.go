@@ -129,7 +129,7 @@ func (py *PythonPackageUpdater) fixPoetryDependency(fixDetails *FixDetails, desc
 
 	rollback := func(cause error) error {
 		var rollbackErr error
-		//#nosec G306 -- 0644 is correct for a checked-out source file.
+		//#nosec G703 G306 -- descriptorPath comes from scan evidence, not user input; 0644 is correct for a checked-out source file.
 		if werr := os.WriteFile(descriptorPath, originalManifest, 0644); werr != nil {
 			rollbackErr = errors.Join(rollbackErr, fmt.Errorf("failed to rollback '%s': %w", descriptorPath, werr))
 		}
@@ -142,7 +142,7 @@ func (py *PythonPackageUpdater) fixPoetryDependency(fixDetails *FixDetails, desc
 		return cause
 	}
 
-	//#nosec G306 -- 0644 is correct for a checked-out source file.
+	//#nosec G703 G306 -- descriptorPath comes from scan evidence, not user input; 0644 is correct for a checked-out source file.
 	if err = os.WriteFile(descriptorPath, []byte(pinnedManifest), 0644); err != nil {
 		return fmt.Errorf("failed to write '%s': %w", descriptorPath, err)
 	}
@@ -150,7 +150,7 @@ func (py *PythonPackageUpdater) fixPoetryDependency(fixDetails *FixDetails, desc
 		return rollback(fmt.Errorf("'poetry update %s --lock' failed: %w", fixDetails.ImpactedDependencyName, err))
 	}
 
-	//#nosec G306 -- 0644 is correct for a checked-out source file.
+	//#nosec G703 G306 -- descriptorPath comes from scan evidence, not user input; 0644 is correct for a checked-out source file.
 	if err = os.WriteFile(descriptorPath, originalManifest, 0644); err != nil {
 		return rollback(fmt.Errorf("failed to restore '%s' before re-syncing the lock hash: %w", descriptorPath, err))
 	}
@@ -163,7 +163,7 @@ func (py *PythonPackageUpdater) fixPoetryDependency(fixDetails *FixDetails, desc
 	}
 
 	if lockedVersion != fixDetails.SuggestedFixedVersion {
-		//#nosec G306 -- 0644 is correct for a checked-out source file.
+		//#nosec G703 G306 -- descriptorPath comes from scan evidence, not user input; 0644 is correct for a checked-out source file.
 		if err = os.WriteFile(descriptorPath, []byte(pinnedManifest), 0644); err != nil {
 			return rollback(fmt.Errorf("failed to re-apply the widened constraint to '%s': %w", descriptorPath, err))
 		}
