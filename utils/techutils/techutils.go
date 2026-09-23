@@ -339,6 +339,10 @@ var technologiesData = map[Technology]TechData{
 var (
 	// [tool.poetry] section
 	pyProjectTomlPoetryRegex = regexp.MustCompile(`(?ms)^\[tool\.poetry\]`)
+	// `poetry-core` in the [build-system] section's requires array - present on Poetry 2.x
+	// projects using the native PEP 621 [project] table, which have no [tool.poetry] section
+	// for pyProjectTomlPoetryRegex to match.
+	pyProjectTomlPoetryCoreRegex = regexp.MustCompile(`(?ms)^\[build-system\][^\[]*requires\s*=\s*\[[^\]]*["']poetry-core`)
 	// `hatchling` in the [build-system] section
 	pyProjectTomlHatchRegex = regexp.MustCompile(`(?ms)^\[build-system\].*requires\s*=\s*\[.*"hatchling".*]`)
 	// `flit_core` in the [build-system] section
@@ -353,7 +357,7 @@ var (
 
 func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 	return func(content []byte) bool {
-		if pyProjectTomlPoetryRegex.Match(content) {
+		if pyProjectTomlPoetryRegex.Match(content) || pyProjectTomlPoetryCoreRegex.Match(content) {
 			return tech == Poetry
 		}
 		if pyProjectTomlHatchRegex.Match(content) || pyProjectTomlFlitRegex.Match(content) || pyProjectTomlPdmRegex.Match(content) {
