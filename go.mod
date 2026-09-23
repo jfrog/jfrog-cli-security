@@ -8,19 +8,19 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/CycloneDX/cyclonedx-go v0.11.0
 	github.com/beevik/etree v1.7.0
-	github.com/go-git/go-git/v5 v5.19.1
+	github.com/go-git/go-git/v5 v5.19.2
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.6.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.13.1-0.20260902120316-b325d342b210
+	github.com/jfrog/build-info-go v1.13.1-0.20260916133330-b238519a26ff
 	github.com/jfrog/froggit-go v1.23.1
 	github.com/jfrog/gofrog v1.7.7
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260908080306-193c9302d3ed
-	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260831061529-c6dd293bccca
-	github.com/jfrog/jfrog-client-go v1.55.1-0.20260908141255-cbf686ec1698
+	github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260916135713-bed01c2d7f80
+	github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260909093400-32a7208a18bd
+	github.com/jfrog/jfrog-client-go v1.55.1-0.20260916171644-3de04df4518c
 	github.com/magiconair/properties v1.18.11
 	github.com/owenrumney/go-sarif/v3 v3.2.3
 	github.com/package-url/packageurl-go v0.1.3
@@ -147,8 +147,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.42.0 // indirect
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
