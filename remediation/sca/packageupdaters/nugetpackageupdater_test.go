@@ -908,19 +908,18 @@ func TestNugetUpdateDependencyPreservesPreexistingObjDir(t *testing.T) {
 	assert.Equal(t, "keep-me", string(sentinel))
 }
 
-func TestUpdatePackageReferenceVersionRejectsMixedInlineAndNonInline(t *testing.T) {
+func TestUpdatePackageReferenceVersionFixesVersionedEntryDespiteVersionlessSibling(t *testing.T) {
 	content := []byte(`<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Update="Newtonsoft.Json" PrivateAssets="All" />
   </ItemGroup>
 </Project>`)
 
 	updated, err := updatePackageReferenceVersion(content, "Newtonsoft.Json", "13.0.1")
-	assert.Nil(t, updated)
-	var unsupportedErr *ErrUnsupportedFix
-	assert.True(t, errors.As(err, &unsupportedErr))
-	assert.Equal(t, MixedInlineAndNonInlineVersionFixNotSupported, unsupportedErr.ErrorType)
+	assert.NoError(t, err)
+	assert.Contains(t, string(updated), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.Contains(t, string(updated), `Update="Newtonsoft.Json" PrivateAssets="All"`)
 }
 
 func TestNugetUpdateDependencyResolvesSingleDirectoryPackagesProps(t *testing.T) {
@@ -1624,7 +1623,7 @@ func TestNugetUpdateDependencyPackageVersionChildElement(t *testing.T) {
 	assert.NotContains(t, string(propsContent), `<Version>12.0.3</Version>`)
 }
 
-func TestNugetUpdateDependencyDoesNotFallbackOnMixedInlineAndVersionless(t *testing.T) {
+func TestNugetUpdateDependencyFixesVersionedEntryWithoutFallingBackToCpm(t *testing.T) {
 	integration.InitUnitTest(t)
 	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
 	currDir, err := os.Getwd()
@@ -1649,13 +1648,18 @@ func TestNugetUpdateDependencyDoesNotFallbackOnMixedInlineAndVersionless(t *test
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Update="Newtonsoft.Json" PrivateAssets="All" />
   </ItemGroup>
 </Project>
 `), 0644))
 
 	originalProps, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
 	assert.NoError(t, err)
+
+	toolDir := t.TempDir()
+	regeneratedLock := `{"version":1,"dependencies":{"net8.0":{"Newtonsoft.Json":{"type":"Direct","resolved":"13.0.1"}}}}`
+	writeFakeDotnetRestore(t, toolDir, 0, regeneratedLock, false)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	fixDetails := &FixDetails{
 		SuggestedFixedVersion:  "13.0.1",
@@ -1667,10 +1671,12 @@ func TestNugetUpdateDependencyDoesNotFallbackOnMixedInlineAndVersionless(t *test
 
 	updater := &NugetPackageUpdater{}
 	err = updater.UpdateDependency(fixDetails)
-	assert.Error(t, err)
-	var unsupportedErr *ErrUnsupportedFix
-	assert.True(t, errors.As(err, &unsupportedErr))
-	assert.Equal(t, MixedInlineAndNonInlineVersionFixNotSupported, unsupportedErr.ErrorType)
+	assert.NoError(t, err)
+
+	fixedCsproj, err := os.ReadFile(csprojPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(fixedCsproj), `Include="Newtonsoft.Json" Version="13.0.1"`)
+	assert.Contains(t, string(fixedCsproj), `Update="Newtonsoft.Json" PrivateAssets="All"`)
 
 	propsContent, err := os.ReadFile(filepath.Join("Cpm", "Directory.Packages.props"))
 	assert.NoError(t, err)
@@ -2049,4 +2055,252 @@ func TestNugetUpdateDependencyClosestDirectoryBuildPropsWins(t *testing.T) {
 	unchangedParent, err := os.ReadFile(filepath.Join(dir, "Directory.Build.props"))
 	assert.NoError(t, err)
 	assert.Equal(t, parentProps, unchangedParent)
+}
+
+func TestNugetUpdateDependencyIgnoresCommentedOutPackageVersion(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	dir := "CpmCommentedPin"
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Proj"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Directory.Packages.props"), []byte(`<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- <PackageVersion Include="Newtonsoft.Json" Version="99.99.99" /> -->
+  </ItemGroup>
+  <Import Project="Versions.props" />
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Versions.props"), []byte(`<Project>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Proj", "Proj.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+</Project>
+`), 0644))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join(dir, "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	versionsProps, err := os.ReadFile(filepath.Join(dir, "Versions.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(versionsProps), `Include="Newtonsoft.Json" Version="13.0.1"`)
+
+	rootProps, err := os.ReadFile(filepath.Join(dir, "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(rootProps), `Version="99.99.99"`, "the commented-out pin must be left untouched")
+}
+
+func TestNugetUpdateDependencyFollowsBackslashSeparatedImport(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	dir := "CpmBackslashImport"
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Shared"), 0755))
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Proj"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Directory.Packages.props"), []byte(`<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <Import Project="Shared\Packages.props" />
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Shared", "Packages.props"), []byte(`<Project>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Proj", "Proj.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+</Project>
+`), 0644))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join(dir, "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	sharedProps, err := os.ReadFile(filepath.Join(dir, "Shared", "Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(sharedProps), `Include="Newtonsoft.Json" Version="13.0.1"`)
+}
+
+func TestNugetUpdateDependencyFollowsMSBuildThisFileDirectoryImportWithBackslashSubpath(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	dir := "CpmMacroBackslashImport"
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Shared"), 0755))
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Proj"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Directory.Packages.props"), []byte(`<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)Shared\Packages.props" />
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Shared", "Packages.props"), []byte(`<Project>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Proj", "Proj.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+</Project>
+`), 0644))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join(dir, "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	sharedProps, err := os.ReadFile(filepath.Join(dir, "Shared", "Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(sharedProps), `Include="Newtonsoft.Json" Version="13.0.1"`)
+}
+
+func TestNugetUpdateDependencyRecognizesManagePackageVersionsCentrallyFalseWithAttributes(t *testing.T) {
+	integration.InitUnitTest(t)
+	testProjectPath := filepath.Join("..", "..", "..", "tests", "testdata", "projects", "package-managers", "nuget", "remediation-packageupdaters")
+	currDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tmpDir, err := os.MkdirTemp("", "nuget-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, biutils.CopyDir(testProjectPath, tmpDir, true, nil))
+	assert.NoError(t, os.Chdir(tmpDir))
+	defer func() {
+		assert.NoError(t, os.Chdir(currDir))
+	}()
+
+	dir := "CpmConditionalOff"
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, "Proj"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Directory.Packages.props"), []byte(`<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally Condition="'$(Configuration)'=='Release'">false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="1.0.0" />
+  </ItemGroup>
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Directory.Build.props"), []byte(`<Project>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+</Project>
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Proj", "Proj.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`), 0644))
+
+	fixDetails := &FixDetails{
+		SuggestedFixedVersion:  "13.0.1",
+		IsDirectDependency:     true,
+		Technology:             techutils.Nuget,
+		ImpactedDependencyName: "Newtonsoft.Json",
+		Components:             []formats.ComponentRow{{Evidences: []formats.Location{{File: filepath.Join(dir, "Proj", "Proj.csproj")}}}},
+	}
+
+	updater := &NugetPackageUpdater{}
+	err = updater.UpdateDependency(fixDetails)
+	assert.NoError(t, err)
+
+	buildProps, err := os.ReadFile(filepath.Join(dir, "Directory.Build.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(buildProps), `Include="Newtonsoft.Json" Version="13.0.1"`)
+
+	packagesProps, err := os.ReadFile(filepath.Join(dir, "Directory.Packages.props"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(packagesProps), `Version="1.0.0"`, "CPM being off must not be missed and must not touch Directory.Packages.props")
 }

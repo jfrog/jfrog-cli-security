@@ -1,6 +1,7 @@
 package packageupdaters
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,28 +20,11 @@ import (
 var nugetProjectFileSuffixes = []string{".csproj", ".fsproj", ".vbproj"}
 
 const (
-	// (?i) accounts for MSBuild element names being case-insensitive (e.g. <packagereference> is
-	// just as valid as <PackageReference>), even though this casing is rare in practice.
-	nugetPackageReferenceElementPattern = `(?is)<PackageReference\b[^>]*/>|<PackageReference\b[^>]*[^/]>.*?</PackageReference>`
-	nugetKeyAttrPattern                 = `(?i)\b(?:Include|Update)\s*=\s*["']%s["']`
-	// nugetVersionAttrPattern matches whatever is already inside Version="...", including an
-	// MSBuild property reference like "$(FooVersion)" - such a reference gets overwritten with the
-	// literal fixed version rather than resolved and updated at its property definition. That's a
-	// deliberate simplification, and a real behavior change versus how MSBuild itself would resolve
-	// it; Maven's updater handles the analogous ${property} case by updating the definition instead.
-	nugetVersionAttrPattern            = `(?is)(\bVersion\s*=\s*["'])[^"']*(["'])`
-	nugetVersionElementPattern         = `(?is)(<Version>)[^<]*(</Version>)`
-	nugetVersionOverrideAttrPattern    = `(?is)(\bVersionOverride\s*=\s*["'])[^"']*(["'])`
-	nugetVersionOverrideElementPattern = `(?is)(<VersionOverride>)[^<]*(</VersionOverride>)`
+	nugetKeyAttrPattern = `(?i)\b(?:Include|Update)\s*=\s*["']%s["']`
 
-	nugetPackageVersionElementPattern  = `(?is)<PackageVersion\b[^>]*/>|<PackageVersion\b[^>]*[^/]>.*?</PackageVersion>`
-	nugetPackageVersionKeyAttrPattern  = `(?i)\b(?:Include|Update)\s*=\s*["']%s["']`
 	nugetDirectoryPackagesPropsName    = "Directory.Packages.props"
 	nugetDirectoryBuildPropsName       = "Directory.Build.props"
 	nugetDirectoryBuildTargetsName     = "Directory.Build.targets"
-	nugetImportProjectAttrPattern      = `(?i)<Import\b[^>]*\bProject\s*=\s*["']([^"']+)["']`
-	nugetManageCpmFalsePattern         = `(?is)<ManagePackageVersionsCentrally>\s*false\s*</ManagePackageVersionsCentrally>`
-	nugetManageCpmTruePattern          = `(?is)<ManagePackageVersionsCentrally>\s*true\s*</ManagePackageVersionsCentrally>`
 	nugetMSBuildThisFileDirectoryMacro = "$(MSBuildThisFileDirectory)"
 
 	nugetLockFileName = "packages.lock.json"
@@ -56,6 +40,28 @@ const (
 	// packages.lock.json can end up stale relative to the new resolution, since --no-dependencies
 	// prevents restore from touching it at all.
 	nugetRestoreNoDependenciesFlag = "--no-dependencies"
+)
+
+var (
+	// (?i) accounts for MSBuild element names being case-insensitive (e.g. <packagereference> is
+	// just as valid as <PackageReference>).
+	nugetPackageReferenceElementRegex = regexp.MustCompile(`(?is)<PackageReference\b[^>]*/>|<PackageReference\b[^>]*[^/]>.*?</PackageReference>`)
+	// nugetVersionAttrRegex matches whatever is already inside Version="...", including an MSBuild
+	// property reference like "$(FooVersion)" - overwritten with the literal fixed version rather
+	// than resolved and updated at its definition, unlike Maven's analogous ${property} handling.
+	nugetVersionAttrRegex            = regexp.MustCompile(`(?is)(\bVersion\s*=\s*["'])[^"']*(["'])`)
+	nugetVersionElementRegex         = regexp.MustCompile(`(?is)(<Version>)[^<]*(</Version>)`)
+	nugetVersionOverrideAttrRegex    = regexp.MustCompile(`(?is)(\bVersionOverride\s*=\s*["'])[^"']*(["'])`)
+	nugetVersionOverrideElementRegex = regexp.MustCompile(`(?is)(<VersionOverride>)[^<]*(</VersionOverride>)`)
+	nugetPackageVersionElementRegex  = regexp.MustCompile(`(?is)<PackageVersion\b[^>]*/>|<PackageVersion\b[^>]*[^/]>.*?</PackageVersion>`)
+	nugetImportProjectAttrRegex      = regexp.MustCompile(`(?i)<Import\b[^>]*\bProject\s*=\s*["']([^"']+)["']`)
+	// \b[^>]*> allows attributes (e.g. a Condition) on the opening tag, which a literal
+	// "<ManagePackageVersionsCentrally>" would miss.
+	nugetManageCpmFalseRegex = regexp.MustCompile(`(?is)<ManagePackageVersionsCentrally\b[^>]*>\s*false\s*</ManagePackageVersionsCentrally>`)
+	nugetManageCpmTrueRegex  = regexp.MustCompile(`(?is)<ManagePackageVersionsCentrally\b[^>]*>\s*true\s*</ManagePackageVersionsCentrally>`)
+	// xmlCommentRegex masks out comments before element-matching, so a commented-out pin is never
+	// mistaken for a live one.
+	xmlCommentRegex = regexp.MustCompile(`(?s)<!--.*?-->`)
 )
 
 // NugetRestoreEnvVars suppresses first-run banner noise and telemetry prompts observed when
@@ -178,9 +184,6 @@ func (n *NugetPackageUpdater) fixVulnerabilityAndRestore(projectFilePath, packag
 	}
 
 	updatedProjectFile, fixErr := updatePackageReferenceVersion(originalProjectFile, packageName, fixedVersion)
-	if isMixedInlineAndNonInline(fixErr) {
-		return fmt.Errorf("%w in %s", fixErr, projectFilePath)
-	}
 	if fixErr != nil {
 		return n.fixViaVersionSource(projectFilePath, packageName, fixedVersion, originalWd)
 	}
@@ -204,11 +207,6 @@ func (n *NugetPackageUpdater) fixViaVersionSource(projectFilePath, packageName, 
 func isUnsupportedNoInlineVersion(err error) bool {
 	var unsupportedErr *ErrUnsupportedFix
 	return errors.As(err, &unsupportedErr) && unsupportedErr.ErrorType == NoInlineVersionFixNotSupported
-}
-
-func isMixedInlineAndNonInline(err error) bool {
-	var unsupportedErr *ErrUnsupportedFix
-	return errors.As(err, &unsupportedErr) && unsupportedErr.ErrorType == MixedInlineAndNonInlineVersionFixNotSupported
 }
 
 func (n *NugetPackageUpdater) fixViaDirectoryPackagesProps(projectFilePath, packageName, fixedVersion, originalWd string) error {
@@ -382,43 +380,36 @@ func rollbackProjectFileAndLock(projectFilePath string, originalProjectFile []by
 }
 
 func updatePackageReferenceVersion(content []byte, packageName, fixedVersion string) ([]byte, error) {
-	element := regexp.MustCompile(nugetPackageReferenceElementPattern)
 	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetKeyAttrPattern, regexp.QuoteMeta(packageName)))
-	versionAttr := regexp.MustCompile(nugetVersionAttrPattern)
-	versionElement := regexp.MustCompile(nugetVersionElementPattern)
-	versionOverrideAttr := regexp.MustCompile(nugetVersionOverrideAttrPattern)
-	versionOverrideElement := regexp.MustCompile(nugetVersionOverrideElementPattern)
 
 	var fixedAny, foundWithoutVersion bool
-	updatedContent := element.ReplaceAllFunc(content, func(match []byte) []byte {
+	updatedContent := replaceMatchingElements(content, nugetPackageReferenceElementRegex, func(match []byte) []byte {
 		if !keyAttr.Match(match) {
 			return match
 		}
 		switch {
-		case versionAttr.Match(match):
+		case nugetVersionAttrRegex.Match(match):
 			fixedAny = true
-			return versionAttr.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
-		case versionElement.Match(match):
+			return nugetVersionAttrRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case nugetVersionElementRegex.Match(match):
 			fixedAny = true
-			return versionElement.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
-		case versionOverrideAttr.Match(match):
+			return nugetVersionElementRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case nugetVersionOverrideAttrRegex.Match(match):
 			fixedAny = true
-			return versionOverrideAttr.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
-		case versionOverrideElement.Match(match):
+			return nugetVersionOverrideAttrRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case nugetVersionOverrideElementRegex.Match(match):
 			fixedAny = true
-			return versionOverrideElement.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+			return nugetVersionOverrideElementRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
 		default:
 			foundWithoutVersion = true
 			return match
 		}
 	})
 
-	if foundWithoutVersion && fixedAny {
-		return nil, &ErrUnsupportedFix{
-			PackageName:  packageName,
-			FixedVersion: fixedVersion,
-			ErrorType:    MixedInlineAndNonInlineVersionFixNotSupported,
-		}
+	// A versionless entry for the same package (e.g. an Update= metadata overlay) doesn't make the
+	// fix ambiguous as long as some entry was actually fixed.
+	if fixedAny {
+		return updatedContent, nil
 	}
 	if foundWithoutVersion {
 		return nil, &ErrUnsupportedFix{
@@ -427,35 +418,57 @@ func updatePackageReferenceVersion(content []byte, packageName, fixedVersion str
 			ErrorType:    NoInlineVersionFixNotSupported,
 		}
 	}
-	if fixedAny {
-		return updatedContent, nil
-	}
 	return nil, fmt.Errorf("dependency %s not found", packageName)
 }
 
 func updatePackageVersionEntry(content []byte, packageName, fixedVersion string) ([]byte, bool) {
-	element := regexp.MustCompile(nugetPackageVersionElementPattern)
-	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetPackageVersionKeyAttrPattern, regexp.QuoteMeta(packageName)))
-	versionAttr := regexp.MustCompile(nugetVersionAttrPattern)
-	versionElement := regexp.MustCompile(nugetVersionElementPattern)
+	keyAttr := regexp.MustCompile(fmt.Sprintf(nugetKeyAttrPattern, regexp.QuoteMeta(packageName)))
 
 	var fixedAny bool
-	updatedContent := element.ReplaceAllFunc(content, func(match []byte) []byte {
+	updatedContent := replaceMatchingElements(content, nugetPackageVersionElementRegex, func(match []byte) []byte {
 		if !keyAttr.Match(match) {
 			return match
 		}
 		switch {
-		case versionAttr.Match(match):
+		case nugetVersionAttrRegex.Match(match):
 			fixedAny = true
-			return versionAttr.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
-		case versionElement.Match(match):
+			return nugetVersionAttrRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+		case nugetVersionElementRegex.Match(match):
 			fixedAny = true
-			return versionElement.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
+			return nugetVersionElementRegex.ReplaceAll(match, []byte("${1}"+fixedVersion+"${2}"))
 		default:
 			return match
 		}
 	})
 	return updatedContent, fixedAny
+}
+
+// replaceMatchingElements finds every match of element in content, skipping matches that fall
+// inside an XML comment, and lets handle decide what replaces each real match.
+func replaceMatchingElements(content []byte, element *regexp.Regexp, handle func(match []byte) []byte) []byte {
+	masked := maskXMLComments(content)
+	var buf bytes.Buffer
+	lastEnd := 0
+	for _, loc := range element.FindAllIndex(masked, -1) {
+		buf.Write(content[lastEnd:loc[0]])
+		buf.Write(handle(content[loc[0]:loc[1]]))
+		lastEnd = loc[1]
+	}
+	buf.Write(content[lastEnd:])
+	return buf.Bytes()
+}
+
+// maskXMLComments returns a same-length copy of content with every <!-- ... --> body blanked out.
+func maskXMLComments(content []byte) []byte {
+	masked := append([]byte(nil), content...)
+	for _, loc := range xmlCommentRegex.FindAllIndex(masked, -1) {
+		for i := loc[0]; i < loc[1]; i++ {
+			if masked[i] != '\n' {
+				masked[i] = ' '
+			}
+		}
+	}
+	return masked
 }
 
 type versionFixFunc func(content []byte, packageName, fixedVersion string) ([]byte, bool, error)
@@ -468,11 +481,11 @@ func resolvePackageVersionUpdate(propsPath string, propsContent []byte, packageN
 }
 
 func isCentralPackageManagementDisabled(content []byte) bool {
-	return regexp.MustCompile(nugetManageCpmFalsePattern).Match(content)
+	return nugetManageCpmFalseRegex.Match(content)
 }
 
 func isCentralPackageManagementEnabled(content []byte) bool {
-	return regexp.MustCompile(nugetManageCpmTruePattern).Match(content)
+	return nugetManageCpmTrueRegex.Match(content)
 }
 
 func isCentralPackageManagementDisabledInContext(projectFilePath string, packagesProps []byte, repoRoot string) bool {
@@ -500,13 +513,7 @@ func isCentralPackageManagementDisabledInContext(projectFilePath string, package
 
 func tryFixPackageReference(content []byte, packageName, fixedVersion string) ([]byte, bool, error) {
 	updated, err := updatePackageReferenceVersion(content, packageName, fixedVersion)
-	if err == nil {
-		return updated, true, nil
-	}
-	if isMixedInlineAndNonInline(err) {
-		return nil, false, err
-	}
-	return nil, false, nil
+	return updated, err == nil, nil
 }
 
 func tryFixPackageVersionEntry(content []byte, packageName, fixedVersion string) ([]byte, bool, error) {
@@ -535,11 +542,10 @@ func searchVersionUpdate(path string, content []byte, packageName, fixedVersion,
 		return absPath, content, updated, true, nil
 	}
 
-	importAttr := regexp.MustCompile(nugetImportProjectAttrPattern)
-	for _, match := range importAttr.FindAllSubmatch(content, -1) {
+	for _, match := range nugetImportProjectAttrRegex.FindAllSubmatch(content, -1) {
 		projectRef := string(match[1])
 		if strings.HasPrefix(projectRef, nugetMSBuildThisFileDirectoryMacro) {
-			suffix := filepath.FromSlash(strings.TrimPrefix(projectRef, nugetMSBuildThisFileDirectoryMacro))
+			suffix := msbuildPathToFilePath(strings.TrimPrefix(projectRef, nugetMSBuildThisFileDirectoryMacro))
 			projectRef = filepath.Join(filepath.Dir(absPath), suffix)
 		}
 		if strings.Contains(projectRef, "$") {
@@ -547,7 +553,7 @@ func searchVersionUpdate(path string, content []byte, packageName, fixedVersion,
 		}
 		nextPath := projectRef
 		if !filepath.IsAbs(projectRef) {
-			nextPath = filepath.Join(filepath.Dir(absPath), filepath.FromSlash(projectRef))
+			nextPath = filepath.Join(filepath.Dir(absPath), msbuildPathToFilePath(projectRef))
 		}
 		nextAbs, absErr := filepath.Abs(nextPath)
 		if absErr != nil || !isPathInsideRoot(repoRoot, nextAbs) {
@@ -609,4 +615,10 @@ func isPathInsideRoot(root, path string) bool {
 		return false
 	}
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
+}
+
+// msbuildPathToFilePath converts an MSBuild-style path - which may use Windows backslash
+// separators regardless of the current OS - into one filepath can join/read anywhere.
+func msbuildPathToFilePath(msbuildPath string) string {
+	return filepath.FromSlash(strings.ReplaceAll(msbuildPath, "\\", "/"))
 }
