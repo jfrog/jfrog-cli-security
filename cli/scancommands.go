@@ -30,6 +30,7 @@ import (
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
+	curationActionsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curationactions"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
@@ -130,6 +131,17 @@ func getAuditAndScansCommands() []components.Command {
 			AIDescription: curationDocs.GetAIDescription(),
 			Category:      securityCategory,
 			Action:        CurationCmd,
+		},
+		{
+			// Hidden until Catalog/Artifactory add support for VCS package type for GitHub Actions. Until then the
+			// curation decision is a stand-in, so the command must not be discoverable to users.
+			Name:          "curate-gh-actions",
+			Flags:         flags.GetCommandFlags(flags.CurationActions),
+			Description:   curationActionsDocs.GetDescription(),
+			AIDescription: curationActionsDocs.GetAIDescription(),
+			Category:      securityCategory,
+			Action:        CurationActionsCmd,
+			Hidden:        true,
 		},
 		{
 			Name:          "source-mcp",
@@ -644,6 +656,13 @@ func CurationCmd(c *components.Context) error {
 		return err
 	}
 	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+// CurationActionsCmd curates the GitHub Actions resolved on this job's runner.
+func CurationActionsCmd(c *components.Context) error {
+	// No flags: every input comes from the runner environment. The setters the command
+	// exposes are for tests, which construct it directly rather than through the CLI.
+	return curation.NewCurationActionsCommand().Run()
 }
 
 var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](

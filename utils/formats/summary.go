@@ -34,6 +34,7 @@ type ScanSummary struct {
 	Vulnerabilities *ScanResultSummary     `json:"vulnerabilities,omitempty"`
 	Violations      *ScanViolationsSummary `json:"violations,omitempty"`
 	CuratedPackages *CuratedPackages       `json:"curated,omitempty"`
+	CuratedActions  *CuratedActions        `json:"curated_actions,omitempty"`
 }
 
 type ScanResultSummary struct {
@@ -73,6 +74,33 @@ type BlockedPackages struct {
 	Policy    string         `json:"policy,omitempty"`
 	Condition string         `json:"condition,omitempty"`
 	Packages  map[string]int `json:"packages"`
+}
+
+// CuratedActions holds the GitHub Actions curation result for one job.
+type CuratedActions struct {
+	Actions []CuratedAction `json:"actions,omitempty"`
+	// Attributed reports whether a workflow file is present to do parent attribution.
+	// else Parent column is dropped in the report.
+	Attributed bool `json:"attributed"`
+	// LocalCompositeActions holds the `uses: ./...` steps which are evaluated lazily
+	LocalCompositeActions []LocalCompositeAction `json:"local_composite_actions,omitempty"`
+}
+
+// LocalCompositeAction is one `uses: ./...` step a curated job will run, and who declared it.
+type LocalCompositeAction struct {
+	Path string `json:"path"`
+	// DeclaredBy is the composite action declaring this step, as "<owner>/<repo>@<ref>", or ""
+	// when the job's own workflow declares it.
+	DeclaredBy string `json:"declared_by,omitempty"`
+}
+
+// CuratedAction is the curation outcome for one resolved GitHub Action.
+type CuratedAction struct {
+	Action string `json:"action"`           // "owner/repo", plus " (subpath[, subpath...])" when invoked via subpaths
+	Ref    string `json:"ref"`              // verbatim from the cache directory name, uninterpreted
+	Parent string `json:"parent,omitempty"` // "" when directly referenced, or when attribution could not place it
+	Status string `json:"status"`
+	Notes  string `json:"notes,omitempty"`
 }
 
 func (cp *CuratedPackages) GetApprovedCount() int {
@@ -140,6 +168,10 @@ func (sc *ScanSummary) HasCuratedPackages() bool {
 
 func (sc *ScanSummary) HasBlockedPackages() bool {
 	return sc.CuratedPackages != nil && len(sc.CuratedPackages.Blocked) > 0
+}
+
+func (sc *ScanSummary) HasCuratedActions() bool {
+	return sc.CuratedActions != nil && len(sc.CuratedActions.Actions) > 0
 }
 
 func (sc *ScanSummary) HasViolations() bool {
