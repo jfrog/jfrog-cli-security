@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -1638,6 +1639,35 @@ func TestProbeBlockedDirectDeps(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProbeBlockedDirectDepsSendsCurationAuditIdHeader(t *testing.T) {
+	const wantAuditId = "test-audit-id-123"
+	var gotAuditIdHeader string
+
+	mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if h := r.Header.Get(utils.CurationAuditIdHeader); h != "" {
+			gotAuditIdHeader = h
+		}
+		w.WriteHeader(http.StatusForbidden)
+	})
+	defer mockServer.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"),
+		[]byte(`{"name":"root","dependencies":{"lodash":"4.17.21"}}`), 0o644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		ServerDetails:          serverDetails,
+		DependenciesRepository: "tst-yarn-repo",
+		ParallelRequests:       1,
+		AuditId:                wantAuditId,
+	}
+
+	_, totalProbed := probeBlockedDirectDeps(params, curWd, "")
+
+	assert.Equal(t, 1, totalProbed)
+	assert.Equal(t, wantAuditId, gotAuditIdHeader)
 }
 
 func TestRegisterYarnPluginInYarnrc(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,12 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
@@ -829,6 +832,36 @@ func TestCollectDeclaredPnpmDirectDepsForMember(t *testing.T) {
 // Pins the fix: only an actual 'pnpm install' failure should get curation framing — setup
 // errors (temp dir creation, project copy, initial lockfile stat) must propagate plainly,
 // mirroring yarn's tighter gate in resolveCurationLockfileDir.
+// Mirrors yarn's TestProbeBlockedDirectDepsSendsCurationAuditIdHeader — both wrappers delegate to the same npm.ProbeBlockedDirectDeps.
+func TestProbeBlockedPnpmDirectDepsSendsCurationAuditIdHeader(t *testing.T) {
+	const wantAuditId = "test-audit-id-123"
+	var gotAuditIdHeader string
+
+	mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if h := r.Header.Get(utils.CurationAuditIdHeader); h != "" {
+			gotAuditIdHeader = h
+		}
+		w.WriteHeader(http.StatusForbidden)
+	})
+	defer mockServer.Close()
+
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"),
+		[]byte(`{"name":"root","dependencies":{"lodash":"4.17.21"}}`), 0o644))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		ServerDetails:          serverDetails,
+		DependenciesRepository: "tst-pnpm-repo",
+		ParallelRequests:       1,
+		AuditId:                wantAuditId,
+	}
+
+	_, totalProbed := probeBlockedPnpmDirectDeps(params, curWd, "")
+
+	assert.Equal(t, 1, totalProbed)
+	assert.Equal(t, wantAuditId, gotAuditIdHeader)
+}
+
 func TestIsCurationInstallFailure(t *testing.T) {
 	t.Run("wrapped install failure is recognized and unwrapped", func(t *testing.T) {
 		underlying := errors.New("pnpm install --lockfile-only failed: exit status 1")
