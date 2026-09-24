@@ -70,12 +70,7 @@ func RenderReportTable(rows []ActionReportRow, withParent bool) string {
 // NotApproved returns every row whose Status is not exactly ActionApproved, for the command's
 // exit-code decision.
 //
-// An allow-list, deliberately, rather than a test for ActionRejected: ActionCurationStatus is an
-// open string type, so a status this code does not recognize - one a later decider introduces, or
-// the zero value of a result returned without one - would pass a deny-list while rendering as an
-// empty cell. Only an explicit approval may clear a gate whose purpose is to stop whatever it has
-// not cleared. This is not part of the mocked seam; the real decider replaces the verdict, not
-// the enforcement.
+// An allow-list, not a check for Rejected: an unknown or zero-value status must fail the gate too.
 func NotApproved(rows []ActionReportRow) []ActionReportRow {
 	var notApproved []ActionReportRow
 	for _, row := range rows {

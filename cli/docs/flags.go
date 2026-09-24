@@ -235,8 +235,8 @@ var commandFlags = map[string][]string{
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
 	},
-	// curate-gh-actions takes every input from the runner environment; it has no flags.
-	CurationActions: {},
+	// --threads only bounds how many actions are evaluated in parallel.
+	CurationActions: {Threads},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
 	},

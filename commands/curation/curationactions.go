@@ -7,7 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
+	"github.com/jfrog/gofrog/parallel"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -20,20 +24,34 @@ import (
 // CurationActionsCommand curates the GitHub Actions that actually resolved on this job's
 // runner, taking the runner's action cache as the source of truth.
 type CurationActionsCommand struct {
-	workingDir      string
-	actionsCacheDir string
-	workflowFile    string
-	jobID           string
-	githubRepo      string
-	decider         githubactions.ActionCurationDecider
-	vcsRepoResolver githubactions.ArtifactoryVcsRepoResolver
+	workingDir       string
+	actionsCacheDir  string
+	workflowFile     string
+	jobID            string
+	githubRepo       string
+	parallelRequests int
+	serverDetails    *config.ServerDetails
+	decider          githubactions.ActionCurationDecider
+	vcsRepoResolver  githubactions.ArtifactoryVcsRepoResolver
 }
 
 func NewCurationActionsCommand() *CurationActionsCommand {
 	return &CurationActionsCommand{
-		decider:         githubactions.NewMockActionCurationDecider(),
 		vcsRepoResolver: githubactions.NewMockArtifactoryVcsRepoResolver(),
 	}
+}
+
+// SetServerDetails sets the JFrog server details from jf config
+func (c *CurationActionsCommand) SetServerDetails(serverDetails *config.ServerDetails) *CurationActionsCommand {
+	c.serverDetails = serverDetails
+	return c
+}
+
+// SetParallelRequests bounds how many actions are decided at once - the --threads flag. Zero
+// falls back to the CLI's default thread count.
+func (c *CurationActionsCommand) SetParallelRequests(threads int) *CurationActionsCommand {
+	c.parallelRequests = threads
+	return c
 }
 
 // SetWorkingDir overrides the repo root; defaults to the process's working directory. No flag
@@ -77,7 +95,8 @@ func (c *CurationActionsCommand) SetVcsRepoResolver(resolver githubactions.Artif
 	return c
 }
 
-// SetDecider overrides the curation decider
+// SetDecider overrides the curation decider; Run otherwise builds the Artifactory decider from
+// the server details. It must be safe for concurrent use.
 func (c *CurationActionsCommand) SetDecider(decider githubactions.ActionCurationDecider) *CurationActionsCommand {
 	c.decider = decider
 	return c
@@ -87,22 +106,14 @@ func (c *CurationActionsCommand) CommandName() string {
 	return "curate_gh_actions"
 }
 
-// Run discovers the actions resolved on this job's runner, decides a curation outcome per
-// action, prints and records the report, and returns an error unless every action was Approved.
-// Only that exact status clears the gate - a rejection withholds the job, and so would a status
-// this code does not recognize, which is what keeps a future decider's unhandled outcome from
-// reading as a pass.
-//
-// If any action cannot be decided at all Run returns that error and produces no report and no job summary.
-//
-// With a workflow file cross-referencing entries for Parent and Subpath
-// metadata and rendering a Parent column; without one, STRUCTURE-ONLY.
+// Run curates every action in the runner's cache and fails unless all are Approved. Undetermined
+// actions are reported and fail the job; an access failure stops the run and returns only that
+// error, with no report.
 func (c *CurationActionsCommand) Run() (err error) {
 	// A one-shot CLI invocation, so this is the root of the call tree, and no deadline is imposed
 	// here. Artifactory carries a fail-open / fail-close setting that governs what happens when
 	// curation cannot reach a verdict - a timeout, or a decision service that is unreachable.
-	// Fetching that setting and honouring it lands with the real decision client; until then this
-	// command is unconditionally fail-closed.
+	// That setting is not fetched or honoured yet, so this command is unconditionally fail-closed.
 	ctx := context.Background()
 
 	workingDir := c.workingDir
@@ -139,25 +150,22 @@ func (c *CurationActionsCommand) Run() (err error) {
 	if attributed {
 		discovered, localUses = githubactions.CrossReference(discovered, used)
 	}
-	// Resolved once, after the early return above: a job with nothing to curate makes no call.
 	artifactoryVcsRepo, err := c.resolveArtifactoryVcsRepo(ctx)
 	if err != nil {
 		return err
 	}
 
-	rows := make([]githubactions.ActionReportRow, 0, len(discovered))
-	var decideErrs error
-	for _, ref := range discovered {
-		result, decideErr := c.decider.Decide(ctx, artifactoryVcsRepo, ref)
-		if decideErr != nil {
-			decideErrs = errors.Join(decideErrs, fmt.Errorf("deciding curation status for %s/%s@%s: %w", ref.Owner, ref.Repo, ref.Ref, decideErr))
-			continue
-		}
-		rows = append(rows, githubactions.NewActionReportRow(ref, result))
+	decider, err := c.resolveDecider()
+	if err != nil {
+		return err
 	}
-	if decideErrs != nil {
-		return decideErrs
+	outcome := c.decideAll(ctx, decider, artifactoryVcsRepo, discovered)
+	if outcome.accessErr != nil {
+		// Nothing is reported: the run stopped part-way, and a table of mostly-skipped actions
+		// would read as a verdict when none was reached.
+		return outcome.accessErr
 	}
+	rows := outcome.rows
 
 	curated := curatedActions(rows, attributed, localUses)
 	caveat := formats.RenderActionsException([]formats.CuratedActions{curated})
@@ -171,18 +179,138 @@ func (c *CurationActionsCommand) Run() (err error) {
 			"the curation section - the report above is the complete result: %v", recordErr))
 	}
 
-	if notApproved := githubactions.NotApproved(rows); len(notApproved) > 0 {
-		var msg strings.Builder
-		msg.WriteString("curation policy did not approve every GitHub Action this job resolved:")
-		for _, row := range notApproved {
-			fmt.Fprintf(&msg, "\n  %s@%s: status %q", row.Action, row.Ref, row.Status)
-			if row.Notes != "" {
-				fmt.Fprintf(&msg, " - %s", row.Notes)
-			}
+	return errors.Join(outcome.decideErr(), notApprovedError(outcome.decidedRows()))
+}
+
+// notApprovedError fails the gate unless every row is Approved. A decider that returns any status other than Approved,
+// without an error still fails the job.
+func notApprovedError(rows []githubactions.ActionReportRow) error {
+	var msg strings.Builder
+	for _, row := range githubactions.NotApproved(rows) {
+		if msg.Len() == 0 {
+			msg.WriteString("curation policy did not approve every GitHub Action this job resolved:")
 		}
-		return errors.New(msg.String())
+		fmt.Fprintf(&msg, "\n  %s@%s: status %q", row.Action, row.Ref, row.Status)
+		if row.Notes != "" {
+			fmt.Fprintf(&msg, " - %s", row.Notes)
+		}
+	}
+	if msg.Len() == 0 {
+		return nil
+	}
+	return errors.New(msg.String())
+}
+
+func (c *CurationActionsCommand) resolveDecider() (githubactions.ActionCurationDecider, error) {
+	if c.decider != nil {
+		return c.decider, nil
+	}
+	if err := RequireArtifactoryServer(c.serverDetails); err != nil {
+		return nil, err
+	}
+	return githubactions.NewArtifactoryActionCurationDecider(c.serverDetails)
+}
+
+// RequireArtifactoryServer fails when serverDetails names no Artifactory. With nothing in jf config
+// the CLI resolves an empty, non-nil ServerDetails rather than an error, so this checks the URL.
+func RequireArtifactoryServer(serverDetails *config.ServerDetails) error {
+	if serverDetails == nil || serverDetails.ArtifactoryUrl == "" {
+		return errorutils.CheckErrorf("no JFrog server is configured: run 'jf config add', or add jfrog/setup-jfrog-cli " +
+			"with JF_URL (or oidc-provider-name) before this step")
 	}
 	return nil
+}
+
+// decideOutcome is every action's decision, in discovery order.
+type decideOutcome struct {
+	rows []githubactions.ActionReportRow
+	// errs[i] is why no decision was reached for rows[i], or nil when one was. A failed row is
+	// reported Undetermined, with the error as its Notes.
+	errs []error
+	// accessErr is 401 for download apis and 403 from git refs api. Job stops when encountered.
+	// no report generated in this case.
+	accessErr error
+}
+
+// decideErr joins the error of every action no decision was reached for, or nil when every
+// action was decided.
+func (o decideOutcome) decideErr() error {
+	return errors.Join(o.errs...)
+}
+
+// decidedRows is every row a decision was reached for - the rows the approval gate judges. A
+// failed row is left out because decideErr already fails the run with its cause, and naming it a
+// second time as "status Undetermined" would bury that cause.
+func (o decideOutcome) decidedRows() []githubactions.ActionReportRow {
+	decided := make([]githubactions.ActionReportRow, 0, len(o.rows))
+	for i, row := range o.rows {
+		if o.errs[i] == nil {
+			decided = append(decided, row)
+		}
+	}
+	return decided
+}
+
+// decideAll decides every action with at most parallelRequests in flight at once.
+func (c *CurationActionsCommand) decideAll(ctx context.Context, decider githubactions.ActionCurationDecider,
+	artifactoryVcsRepo string, refs []githubactions.ActionRef) decideOutcome {
+	parallelRequests := c.parallelRequests
+	if parallelRequests <= 0 {
+		parallelRequests = cliutils.Threads
+	}
+	type decision struct {
+		result githubactions.ActionCurationResult
+		err    error
+	}
+	decisions := make([]decision, len(refs))
+	var stopped atomic.Bool
+	// Written only by the task that wins the CompareAndSwap, and read only after runner.Run
+	// returns, which is after every task has finished.
+	var accessErr error
+
+	runner := parallel.NewBounedRunner(parallelRequests, false)
+	go func() {
+		defer runner.Done()
+		for i, ref := range refs {
+			if stopped.Load() {
+				return
+			}
+			// AddTask fails only once the runner is cancelled, which this never does.
+			if _, err := runner.AddTask(func(int) error {
+				if stopped.Load() {
+					return nil
+				}
+				result, err := decider.Decide(ctx, artifactoryVcsRepo, ref)
+				decisions[i] = decision{result: result, err: err}
+				if errors.Is(err, githubactions.ErrAccessDenied) && stopped.CompareAndSwap(false, true) {
+					accessErr = err
+				}
+				return nil
+			}); err != nil {
+				// No task was queued for this action or any after it, so nothing else writes their
+				// slots. Recording the cause keeps each one a reported row rather than a blank.
+				for j := i; j < len(refs); j++ {
+					decisions[j].err = fmt.Errorf("not queued for a decision: %w", err)
+				}
+				return
+			}
+		}
+	}()
+	runner.Run()
+
+	if accessErr != nil {
+		return decideOutcome{accessErr: accessErr}
+	}
+	outcome := decideOutcome{rows: make([]githubactions.ActionReportRow, 0, len(refs)), errs: make([]error, len(refs))}
+	for i, ref := range refs {
+		d := decisions[i]
+		if d.err != nil {
+			outcome.errs[i] = fmt.Errorf("deciding curation status for %s/%s@%s: %w", ref.Owner, ref.Repo, ref.Ref, d.err)
+			d.result = githubactions.ActionCurationResult{Status: githubactions.ActionUndetermined, Notes: d.err.Error()}
+		}
+		outcome.rows = append(outcome.rows, githubactions.NewActionReportRow(ref, d.result))
+	}
+	return outcome
 }
 
 // parseWorkflowUses resolves which workflow file to attribute against, returning its uses:

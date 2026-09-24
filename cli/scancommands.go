@@ -660,9 +660,21 @@ func CurationCmd(c *components.Context) error {
 
 // CurationActionsCmd curates the GitHub Actions resolved on this job's runner.
 func CurationActionsCmd(c *components.Context) error {
-	// No flags: every input comes from the runner environment. The setters the command
-	// exposes are for tests, which construct it directly rather than through the CLI.
-	return curation.NewCurationActionsCommand().Run()
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
+	if err != nil {
+		return err
+	}
+	if err = curation.RequireArtifactoryServer(serverDetails); err != nil {
+		return err
+	}
+	return curation.NewCurationActionsCommand().
+		SetServerDetails(serverDetails).
+		SetParallelRequests(threads).
+		Run()
 }
 
 var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](
