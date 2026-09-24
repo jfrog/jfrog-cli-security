@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "poetry-project"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = { version = "^2.31", extras = ["socks"] }
+
+[tool.poetry.group.dev.dependencies]
+requests = ">=2.31,<2.32"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

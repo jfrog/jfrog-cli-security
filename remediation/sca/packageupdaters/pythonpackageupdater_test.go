@@ -87,6 +87,117 @@ func TestHandlePoetryTargetsGroupDependencyWithoutDuplicating(t *testing.T) {
 	assert.Equal(t, "2.32.4", lockedVersion)
 }
 
+func TestHandlePoetryFixesPep621ArrayEntryWithParensFormat(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "pep621-array-range")
+	defer cleanup()
+
+	originalManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+
+	updater := &PythonPackageUpdater{}
+	err = updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	fixedManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalManifest), string(fixedManifest), "the 'name (>=x,<y)' form Poetry 2 writes must be recognized, and the range already admits the fix so the file stays unchanged")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion)
+}
+
+func TestHandlePoetryPep621OnelineArrayLeavesOtherDependenciesIntact(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "pep621-oneline-array")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	manifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Contains(t, string(manifest), `"requests==2.32.4"`)
+	assert.Contains(t, string(manifest), `"flask (==3.0.0)"`, "a comma-range fix for one array entry must not swallow a sibling entry on the same line")
+}
+
+func TestHandlePoetryNormalizesNameAcrossManifestAndLock(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "name-separator-mismatch")
+	defer cleanup()
+
+	originalManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+
+	updater := &PythonPackageUpdater{}
+	err = updater.handlePoetry(createFixDetails(techutils.Poetry, "flask-cors", "3.0.0", "6.0.5", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	fixedManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalManifest), string(fixedManifest), "pyproject.toml keeps its own 'flask_cors' spelling even though the fix was requested as the normalized 'flask-cors'")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "flask-cors")
+	assert.NoError(t, err)
+	assert.Equal(t, "6.0.5", lockedVersion)
+}
+
+func TestHandlePoetryFixesEveryDeclarationOfTheSamePackage(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "multi-table-declaration")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	manifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Contains(t, string(manifest), `version = "2.32.4"`, "the main table declaration must be fixed")
+	assert.Contains(t, string(manifest), "requests = \"2.32.4\"", "the dev group's declaration must also be fixed, not left at a range that excludes the fix version")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion)
+}
+
+func TestHandlePoetryAcceptsSingleQuotedConstraint(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "single-quoted-constraint")
+	defer cleanup()
+
+	originalManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+
+	updater := &PythonPackageUpdater{}
+	err = updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	fixedManifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Equal(t, string(originalManifest), string(fixedManifest), "a single-quoted TOML string constraint must be recognized")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion)
+}
+
+func TestHandlePoetryAcceptsLockFileAsEvidence(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "range-admits-fix")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "poetry.lock"))
+	assert.NoError(t, err)
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion, "poetry.lock is the evidence file Xray actually reports - the fix must resolve pyproject.toml next to it")
+}
+
 func TestHandleUvSubstringCollisionSafe(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "uv", true, "substring-collision")

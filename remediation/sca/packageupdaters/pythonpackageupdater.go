@@ -66,14 +66,24 @@ const (
 // 'poetry update' (unscoped, installs without --lock) - see fixPoetryDependency for the
 // pin/update/restore-or-widen sequence and why the locked version is asserted directly.
 func (py *PythonPackageUpdater) handlePoetry(fixDetails *FixDetails) error {
-	descriptorPaths := py.CollectVulnerabilityDescriptorPaths(fixDetails, []string{poetryPyprojectFile}, nil)
+	descriptorPaths := py.CollectVulnerabilityDescriptorPaths(fixDetails, []string{poetryPyprojectFile, poetryLockFileName}, nil)
 	if len(descriptorPaths) == 0 {
 		return fmt.Errorf("no descriptor evidence was found for package %s", fixDetails.ImpactedDependencyName)
 	}
 
+	// Xray reports poetry.lock as the evidence file, not pyproject.toml - the
+	// fix always targets the manifest next to whichever of the two was found.
+	manifestPaths := make(map[string]bool)
+	for _, descriptorPath := range descriptorPaths {
+		if filepath.Base(descriptorPath) == poetryLockFileName {
+			descriptorPath = filepath.Join(filepath.Dir(descriptorPath), poetryPyprojectFile)
+		}
+		manifestPaths[descriptorPath] = true
+	}
+
 	var joinedErr error
 	var failingDescriptors []string
-	for _, descriptorPath := range descriptorPaths {
+	for descriptorPath := range manifestPaths {
 		if fixErr := py.fixPoetryDependency(fixDetails, descriptorPath); fixErr != nil {
 			var unsupported *ErrUnsupportedFix
 			if errors.As(fixErr, &unsupported) {
@@ -182,24 +192,65 @@ func (py *PythonPackageUpdater) fixPoetryDependency(fixDetails *FixDetails, desc
 	return nil
 }
 
-// pinPoetryDependency rewrites name's existing declaration to an exact pin at fixedVersion,
-// wherever it is: a bare string constraint, a table with extras (only the version= field is
-// touched), or a PEP 621 native array entry (Poetry 2.x's [project.dependencies]).
-func pinPoetryDependency(manifest, name, fixedVersion string) (string, error) {
-	escapedName := regexp.QuoteMeta(name)
-	quotedFixed := `"` + fixedVersion + `"`
+var pythonSeparatorRunRegex = regexp.MustCompile(`[-_.]+`)
 
-	if tableRe := regexp.MustCompile(`(?im)^(\s*` + escapedName + `\s*=\s*\{[^}]*?version\s*=\s*)"[^"]*"`); tableRe.MatchString(manifest) {
-		return tableRe.ReplaceAllString(manifest, "${1}"+quotedFixed), nil
+// normalizePythonPackageName applies PEP 503 normalization (lowercase, any run of
+// -, _ or . collapsed to a single -), which is how poetry.lock and the SBOM always
+// name a package regardless of which separator variant pyproject.toml used.
+func normalizePythonPackageName(name string) string {
+	return strings.ToLower(pythonSeparatorRunRegex.ReplaceAllString(name, "-"))
+}
+
+// pythonPackageNameManifestPattern matches name in pyproject.toml regardless of
+// which separator variant (-, _ or .) it was actually written with there, since
+// the name we're given is normalized but the manifest is free-form.
+func pythonPackageNameManifestPattern(name string) string {
+	parts := pythonSeparatorRunRegex.Split(normalizePythonPackageName(name), -1)
+	escapedParts := make([]string, len(parts))
+	for i, part := range parts {
+		escapedParts[i] = regexp.QuoteMeta(part)
 	}
-	if bareRe := regexp.MustCompile(`(?im)^(\s*` + escapedName + `\s*=\s*)"[^"]*"`); bareRe.MatchString(manifest) {
-		return bareRe.ReplaceAllString(manifest, "${1}"+quotedFixed), nil
+	return strings.Join(escapedParts, `[-_.]`)
+}
+
+// pythonQuotedValuePattern matches a "key = <value>" value in either quote style -
+// RE2 (Go's regexp engine) has no backreferences, so both styles are spelled out
+// rather than captured once and matched back.
+const pythonQuotedValuePattern = `(?:"[^"]*"|'[^']*')`
+
+// pinPoetryDependency rewrites every existing declaration of name to an exact pin at
+// fixedVersion, wherever it appears: a bare string constraint, a table with extras
+// (only the version= field is touched), or a PEP 621 native array entry (Poetry 2.x's
+// [project.dependencies], including the "name (>=x,<y)" form poetry add writes there).
+// All matching forms are rewritten, not just the first, since the same package can be
+// declared more than once (e.g. the main table and a dependency group).
+func pinPoetryDependency(manifest, name, fixedVersion string) (string, error) {
+	namePattern := pythonPackageNameManifestPattern(name)
+	quotedFixed := `"` + fixedVersion + `"`
+	result := manifest
+	changed := false
+
+	if tableRe := regexp.MustCompile(`(?im)^(\s*` + namePattern + `\s*=\s*\{[^}]*?version\s*=\s*)` + pythonQuotedValuePattern); tableRe.MatchString(result) {
+		result = tableRe.ReplaceAllString(result, "${1}"+quotedFixed)
+		changed = true
 	}
-	if arrayRe := regexp.MustCompile(PythonPackageRegexPrefix + pythonDependencyLeftBoundary + escapedName + PythonPackageRegexSuffix); arrayRe.MatchString(manifest) {
+	if bareRe := regexp.MustCompile(`(?im)^(\s*` + namePattern + `\s*=\s*)` + pythonQuotedValuePattern); bareRe.MatchString(result) {
+		result = bareRe.ReplaceAllString(result, "${1}"+quotedFixed)
+		changed = true
+	}
+	// Bounded by the entry's own closing quote/paren ([^"')]*), not the shared
+	// PythonPackageRegexSuffix - that suffix's range clause is meant for a single
+	// requirements.txt line and its unbounded .* swallows the rest of a oneline array.
+	if arrayRe := regexp.MustCompile(PythonPackageRegexPrefix + pythonDependencyLeftBoundary + namePattern + `\s*\(?\s*(?:[=<>~!]=|[<>])[^"')]*\)?`); arrayRe.MatchString(result) {
 		fixedPackage := strings.ToLower(name) + "==" + fixedVersion
-		return arrayRe.ReplaceAllString(manifest, "${1}"+fixedPackage), nil
+		result = arrayRe.ReplaceAllString(result, "${1}"+fixedPackage)
+		changed = true
 	}
-	return "", fmt.Errorf("impacted package %s not found in pyproject.toml, fix failed", name)
+
+	if !changed {
+		return "", fmt.Errorf("impacted package %s not found in pyproject.toml, fix failed", name)
+	}
+	return result, nil
 }
 
 // lockedPackageVersion reads the version poetry.lock actually recorded for name, so the fix
@@ -210,7 +261,7 @@ func lockedPackageVersion(lockPath, name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read '%s' to verify the locked version: %w", lockPath, err)
 	}
-	nameRe := regexp.MustCompile(`(?im)^name\s*=\s*"` + regexp.QuoteMeta(name) + `"\s*\n\s*version\s*=\s*"([^"]+)"`)
+	nameRe := regexp.MustCompile(`(?im)^name\s*=\s*"` + regexp.QuoteMeta(normalizePythonPackageName(name)) + `"\s*\n\s*version\s*=\s*"([^"]+)"`)
 	match := nameRe.FindStringSubmatch(string(data))
 	if match == nil {
 		return "", fmt.Errorf("could not find package '%s' in '%s' to verify the fix", name, lockPath)
