@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -865,4 +866,26 @@ func AppendDependencies(bom *cyclonedx.BOM, dependencies *[]cyclonedx.Dependency
 			}
 		}
 	}
+}
+
+// ExtractPackageVersionKeys builds the list of package identities (type/namespace/name/version) for every
+// component in the BOM that has a package URL, for use with Catalog APIs that require an explicit package list.
+func ExtractPackageVersionKeys(bom *cyclonedx.BOM) (packages []xrayutils.PackageVersionKey) {
+	if bom == nil || bom.Components == nil {
+		return
+	}
+	for _, component := range *bom.Components {
+		if component.PackageURL == "" {
+			continue
+		}
+		packageType, namespace, name, version, _ := techutils.SplitPackageUrlWithQualifiers(component.PackageURL)
+		packages = append(packages, xrayutils.PackageVersionKey{
+			Type:      packageType,
+			Namespace: namespace,
+			Name:      name,
+			Version:   version,
+			Ecosystem: xrayutils.GenericEcosystem,
+		})
+	}
+	return
 }

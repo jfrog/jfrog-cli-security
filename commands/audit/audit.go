@@ -1017,6 +1017,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 					return
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
+				ProjectKey:                  auditParams.resultsContext.ProjectKey,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                   auditParams.SastRules(),

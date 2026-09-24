@@ -5,6 +5,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
+	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1709,6 +1710,45 @@ func TestExclude(t *testing.T) {
 			} else {
 				assert.ElementsMatch(t, *tt.expected.Dependencies, *result.Dependencies, "Expected exclude dependencies do not match")
 			}
+		})
+	}
+}
+
+func TestExtractPackageVersionKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		bom      *cyclonedx.BOM
+		expected []xrayutils.PackageVersionKey
+	}{
+		{
+			name:     "Nil bom",
+			bom:      nil,
+			expected: nil,
+		},
+		{
+			name:     "No components",
+			bom:      &cyclonedx.BOM{},
+			expected: nil,
+		},
+		{
+			name: "Components with and without a purl, namespaced and non-namespaced",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{Name: "lodash", Version: "4.17.21", PackageURL: "pkg:npm/lodash@4.17.21"},
+					{Name: "core", Version: "1.0.0", PackageURL: "pkg:golang/github.com/jfrog/core@1.0.0"},
+					{Name: "no-purl", Version: "1.0.0"},
+				},
+			},
+			expected: []xrayutils.PackageVersionKey{
+				{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+				{Type: "golang", Namespace: "github.com/jfrog", Name: "core", Version: "1.0.0", Ecosystem: xrayutils.GenericEcosystem},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ExtractPackageVersionKeys(tt.bom))
 		})
 	}
 }
