@@ -1563,18 +1563,30 @@ func CdxEvidencesToPreferredLocation(component cyclonedx.Component) (location *f
 		}
 	}
 	// We need to pick the preferred location from the evidences (we prefer descriptors over lock files)
-	for _, occurrence := range *component.Evidence.Occurrences {
-		if techutils.IsTechnologyDescriptor(occurrence.Location) != techutils.NoTech {
-			return &formats.Location{
-				File: occurrence.Location,
-			}
-		}
+	if location := firstDescriptorLocation(*component.Evidence.Occurrences, false); location != nil {
+		return location
+	}
+	if location := firstDescriptorLocation(*component.Evidence.Occurrences, true); location != nil {
+		return location
 	}
 	// We take the first location as the main location
 	log.Debug(fmt.Sprintf("Multiple locations found for component %s evidence, using the first one as location", component.Name))
 	return &formats.Location{
 		File: (*component.Evidence.Occurrences)[0].Location,
 	}
+}
+
+func firstDescriptorLocation(occurrences []cyclonedx.EvidenceOccurrence, allowLockFile bool) *formats.Location {
+	for _, occurrence := range occurrences {
+		if techutils.IsTechnologyDescriptor(occurrence.Location) == techutils.NoTech {
+			continue
+		}
+		if !allowLockFile && techutils.IsLockFilePackageDescriptor(occurrence.Location) {
+			continue
+		}
+		return &formats.Location{File: occurrence.Location}
+	}
+	return nil
 }
 
 func getExternalReferencesUrls(component cyclonedx.Component) (externalReferences []string) {
