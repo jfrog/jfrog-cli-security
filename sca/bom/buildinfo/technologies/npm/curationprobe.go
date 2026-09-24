@@ -17,6 +17,7 @@ import (
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -294,6 +295,9 @@ func ProbeBlockedDirectDeps(params technologies.BuildInfoBomGeneratorParams, dec
 	}
 	// asks Artifactory to include curation policy details in the 403 body, matching the curation walker.
 	httpDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+	if params.AuditId != "" {
+		httpDetails.Headers[utils.CurationAuditIdHeader] = params.AuditId
+	}
 
 	parallelRequests := params.ParallelRequests
 	if parallelRequests == 0 {

@@ -24,6 +24,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
+	"github.com/google/uuid"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -2165,6 +2166,55 @@ func TestSendWaiverRequests(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunGeneratesAuditIdForHttpDetails(t *testing.T) {
+	curWd := t.TempDir()
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(curWd))
+	defer func() { require.NoError(t, os.Chdir(origWd)) }()
+
+	ca := NewCurationAuditCommand().SetWorkingDirs([]string{curWd})
+	require.NoError(t, ca.Run())
+
+	require.NotEmpty(t, ca.auditId)
+	_, parseErr := uuid.Parse(ca.auditId)
+	assert.NoError(t, parseErr)
+
+	rtAuth, err := (&config.ServerDetails{ArtifactoryUrl: "http://localhost/artifactory/"}).CreateArtAuthConfig()
+	require.NoError(t, err)
+	clientDetails := ca.createHttpClientDetails(rtAuth)
+	assert.Equal(t, ca.auditId, clientDetails.Headers[utils.CurationAuditIdHeader])
+}
+
+func TestSendWaiverRequestsSendsCurationAuditIdHeader(t *testing.T) {
+	const wantAuditId = "test-audit-id-456"
+	var gotAuditIdHeader string
+
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		gotAuditIdHeader = r.Header.Get(utils.CurationAuditIdHeader)
+		w.WriteHeader(http.StatusForbidden)
+		_, err := w.Write([]byte(`{"errors":[{"status":200,"message":"waiver-id|approved"}]}`))
+		assert.NoError(t, err)
+	}
+	mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+	defer mockServer.Close()
+
+	ca := &CurationAuditCommand{auditId: wantAuditId}
+	pkgs := []*PackageStatus{
+		{
+			BlockedPackageUrl: strings.ReplaceAll("http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+				"http://localhost:8046/", serverDetails.GetArtifactoryUrl()),
+			PackageName:    "rsc.io/sampler",
+			PackageVersion: "v1.3.0",
+		},
+	}
+
+	_, err := ca.sendWaiverRequests(pkgs, "Requesting waiver for testing", serverDetails)
+
+	assert.NoError(t, err)
+	assert.Equal(t, wantAuditId, gotAuditIdHeader)
 }
 
 // TestFetchNodesStatusConcurrentMapWrite reproduces crash
