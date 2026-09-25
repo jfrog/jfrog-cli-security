@@ -38,8 +38,8 @@ const (
 
 // vcsHTTPRequestTimeout bounds each request end to end, body included, so a stalled Artifactory
 // fails the action fast rather than holding the runner - billed by the minute - until the job's
-// own timeout. A variable so a test can shorten it.
-var vcsHTTPRequestTimeout = time.Minute
+// own timeout.
+const vcsHTTPRequestTimeout = time.Minute
 
 // ErrAccessDenied is wrapped when Artifactory refuses the configured credentials: a 401 from any
 // VCS API, or a 403 from getRefs. Every call in a run uses the same credentials and the same
@@ -82,10 +82,11 @@ type vcsClient struct {
 	refs       map[string]*RefAdvertisement
 }
 
-func newVCSClient(serverDetails *config.ServerDetails) (*vcsClient, error) {
+// newVCSClient builds a client whose every request, body included, is bounded by requestTimeout.
+func newVCSClient(serverDetails *config.ServerDetails, requestTimeout time.Duration) (*vcsClient, error) {
 	// The client must not retry: get does the one retry (vcsHTTPRetries), with jitter, and client
 	// retries would stack on top of it.
-	manager, err := rtUtils.CreateServiceManagerWithContext(context.Background(), serverDetails, false, 0, 0, 0, vcsHTTPRequestTimeout)
+	manager, err := rtUtils.CreateServiceManagerWithContext(context.Background(), serverDetails, false, 0, 0, 0, requestTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("creating the Artifactory client: %w", err)
 	}

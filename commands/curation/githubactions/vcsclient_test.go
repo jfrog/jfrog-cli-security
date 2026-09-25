@@ -26,12 +26,17 @@ const (
 // newTestVCSClient returns a client for a fake Artifactory served by handler.
 func newTestVCSClient(t *testing.T, handler http.Handler) *vcsClient {
 	t.Helper()
+	return newTestVCSClientWithTimeout(t, handler, vcsHTTPRequestTimeout)
+}
+
+func newTestVCSClientWithTimeout(t *testing.T, handler http.Handler, requestTimeout time.Duration) *vcsClient {
+	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	client, err := newVCSClient(&config.ServerDetails{
 		ArtifactoryUrl: server.URL + "/artifactory/",
 		AccessToken:    testAccessToken,
-	})
+	}, requestTimeout)
 	require.NoError(t, err)
 	return client
 }
@@ -87,7 +92,6 @@ func TestVCSClientGetRefs(t *testing.T) {
 			assert.False(t, errors.As(err, &blocked), "GetRefs() error = %v; a getRefs failure must never be a curation block", err)
 			if !tt.wantAnyErr {
 				require.NoError(t, err)
-				assert.Equal(t, "main", got.DefaultBranch)
 				assert.Equal(t, branchTip, got.Refs["refs/heads/main"])
 				return
 			}
@@ -307,14 +311,11 @@ func TestVCSClientTimesOutAStalledResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			original := vcsHTTPRequestTimeout
-			vcsHTTPRequestTimeout = 200 * time.Millisecond
-			t.Cleanup(func() { vcsHTTPRequestTimeout = original })
 			var calls atomic.Int32
-			client := newTestVCSClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			client := newTestVCSClientWithTimeout(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				tt.stall(w, r)
-			}))
+			}), 200*time.Millisecond)
 
 			body, _, err := client.Download(testRepoKey, "actions", "checkout", ResolvedRef{Kind: RefKindTag, APIRef: "v4"})
 			if err == nil {

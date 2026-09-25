@@ -8,7 +8,8 @@ type ActionCurationStatus string
 const (
 	ActionApproved ActionCurationStatus = "Approved"
 	ActionRejected ActionCurationStatus = "Rejected"
-	// ActionUndetermined to cover the cases of decider failures.
+	// ActionUndetermined is an action no decision could be reached for; it fails the gate like any
+	// status other than Approved.
 	ActionUndetermined ActionCurationStatus = "Undetermined"
 )
 

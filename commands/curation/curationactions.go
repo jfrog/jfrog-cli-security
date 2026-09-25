@@ -227,8 +227,7 @@ type decideOutcome struct {
 	// errs[i] is why no decision was reached for rows[i], or nil when one was. A failed row is
 	// reported Undetermined, with the error as its Notes.
 	errs []error
-	// accessErr is 401 for download apis and 403 from git refs api. Job stops when encountered.
-	// no report generated in this case.
+	// accessErr is the first ErrAccessDenied seen; it stops the run and no report is produced.
 	accessErr error
 }
 

@@ -133,8 +133,9 @@ func getAuditAndScansCommands() []components.Command {
 			Action:        CurationCmd,
 		},
 		{
-			// Hidden until Catalog/Artifactory add support for VCS package type for GitHub Actions. Until then the
-			// curation decision is a stand-in, so the command must not be discoverable to users.
+			// Hidden until Artifactory curates the VCS package type and the curation service exposes the
+			// GitHub-repository -> VCS-repository mapping. Until then the repository resolver is a stand-in and a
+			// download is not yet a policy decision, so the command must not be discoverable to users.
 			Name:          "curate-gh-actions",
 			Flags:         flags.GetCommandFlags(flags.CurationActions),
 			Description:   curationActionsDocs.GetDescription(),

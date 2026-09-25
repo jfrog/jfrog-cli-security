@@ -16,8 +16,10 @@ type artifactoryActionCurationDecider struct {
 	client *vcsClient
 }
 
+// NewArtifactoryActionCurationDecider returns a decider that downloads each action through the
+// Artifactory VCS repository; a successful download is the curation approval.
 func NewArtifactoryActionCurationDecider(serverDetails *config.ServerDetails) (ActionCurationDecider, error) {
-	client, err := newVCSClient(serverDetails)
+	client, err := newVCSClient(serverDetails, vcsHTTPRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -27,8 +29,8 @@ func NewArtifactoryActionCurationDecider(serverDetails *config.ServerDetails) (A
 // Decide classifies ref, downloads it from artifactoryVcsRepo on curation approval, writes
 // the served content over the runner's copy at ref.Path.
 //
-// Owner and Repo are handled as case-insensitive and ref is case-sensitive
-// and only an object ID is normalized
+// Owner and Repo are matched case-insensitively. The ref is case-sensitive; only a full object ID
+// is lower-cased.
 func (d *artifactoryActionCurationDecider) Decide(ctx context.Context, artifactoryVcsRepo string, ref ActionRef) (ActionCurationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return ActionCurationResult{}, err

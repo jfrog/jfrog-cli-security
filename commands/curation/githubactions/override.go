@@ -55,6 +55,11 @@ func ReplaceActionContent(actionDir string, archive io.Reader) (err error) {
 	if err != nil {
 		return fmt.Errorf("extracting the action archive for %q: %w", actionDir, err)
 	}
+	// TODO: a Docker action ('runs: using: docker') has its image pulled or built by the runner during
+	// job setup, from the content it downloaded. For a tag or branch ref, Artifactory may resolve to a
+	// different commit, so swapping the content alone leaves the job running an image built from the old
+	// content - the image must be rebuilt from the served content and replaced too. A commit ref serves
+	// the same tree, so its image already matches.
 	return swapDirectory(actionDir, extracted, filepath.Join(workDir, "previous"))
 }
 

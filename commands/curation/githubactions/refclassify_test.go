@@ -36,7 +36,6 @@ func testAdvertisement() *RefAdvertisement {
 			"refs/pull/2264/head":                   pullHead,
 			"refs/pull/2264/merge":                  pullMerge,
 		},
-		Peeled: map[string]string{"refs/tags/collision": tagCommit},
 	}
 }
 

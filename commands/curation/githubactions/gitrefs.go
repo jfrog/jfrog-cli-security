@@ -9,21 +9,17 @@ import (
 	"strings"
 )
 
-// RefAdvertisement is a parsed git smart-HTTP upload-pack reference advertisement
+// RefAdvertisement is the part of a git smart-HTTP upload-pack reference advertisement that ref
+// classification reads. Every record is parsed, but only refs/... records are kept and validated:
+// HEAD, peeled "<tag>^{}" records and the capabilities other than object-format are skipped, since
+// no ref an action can be pinned to resolves through them - uses: always names a ref, and the
+// download APIs peel annotated tags themselves.
 type RefAdvertisement struct {
 	// ObjectFormat is "sha1" or "sha256".
 	ObjectFormat string
-	// HEAD is the advertised HEAD object ID; empty for an empty repository.
-	HEAD string
-	// DefaultBranch is the short name of the branch HEAD points at, from the symref capability;
-	// empty when HEAD has no symref.
-	DefaultBranch string
 	// Refs maps each full ref name ("refs/heads/main", "refs/tags/v1", "refs/pull/1/head") to its
 	// advertised object ID. For an annotated tag this is the tag object, not the commit.
 	Refs map[string]string
-	// Peeled maps a full tag ref name to the object its annotated tag ultimately points at, from
-	// the "<ref>^{}" record. Absent for lightweight tags.
-	Peeled map[string]string
 }
 
 const (
@@ -33,7 +29,6 @@ const (
 
 	uploadPackServiceLine = "# service=git-upload-pack"
 	protocolVersion1      = "version 1"
-	emptyRepoCapabilities = "capabilities^{}"
 	peeledSuffix          = "^{}"
 
 	objectFormatSHA1   = "sha1"
@@ -42,7 +37,6 @@ const (
 	refsPrefix  = "refs/"
 	tagsPrefix  = "refs/tags/"
 	headsPrefix = "refs/heads/"
-	headRefName = "HEAD"
 )
 
 // ParseGitRefs parses a protocol v0/v1 upload-pack reference advertisement.
@@ -59,7 +53,6 @@ func ParseGitRefs(r io.Reader) (*RefAdvertisement, error) {
 	adv := &RefAdvertisement{
 		ObjectFormat: objectFormatSHA1,
 		Refs:         map[string]string{},
-		Peeled:       map[string]string{},
 	}
 	if err := readRefRecords(pr, adv); err != nil {
 		return nil, err
@@ -88,9 +81,9 @@ func readServiceHeader(pr *pktReader) error {
 	return nil
 }
 
-// readRefRecords reads every ref record up to and including the terminating flush.
+// readRefRecords reads every record up to and including the terminating flush, keeping the refs.
 func readRefRecords(pr *pktReader, adv *RefAdvertisement) error {
-	sawFirst, sawVersion, emptyRepo := false, false, false
+	sawFirst := false
 	for {
 		payload, flush, err := pr.next()
 		if err != nil {
@@ -103,25 +96,22 @@ func readRefRecords(pr *pktReader, adv *RefAdvertisement) error {
 			return nil
 		}
 		line := trimLF(payload)
-		if !sawFirst && !sawVersion && strings.HasPrefix(line, "version ") {
+		if !sawFirst && strings.HasPrefix(line, "version ") {
+			// A v2 response is a different format altogether and would be misread as refs.
 			if line != protocolVersion1 {
 				return fmt.Errorf("unsupported git protocol %q - only a v0/v1 advertisement is understood", line)
 			}
-			sawVersion = true
 			continue
-		}
-		if emptyRepo {
-			return errors.New("git refs advertisement lists a ref after the empty-repository record")
 		}
 		if !sawFirst {
 			sawFirst = true
-			if emptyRepo, err = parseFirstRecord(line, adv); err != nil {
+			// Only the first record carries capabilities, after a NUL; they must be read before
+			// any record, since object-format sets the object ID length.
+			var capList string
+			line, capList, _ = strings.Cut(line, "\x00")
+			if err = applyObjectFormat(capList, adv); err != nil {
 				return err
 			}
-			continue
-		}
-		if strings.IndexByte(line, 0) >= 0 {
-			return errors.New("git refs record other than the first carries a NUL")
 		}
 		if err = addRefRecord(line, adv); err != nil {
 			return err
@@ -129,103 +119,40 @@ func readRefRecords(pr *pktReader, adv *RefAdvertisement) error {
 	}
 }
 
-// parseFirstRecord handles the first ref record, which alone carries the capability list after
-// a NUL. It reports whether the record is the synthetic one an empty repository sends.
-func parseFirstRecord(line string, adv *RefAdvertisement) (emptyRepo bool, err error) {
-	record, capList, found := strings.Cut(line, "\x00")
-	if !found {
-		return false, errors.New("first git refs record has no NUL-delimited capability list")
-	}
-	if strings.IndexByte(capList, 0) >= 0 {
-		return false, errors.New("first git refs record carries more than one NUL")
-	}
-	if err = applyCapabilities(capList, adv); err != nil {
-		return false, err
-	}
-	oid, name, err := splitRecord(record)
-	if err != nil {
-		return false, err
-	}
-	if name == emptyRepoCapabilities {
-		if oid != zeroObjectID(adv.ObjectFormat) {
-			return false, fmt.Errorf("empty-repository record has non-zero object ID %q", oid)
-		}
-		// Neither a ref nor a peeled tag: the record exists only to carry the capabilities.
-		return true, nil
-	}
-	return false, addRefRecord(record, adv)
-}
-
-// applyCapabilities reads object-format and symref from the space-delimited capability list,
-// ignoring any other well-formed capability so a server adding one does not break the parse.
-func applyCapabilities(capList string, adv *RefAdvertisement) error {
-	sawFormat, sawHeadSymref := false, false
+// applyObjectFormat reads object-format from the space-delimited capability list; it defaults to
+// sha1 when absent. Every other capability is ignored.
+func applyObjectFormat(capList string, adv *RefAdvertisement) error {
+	sawFormat := false
 	for _, token := range strings.Split(capList, " ") {
-		key, value, hasValue := strings.Cut(token, "=")
-		if !validCapabilityKey(key) {
-			return fmt.Errorf("malformed git capability %q", token)
+		value, isFormat := strings.CutPrefix(token, "object-format=")
+		if !isFormat {
+			continue
 		}
-		switch key {
-		case "object-format":
-			if !hasValue || (value != objectFormatSHA1 && value != objectFormatSHA256) {
-				return fmt.Errorf("unsupported git object format %q", value)
-			}
-			if sawFormat && adv.ObjectFormat != value {
-				return fmt.Errorf("conflicting git object formats %q and %q", adv.ObjectFormat, value)
-			}
-			adv.ObjectFormat, sawFormat = value, true
-		case "symref":
-			source, target, ok := strings.Cut(value, ":")
-			if !hasValue || !ok {
-				return fmt.Errorf("malformed git symref capability %q", token)
-			}
-			if source != headRefName {
-				// Only HEAD's symref is meaningful here; others are ignored like unknown capabilities.
-				continue
-			}
-			if sawHeadSymref {
-				return errors.New("git refs advertisement carries more than one symref for HEAD")
-			}
-			branch, isBranch := strings.CutPrefix(target, headsPrefix)
-			if !isBranch || branch == "" || !validRefName(target) {
-				return fmt.Errorf("git symref for HEAD targets %q, not a branch", target)
-			}
-			adv.DefaultBranch, sawHeadSymref = branch, true
+		if value != objectFormatSHA1 && value != objectFormatSHA256 {
+			return fmt.Errorf("unsupported git object format %q", value)
 		}
+		if sawFormat && adv.ObjectFormat != value {
+			return fmt.Errorf("conflicting git object formats %q and %q", adv.ObjectFormat, value)
+		}
+		adv.ObjectFormat, sawFormat = value, true
 	}
 	return nil
 }
 
-// addRefRecord stores one "<object-id> SP <ref-name>" record.
+// addRefRecord stores one "<object-id> SP <ref-name>" record when it is a refs/... ref; any other
+// record - HEAD, a peeled "^{}" record, an empty repository's "capabilities^{}" - is skipped.
 func addRefRecord(record string, adv *RefAdvertisement) error {
 	oid, name, err := splitRecord(record)
 	if err != nil {
 		return err
 	}
+	if !strings.HasPrefix(name, refsPrefix) || strings.HasSuffix(name, peeledSuffix) {
+		return nil
+	}
 	if err = validateObjectID(oid, adv.ObjectFormat); err != nil {
 		return fmt.Errorf("git ref %q: %w", name, err)
 	}
-	if name == headRefName {
-		if adv.HEAD != "" {
-			return errors.New("git refs advertisement lists HEAD more than once")
-		}
-		adv.HEAD = oid
-		return nil
-	}
-	if base, peeled := strings.CutSuffix(name, peeledSuffix); peeled {
-		if !strings.HasPrefix(base, tagsPrefix) {
-			return fmt.Errorf("peeled git ref %q is not a tag", name)
-		}
-		if _, known := adv.Refs[base]; !known {
-			return fmt.Errorf("peeled git ref %q has no preceding tag record", name)
-		}
-		if _, dup := adv.Peeled[base]; dup {
-			return fmt.Errorf("peeled git ref %q appears more than once", name)
-		}
-		adv.Peeled[base] = oid
-		return nil
-	}
-	if !strings.HasPrefix(name, refsPrefix) || !validRefName(name) {
+	if !validRefName(name) {
 		return fmt.Errorf("invalid git ref name %q", name)
 	}
 	if _, dup := adv.Refs[name]; dup {
@@ -267,19 +194,6 @@ func zeroObjectID(objectFormat string) string {
 func isLowerHex(s string) bool {
 	for i := range len(s) {
 		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
-func validCapabilityKey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for i := range len(key) {
-		c := key[i]
-		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '_' && c != '.' {
 			return false
 		}
 	}
