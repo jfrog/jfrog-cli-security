@@ -256,7 +256,9 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		if params.ScanResults.ScaResults != nil {
 			var pathsErr error
 			if indirectCvePaths, pathsErr = catalogutils.GetIndirectCvePaths(params.ServerDetails, params.ProjectKey, indirectCves, params.ScanResults.ScaResults.Sbom); pathsErr != nil {
-				log.Warn(clientutils.GetLogMsgPrefix(threadId, false) + "failed to get indirect CVE contextual paths from Catalog, continuing without them: " + pathsErr.Error())
+				log.Warn("failed to get indirect CVE contextual paths from Catalog, continuing without them: " + pathsErr.Error())
+			} else {
+				log.Debug("fetched indirect CVE contextual paths from Catalog for %d/%d indirect CVEs", len(indirectCvePaths), len(indirectCves))
 			}
 		}
 		// Run the applicability scan only if we have cves to scan.
