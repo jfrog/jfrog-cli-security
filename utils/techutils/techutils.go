@@ -246,7 +246,7 @@ var technologiesData = map[Technology]TechData{
 		xrayPackageType:            Pypi,
 		indicators:                 []string{"pyproject.toml", "poetry.lock"},
 		validators:                 map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Poetry)},
-		packageDescriptors:         []string{"pyproject.toml"},
+		packageDescriptors:         []string{"pyproject.toml", "poetry.lock"},
 		packageInstallationCommand: "add",
 		packageVersionOperator:     "==",
 		projectType:                project.Poetry,
