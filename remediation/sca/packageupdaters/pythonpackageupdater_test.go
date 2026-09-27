@@ -198,6 +198,56 @@ func TestHandlePoetryAcceptsLockFileAsEvidence(t *testing.T) {
 	assert.Equal(t, "2.32.4", lockedVersion, "poetry.lock is the evidence file Xray actually reports - the fix must resolve pyproject.toml next to it")
 }
 
+func TestHandlePoetryPep621ArrayEntryPreservesExtras(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "pep621-extras")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion, "the '[socks]' extras marker must not prevent the fix from being recognized")
+}
+
+func TestHandlePoetryPep621ArrayEntryPreservesEnvironmentMarker(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "pep621-marker")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "requests", "2.31.0", "2.32.4", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	manifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Contains(t, string(manifest), `python_version >= '3.9'`, "the environment marker must survive the fix, not be truncated into invalid TOML")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "requests")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.32.4", lockedVersion)
+}
+
+func TestHandlePoetryFixesEveryMultipleConstraintsBranch(t *testing.T) {
+	integration.InitRemediationTest(t)
+	cleanup := createTempDirAndChdir(t, "poetry", true, "multi-constraint")
+	defer cleanup()
+
+	updater := &PythonPackageUpdater{}
+	err := updater.handlePoetry(createFixDetails(techutils.Poetry, "numpy", "1.24.4", "2.0.0", true, "pyproject.toml"))
+	assert.NoError(t, err)
+
+	manifest, err := os.ReadFile("pyproject.toml")
+	assert.NoError(t, err)
+	assert.Equal(t, 2, strings.Count(string(manifest), `version = "2.0.0"`), "both python-specific branches of a multiple-constraints dependency must be fixed")
+
+	lockedVersion, err := lockedPackageVersion("poetry.lock", "numpy")
+	assert.NoError(t, err)
+	assert.Equal(t, "2.0.0", lockedVersion)
+}
+
 func TestHandleUvSubstringCollisionSafe(t *testing.T) {
 	integration.InitRemediationTest(t)
 	cleanup := createTempDirAndChdir(t, "uv", true, "substring-collision")

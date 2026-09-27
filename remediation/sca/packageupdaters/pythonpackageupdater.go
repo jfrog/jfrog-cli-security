@@ -218,6 +218,13 @@ func pythonPackageNameManifestPattern(name string) string {
 // rather than captured once and matched back.
 const pythonQuotedValuePattern = `(?:"[^"]*"|'[^']*')`
 
+// pythonExtrasPattern matches an optional PEP 508 extras marker, e.g. "[socks]" in
+// "requests[socks] (>=2.31.0,<3.0.0)" - poetry add writes this form for `poetry add
+// requests[socks]`, and it must survive a fix untouched.
+const pythonExtrasPattern = `(?:\[[^\]]*\])?`
+
+const pythonVersionOperatorPattern = `(?:[=<>~!]=|[<>])`
+
 // pinPoetryDependency rewrites every existing declaration of name to an exact pin at
 // fixedVersion, wherever it appears: a bare string constraint, a table with extras
 // (only the version= field is touched), or a PEP 621 native array entry (Poetry 2.x's
@@ -238,13 +245,31 @@ func pinPoetryDependency(manifest, name, fixedVersion string) (string, error) {
 		result = bareRe.ReplaceAllString(result, "${1}"+quotedFixed)
 		changed = true
 	}
-	// Bounded by the entry's own closing quote/paren ([^"')]*), not the shared
-	// PythonPackageRegexSuffix - that suffix's range clause is meant for a single
-	// requirements.txt line and its unbounded .* swallows the rest of a oneline array.
-	if arrayRe := regexp.MustCompile(PythonPackageRegexPrefix + pythonDependencyLeftBoundary + namePattern + `\s*\(?\s*(?:[=<>~!]=|[<>])[^"')]*\)?`); arrayRe.MatchString(result) {
-		fixedPackage := strings.ToLower(name) + "==" + fixedVersion
-		result = arrayRe.ReplaceAllString(result, "${1}"+fixedPackage)
-		changed = true
+	// Poetry's multiple-constraints-dependencies form: name = [{...}, {...}], each an
+	// inline table for a different python/platform range - every version= field inside
+	// is pinned, since a vulnerability fix must hold regardless of which one resolves.
+	if groupRe := regexp.MustCompile(`(?ims)^(\s*` + namePattern + `\s*=\s*\[)(.*?)(\n?[ \t]*\])`); groupRe.MatchString(result) {
+		versionFieldRe := regexp.MustCompile(`(version\s*=\s*)` + pythonQuotedValuePattern)
+		if match := groupRe.FindStringSubmatch(result); match != nil && versionFieldRe.MatchString(match[2]) {
+			result = groupRe.ReplaceAllStringFunc(result, func(block string) string {
+				m := groupRe.FindStringSubmatch(block)
+				return m[1] + versionFieldRe.ReplaceAllString(m[2], "${1}"+quotedFixed) + m[3]
+			})
+			changed = true
+		}
+	}
+	// PEP 621 array entry, e.g. "requests[socks] (>=2.31.0,<3.0.0)" - matched per quote
+	// style so the exclusion class only protects the entry's own closing quote, letting
+	// a marker's opposite-style quote (e.g. '3.9') appear freely inside.
+	for _, quote := range []string{`"`, `'`} {
+		excludeQuote := `[^` + quote + `);]`
+		pattern := PythonPackageRegexPrefix + pythonDependencyLeftBoundary +
+			quote + `(` + namePattern + pythonExtrasPattern + `)\s*\(?\s*` + pythonVersionOperatorPattern +
+			excludeQuote + `*\)?(;[^` + quote + `]*)?` + quote
+		if arrayRe := regexp.MustCompile(pattern); arrayRe.MatchString(result) {
+			result = arrayRe.ReplaceAllString(result, "${1}"+quote+"${2}=="+fixedVersion+"${3}"+quote)
+			changed = true
+		}
 	}
 
 	if !changed {
