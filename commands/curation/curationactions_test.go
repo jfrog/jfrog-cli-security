@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -816,10 +817,13 @@ func TestCurationActionsCommand_Run_UnreadableWorkflowFileFallsBackRatherThanFai
 	// file. It reaches the command as neither ErrNotExist nor a parse error, which is the one
 	// route that used to abort the run. Curation is the job, so it degrades like every other
 	// workflow-file problem.
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Chmod on Windows only toggles the read-only attribute, so reads are not denied and the failure cannot be produced")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: file permissions do not deny access, so the failure cannot be produced")
 	}
-	pinRunnerEnv(t, testGithubRepo, "", "")
+	pinRunnerEnv(t, testGithubRepo, derivedWorkflowRef, "")
 	decider := &scriptedDecider{}
 	spec := runnerSpec{
 		cacheDirs:          []string{"actions/checkout/v4"},
@@ -827,7 +831,7 @@ func TestCurationActionsCommand_Run_UnreadableWorkflowFileFallsBackRatherThanFai
 		unreadableWorkflow: true,
 	}
 
-	report, err := captureReport(t, spec.newCommand(t, writtenWorkflowFile, "build", decider))
+	report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "build", decider))
 
 	require.NoError(t, err, "a job gated on this command must not fail because the workflow file could not be opened")
 	assert.Equal(t, []string{"actions/checkout@v4"}, decider.asked, "the cache is curated in full regardless")
