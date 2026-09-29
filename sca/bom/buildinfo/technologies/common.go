@@ -49,7 +49,9 @@ type BuildInfoBomGeneratorParams struct {
 	Args               []string
 	InstallCommandArgs []string
 	// Curation params
-	IsCurationCmd        bool
+	IsCurationCmd bool
+	// AuditId is the curation run's audit ID, forwarded to probes that make their own HTTP requests (e.g. npm/yarn direct-dep probing) so they tag those requests the same way as the main audit flow.
+	AuditId              string
 	MvnIncludePluginDeps bool
 	ParallelRequests     int
 	// OutputFormat is the --format flag value forwarded from the curation command.

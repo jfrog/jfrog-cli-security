@@ -27,6 +27,15 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	CurationSupportFlag = "JFROG_CLI_CURATION"
+
+	// #nosec G101 -- Not credentials.
+	// CurationAuditIdHeader carries one ID per `jf ca` run so Xray can batch its notifications into one email; lives here, not commands/curation, to avoid an import cycle from sca/bom.
+	CurationAuditIdHeader = "X-Artifactory-Curation-Run-Id"
+
+	// CurationSourceHeader identifies traffic originating from `jf curation-audit`.
+	CurationSourceHeader = "X-Artifactory-Curation-Source"
+	// CurationSourceJfCurationAudit is the CurationSourceHeader value sent by this CLI command.
+	CurationSourceJfCurationAudit = "jf-curation-audit"
 )
 
 func getJfrogCurationFolder() (string, error) {
