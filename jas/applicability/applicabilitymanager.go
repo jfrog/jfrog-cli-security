@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	catalogServices "github.com/jfrog/jfrog-client-go/catalog/services"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -31,6 +32,7 @@ type ApplicabilityScanType string
 type ApplicabilityScanManager struct {
 	directDependenciesCves   []string
 	indirectDependenciesCves []string
+	indirectCvePaths         map[string]catalogServices.IndirectContextualResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
 	commandType              string
@@ -41,6 +43,7 @@ type ApplicabilityScanManager struct {
 type ContextualAnalysisScanParams struct {
 	DirectDependenciesCves       []string
 	IndirectDependenciesCves     []string
+	IndirectCvePaths             map[string]catalogServices.IndirectContextualResponse
 	ScanType                     ApplicabilityScanType
 	ThirdPartyContextualAnalysis bool
 	ThreadId                     int
@@ -58,7 +61,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), params.ThreadId); err != nil {
 		return
 	}
-	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
+	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, params.IndirectCvePaths, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
 		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
@@ -86,10 +89,11 @@ func (applicabilityScanManager *ApplicabilityScanManager) runApplicabilityScan(p
 	return
 }
 
-func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCves []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
+func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCves []string, indirectCvePaths map[string]catalogServices.IndirectContextualResponse, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	return &ApplicabilityScanManager{
 		directDependenciesCves:   directDependenciesCves,
 		indirectDependenciesCves: indirectDependenciesCves,
+		indirectCvePaths:         indirectCvePaths,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
 		commandType:              string(scanType),
@@ -127,14 +131,66 @@ type applicabilityScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots                []string `yaml:"roots"`
-	Output               string   `yaml:"output"`
-	Type                 string   `yaml:"type"`
-	GrepDisable          bool     `yaml:"grep-disable"`
-	CveWhitelist         []string `yaml:"cve-whitelist"`
-	IndirectCveWhitelist []string `yaml:"indirect-cve-whitelist"`
-	SkippedDirs          []string `yaml:"skipped-folders"`
-	ScanType             string   `yaml:"scantype"`
+	Roots                []string                      `yaml:"roots"`
+	Output               string                        `yaml:"output"`
+	Type                 string                        `yaml:"type"`
+	GrepDisable          bool                          `yaml:"grep-disable"`
+	CveWhitelist         []string                      `yaml:"cve-whitelist"`
+	IndirectCveWhitelist []string                      `yaml:"indirect-cve-whitelist"`
+	IndirectCvePaths     map[string]indirectCveContext `yaml:"indirect-cve-paths,omitempty"`
+	SkippedDirs          []string                      `yaml:"skipped-folders"`
+	ScanType             string                        `yaml:"scantype"`
+}
+
+// indirectCvePathNode is a single node (package + implicated function) in a dependency path leading to an indirect CVE's vulnerable package.
+type indirectCvePathNode struct {
+	Type      string `yaml:"type"`
+	Namespace string `yaml:"namespace,omitempty"`
+	Name      string `yaml:"name"`
+	Version   string `yaml:"version"`
+	Function  string `yaml:"function"`
+}
+
+// indirectCveContext is the per-indirect-CVE contextual analysis data obtained from Catalog: the vulnerable
+// package, the function(s) involved, and the dependency path(s) reaching it.
+type indirectCveContext struct {
+	Type      string                  `yaml:"type"`
+	Namespace string                  `yaml:"namespace,omitempty"`
+	Name      string                  `yaml:"name"`
+	Version   string                  `yaml:"version"`
+	Functions []string                `yaml:"functions,omitempty"`
+	Paths     [][]indirectCvePathNode `yaml:"paths,omitempty"`
+}
+
+func toIndirectCveContextConfig(paths map[string]catalogServices.IndirectContextualResponse) map[string]indirectCveContext {
+	if len(paths) == 0 {
+		return nil
+	}
+	config := make(map[string]indirectCveContext, len(paths))
+	for cve, response := range paths {
+		context := indirectCveContext{
+			Type:      response.Type,
+			Namespace: response.Namespace,
+			Name:      response.Name,
+			Version:   response.Version,
+			Functions: response.Functions,
+		}
+		for _, path := range response.Paths {
+			var pathNodes []indirectCvePathNode
+			for _, node := range path {
+				pathNodes = append(pathNodes, indirectCvePathNode{
+					Type:      node.Type,
+					Namespace: node.Namespace,
+					Name:      node.Name,
+					Version:   node.Version,
+					Function:  node.Function,
+				})
+			}
+			context.Paths = append(context.Paths, pathNodes)
+		}
+		config[cve] = context
+	}
+	return config
 }
 
 func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.ScanTarget) error {
@@ -152,6 +208,7 @@ func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.Sc
 				GrepDisable:          false,
 				CveWhitelist:         asm.directDependenciesCves,
 				IndirectCveWhitelist: asm.indirectDependenciesCves,
+				IndirectCvePaths:     toIndirectCveContextConfig(asm.indirectCvePaths),
 				SkippedDirs:          excludePatterns,
 			},
 		},

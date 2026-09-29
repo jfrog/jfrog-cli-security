@@ -13,8 +13,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	catalogServices "github.com/jfrog/jfrog-client-go/catalog/services"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
 
 var mockDirectDependencies = []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}
@@ -25,7 +28,7 @@ func TestNewApplicabilityScanManager_InputIsValid(t *testing.T) {
 	defer cleanUp()
 	// Act
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -40,7 +43,7 @@ func TestNewApplicabilityScanManager_DependencyTreeDoesntExist(t *testing.T) {
 	defer cleanUp()
 	// Act
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, nil)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "tempDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "tempDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -77,10 +80,10 @@ func TestNewApplicabilityScanManager_NoDirectDependenciesInScan(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(noDirectDependenciesResults, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
 	assertApplicabilityScanner(t, applicabilityManager)
 	// ThirdPartyContextual shouldn't change anything here as this is not npm.
-	applicabilityManager = newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, true, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager = newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, true, ApplicabilityScannerType, "temoDirPath")
 	assertApplicabilityScanner(t, applicabilityManager)
 }
 
@@ -99,7 +102,7 @@ func TestNewApplicabilityScanManager_MultipleDependencyTrees(t *testing.T) {
 	defer cleanUp()
 	// Act
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockMultiRootDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -126,7 +129,7 @@ func TestNewApplicabilityScanManager_ViolationsDontExistInResults(t *testing.T) 
 
 	// Act
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(noViolationScanResponse, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -153,7 +156,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 
 	// Act
 	directComponentsCves, inDirectComponentsCves := results.ExtractCvesFromScanResponse(noVulnerabilitiesScanResponse, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(directComponentsCves, inDirectComponentsCves, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -171,7 +174,7 @@ func TestApplicabilityScan_CreateDeprecatedConfigFile_VerifyFileWasCreated(t *te
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability), 0)
 	require.NoError(t, err)
 	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"})
-	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, nil, scanner, false, ApplicabilityScannerType, scannerTempDir)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -196,7 +199,7 @@ func TestApplicabilityScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
 	require.NoError(t, err)
 	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, nil, scanner, false, ApplicabilityScannerType, scannerTempDir)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -212,6 +215,69 @@ func TestApplicabilityScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
 	assert.NoError(t, err)
 	assert.True(t, len(fileContent) > 0)
+}
+
+func TestApplicabilityScan_CreateConfigFile_IndirectCvePaths(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
+	require.NoError(t, err)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
+	indirectCvePaths := map[string]catalogServices.IndirectContextualResponse{
+		"CVE-2021-1234": {
+			PackageVersionKey: xrayutils.PackageVersionKey{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+			Functions:         []string{"merge"},
+			Paths: [][]catalogServices.IndirectContextualPathEntry{
+				{
+					{PackageVersionKey: xrayutils.PackageVersionKey{Type: "npm", Name: "some-lib", Version: "1.2.3"}, Function: "doStuff"},
+					{PackageVersionKey: xrayutils.PackageVersionKey{Type: "npm", Name: "lodash", Version: "4.17.21"}, Function: "merge"},
+				},
+			},
+		},
+	}
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, indirectCvePaths, scanner, false, ApplicabilityScannerType, scannerTempDir)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}))
+	defer func() {
+		assert.NoError(t, os.Remove(applicabilityManager.configFileName))
+	}()
+
+	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
+	assert.NoError(t, err)
+
+	var parsedConfig applicabilityScanConfig
+	require.NoError(t, yaml.Unmarshal(fileContent, &parsedConfig))
+	require.Len(t, parsedConfig.Scans, 1)
+	require.Contains(t, parsedConfig.Scans[0].IndirectCvePaths, "CVE-2021-1234")
+	cveContext := parsedConfig.Scans[0].IndirectCvePaths["CVE-2021-1234"]
+	assert.Equal(t, "lodash", cveContext.Name)
+	assert.Equal(t, []string{"merge"}, cveContext.Functions)
+	require.Len(t, cveContext.Paths, 1)
+	require.Len(t, cveContext.Paths[0], 2)
+	assert.Equal(t, "some-lib", cveContext.Paths[0][0].Name)
+	assert.Equal(t, "doStuff", cveContext.Paths[0][0].Function)
+}
+
+func TestApplicabilityScan_CreateConfigFile_NoIndirectCvePaths(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
+	require.NoError(t, err)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, nil, scanner, false, ApplicabilityScannerType, scannerTempDir)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}))
+	defer func() {
+		assert.NoError(t, os.Remove(applicabilityManager.configFileName))
+	}()
+
+	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(fileContent), "indirect-cve-paths")
 }
 
 func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
@@ -254,7 +320,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability), 0)
 	require.NoError(t, err)
 	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
-	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, nil, scanner, false, ApplicabilityScannerType, scannerTempDir)
 
 	// Act
 	for _, tc := range testCases {

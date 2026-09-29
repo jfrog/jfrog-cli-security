@@ -13,8 +13,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	servicesScan "github.com/jfrog/jfrog-cli-security/jas/services"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	catalogutils "github.com/jfrog/jfrog-cli-security/utils/catalog"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	catalogServices "github.com/jfrog/jfrog-client-go/catalog/services"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
@@ -44,6 +46,7 @@ type JasRunnerParams struct {
 	CvesProvider                CveProvider
 	ApplicableScanType          applicability.ApplicabilityScanType
 	ThirdPartyApplicabilityScan bool
+	ProjectKey                  string
 	// SAST scan flags
 	SastChangedFilesMode bool
 	SignedDescriptions   bool
@@ -248,11 +251,22 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		params.Runner.ScaScansWg.Wait()
 		// Get the direct and indirect cves from the sca scan.
 		directCves, indirectCves := params.CvesProvider()
+		// Get the contextual (reachability) paths for the indirect cves from Catalog, if we have a resolved SBOM to derive the package list from.
+		var indirectCvePaths map[string]catalogServices.IndirectContextualResponse
+		if params.ScanResults.ScaResults != nil {
+			var pathsErr error
+			if indirectCvePaths, pathsErr = catalogutils.GetIndirectCvePaths(params.ServerDetails, params.ProjectKey, indirectCves, params.ScanResults.ScaResults.Sbom); pathsErr != nil {
+				log.Warn("failed to get indirect CVE contextual paths from Catalog, continuing without them: " + pathsErr.Error())
+			} else {
+				log.Debug(fmt.Sprintf("fetched indirect CVE contextual paths from Catalog for %d/%d indirect CVEs", len(indirectCvePaths), len(indirectCves)))
+			}
+		}
 		// Run the applicability scan only if we have cves to scan.
 		caScanResults, err := applicability.RunApplicabilityScan(
 			applicability.ContextualAnalysisScanParams{
 				DirectDependenciesCves:       directCves,
 				IndirectDependenciesCves:     indirectCves,
+				IndirectCvePaths:             indirectCvePaths,
 				ScanType:                     params.ApplicableScanType,
 				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
 				ThreadId:                     threadId,

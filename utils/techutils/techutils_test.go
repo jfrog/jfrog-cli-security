@@ -1063,6 +1063,45 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 	}
 }
 
+func TestDetectTechnologiesDescriptorsPoetryPep621WithoutLock(t *testing.T) {
+	root := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(`[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["requests==2.6.0"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+`), 0644))
+
+	detected, err := DetectTechnologiesDescriptors(root, false, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+	assert.Contains(t, detected, Poetry, "poetry-core in [build-system] must be recognized even without [tool.poetry] or poetry.lock")
+	assert.NotContains(t, detected, Pip, "must not also fall through to Pip's default-true branch")
+}
+
+func TestDetectTechnologiesDescriptorsPoetryCoreOutsideRequiresArrayDoesNotMatch(t *testing.T) {
+	root := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(`[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["requests==2.6.0"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = ["poetry-core>=2.2.1"]
+`), 0644))
+
+	detected, err := DetectTechnologiesDescriptors(root, false, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+	assert.Contains(t, detected, Pip, "a setuptools project must stay Pip regardless of a poetry-core dev-dependency elsewhere in the file")
+	assert.NotContains(t, detected, Poetry, "poetry-core outside the [build-system] requires array must not be treated as the build backend")
+}
+
 // TestDetectTechnologiesDescriptorsDoesNotPromoteYarnWorkspaceMembers pins
 // the scoping contract for the workspace-member detector fixup: the
 // generic file-based detector that 'jf audit', 'jf scan' etc. depend on

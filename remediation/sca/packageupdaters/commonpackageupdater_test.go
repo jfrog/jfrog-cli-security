@@ -92,7 +92,7 @@ func TestUpdateDependency(t *testing.T) {
 				descriptorsToCheck: []string{"requirements.txt"},
 			},
 			{
-				fixDetails:         createFixDetails(techutils.Poetry, "pyjwt", "", "2.4.0", true, ""),
+				fixDetails:         createFixDetails(techutils.Poetry, "pyjwt", "", "2.4.0", true, "pyproject.toml"),
 				fixSupported:       true,
 				descriptorsToCheck: []string{"pyproject.toml"},
 			},
