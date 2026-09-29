@@ -1,0 +1,5 @@
+name: 'CodeQL'
+description: 'Root action.yml - not composite, and must not be consulted when a subpath (e.g. analyze) is the one actually invoked'
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

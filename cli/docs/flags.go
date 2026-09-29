@@ -22,6 +22,7 @@ const (
 	DockerScan           = "docker scan"
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
+	CurationActions      = "curate-gh-actions"
 	GitAudit             = "git-audit"
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
@@ -234,6 +235,8 @@ var commandFlags = map[string][]string{
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit, UseIncludedBuilds, SolutionPath, DockerImageName, HuggingFaceModel, IncludeCachedPackages, MvnIncludePluginDeps, LegacyPeerDeps, RunNative, Script,
 	},
+	// curate-gh-actions takes every input from the runner environment; it has no flags.
+	CurationActions: {},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls, GitThreads, CacheValidity,
 	},
