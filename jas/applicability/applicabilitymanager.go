@@ -1,6 +1,7 @@
 package applicability
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -131,64 +132,38 @@ type applicabilityScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots                []string                      `yaml:"roots"`
-	Output               string                        `yaml:"output"`
-	Type                 string                        `yaml:"type"`
-	GrepDisable          bool                          `yaml:"grep-disable"`
-	CveWhitelist         []string                      `yaml:"cve-whitelist"`
-	IndirectCveWhitelist []string                      `yaml:"indirect-cve-whitelist"`
-	IndirectCvePaths     map[string]indirectCveContext `yaml:"indirect-cve-paths,omitempty"`
-	SkippedDirs          []string                      `yaml:"skipped-folders"`
-	ScanType             string                        `yaml:"scantype"`
+	Roots                []string          `yaml:"roots"`
+	Output               string            `yaml:"output"`
+	Type                 string            `yaml:"type"`
+	GrepDisable          bool              `yaml:"grep-disable"`
+	CveWhitelist         []string          `yaml:"cve-whitelist"`
+	IndirectCveWhitelist []string          `yaml:"indirect-cve-whitelist"`
+	TransitivePaths      map[string]string `yaml:"transitive_paths,omitempty"`
+	SkippedDirs          []string          `yaml:"skipped-folders"`
+	ScanType             string            `yaml:"scantype"`
 }
 
-// indirectCvePathNode is a single node (package + implicated function) in a dependency path leading to an indirect CVE's vulnerable package.
-type indirectCvePathNode struct {
-	Type      string `yaml:"type"`
-	Namespace string `yaml:"namespace,omitempty"`
-	Name      string `yaml:"name"`
-	Version   string `yaml:"version"`
-	Function  string `yaml:"function"`
-}
-
-// indirectCveContext is the per-indirect-CVE contextual analysis data obtained from Catalog: the vulnerable
-// package, the function(s) involved, and the dependency path(s) reaching it.
-type indirectCveContext struct {
-	Type      string                  `yaml:"type"`
-	Namespace string                  `yaml:"namespace,omitempty"`
-	Name      string                  `yaml:"name"`
-	Version   string                  `yaml:"version"`
-	Functions []string                `yaml:"functions,omitempty"`
-	Paths     [][]indirectCvePathNode `yaml:"paths,omitempty"`
-}
-
-func toIndirectCveContextConfig(paths map[string]catalogServices.IndirectContextualResponse) map[string]indirectCveContext {
+// toTransitivePathsConfig marshals each Catalog indirect-CVE contextual response into an opaque JSON string.
+// Downstream (AM / jas-shift-left / gadgets) parses this JSON directly as Catalog's own PathsResponse shape
+// (PathsResponse(**json.loads(...))), so it must be the full Catalog struct, not a YAML-mirrored one.
+func toTransitivePathsConfig(paths map[string]catalogServices.IndirectContextualResponse) map[string]string {
 	if len(paths) == 0 {
 		return nil
 	}
-	config := make(map[string]indirectCveContext, len(paths))
+	config := make(map[string]string, len(paths))
 	for cve, response := range paths {
-		context := indirectCveContext{
-			Type:      response.Type,
-			Namespace: response.Namespace,
-			Name:      response.Name,
-			Version:   response.Version,
-			Functions: response.Functions,
+		if len(response.Paths) == 0 {
+			continue
 		}
-		for _, path := range response.Paths {
-			var pathNodes []indirectCvePathNode
-			for _, node := range path {
-				pathNodes = append(pathNodes, indirectCvePathNode{
-					Type:      node.Type,
-					Namespace: node.Namespace,
-					Name:      node.Name,
-					Version:   node.Version,
-					Function:  node.Function,
-				})
-			}
-			context.Paths = append(context.Paths, pathNodes)
+		marshaled, err := json.Marshal(response)
+		if err != nil {
+			log.Warn(fmt.Sprintf("failed to marshal indirect CVE contextual paths for %s, skipping: %s", cve, err.Error()))
+			continue
 		}
-		config[cve] = context
+		config[cve] = string(marshaled)
+	}
+	if len(config) == 0 {
+		return nil
 	}
 	return config
 }
@@ -208,7 +183,7 @@ func (asm *ApplicabilityScanManager) createConfigFileForTarget(target results.Sc
 				GrepDisable:          false,
 				CveWhitelist:         asm.directDependenciesCves,
 				IndirectCveWhitelist: asm.indirectDependenciesCves,
-				IndirectCvePaths:     toIndirectCveContextConfig(asm.indirectCvePaths),
+				TransitivePaths:      toTransitivePathsConfig(asm.indirectCvePaths),
 				SkippedDirs:          excludePatterns,
 			},
 		},

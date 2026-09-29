@@ -1,6 +1,7 @@
 package applicability
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -246,12 +247,16 @@ func TestApplicabilityScan_CreateConfigFile_IndirectCvePaths(t *testing.T) {
 
 	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
 	assert.NoError(t, err)
+	assert.NotContains(t, string(fileContent), "indirect-cve-paths")
 
 	var parsedConfig applicabilityScanConfig
 	require.NoError(t, yaml.Unmarshal(fileContent, &parsedConfig))
 	require.Len(t, parsedConfig.Scans, 1)
-	require.Contains(t, parsedConfig.Scans[0].IndirectCvePaths, "CVE-2021-1234")
-	cveContext := parsedConfig.Scans[0].IndirectCvePaths["CVE-2021-1234"]
+	require.Contains(t, parsedConfig.Scans[0].TransitivePaths, "CVE-2021-1234")
+	rawContext := parsedConfig.Scans[0].TransitivePaths["CVE-2021-1234"]
+
+	var cveContext catalogServices.IndirectContextualResponse
+	require.NoError(t, json.Unmarshal([]byte(rawContext), &cveContext))
 	assert.Equal(t, "lodash", cveContext.Name)
 	assert.Equal(t, []string{"merge"}, cveContext.Functions)
 	require.Len(t, cveContext.Paths, 1)
@@ -278,6 +283,7 @@ func TestApplicabilityScan_CreateConfigFile_NoIndirectCvePaths(t *testing.T) {
 	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
 	assert.NoError(t, err)
 	assert.NotContains(t, string(fileContent), "indirect-cve-paths")
+	assert.NotContains(t, string(fileContent), "transitive_paths")
 }
 
 func TestParseResults_NewApplicabilityStatuses(t *testing.T) {

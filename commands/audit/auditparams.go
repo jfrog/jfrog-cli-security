@@ -53,6 +53,10 @@ type AuditParams struct {
 	diffMode             bool
 	sastChangedFilesMode bool
 	resultsToCompare     *results.SecurityCommandResults
+	// Internal gate for fetching indirect CVE contextual (reachability) paths from Catalog: reflects the
+	// transitive_contextual_analysis entitlement (or its absence, including a failed check). Not part of the
+	// scan's output metadata.
+	transitiveContextualAnalysisEnabled bool
 }
 
 func NewAuditParams() *AuditParams {

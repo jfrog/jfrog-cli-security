@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -35,6 +38,7 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/xray"
 	xrayServices "github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
@@ -1828,4 +1832,86 @@ func TestDetectTechnologiesInTargetNestedUv(t *testing.T) {
 	techs := detectTechnologiesInTarget(results.ScanTarget{Target: root}, NewAuditParams())
 	assert.Contains(t, techs, techutils.Uv)
 	assert.NotContains(t, techs, techutils.Pip)
+}
+
+func TestIsEntitledForTransitiveContextualAnalysis(t *testing.T) {
+	newXrayManagerAndParams := func(t *testing.T, handler http.HandlerFunc) *xray.XrayServicesManager {
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+		xrayManager, err := corexray.CreateXrayServiceManager(&config.ServerDetails{XrayUrl: server.URL + "/"})
+		require.NoError(t, err)
+		return xrayManager
+	}
+	newParams := func() *AuditParams {
+		params := NewAuditParams()
+		params.SetXrayVersion("3.70.0")
+		return params
+	}
+
+	t.Run("no JAS entitlement - false without calling Xray", func(t *testing.T) {
+		called := false
+		xrayManager := newXrayManagerAndParams(t, func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"entitled":true}`))
+		})
+		assert.False(t, isEntitledForTransitiveContextualAnalysis(false, xrayManager, newParams()))
+		assert.False(t, called)
+	})
+
+	t.Run("transitive entitlement disabled - false", func(t *testing.T) {
+		xrayManager := newXrayManagerAndParams(t, func(w http.ResponseWriter, r *http.Request) {
+			assert.Contains(t, r.URL.Path, "transitive_contextual_analysis")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"entitled":false}`))
+		})
+		assert.False(t, isEntitledForTransitiveContextualAnalysis(true, xrayManager, newParams()))
+	})
+
+	t.Run("entitlement API error - false, no error propagated", func(t *testing.T) {
+		xrayManager := newXrayManagerAndParams(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		assert.False(t, isEntitledForTransitiveContextualAnalysis(true, xrayManager, newParams()))
+	})
+
+	t.Run("JAS entitled and transitive entitlement enabled - true", func(t *testing.T) {
+		xrayManager := newXrayManagerAndParams(t, func(w http.ResponseWriter, r *http.Request) {
+			assert.Contains(t, r.URL.Path, "transitive_contextual_analysis")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"entitled":true}`))
+		})
+		assert.True(t, isEntitledForTransitiveContextualAnalysis(true, xrayManager, newParams()))
+	})
+}
+
+// initAuditCmdResults must never surface the transitive_contextual_analysis entitlement check as a general error,
+// and the gate must not leak into the output Entitlements metadata (it's an internal control bool on AuditParams).
+func TestInitAuditCmdResults_TransitiveContextualAnalysis_ErrorDoesNotFailAuditOrLeakToOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "entitlements/feature/transitive_contextual_analysis") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// Regular JAS entitlement (and anything else queried along the way) is entitled.
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"entitled":true}`))
+	}))
+	defer server.Close()
+
+	params := NewAuditParams()
+	params.SetServerDetails(&config.ServerDetails{XrayUrl: server.URL + "/"})
+	params.SetXrayVersion("3.70.0")
+	params.SetUseJas(true)
+	// Restrict to a non-JAS scan so IsJASRequested is false and the test doesn't depend on locally installed software.
+	params.SetScansToPerform([]utils.SubScanType{utils.ScaScan})
+
+	cmdResults := initAuditCmdResults(params)
+	require.Empty(t, cmdResults.GetErrors())
+	assert.True(t, cmdResults.Entitlements.Jas, "sanity check: regular JAS entitlement must remain unaffected")
+	assert.False(t, params.transitiveContextualAnalysisEnabled)
+
+	entitlementsJson, err := utils.GetAsJsonBytes(cmdResults.Entitlements, false, false)
+	require.NoError(t, err)
+	assert.NotContains(t, string(entitlementsJson), "transitive_contextual_analysis")
 }
