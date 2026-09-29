@@ -1,0 +1,9 @@
+[project]
+name = "poetry-project"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["requests (>=2.31.0,<2.32.0)", "flask (==3.0.0)"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"

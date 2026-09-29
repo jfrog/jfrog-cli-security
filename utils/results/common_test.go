@@ -3057,6 +3057,16 @@ func TestCdxEvidencesToPreferredLocation(t *testing.T) {
 			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "requirements.txt"}, {Location: "requirements.lock"}}}},
 			expected:  &formats.Location{File: "requirements.txt"},
 		},
+		{
+			name:      "Component with evidences (nuget prefers csproj over lock)",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "packages.lock.json"}, {Location: "Proj.csproj"}}}},
+			expected:  &formats.Location{File: "Proj.csproj"},
+		},
+		{
+			name:      "Component with nuget lock file only",
+			component: cyclonedx.Component{Evidence: &cyclonedx.Evidence{Occurrences: &[]cyclonedx.EvidenceOccurrence{{Location: "src/packages.lock.json"}}}},
+			expected:  &formats.Location{File: "src/packages.lock.json"},
+		},
 	}
 
 	for _, test := range tests {
