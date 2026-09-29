@@ -257,7 +257,7 @@ func TestParseGitRefsCapturedAdvertisements(t *testing.T) {
 			// Lightweight tags only - no ^{} records at all.
 			fixture:    "docker-build-push-action",
 			wantCounts: refCounts{heads: 10, tags: 10, pull: 10},
-			wantRefs: map[string]string{
+			wantRefs: map[string]string{ // #nosec G101 -- fixture ref names and commit SHAs, not credentials
 				"refs/tags/v1":     "3e7a4f6646880c6f63758d73ac32392d323eaf8f",
 				"refs/pull/1/head": "3b4339199e7eafa9901d48d4c7b25c322b17e69a",
 				"refs/heads/dependabot/github_actions/aws-actions/configure-aws-credentials-6.3.0": "7317d27643a2ae3e03a44368f44858e458b031ab",

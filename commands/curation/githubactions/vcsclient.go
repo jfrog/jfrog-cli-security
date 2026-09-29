@@ -133,7 +133,11 @@ func (c *vcsClient) GetRefs(repoKey, owner, repo string) (*RefAdvertisement, err
 	if err != nil {
 		return nil, err
 	}
-	return v.(*RefAdvertisement), nil
+	adv, ok := v.(*RefAdvertisement)
+	if !ok {
+		return nil, fmt.Errorf("git refs for %s: unexpected type %T", key, v)
+	}
+	return adv, nil
 }
 
 func (c *vcsClient) cachedRefs(key string) (*RefAdvertisement, bool) {
@@ -191,6 +195,8 @@ func (c *vcsClient) Download(repoKey, owner, repo string, ref ResolvedRef) (io.R
 	defer closeResponseBody(body)
 	switch resp.StatusCode {
 	case http.StatusForbidden:
+		// TODO: need handling to be done for 403 of SHA requests to differentiate between access
+		// issue and curation block once RT implementation is complete.
 		return nil, "", &BlockedError{Reason: blockedReason(body)}
 	case http.StatusUnauthorized:
 		return nil, "", errUnauthorized(endpoint)
@@ -209,6 +215,7 @@ func (c *vcsClient) get(endpoint string) (io.ReadCloser, *http.Response, error) 
 		if body != nil {
 			closeResponseBody(body)
 		}
+		// #nosec G404 -- retry jitter only, so concurrent decisions do not retry in lockstep; not a key or token
 		wait := vcsHTTPRetryWait + rand.N(vcsHTTPRetryMaxJitter)
 		log.Debug(fmt.Sprintf("github-actions curation: retrying GET %s in %s", endpoint, wait))
 		time.Sleep(wait)

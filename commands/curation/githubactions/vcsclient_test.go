@@ -303,7 +303,12 @@ func TestVCSClientTimesOutAStalledResponse(t *testing.T) {
 			stall: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = io.WriteString(w, "partial")
-				w.(http.Flusher).Flush()
+				flusher, ok := w.(http.Flusher)
+				if !ok {
+					t.Errorf("response writer %T cannot flush", w)
+					return
+				}
+				flusher.Flush()
 				<-r.Context().Done()
 			},
 			wantCalls: 1,
