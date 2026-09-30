@@ -1366,13 +1366,136 @@ source = { registry = "` + allowedBase + `" }
 	assert.False(t, allPackagesUseRegistry(content, "https://other.example.com/api/pypi/repo/simple"))
 }
 
-func TestBuildDependencyTreeRejectsAuditMode(t *testing.T) {
+func TestBuildDependencyTreeAuditMode(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "uv.lock")
+	lockContent := `
+version = 1
+revision = 1
+
+[[package]]
+name = "demo"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+`
+	require.NoError(t, os.WriteFile(lockPath, []byte(lockContent), 0644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origWd) }()
+	require.NoError(t, os.Chdir(dir))
+
 	params := technologies.BuildInfoBomGeneratorParams{
 		IsCurationCmd: false,
 	}
-	_, _, _, err := BuildDependencyTree(params)
+	depTree, uniqueDeps, downloadUrls, err := BuildDependencyTree(params)
+	require.NoError(t, err)
+	assert.Nil(t, downloadUrls)
+	assert.NotEmpty(t, depTree)
+	assert.Contains(t, uniqueDeps, "pypi://requests:2.31.0")
+}
+
+func TestBuildDependencyTreeAuditModeMissingLock(t *testing.T) {
+	dir := t.TempDir()
+	pyproject := "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[tool.uv]\nmanaged = true\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte(pyproject), 0644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origWd) }()
+	require.NoError(t, os.Chdir(dir))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd: false,
+	}
+	_, _, _, err = BuildDependencyTree(params)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf curation-audit")
+	assert.Contains(t, err.Error(), "uv.lock not found")
+	assert.Contains(t, err.Error(), "uv lock")
+	assert.NoFileExists(t, filepath.Join(dir, "uv.lock"))
+}
+
+func TestBuildDependencyTreeAuditModeWorkspaceSubdirectory(t *testing.T) {
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origWd) }()
+
+	lockContent := `
+version = 1
+revision = 1
+
+[[package]]
+name = "workspace-root"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "urllib3" },
+]
+
+[[package]]
+name = "urllib3"
+version = "1.26.5"
+`
+	t.Run("declared workspace member uses root uv.lock", func(t *testing.T) {
+		rootDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "uv.lock"), []byte(lockContent), 0644))
+		rootPyproject := "[tool.uv.workspace]\nmembers = [\"sub/*\"]\nexclude = [\"sub/excluded\"]\n"
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "pyproject.toml"), []byte(rootPyproject), 0644))
+
+		memberDir := filepath.Join(rootDir, "sub", "pkg")
+		require.NoError(t, os.MkdirAll(memberDir, 0755))
+		require.NoError(t, os.Chdir(memberDir))
+
+		depTree, uniqueDeps, downloadUrls, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false})
+		require.NoError(t, err)
+		assert.Nil(t, downloadUrls)
+		assert.NotEmpty(t, depTree)
+		assert.Contains(t, uniqueDeps, "pypi://urllib3:1.26.5")
+	})
+
+	t.Run("non-member subdirectory does not use parent uv.lock", func(t *testing.T) {
+		rootDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "uv.lock"), []byte(lockContent), 0644))
+		rootPyproject := "[tool.uv.workspace]\nmembers = [\"sub/*\"]\nexclude = [\"sub/excluded\"]\n"
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "pyproject.toml"), []byte(rootPyproject), 0644))
+
+		otherDir := filepath.Join(rootDir, "other", "pkg")
+		require.NoError(t, os.MkdirAll(otherDir, 0755))
+		require.NoError(t, os.Chdir(otherDir))
+
+		_, _, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "uv.lock not found")
+
+		excludedDir := filepath.Join(rootDir, "sub", "excluded")
+		require.NoError(t, os.MkdirAll(excludedDir, 0755))
+		require.NoError(t, os.Chdir(excludedDir))
+
+		_, _, _, err = BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "uv.lock not found")
+	})
+
+	t.Run("subdirectory under parent uv.lock without workspace table does not use parent lock", func(t *testing.T) {
+		rootDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "uv.lock"), []byte(lockContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(rootDir, "pyproject.toml"), []byte("[project]\nname = \"root\"\nversion = \"0.1.0\"\n"), 0644))
+
+		nestedDir := filepath.Join(rootDir, "nested")
+		require.NoError(t, os.MkdirAll(nestedDir, 0755))
+		require.NoError(t, os.Chdir(nestedDir))
+
+		_, _, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "uv.lock not found")
+	})
 }
 
 func TestClassifyUvCurationLockError_WheelFetchBlocked(t *testing.T) {
