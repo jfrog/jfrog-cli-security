@@ -479,7 +479,7 @@ func TestCleanSubDirectories(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cleaned := cleanSubDirectories(test.workingDirectoryToFiles)
+			cleaned := CleanSubDirectories(test.workingDirectoryToFiles)
 			cleanedKeys := maps.Keys(cleaned)
 			expectedKeys := maps.Keys(test.expected)
 			assert.ElementsMatch(t, expectedKeys, cleanedKeys, "expected: %s, actual: %s", expectedKeys, cleanedKeys)
@@ -1486,4 +1486,17 @@ func TestPromotePipToUv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPromotePipToUvWorkspaceSubdirectory(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0o644))
+
+	subDir := filepath.Join(root, "packages", "member1")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "pyproject.toml"), []byte("[project]\nname = \"member1\"\nversion = \"0.1.0\"\n"), 0o644))
+
+	techs := PromotePipToUv([]Technology{Pip}, subDir)
+	assert.Contains(t, techs, Uv)
+	assert.NotContains(t, techs, Pip)
 }

@@ -762,7 +762,7 @@ func filterAmbiguousPipUvTargets(techToWorkingDirs map[techutils.Technology]map[
 	if len(uvDirs) == 0 {
 		delete(techToWorkingDirs, techutils.Uv)
 	} else {
-		techToWorkingDirs[techutils.Uv] = uvDirs
+		techToWorkingDirs[techutils.Uv] = techutils.CleanSubDirectories(uvDirs)
 	}
 	return techToWorkingDirs
 }
