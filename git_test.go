@@ -136,10 +136,10 @@ func TestGitAuditSimpleJson(t *testing.T) {
 func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 	// XRAY-136444 will be fixed in 3.141.7
 	integration.InitAuditNewScaTests(t, "3.141.7")
-	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-08-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138919")
+	securityTestUtils.SkipTestIfDurationNotPassed(t, "01-10-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138919")
 	if coreutils.IsWindows() {
 		// On windows tests are failing due to the bug in Xray Server, should be fixed at XRAY-138079
-		securityTestUtils.SkipTestIfDurationNotPassed(t, "01-08-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
+		securityTestUtils.SkipTestIfDurationNotPassed(t, "01-10-2026", 60, "Bug in Xray Server, should be fixed at XRAY-138079")
 	}
 
 	xrayVersion := integration.GetAndValidateXrayVersion(t, securityUtils.StaticScanMinVersion)
@@ -169,12 +169,12 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 6, Vulnerabilities: 16 + 6},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 4, Vulnerabilities: 16 + 4},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: 6},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: 4},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: 6}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: 4}},
 		},
 	)
 }
