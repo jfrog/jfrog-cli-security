@@ -152,7 +152,10 @@ func toTransitivePathsConfig(paths map[string]catalogServices.IndirectContextual
 	}
 	config := make(map[string]string, len(paths))
 	for cve, response := range paths {
-		if len(response.Paths) == 0 {
+		if response.Name == "" && len(response.Functions) == 0 {
+			// No package identity and no functions: nothing useful for Analyzer Manager to act on.
+			// A response with functions/package identity but no paths is still valuable and kept.
+			log.Warn(fmt.Sprintf("skipping indirect CVE contextual response for %s: no package identity or functions", cve))
 			continue
 		}
 		marshaled, err := json.Marshal(response)

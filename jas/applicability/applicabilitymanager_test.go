@@ -2,15 +2,20 @@ package applicability
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	catalogutils "github.com/jfrog/jfrog-cli-security/utils/catalog"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -263,6 +268,124 @@ func TestApplicabilityScan_CreateConfigFile_IndirectCvePaths(t *testing.T) {
 	require.Len(t, cveContext.Paths[0], 2)
 	assert.Equal(t, "some-lib", cveContext.Paths[0][0].Name)
 	assert.Equal(t, "doStuff", cveContext.Paths[0][0].Function)
+}
+
+func TestApplicabilityScan_CreateConfigFile_IndirectCvePaths_KeepsFunctionsOnlyResponses(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
+	require.NoError(t, err)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
+	indirectCvePaths := map[string]catalogServices.IndirectContextualResponse{
+		// A Catalog hit that carries package identity and functions but no paths (exactly the shape Catalog's
+		// own client returns on some responses) must still be kept - Analyzer Manager can use the function list.
+		"CVE-2021-1234": {
+			PackageVersionKey: xrayutils.PackageVersionKey{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+			Functions:         []string{"merge"},
+		},
+		// A response with no package identity and no functions carries nothing Analyzer Manager can use, so it
+		// must be skipped (and only this one).
+		"CVE-2021-9999": {},
+	}
+	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, indirectCvePaths, scanner, false, ApplicabilityScannerType, scannerTempDir)
+
+	currWd, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	assert.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}))
+	defer func() {
+		assert.NoError(t, os.Remove(applicabilityManager.configFileName))
+	}()
+
+	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
+	assert.NoError(t, err)
+
+	var parsedConfig applicabilityScanConfig
+	require.NoError(t, yaml.Unmarshal(fileContent, &parsedConfig))
+	require.Len(t, parsedConfig.Scans, 1)
+	require.Contains(t, parsedConfig.Scans[0].TransitivePaths, "CVE-2021-1234")
+	assert.NotContains(t, parsedConfig.Scans[0].TransitivePaths, "CVE-2021-9999")
+
+	var cveContext catalogServices.IndirectContextualResponse
+	require.NoError(t, json.Unmarshal([]byte(parsedConfig.Scans[0].TransitivePaths["CVE-2021-1234"]), &cveContext))
+	assert.Equal(t, "lodash", cveContext.Name)
+	assert.Equal(t, []string{"merge"}, cveContext.Functions)
+	assert.Empty(t, cveContext.Paths)
+}
+
+// TestApplicabilityScan_CreateConfigFile_CatalogIntegration exercises the full pipeline from a real (httptest-mocked)
+// Catalog HTTP call through to the written config file, rather than a map the test constructs itself: a Catalog
+// error must still let applicability run with the CVE lists and no transitive_paths, and a successful body's
+// content must be exactly what lands in transitive_paths.
+func TestApplicabilityScan_CreateConfigFile_CatalogIntegration(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	directCves, _ := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
+	indirectCves := []string{"CVE-2024-1234"}
+	bom := &cyclonedx.BOM{Components: &[]cyclonedx.Component{{Name: "lodash", Version: "4.17.21", PackageURL: "pkg:npm/lodash@4.17.21"}}}
+	currWd, err := coreutils.GetWorkingDirectory()
+	require.NoError(t, err)
+
+	writeConfigFile := func(t *testing.T, indirectCvePaths map[string]catalogServices.IndirectContextualResponse) string {
+		scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
+		require.NoError(t, err)
+		applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, indirectCvePaths, scanner, false, ApplicabilityScannerType, scannerTempDir)
+		require.NoError(t, applicabilityManager.createConfigFileForTarget(results.ScanTarget{Target: currWd}))
+		t.Cleanup(func() {
+			assert.NoError(t, os.Remove(applicabilityManager.configFileName))
+		})
+		fileContent, err := os.ReadFile(applicabilityManager.configFileName)
+		require.NoError(t, err)
+		return string(fileContent)
+	}
+
+	t.Run("catalog HTTP 500 - applicability still runs with CVE lists and no transitive_paths", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		indirectCvePaths, err := catalogutils.GetIndirectCvePaths(&config.ServerDetails{Url: server.URL + "/"}, "", indirectCves, bom)
+		require.Error(t, err)
+		assert.Nil(t, indirectCvePaths)
+
+		fileContent := writeConfigFile(t, indirectCvePaths)
+		assert.NotContains(t, fileContent, "transitive_paths")
+
+		var parsedConfig applicabilityScanConfig
+		require.NoError(t, yaml.Unmarshal([]byte(fileContent), &parsedConfig))
+		require.Len(t, parsedConfig.Scans, 1)
+		assert.Contains(t, parsedConfig.Scans[0].IndirectCveWhitelist, "CVE-2024-1234")
+	})
+
+	t.Run("catalog success - response body lands in transitive_paths", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]catalogServices.IndirectContextualResponse{
+				"CVE-2024-1234": {
+					PackageVersionKey: xrayutils.PackageVersionKey{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+					Functions:         []string{"merge"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		indirectCvePaths, err := catalogutils.GetIndirectCvePaths(&config.ServerDetails{Url: server.URL + "/"}, "", indirectCves, bom)
+		require.NoError(t, err)
+		require.Contains(t, indirectCvePaths, "CVE-2024-1234")
+
+		fileContent := writeConfigFile(t, indirectCvePaths)
+
+		var parsedConfig applicabilityScanConfig
+		require.NoError(t, yaml.Unmarshal([]byte(fileContent), &parsedConfig))
+		require.Len(t, parsedConfig.Scans, 1)
+		require.Contains(t, parsedConfig.Scans[0].TransitivePaths, "CVE-2024-1234")
+
+		var cveContext catalogServices.IndirectContextualResponse
+		require.NoError(t, json.Unmarshal([]byte(parsedConfig.Scans[0].TransitivePaths["CVE-2024-1234"]), &cveContext))
+		assert.Equal(t, "lodash", cveContext.Name)
+		assert.Equal(t, []string{"merge"}, cveContext.Functions)
+	})
 }
 
 func TestApplicabilityScan_CreateConfigFile_NoIndirectCvePaths(t *testing.T) {

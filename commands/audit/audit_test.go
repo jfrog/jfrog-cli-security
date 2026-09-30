@@ -1909,7 +1909,7 @@ func TestInitAuditCmdResults_TransitiveContextualAnalysis_ErrorDoesNotFailAuditO
 	cmdResults := initAuditCmdResults(params)
 	require.Empty(t, cmdResults.GetErrors())
 	assert.True(t, cmdResults.Entitlements.Jas, "sanity check: regular JAS entitlement must remain unaffected")
-	assert.False(t, params.transitiveContextualAnalysisEnabled)
+	assert.False(t, cmdResults.IsTransitiveContextualAnalysisEnabled())
 
 	entitlementsJson, err := utils.GetAsJsonBytes(cmdResults.Entitlements, false, false)
 	require.NoError(t, err)

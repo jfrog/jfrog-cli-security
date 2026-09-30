@@ -444,8 +444,8 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	}
 	// Indirect CVE contextual (reachability) paths from Catalog require this entitlement, on top of JAS entitlement
 	// and the new (V3) audit flow. A failed or negative check must not fail the audit - it only means Catalog is skipped.
-	// This is an internal gate, not output metadata, so it's stored on params rather than cmdResults.
-	params.transitiveContextualAnalysisEnabled = isEntitledForTransitiveContextualAnalysis(entitledForJas, xrayManager, params)
+	// This is an internal gate, not output metadata, so it's stored as an unexported field on cmdResults.
+	cmdResults.SetTransitiveContextualAnalysisEnabled(isEntitledForTransitiveContextualAnalysis(entitledForJas, xrayManager, params))
 	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
 	if shouldIncludeSnippetDetection(params) {
 		entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
@@ -1038,7 +1038,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				ThirdPartyApplicabilityScan:         auditParams.thirdPartyApplicabilityScan,
 				ProjectKey:                          auditParams.resultsContext.ProjectKey,
 				V3Flow:                              isNewFlow,
-				TransitiveContextualAnalysisEnabled: auditParams.transitiveContextualAnalysisEnabled,
+				TransitiveContextualAnalysisEnabled: scanResults.IsTransitiveContextualAnalysisEnabled(),
 				ApplicableScanType:                  applicability.ApplicabilityScannerType,
 				SignedDescriptions:                  getSignedDescriptions(auditParams.OutputFormat()),
 				SastRules:                           auditParams.SastRules(),
