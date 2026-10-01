@@ -824,9 +824,9 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || shouldCleanSubModulesInUnsupportedTechs() {
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || tech == Uv || shouldCleanSubModulesInUnsupportedTechs() {
 		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
-		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+		techWorkingDirs = CleanSubDirectories(techWorkingDirs)
 	}
 	return
 }
@@ -917,13 +917,7 @@ func PromotePipToUv(techs []Technology, dir string) []Technology {
 		}
 	}
 
-	uvSignal := ""
-	if _, statErr := os.Stat(filepath.Join(dir, "uv.lock")); statErr == nil {
-		uvSignal = "uv.lock detected"
-	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
-		(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
-		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
-	}
+	uvSignal := findUvSignal(dir)
 	if uvSignal == "" {
 		return techs
 	}
@@ -933,6 +927,31 @@ func PromotePipToUv(techs []Technology, dir string) []Technology {
 		techs = append(techs, Uv)
 	}
 	return techs
+}
+
+func findUvSignal(dir string) string {
+	curr := dir
+	for {
+		if _, statErr := os.Stat(filepath.Join(curr, "uv.lock")); statErr == nil {
+			if curr == dir {
+				return "uv.lock detected"
+			}
+			return fmt.Sprintf("ancestor uv.lock detected at '%s'", curr)
+		}
+		if data, readErr := os.ReadFile(filepath.Join(curr, "pyproject.toml")); readErr == nil &&
+			(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
+			if curr == dir {
+				return "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
+			}
+			return fmt.Sprintf("ancestor pyproject.toml has uv configuration at '%s'", curr)
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr || parent == "." || parent == "" {
+			break
+		}
+		curr = parent
+	}
+	return ""
 }
 
 func removeTechnology(techs []Technology, tech Technology) []Technology {
@@ -1053,7 +1072,7 @@ func DecodeYarnWorkspacesField(raw json.RawMessage) []string {
 // Keys: [dir, directory] -> [dir, directory]
 // Keys: [dir/dir2, dir/dir2/dir3, dir/dir2/dir3/dir4] -> [dir/dir2]
 // Values of removed sub directories will be added to the root directory.
-func cleanSubDirectories(workingDirectoryToFiles map[string][]string) (result map[string][]string) {
+func CleanSubDirectories(workingDirectoryToFiles map[string][]string) (result map[string][]string) {
 	result = make(map[string][]string)
 	for wd, files := range workingDirectoryToFiles {
 		root := getExistingRootDir(wd, workingDirectoryToFiles)
