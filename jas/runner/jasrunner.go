@@ -47,6 +47,13 @@ type JasRunnerParams struct {
 	ApplicableScanType          applicability.ApplicabilityScanType
 	ThirdPartyApplicabilityScan bool
 	ProjectKey                  string
+	// V3Flow is true for the V3 (SBOM-based) audit flow. Indirect CVE contextual (reachability) paths from
+	// Catalog are only ever fetched for this flow - the V2 graph-scan flow (e.g. binary scan) is out of scope.
+	V3Flow bool
+	// TransitiveContextualAnalysisEnabled is the caller's resolved gate for the transitive_contextual_analysis
+	// feature (entitlement check result, already false on error or when the underlying JAS entitlement is missing).
+	// Indirect CVE contextual paths are only fetched when true.
+	TransitiveContextualAnalysisEnabled bool
 	// SAST scan flags
 	SastChangedFilesMode bool
 	SignedDescriptions   bool
@@ -253,7 +260,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		directCves, indirectCves := params.CvesProvider()
 		// Get the contextual (reachability) paths for the indirect cves from Catalog, if we have a resolved SBOM to derive the package list from.
 		var indirectCvePaths map[string]catalogServices.IndirectContextualResponse
-		if params.ScanResults.ScaResults != nil {
+		if shouldFetchIndirectCvePaths(params, indirectCves) {
 			var pathsErr error
 			if indirectCvePaths, pathsErr = catalogutils.GetIndirectCvePaths(params.ServerDetails, params.ProjectKey, indirectCves, params.ScanResults.ScaResults.Sbom); pathsErr != nil {
 				log.Warn("failed to get indirect CVE contextual paths from Catalog, continuing without them: " + pathsErr.Error())
@@ -284,6 +291,19 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		}
 		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Applicability, threadId, caScanResults)
 	}
+}
+
+// shouldFetchIndirectCvePaths reports whether Catalog should be queried for indirect CVE contextual (reachability)
+// paths: only for the new (V3) flow, when the platform is entitled for transitive_contextual_analysis, with a
+// resolved SBOM to derive the package list from, and at least one indirect CVE to look up.
+func shouldFetchIndirectCvePaths(params *JasRunnerParams, indirectCves []string) bool {
+	if !params.V3Flow || !params.TransitiveContextualAnalysisEnabled {
+		return false
+	}
+	if len(indirectCves) == 0 {
+		return false
+	}
+	return params.ScanResults.ScaResults != nil && params.ScanResults.ScaResults.Sbom != nil
 }
 
 func getSourceRunsToCompare(params *JasRunnerParams, scanType jasutils.JasScanType) []*sarif.Run {

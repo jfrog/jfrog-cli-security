@@ -269,6 +269,9 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	)
 }
 
+// Applicability counts below (NotApplicable/NotCovered/Sca) reflect the live Xray/JAS applicability determination
+// for this fixture's indirect CVEs; they were last verified against CI and may drift again as vulnerability
+// content or scanner heuristics evolve independently of this repo's code.
 func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinXrayVersion)
 	defer testCleanUp()
