@@ -4,11 +4,13 @@ import (
 	"time"
 
 	corecommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 
 	"github.com/jfrog/jfrog-cli-security/commands/xray/curl"
+	"github.com/jfrog/jfrog-cli-security/commands/xray/downloadstatus"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
@@ -16,6 +18,7 @@ import (
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	curlDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/curl"
+	downloadStatusDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/downloadstatus"
 	offlineupdateDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/offlineupdate"
 )
 
@@ -38,6 +41,15 @@ func getXrayNameSpaceCommands() []components.Command {
 			Description:   offlineupdateDocs.GetDescription(),
 			AIDescription: offlineupdateDocs.GetAIDescription(),
 			Action:        offlineUpdates,
+		},
+		{
+			Name:          "status",
+			Aliases:       []string{"st"},
+			Flags:         flags.GetCommandFlags(flags.Status),
+			Description:   downloadStatusDocs.GetDescription(),
+			AIDescription: downloadStatusDocs.GetAIDescription(),
+			Arguments:     downloadStatusDocs.GetArguments(),
+			Action:        xrStatusCmd,
 		},
 
 		// TODO: Deprecated commands (remove at next CLI major version)
@@ -140,6 +152,36 @@ func newXrCurlCommand(c *components.Context) (*curl.XrCurlCommand, error) {
 	xrCurlCommand.SetServerDetails(xrDetails)
 	xrCurlCommand.SetUrl(xrDetails.XrayUrl)
 	return xrCurlCommand, err
+}
+
+func xrStatusCmd(c *components.Context) error {
+	if show, err := pluginsCommon.ShowCmdHelpIfNeeded(c, c.Arguments); show || err != nil {
+		return err
+	}
+	if len(c.Arguments) != 1 {
+		return pluginsCommon.WrongNumberOfArgumentsHandler(c)
+	}
+	repo, pathCandidates, err := downloadstatus.ParseArtifact(c.Arguments[0])
+	if err != nil {
+		return err
+	}
+	serverDetails, err := CreateServerDetailsFromFlags(c)
+	if err != nil {
+		return err
+	}
+	if err = validateConnectionInputs(serverDetails); err != nil {
+		return err
+	}
+	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), []outputFormat.OutputFormat{outputFormat.Table, outputFormat.Json})
+	if err != nil {
+		return err
+	}
+	downloadStatusCommand := downloadstatus.NewDownloadStatusCommand().
+		SetServerDetails(serverDetails).
+		SetRepoAndPathCandidates(repo, pathCandidates).
+		SetOutputFormat(format).
+		SetProject(getProject(c))
+	return corecommon.Exec(downloadStatusCommand)
 }
 
 // Base on a given context from the CLI, create the offline-update command and execute it.
