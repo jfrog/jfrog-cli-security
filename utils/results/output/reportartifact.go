@@ -122,8 +122,6 @@ func getLocalArtifactPath(serverDetails *config.ServerDetails) (string, error) {
 	if serverDetails == nil {
 		return "", fmt.Errorf("server details are missing from the command results")
 	}
-	// Extract JFROG user from server details.
-	user := unknownLocalArtifactPath
 	if serverDetails.AccessToken != "" {
 		userFromToken := auth.ExtractUsernameFromAccessToken(serverDetails.AccessToken)
 		if userFromToken != "" {
@@ -133,7 +131,7 @@ func getLocalArtifactPath(serverDetails *config.ServerDetails) (string, error) {
 	if serverDetails.User != "" {
 		return serverDetails.User, nil
 	}
-	return user, nil
+	return unknownLocalArtifactPath, nil
 }
 
 func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, error) {
