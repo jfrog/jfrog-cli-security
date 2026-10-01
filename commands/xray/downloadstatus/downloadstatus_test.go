@@ -28,25 +28,49 @@ func TestParseArtifact(t *testing.T) {
 			name:          "docker pull reference with host",
 			arg:           "xray-dev.jfrogdev.org/my-docker-repo/my-image:3",
 			expectedRepo:  "my-docker-repo",
-			expectedPaths: []string{"my-image/3/list.manifest.json", "my-image/3/manifest.json"},
+			expectedPaths: []string{"my-image/3/list.manifest.json", "my-image/3/manifest.json", "my-image:3"},
 		},
 		{
 			name:          "docker pull reference without host",
 			arg:           "my-docker-repo/my-image:3",
 			expectedRepo:  "my-docker-repo",
-			expectedPaths: []string{"my-image/3/list.manifest.json", "my-image/3/manifest.json"},
+			expectedPaths: []string{"my-image/3/list.manifest.json", "my-image/3/manifest.json", "my-image:3"},
 		},
 		{
 			name:          "docker pull reference with nested image path",
 			arg:           "xray-dev.jfrogdev.org/my-docker-repo/team/my-image:3",
 			expectedRepo:  "my-docker-repo",
-			expectedPaths: []string{"team/my-image/3/list.manifest.json", "team/my-image/3/manifest.json"},
+			expectedPaths: []string{"team/my-image/3/list.manifest.json", "team/my-image/3/manifest.json", "team/my-image:3"},
 		},
 		{
 			name:          "docker reference with digest",
 			arg:           "xray-dev.jfrogdev.org/my-docker-repo/my-image@sha256:abcd1234",
 			expectedRepo:  "my-docker-repo",
-			expectedPaths: []string{"my-image/sha256:abcd1234/manifest.json"},
+			expectedPaths: []string{"my-image/sha256__abcd1234/list.manifest.json", "my-image/sha256__abcd1234/manifest.json", "my-image@sha256:abcd1234"},
+		},
+		{
+			name:          "docker reference with tag and digest",
+			arg:           "my-docker-repo/my-image:3@sha256:abcd1234",
+			expectedRepo:  "my-docker-repo",
+			expectedPaths: []string{"my-image/sha256__abcd1234/list.manifest.json", "my-image/sha256__abcd1234/manifest.json", "my-image@sha256:abcd1234"},
+		},
+		{
+			name:          "filename containing a colon keeps the literal path",
+			arg:           "libs-release-local/backup:latest.tar",
+			expectedRepo:  "libs-release-local",
+			expectedPaths: []string{"backup/latest.tar/list.manifest.json", "backup/latest.tar/manifest.json", "backup:latest.tar"},
+		},
+		{
+			name:          "url query and fragment are stripped",
+			arg:           "https://acme.jfrog.io/artifactory/libs-release-local/com/acme/foo-1.2.jar?tab=xray#violations",
+			expectedRepo:  "libs-release-local",
+			expectedPaths: []string{"com/acme/foo-1.2.jar"},
+		},
+		{
+			name:          "url encoded path",
+			arg:           "https://acme.jfrog.io/artifactory/libs-release-local/com%2Facme%2Ffoo-1.2.jar",
+			expectedRepo:  "libs-release-local",
+			expectedPaths: []string{"com/acme/foo-1.2.jar"},
 		},
 	}
 
@@ -74,7 +98,7 @@ func TestBuildResultBlockedByViolation(t *testing.T) {
 		Policies: []services.ViolationPolicy{{PolicyName: "no-critical-cve", Rule: "critical-cve", IsBlocking: true}},
 	}}
 
-	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", scanStatus, violations)
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, violations)
 
 	assert.Equal(t, StatusBlocked, result.DownloadStatus)
 	assert.Len(t, result.Violations, 1)
@@ -91,7 +115,7 @@ func TestBuildResultIgnoredViolationDoesNotBlock(t *testing.T) {
 		Policies: []services.ViolationPolicy{{PolicyName: "no-critical-cve", Rule: "critical-cve", IsBlocking: true, IsIgnored: true}},
 	}}
 
-	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", scanStatus, violations)
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, violations)
 
 	assert.Equal(t, StatusAllowed, result.DownloadStatus)
 	assert.False(t, result.Violations[0].Blocking)
@@ -103,7 +127,7 @@ func TestBuildResultPendingScanIsUnknown(t *testing.T) {
 		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusPending},
 	}}
 
-	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", scanStatus, nil)
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, nil)
 
 	assert.Equal(t, StatusUnknown, result.DownloadStatus)
 }
@@ -122,7 +146,7 @@ func TestBuildResultCarriesViolationIdAndLink(t *testing.T) {
 		Policies:             []services.ViolationPolicy{{PolicyName: "no-critical-cve", Rule: "critical-cve", IsBlocking: true, BlockingMask: 1}},
 	}}
 
-	result := buildResult("bella-test-proj-gel-local", "libxml2_2.9.14+dfsg-1.3~deb12u4_amd64.deb", "sha", "https://xray-dev.jfrogdev.org", "deb://debian:12:libxml2", "", scanStatus, violations)
+	result := buildResult("bella-test-proj-gel-local", "libxml2_2.9.14+dfsg-1.3~deb12u4_amd64.deb", "sha", "https://xray-dev.jfrogdev.org", "deb://debian:12:libxml2", "", false, scanStatus, violations)
 
 	assert.Equal(t, "XRAY-94620", result.Violations[0].ViolationId)
 
@@ -159,7 +183,7 @@ func TestBuildResultOrdersByBlockingThenSeverity(t *testing.T) {
 		{Watch: "w", Severity: "Medium", Policies: []services.ViolationPolicy{{PolicyName: "medium-blocking", IsBlocking: true}}},
 	}
 
-	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", scanStatus, violations)
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, violations)
 
 	names := make([]string, len(result.Violations))
 	for i, v := range result.Violations {
@@ -169,7 +193,7 @@ func TestBuildResultOrdersByBlockingThenSeverity(t *testing.T) {
 }
 
 func TestBuildViolationUiLinkEmptyPlatformUrl(t *testing.T) {
-	assert.Empty(t, buildViolationUiLink("", "repo", "path", "generic://foo", "", services.XrayViolation{}))
+	assert.Empty(t, buildViolationUiLink("", "repo", "path", "generic://foo", "", "", services.XrayViolation{}))
 }
 
 func TestBuildArtifactScansListLink(t *testing.T) {
@@ -183,7 +207,21 @@ func TestBuildArtifactScansListLink(t *testing.T) {
 	assert.Equal(t, "deb://debian:12:libxml2", query.Get("package_id"))
 	assert.Equal(t, "bella-test-proj-gel-local/libxml2_2.9.14+dfsg-1.3~deb12u4_amd64.deb", query.Get("path"))
 	assert.Equal(t, "overview", query.Get("page_type"))
+	assert.Empty(t, query.Get("version"))
 	assert.Empty(t, query.Get("issue"))
+}
+
+func TestBuildArtifactScansListLinkUsesFileNameAndVersion(t *testing.T) {
+	link := buildArtifactScansListLink("https://acme.jfrog.io", "libs-release-local", "com/acme/foo-1.2.jar", "gav://com.acme:foo", "1.2")
+
+	parsedUrl, err := url.Parse(link)
+	assert.NoError(t, err)
+	assert.Equal(t, "/ui/scans-list/repositories/libs-release-local/scan-descendants/foo-1.2.jar", parsedUrl.Path)
+
+	query := parsedUrl.Query()
+	assert.Equal(t, "1.2", query.Get("version"))
+	assert.Equal(t, "gav://com.acme:foo", query.Get("package_id"))
+	assert.Equal(t, "libs-release-local/com/acme/foo-1.2.jar", query.Get("path"))
 }
 
 func TestBuildArtifactScansListLinkEmptyPlatformUrl(t *testing.T) {
@@ -202,22 +240,43 @@ func TestSplitPackageNameAndVersionDockerNoTag(t *testing.T) {
 	assert.Empty(t, version)
 }
 
-func TestSplitPackageNameAndVersionNonDockerLeftUnsplit(t *testing.T) {
-	name, version := splitPackageNameAndVersion("generic", "analyzerManager.zip")
-	assert.Equal(t, "analyzerManager.zip", name)
+func TestSplitPackageNameAndVersionMaven(t *testing.T) {
+	name, version := splitPackageNameAndVersion("gav", "gav://com.acme:foo:1.2")
+	assert.Equal(t, "com.acme:foo", name)
+	assert.Equal(t, "1.2", version)
+}
+
+func TestSplitPackageNameAndVersionDebian(t *testing.T) {
+	name, version := splitPackageNameAndVersion("deb", "deb://debian:12:libxml2:2.9.14+dfsg-1.3~deb12u4")
+	assert.Equal(t, "debian:12:libxml2", name)
+	assert.Equal(t, "2.9.14+dfsg-1.3~deb12u4", version)
+}
+
+func TestSplitPackageNameAndVersionGenericLeftUnsplit(t *testing.T) {
+	name, version := splitPackageNameAndVersion("generic", "generic://sha256:abcd/analyzerManager.zip")
+	assert.Equal(t, "sha256:abcd/analyzerManager.zip", name)
 	assert.Empty(t, version)
 }
 
 func TestBuildScansListIssueDefaultsWhenNoInfectedComponents(t *testing.T) {
-	issue := buildScansListIssue(services.XrayViolation{IssueId: "XRAY-1", Type: "License"})
+	issue := buildScansListIssue(services.XrayViolation{IssueId: "XRAY-1", Type: "License"}, "")
 	assert.Empty(t, issue.CompId)
 	assert.Empty(t, issue.ComponentPackageType)
 	assert.Equal(t, "license", issue.Type)
 }
 
 func TestBuildScansListIssueDetectsExposures(t *testing.T) {
-	issue := buildScansListIssue(services.XrayViolation{ExposureDetails: &services.ExposureDetails{}})
+	issue := buildScansListIssue(services.XrayViolation{ExposureDetails: &services.ExposureDetails{}}, "")
 	assert.True(t, issue.IsExposuresIssue)
+}
+
+func TestBuildScansListIssueUsesArtifactAsComponentForDependency(t *testing.T) {
+	issue := buildScansListIssue(services.XrayViolation{
+		InfectedComponentIds: []string{"gav://com.google.guava:guava:20.0"},
+	}, "docker://nginx:1.2")
+	assert.Equal(t, "docker://nginx:1.2", issue.CompId)
+	assert.Equal(t, "gav://com.google.guava:guava:20.0", issue.SourceCompId)
+	assert.Equal(t, "docker", issue.ComponentPackageType)
 }
 
 func TestViolationState(t *testing.T) {
@@ -225,12 +284,70 @@ func TestViolationState(t *testing.T) {
 	assert.Equal(t, "Ignored", violationState(true))
 }
 
+func TestBuildResultFailedScanIsUnknown(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusFailed},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, nil)
+
+	assert.Equal(t, StatusUnknown, result.DownloadStatus)
+	assert.Contains(t, result.StatusReason, "failed")
+}
+
+func TestBuildResultPartialScanIsUnknown(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusPartial},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, nil)
+
+	assert.Equal(t, StatusUnknown, result.DownloadStatus)
+	assert.Contains(t, result.StatusReason, "partial")
+}
+
+func TestBuildResultNotSupportedIsAllowed(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusNotSupported},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, nil)
+
+	assert.Equal(t, StatusAllowed, result.DownloadStatus)
+}
+
+func TestBuildResultChecksumMismatchIsUnknown(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusDone},
+	}}
+	violations := []services.XrayViolation{{
+		Severity: "Critical",
+		Policies: []services.ViolationPolicy{{PolicyName: "no-critical-cve", IsBlocking: true}},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", true, scanStatus, violations)
+
+	assert.Equal(t, StatusUnknown, result.DownloadStatus)
+	assert.Empty(t, result.Violations)
+}
+
+func TestBuildResultPendingMentionsUnscannedBlock(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusPending},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, nil)
+
+	assert.Equal(t, StatusUnknown, result.DownloadStatus)
+	assert.Contains(t, result.StatusReason, "unscanned")
+}
+
 func TestBuildResultNoViolationsIsAllowed(t *testing.T) {
 	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
 		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusDone},
 	}}
 
-	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", scanStatus, nil)
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, nil)
 
 	assert.Equal(t, StatusAllowed, result.DownloadStatus)
 	assert.Empty(t, result.Violations)

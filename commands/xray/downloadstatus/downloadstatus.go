@@ -88,6 +88,12 @@ func ParseArtifact(arg string) (repo string, pathCandidates []string, err error)
 		}
 		spec = afterScheme[markerIdx+len(artifactoryUrlMarker):]
 	}
+	if cut := strings.IndexAny(spec, "?#"); cut != -1 {
+		spec = spec[:cut]
+	}
+	if decoded, unescapeErr := url.PathUnescape(spec); unescapeErr == nil {
+		spec = decoded
+	}
 	spec = strings.Trim(spec, "/")
 
 	if dockerRepo, dockerPaths, ok := parseDockerReference(spec); ok {
@@ -113,6 +119,9 @@ func parseDockerReference(spec string) (repo string, pathCandidates []string, ok
 	var imageName, tag, digest string
 	if atIdx := strings.Index(lastSegment, "@"); atIdx != -1 {
 		imageName, digest = lastSegment[:atIdx], lastSegment[atIdx+1:]
+		if colonIdx := strings.LastIndex(imageName, ":"); colonIdx != -1 {
+			imageName = imageName[:colonIdx]
+		}
 		if imageName == "" || !strings.HasPrefix(digest, "sha256:") {
 			return "", nil, false
 		}
@@ -132,11 +141,18 @@ func parseDockerReference(spec string) (repo string, pathCandidates []string, ok
 	}
 
 	if digest != "" {
-		return repo, []string{fmt.Sprintf("%s/%s/manifest.json", imagePath, digest)}, true
+		// Artifactory stores digest path segments with ':' replaced by '__'.
+		storageDigest := strings.Replace(digest, ":", "__", 1)
+		return repo, []string{
+			fmt.Sprintf("%s/%s/list.manifest.json", imagePath, storageDigest),
+			fmt.Sprintf("%s/%s/manifest.json", imagePath, storageDigest),
+			imagePath + "@" + digest,
+		}, true
 	}
 	return repo, []string{
 		fmt.Sprintf("%s/%s/list.manifest.json", imagePath, tag),
 		fmt.Sprintf("%s/%s/manifest.json", imagePath, tag),
+		imagePath + ":" + tag,
 	}, true
 }
 
@@ -178,8 +194,16 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 		return err
 	}
 
-	packageId, version := cmd.resolvePackageIdentity(xrayManager, path)
-	result := buildResult(cmd.repo, path, sha256, cmd.serverDetails.Url, packageId, version, scanStatus, violationsResponse.Violations)
+	packageId, version, indexedSha256 := cmd.resolvePackageIdentity(xrayManager, path)
+	var violations []services.XrayViolation
+	if violationsResponse != nil {
+		violations = violationsResponse.Violations
+	}
+	checksumMismatch := sha256 != "" && indexedSha256 != "" && !strings.EqualFold(sha256, indexedSha256)
+	if checksumMismatch {
+		violations = nil
+	}
+	result := buildResult(cmd.repo, path, sha256, cmd.serverDetails.Url, packageId, version, checksumMismatch, scanStatus, violations)
 	return printResult(cmd.outputFormat, result)
 }
 
@@ -187,7 +211,7 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 // which the scans-list UI needs in its URL. Falls back to a generic identity if the artifact isn't a recognized
 // package type or the lookup fails - the resulting link still works, just without the platform's stricter package
 // context.
-func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, path string) (packageId, version string) {
+func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, path string) (packageId, version, indexedSha256 string) {
 	for _, candidate := range []string{cmd.repo + "/" + path, "default/" + cmd.repo + "/" + path} {
 		summary, err := xrayManager.ArtifactSummary(services.ArtifactSummaryParams{Paths: []string{candidate}})
 		if err != nil || summary == nil || len(summary.Artifacts) == 0 {
@@ -196,13 +220,13 @@ func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayS
 		general := summary.Artifacts[0].General
 		pkgType := toXrayPkgPrefix(general.PkgType)
 		name, version := splitPackageNameAndVersion(pkgType, general.ComponentId)
-		return pkgType + "://" + name, version
+		return pkgType + "://" + name, version, general.Sha256
 	}
 	base := path
 	if idx := strings.LastIndex(path, "/"); idx != -1 {
 		base = path[idx+1:]
 	}
-	return "generic://" + base, ""
+	return "generic://" + base, "", ""
 }
 
 // toXrayPkgPrefix mirrors Xray's own package-type-to-URL-scheme mapping (e.g. Maven components are addressed
@@ -218,20 +242,20 @@ func toXrayPkgPrefix(pkgType string) string {
 	return lower
 }
 
-// splitPackageNameAndVersion separates a package's name from its version where Xray's component_id embeds
-// both together. The scans-list UI expects them as separate fields (package_id excluding the version, plus
-// a distinct version param) - observed directly from a working example URL, where an empty version produced
-// a "Mandatory fields are missing" error. Docker identifies components as 'name:tag', so we can split
-// reliably there; other package types aren't confirmed to follow the same convention, so they're left
-// unsplit rather than guessed at.
+// splitPackageNameAndVersion separates a component id's name from its version. Generic ids embed a
+// checksum ('sha256:<hex>/name') rather than a version, so they stay unsplit.
 func splitPackageNameAndVersion(pkgType, componentId string) (name, version string) {
-	if pkgType != "docker" {
+	if schemeIdx := strings.Index(componentId, "://"); schemeIdx != -1 {
+		componentId = componentId[schemeIdx+len("://"):]
+	}
+	if pkgType == "generic" || componentId == "" {
 		return componentId, ""
 	}
-	if idx := strings.LastIndex(componentId, ":"); idx != -1 {
-		return componentId[:idx], componentId[idx+1:]
+	colonIdx := strings.LastIndex(componentId, ":")
+	if colonIdx <= 0 || componentId[colonIdx-1] == ':' {
+		return componentId, ""
 	}
-	return componentId, ""
+	return componentId[:colonIdx], componentId[colonIdx+1:]
 }
 
 // resolveArtifact tries each path candidate in turn (a docker tag can resolve to a manifest list or a plain
@@ -248,6 +272,9 @@ func (cmd *DownloadStatusCommand) resolveArtifact() (path, sha256 string, err er
 			return candidate, fileInfo.Checksums.Sha256, nil
 		}
 		lastErr = ferr
+	}
+	if lastErr == nil {
+		return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s)", cmd.repo, strings.Join(cmd.pathCandidates, ", "))
 	}
 	return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s): %s", cmd.repo, strings.Join(cmd.pathCandidates, ", "), lastErr.Error())
 }
@@ -276,7 +303,10 @@ type Result struct {
 	Violations     []violationRow                  `json:"violations"`
 }
 
-func buildResult(repo, path, sha256, platformUrl, packageId, version string, scanStatus *services.ArtifactStatusResponse, violations []services.XrayViolation) *Result {
+func buildResult(repo, path, sha256, platformUrl, packageId, version string, checksumMismatch bool, scanStatus *services.ArtifactStatusResponse, violations []services.XrayViolation) *Result {
+	if scanStatus == nil {
+		scanStatus = &services.ArtifactStatusResponse{}
+	}
 	result := &Result{
 		Repo:          repo,
 		Path:          path,
@@ -286,11 +316,19 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, sca
 		Violations:    []violationRow{},
 	}
 
+	artifactCompId := ""
+	if packageId != "" && version != "" {
+		artifactCompId = packageId + ":" + version
+	}
+	if checksumMismatch {
+		violations = nil
+	}
+
 	blocking := false
 	for _, violation := range violations {
 		severity := severityutils.XraySeverityToSeverity(violation.Severity)
 		severityNumValue := severityutils.GetSeverityDetails(severity, jasutils.NotScanned).Priority
-		link := buildViolationUiLink(platformUrl, repo, path, packageId, version, violation)
+		link := buildViolationUiLink(platformUrl, repo, path, packageId, version, artifactCompId, violation)
 		for _, policy := range violation.Policies {
 			row := violationRow{
 				Watch:            violation.Watch,
@@ -317,12 +355,15 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, sca
 	})
 
 	switch {
+	case checksumMismatch:
+		result.DownloadStatus = StatusUnknown
+		result.StatusReason = "Xray's indexed checksum does not match this artifact"
 	case blocking:
 		result.DownloadStatus = StatusBlocked
 		result.StatusReason = "one or more matched policies are configured to block downloads"
-	case isScanPending(scanStatus.Details.Violations):
+	case isScanIncomplete(scanStatus.Details.Violations):
 		result.DownloadStatus = StatusUnknown
-		result.StatusReason = "violation scanning has not completed for this artifact yet"
+		result.StatusReason = scanIncompleteReason(scanStatus.Details.Violations.Status)
 	default:
 		result.DownloadStatus = StatusAllowed
 	}
@@ -342,8 +383,8 @@ func violationDetail(violation services.XrayViolation) string {
 // buildViolationUiLink builds a deep link into Xray's Scans List -> Violation Details view for this exact
 // violation. This mirrors an internal URL scheme reverse-engineered from the Xray UI (not a documented/stable
 // API), built around a JSON-encoded 'issue' query param the UI reads to open straight to this violation.
-func buildViolationUiLink(platformUrl, repo, path, packageId, version string, violation services.XrayViolation) string {
-	issue := buildScansListIssue(violation)
+func buildViolationUiLink(platformUrl, repo, path, packageId, version, artifactCompId string, violation services.XrayViolation) string {
+	issue := buildScansListIssue(violation, artifactCompId)
 	issueJson, err := json.Marshal(issue)
 	if err != nil {
 		return ""
@@ -363,7 +404,9 @@ func buildScansListLink(platformUrl, repo, path, packageId, version, pageType, i
 	}
 
 	query := url.Values{}
-	query.Set("version", version)
+	if version != "" {
+		query.Set("version", version)
+	}
 	query.Set("package_id", packageId)
 	query.Set("path", repo+"/"+path)
 	query.Set("page_type", pageType)
@@ -371,9 +414,12 @@ func buildScansListLink(platformUrl, repo, path, packageId, version, pageType, i
 		query.Set("issue", issueJson)
 	}
 
-	routeSegment := strings.ReplaceAll(url.PathEscape(path), "/", "%2F")
+	artifactName := path
+	if idx := strings.LastIndex(path, "/"); idx != -1 {
+		artifactName = path[idx+1:]
+	}
 	return fmt.Sprintf("%s/ui/scans-list/repositories/%s/scan-descendants/%s?%s",
-		strings.TrimSuffix(platformUrl, "/"), url.PathEscape(repo), routeSegment, query.Encode())
+		strings.TrimSuffix(platformUrl, "/"), url.PathEscape(repo), url.PathEscape(artifactName), query.Encode())
 }
 
 type scansListMatchedPolicy struct {
@@ -398,10 +444,19 @@ type scansListIssue struct {
 	ComponentPackageType string                   `json:"component_package_type"`
 }
 
-func buildScansListIssue(violation services.XrayViolation) scansListIssue {
-	compId := ""
+func buildScansListIssue(violation services.XrayViolation, artifactCompId string) scansListIssue {
+	infected := ""
 	if len(violation.InfectedComponentIds) > 0 {
-		compId = violation.InfectedComponentIds[0]
+		infected = violation.InfectedComponentIds[0]
+	}
+	compId := infected
+	sourceCompId := infected
+	if artifactCompId != "" && infected != "" && artifactCompId != infected {
+		compId = artifactCompId
+		sourceCompId = infected
+	} else if compId == "" {
+		compId = artifactCompId
+		sourceCompId = artifactCompId
 	}
 	componentPackageType := ""
 	if idx := strings.Index(compId, "://"); idx != -1 {
@@ -425,7 +480,7 @@ func buildScansListIssue(violation services.XrayViolation) scansListIssue {
 		IssueId:              violation.IssueId,
 		UserIssueId:          violation.Id,
 		WatcherName:          violation.Watch,
-		SourceCompId:         compId,
+		SourceCompId:         sourceCompId,
 		Title:                violationDetail(violation),
 		Type:                 strings.ToLower(string(violation.Type)),
 		MatchedPolicies:      policies,
@@ -434,12 +489,23 @@ func buildScansListIssue(violation services.XrayViolation) scansListIssue {
 	}
 }
 
-func isScanPending(status services.ArtifactScanStatus) bool {
+func isScanIncomplete(status services.ArtifactScanStatus) bool {
 	switch status.Status {
-	case services.ArtifactStatusPending, services.ArtifactStatusScanning, services.ArtifactStatusNotScanned:
-		return true
-	default:
+	case services.ArtifactStatusDone, services.ArtifactStatusNotSupported:
 		return false
+	default:
+		return true
+	}
+}
+
+func scanIncompleteReason(status services.ArtifactStatus) string {
+	switch status {
+	case services.ArtifactStatusFailed:
+		return "violation scan failed, so download blocking cannot be determined"
+	case services.ArtifactStatusPartial:
+		return "violation scan is partial, so download blocking cannot be determined"
+	default:
+		return "violation scanning has not completed for this artifact yet. A policy that blocks unscanned artifacts can still block the download"
 	}
 }
 

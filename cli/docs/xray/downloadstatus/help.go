@@ -18,12 +18,14 @@ Prerequisites:
 - The caller needs the same read permission on the artifact's repository that download requires.
 
 Notes:
-- The reported download status is computed from the current violation and scan data, not from a live download attempt, and may not exactly match what a real download would do.
-- Results are looked up by repository and path; if the same path has been overwritten with a different binary, matched violations reflect the current path rather than a specific build.
+- The reported download status is computed from the current violation and scan data, not from a live download attempt.
+- UNKNOWN means the violation scan has not finished, failed, or is partial, or the indexed checksum does not match the current file. A watch that blocks unscanned artifacts can still block the download while the status is UNKNOWN.
+- A docker pull reference ([host/]<repo>/<image>:<tag>, or @sha256:<digest>) is resolved to the manifest Artifactory stores for that image.
 
 Common patterns:
   $ jf xr status libs-release-local/com/acme/foo-1.2.jar
   $ jf xr status https://acme.jfrog.io/artifactory/libs-release-local/com/acme/foo-1.2.jar
+  $ jf xr status my-docker-repo/nginx:1.25
   $ jf xr status libs-release-local/com/acme/foo-1.2.jar --format=json
 
 Related: jf xr curl
@@ -33,6 +35,6 @@ Related: jf xr curl
 func GetArguments() []components.Argument {
 	return []components.Argument{{
 		Name:        "artifact",
-		Description: "The artifact to check, given either as '<repo>/<path>' or a full platform URL (https://<host>/artifactory/<repo>/<path>).",
+		Description: "The artifact to check. A '<repo>/<path>', a platform URL (https://<host>/artifactory/<repo>/<path>), or a docker pull reference ([host/]<repo>/<image>:<tag> or @sha256:<digest>).",
 	}}
 }
