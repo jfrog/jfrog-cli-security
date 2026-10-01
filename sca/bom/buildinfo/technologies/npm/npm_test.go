@@ -528,6 +528,25 @@ func TestParseProbe403Body(t *testing.T) {
 		ParseProbe403Body(body, &dep)
 		assert.Equal(t, "not_found", dep.Reason)
 	})
+	t.Run("new-server pending-catalog block parses as a policy block", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the following policies violated {pending catalog test 159776,Malicious package,The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.,Request a waiver for this package or wait for the JFrog Catalog to analyze it.}. For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]"}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		if assert.Len(t, dep.Policies, 1) {
+			assert.Equal(t, "pending catalog test 159776", dep.Policies[0].Policy)
+			assert.Equal(t, "Malicious package", dep.Policies[0].Condition)
+			assert.Equal(t, "The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.", dep.Policies[0].Explanation)
+			assert.Equal(t, "Request a waiver for this package or wait for the JFrog Catalog to analyze it.", dep.Policies[0].Recommendation)
+		}
+	})
+	t.Run("policy groups win over a not-being-found substring", func(t *testing.T) {
+		dep := BlockedDirectDep{}
+		body := []byte(`{"errors":[{"status":403,"message":"package mal-pkg:1.0.0 download was blocked by jfrog packages curation service due to it not being found in the index and the following policies violated {mal-policy, Malicious package}."}]}`)
+		ParseProbe403Body(body, &dep)
+		assert.Equal(t, "blocked_policy", dep.Reason)
+		assert.Len(t, dep.Policies, 1)
+	})
 	t.Run("policy quartet is parsed", func(t *testing.T) {
 		dep := BlockedDirectDep{}
 		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package and replace with an alternate}."}]}`)
