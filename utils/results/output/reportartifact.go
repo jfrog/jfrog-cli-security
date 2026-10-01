@@ -19,6 +19,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
+const unknownLocalArtifactPath = "unknown"
+
 func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults, xrayVersion string) (artifactPath string, err error) {
 	cdxResults, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeSbom:            true,
@@ -120,12 +122,16 @@ func getLocalArtifactPath(serverDetails *config.ServerDetails) (string, error) {
 	if serverDetails == nil {
 		return "", fmt.Errorf("server details are missing from the command results")
 	}
-	// Extract JFROG user from server details.
-	user := serverDetails.User
 	if serverDetails.AccessToken != "" {
-		user = auth.ExtractUsernameFromAccessToken(serverDetails.AccessToken)
+		userFromToken := auth.ExtractUsernameFromAccessToken(serverDetails.AccessToken)
+		if userFromToken != "" {
+			return userFromToken, nil
+		}
 	}
-	return user, nil
+	if serverDetails.User != "" {
+		return serverDetails.User, nil
+	}
+	return unknownLocalArtifactPath, nil
 }
 
 func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, error) {
