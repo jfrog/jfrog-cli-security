@@ -40,10 +40,6 @@ type SecurityCommandStep string
 type SecurityCommandResults struct {
 	errorsMutex  sync.Mutex `json:"-"`
 	targetsMutex sync.Mutex `json:"-"`
-	// Internal gate for fetching indirect CVE contextual (reachability) paths from Catalog: reflects the
-	// transitive_contextual_analysis entitlement (or its absence, including a failed check). Not part of the
-	// scan's output metadata - unexported so it's never serialized.
-	transitiveContextualAnalysisEnabled bool `json:"-"`
 	// General fields describing the command metadata
 	ResultsMetaData
 	// Results for each target in the command
@@ -92,6 +88,10 @@ type SkippableError struct {
 type Entitlements struct {
 	Jas              bool `json:"jas"`
 	SnippetDetection bool `json:"snippet_detection"`
+	// TransitiveContextualAnalysisEnabled is the internal gate for fetching indirect CVE contextual (reachability)
+	// paths from Catalog: reflects the transitive_contextual_analysis entitlement (or its absence, including a
+	// failed check). Not part of the scan's output metadata, so it's never serialized.
+	TransitiveContextualAnalysisEnabled bool `json:"-"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -499,13 +499,13 @@ func (r *SecurityCommandResults) SetEntitledForSnippetDetection(entitledForSnipp
 // SetTransitiveContextualAnalysisEnabled records the internal gate for fetching indirect CVE contextual
 // (reachability) paths from Catalog. This is not part of the scan's output metadata.
 func (r *SecurityCommandResults) SetTransitiveContextualAnalysisEnabled(enabled bool) *SecurityCommandResults {
-	r.transitiveContextualAnalysisEnabled = enabled
+	r.Entitlements.TransitiveContextualAnalysisEnabled = enabled
 	return r
 }
 
 // IsTransitiveContextualAnalysisEnabled reports the internal gate set by SetTransitiveContextualAnalysisEnabled.
 func (r *SecurityCommandResults) IsTransitiveContextualAnalysisEnabled() bool {
-	return r.transitiveContextualAnalysisEnabled
+	return r.Entitlements.TransitiveContextualAnalysisEnabled
 }
 
 func (r *SecurityCommandResults) SetSecretValidation(secretValidation bool) *SecurityCommandResults {
