@@ -15,14 +15,23 @@ When to use:
 
 Which policies apply: the Artifactory repository governing the job, looked up from the GitHub repository running it (GITHUB_REPOSITORY). The mapping is curation-side configuration. If it cannot be resolved the command fails.
 
+How each action is decided: it is evaluated against the curation policies configured using the ref the runner resolved - a tag, a branch or a commit. An approved action's content replaces the runner's copy in its cache; for a branch or a commit, the report's Notes shows the SHA Artifactory resolved it to (tags carry none yet). A blocked action is reported Rejected with Artifactory's block reason in Notes, and the runner's copy is left as it was.
+
 Prerequisites:
-- Must run on a GitHub Actions runner. The command takes no flags: the action cache, workflow, job and repository all come from the runner environment (RUNNER_WORKSPACE, GITHUB_WORKFLOW_REF, GITHUB_JOB, GITHUB_REPOSITORY). Outside a runner those are unset and the command reports an error rather than guessing.
+- Must run on a GitHub Actions runner. What is curated comes from the runner environment (RUNNER_WORKSPACE, GITHUB_WORKFLOW_REF, GITHUB_JOB, GITHUB_REPOSITORY). Outside a runner those are unset and the command reports an error.
+- A JFrog server configured (jf config, or jfrog/setup-jfrog-cli earlier in the job). The default server is used; to pick another, set JFROG_CLI_SERVER_ID to its server ID. setup-jfrog-cli's server is the default only when it is the first one configured, so on a runner that already has a JFrog config, or when a JF_ENV_* config token is also set, point at it explicitly: JFROG_CLI_SERVER_ID=setup-jfrog-cli-server (or the action's custom-server-id).
+- For a self-signed or internal-CA Artifactory, add its CA certificate to the runner's trust store or to ~/.jfrog/security/certs. TLS verification cannot be turned off for this command, because it replaces the action code the runner executes.
+
+Flags:
+- --threads: how many actions are decided at once (default 3).
 
 Common patterns:
   $ jf curate-gh-actions
+  $ jf curate-gh-actions --threads 8
 
 Gotchas:
-- If the action cache cannot be read - RUNNER_WORKSPACE is unset, or the directory it points at is absent the command reports an error rather.
+- If the action cache cannot be read - RUNNER_WORKSPACE is unset, or the directory it points at is absent the command reports an error.
+- An action no decision can be reached for (Artifactory unreachable, the ref not found) is reported as Undetermined with the cause, and the job fails; the other actions are still decided and reported. The command stops at first authentication failure and reports only that error.
 - Subpath and parent attribution is best-effort and additive: it adds a Parent when it can explain where an action came from. Actions pulled in transitively by a composite action's own action.yml uses: lines are attributed and reported with that action as their Parent. One it cannot place - pulled in by an action.yml this parser cannot read - is reported with an empty Parent, still curated, just unexplained.
 - Steps that run a container image rather than an action are not curated. A step using 'uses: docker://<image>' resolves to a container reference, so the runner pulls the image during job setup instead of into the action cache and it never appears in the scan. Curate those images with 'jf curation-audit --image <image>'.
 - An action that itself runs in a container ('runs: using: docker' in its action.yml) is curated as an action, but the image it pulls is not. The same 'jf curation-audit --image' applies.
@@ -39,7 +48,10 @@ Q: What's the command to curate the GitHub Actions used in this job?
 A: jf curate-gh-actions
 
 Q: Can I run it outside a GitHub Actions runner?
-A: No. It has no flags and reads everything from the runner environment, so off a runner it reports an error rather than curating something it cannot identify.
+A: No. It reads what to curate from the runner environment, so off a runner it reports an error.
+
+Q: How do I make it curate faster?
+A: Raise --threads, e.g. jf curate-gh-actions --threads 8. It bounds how many actions are decided at once; the default is 3.
 
 Q: Does this curate the actions used by a reusable workflow my job calls?
 A: No - a called reusable workflow runs its jobs on their own runners, so add jf curate-gh-actions as a step inside that reusable workflow.

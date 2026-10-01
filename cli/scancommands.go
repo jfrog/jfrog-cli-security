@@ -133,8 +133,9 @@ func getAuditAndScansCommands() []components.Command {
 			Action:        CurationCmd,
 		},
 		{
-			// Hidden until Catalog/Artifactory add support for VCS package type for GitHub Actions. Until then the
-			// curation decision is a stand-in, so the command must not be discoverable to users.
+			// Hidden until Artifactory curates the VCS package type and the curation service exposes the
+			// GitHub-repository -> VCS-repository mapping. Until then the repository resolver is a stand-in and a
+			// download is not yet a policy decision, so the command must not be discoverable to users.
 			Name:          "curate-gh-actions",
 			Flags:         flags.GetCommandFlags(flags.CurationActions),
 			Description:   curationActionsDocs.GetDescription(),
@@ -660,9 +661,21 @@ func CurationCmd(c *components.Context) error {
 
 // CurationActionsCmd curates the GitHub Actions resolved on this job's runner.
 func CurationActionsCmd(c *components.Context) error {
-	// No flags: every input comes from the runner environment. The setters the command
-	// exposes are for tests, which construct it directly rather than through the CLI.
-	return curation.NewCurationActionsCommand().Run()
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
+	if err != nil {
+		return err
+	}
+	if err = curation.RequireArtifactoryServer(serverDetails); err != nil {
+		return err
+	}
+	return curation.NewCurationActionsCommand().
+		SetServerDetails(serverDetails).
+		SetParallelRequests(threads).
+		Run()
 }
 
 var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](

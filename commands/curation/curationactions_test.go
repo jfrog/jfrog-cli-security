@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -34,10 +41,18 @@ var fixtureCacheEntries = []string{"actions/checkout@v4", "github/codeql-action@
 // undecidable, rejects the keys in rejected, approves everything else, and records what it was
 // asked so a test can assert on curation SCOPE rather than only on the command's exit status.
 // Keys are "owner/repo@ref". undecidable wins over rejected: no decision is not a decision.
+//
+// Run decides actions concurrently, so the recording is locked, and the order of asked is the
+// order decisions happened to start in - assert it as a set, not a sequence.
 type scriptedDecider struct {
 	rejected    []string
 	undecidable []string
-	asked       []string
+	// silentlyUndetermined actions come back Undetermined with no error - a decider that gives up
+	// without saying why.
+	silentlyUndetermined []string
+
+	mu    sync.Mutex
+	asked []string
 	// vcsRepos records the Artifactory VCS repository each decision was made under, so tests can
 	// prove the resolved value actually reached the decider rather than being computed and dropped.
 	vcsRepos []string
@@ -45,10 +60,15 @@ type scriptedDecider struct {
 
 func (d *scriptedDecider) Decide(_ context.Context, artifactoryVcsRepo string, ref githubactions.ActionRef) (githubactions.ActionCurationResult, error) {
 	key := ref.Owner + "/" + ref.Repo + "@" + ref.Ref
+	d.mu.Lock()
 	d.asked = append(d.asked, key)
 	d.vcsRepos = append(d.vcsRepos, artifactoryVcsRepo)
+	d.mu.Unlock()
 	if slices.Contains(d.undecidable, key) {
 		return githubactions.ActionCurationResult{}, errors.New("decision service unavailable")
+	}
+	if slices.Contains(d.silentlyUndetermined, key) {
+		return githubactions.ActionCurationResult{Status: githubactions.ActionUndetermined}, nil
 	}
 	if slices.Contains(d.rejected, key) {
 		return githubactions.ActionCurationResult{Status: githubactions.ActionRejected, Notes: "rejected in test"}, nil
@@ -337,9 +357,6 @@ func TestCurationActionsCommand_Run_ExitStatus(t *testing.T) {
 }
 
 func TestCurationActionsCommand_Run_UndecidableActions(t *testing.T) {
-	// An action that cannot be decided has an unknown status, and a report that quietly omitted
-	// it would read as a clean run. So the whole run fails and emits nothing - every row asserts
-	// the job summary directory stays empty, not just the one that motivated the rule.
 	twoActions := runnerSpec{cacheDirs: []string{"actions/checkout/v4", "actions/setup-node/v4"}}
 
 	tests := []struct {
@@ -349,6 +366,7 @@ func TestCurationActionsCommand_Run_UndecidableActions(t *testing.T) {
 		undecidable        []string
 		wantErrContains    []string
 		wantErrNotContains []string
+		wantApprovedRows   int
 	}{
 		{
 			name:            "verify when a decision fails then the error names the action and the cause",
@@ -364,22 +382,23 @@ func TestCurationActionsCommand_Run_UndecidableActions(t *testing.T) {
 			wantErrContains: []string{"actions/checkout@v4", "actions/setup-node@v4"},
 		},
 		{
-			name:               "verify when only one decision fails then the error names it alone",
+			name:               "verify when only one decision fails then the error names it alone and the other is still reported",
 			spec:               twoActions,
 			undecidable:        []string{"actions/setup-node@v4"},
 			wantErrContains:    []string{"actions/setup-node@v4"},
 			wantErrNotContains: []string{"actions/checkout@v4"},
+			wantApprovedRows:   1,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pinRunnerEnv(t, testGithubRepo, "", "")
-			// Recording is a no-op unless this is set, so set it and assert nothing lands there.
+			// Recording is a no-op unless this is set.
 			summaryDir := t.TempDir()
 			t.Setenv(coreutils.SummaryOutputDirPathEnv, summaryDir)
 			decider := &scriptedDecider{undecidable: tt.undecidable}
 
-			err := tt.spec.newCommand(t, tt.mode, "", decider).Run()
+			report, err := captureReport(t, tt.spec.newCommand(t, tt.mode, "", decider))
 
 			require.Error(t, err)
 			for _, want := range tt.wantErrContains {
@@ -388,9 +407,14 @@ func TestCurationActionsCommand_Run_UndecidableActions(t *testing.T) {
 			for _, notWant := range tt.wantErrNotContains {
 				assert.NotContains(t, err.Error(), notWant)
 			}
+			assert.Equal(t, len(tt.undecidable), strings.Count(report, "| Undetermined |"),
+				"every undecidable action must be a row, not omitted:\n%s", report)
+			assert.Equal(t, tt.wantApprovedRows, strings.Count(report, "| Approved |"),
+				"the actions that were decided must still be reported:\n%s", report)
+			assert.Contains(t, report, "decision service unavailable", "an Undetermined row must carry its cause")
 			entries, readErr := os.ReadDir(summaryDir)
 			require.NoError(t, readErr)
-			assert.Empty(t, entries, "no job summary may be recorded when an action could not be decided")
+			assert.NotEmpty(t, entries, "the job summary must be recorded even when an action could not be decided")
 		})
 	}
 }
@@ -493,7 +517,7 @@ func TestCurationActionsCommand_Run_WorkflowFileResolution(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantAsked, decider.asked,
+			assert.ElementsMatch(t, tt.wantAsked, decider.asked,
 				"every entry in the cache must be curated, whichever branch resolution took")
 		})
 	}
@@ -942,6 +966,218 @@ func TestCurationActionsCommand_Run_ErrorHandlingHookAppliesToFailuresNotOutcome
 				return
 			}
 			assert.NoError(t, err)
+		})
+	}
+}
+
+// probeDecider approves or refuses actions on a script while measuring concurrency: how many
+// decisions were in flight at once, and how many were made.
+type probeDecider struct {
+	// hold is how long a decision takes, per action; nil means immediate.
+	hold func(ref githubactions.ActionRef) time.Duration
+	// barrier, when set, holds every decision until that many are in flight at once, then releases
+	// them all - proof of parallelism that does not depend on sleeps overlapping.
+	barrier     int32
+	release     chan struct{}
+	releaseOnce sync.Once
+	// denied actions fail as an access failure, keyed "owner/repo@ref"; "*" denies every action.
+	denied []string
+	// rejected actions are Rejected, keyed "owner/repo@ref".
+	rejected []string
+
+	calls       atomic.Int32
+	inFlight    atomic.Int32
+	maxInFlight atomic.Int32
+}
+
+func (p *probeDecider) Decide(_ context.Context, _ string, ref githubactions.ActionRef) (githubactions.ActionCurationResult, error) {
+	p.calls.Add(1)
+	now := p.inFlight.Add(1)
+	defer p.inFlight.Add(-1)
+	for {
+		seen := p.maxInFlight.Load()
+		if now <= seen || p.maxInFlight.CompareAndSwap(seen, now) {
+			break
+		}
+	}
+	if p.hold != nil {
+		time.Sleep(p.hold(ref))
+	}
+	if p.barrier > 0 {
+		if now >= p.barrier {
+			p.releaseOnce.Do(func() { close(p.release) })
+		}
+		select {
+		case <-p.release:
+		case <-time.After(5 * time.Second):
+			// Only stops a serialized runner from hanging the test; the maxInFlight assertion fails it.
+		}
+	}
+	key := ref.Owner + "/" + ref.Repo + "@" + ref.Ref
+	if slices.Contains(p.denied, "*") || slices.Contains(p.denied, key) {
+		return githubactions.ActionCurationResult{}, fmt.Errorf("fetching %s: %w", key, githubactions.ErrAccessDenied)
+	}
+	if slices.Contains(p.rejected, key) {
+		return githubactions.ActionCurationResult{Status: githubactions.ActionRejected, Notes: "rejected in test"}, nil
+	}
+	return githubactions.ActionCurationResult{Status: githubactions.ActionApproved}, nil
+}
+
+// orderedActions is a cache of n actions that discovery lists in name order: a-org, b-org, ...
+func orderedActions(n int) (runnerSpec, []string) {
+	var spec runnerSpec
+	var keys []string
+	for i := range n {
+		owner := string(rune('a'+i)) + "-org"
+		spec.cacheDirs = append(spec.cacheDirs, owner+"/act/v1")
+		keys = append(keys, owner+"/act@v1")
+	}
+	return spec, keys
+}
+
+func TestCurationActionsCommand_Run_StopsOnAccessFailure(t *testing.T) {
+	t.Run("verify when one action is refused access with a single thread then no later action is decided and nothing is reported", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		summaryDir := t.TempDir()
+		t.Setenv(coreutils.SummaryOutputDirPathEnv, summaryDir)
+		spec, keys := orderedActions(5)
+		decider := &probeDecider{denied: []string{keys[1]}} // the 2nd of 5 in discovery order
+
+		report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "", decider).SetParallelRequests(1))
+
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, githubactions.ErrAccessDenied), "Run() error = %v, want ErrAccessDenied", err)
+		assert.LessOrEqual(t, decider.calls.Load(), int32(2), "no action after the refused one may be decided")
+		assert.NotContains(t, report, "GitHub Actions Curation Report", "a run stopped part-way must not report")
+		entries, readErr := os.ReadDir(summaryDir)
+		require.NoError(t, readErr)
+		assert.Empty(t, entries, "a run stopped part-way must not record a job summary")
+	})
+	t.Run("verify when access is refused with several threads then the run stops well short of every action", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		const threads = 3
+		spec, _ := orderedActions(20)
+		decider := &probeDecider{denied: []string{"*"}}
+
+		err := spec.newCommand(t, noWorkflowFile, "", decider).SetParallelRequests(threads).Run()
+
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, githubactions.ErrAccessDenied), "Run() error = %v, want ErrAccessDenied", err)
+		// Up to threads decisions are in flight when the first refusal lands, and each other worker
+		// may begin at most one more before it sees the stop; 20 would mean nothing stopped.
+		assert.LessOrEqual(t, decider.calls.Load(), int32(2*threads), "the run did not stop on the access failure")
+		assert.Equal(t, 1, strings.Count(err.Error(), githubactions.ErrAccessDenied.Error()),
+			"one access failure is reported, not one per action: %v", err)
+	})
+	t.Run("verify when an action is rejected then the run does not stop and every action is decided", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		spec, keys := orderedActions(5)
+		decider := &probeDecider{rejected: []string{keys[1]}}
+
+		report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "", decider).SetParallelRequests(1))
+
+		require.Error(t, err)
+		assert.False(t, errors.Is(err, githubactions.ErrAccessDenied), "a curation block must not stop the run: %v", err)
+		assert.Equal(t, int32(5), decider.calls.Load(), "every action must be decided after a rejection")
+		assert.Equal(t, 4, strings.Count(report, "| Approved |"))
+		assert.Equal(t, 1, strings.Count(report, "| Rejected |"))
+	})
+}
+
+func TestCurationActionsCommand_Run_ParallelDecisions(t *testing.T) {
+	tests := []struct {
+		name        string
+		threads     int
+		wantMaxOpen int32
+	}{
+		{name: "verify when threads is set then no more decisions than that run at once", threads: 2, wantMaxOpen: 2},
+		{name: "verify when threads is not set then the CLI default bounds the decisions in flight", threads: 0, wantMaxOpen: int32(cliutils.Threads)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pinRunnerEnv(t, testGithubRepo, "", "")
+			spec, _ := orderedActions(8)
+			decider := &probeDecider{barrier: tt.wantMaxOpen, release: make(chan struct{})}
+
+			err := spec.newCommand(t, noWorkflowFile, "", decider).SetParallelRequests(tt.threads).Run()
+
+			require.NoError(t, err)
+			assert.Equal(t, int32(8), decider.calls.Load())
+			assert.Equal(t, tt.wantMaxOpen, decider.maxInFlight.Load(), "decisions in flight at once, want exactly the thread bound")
+		})
+	}
+}
+
+func TestCurationActionsCommand_Run_ReportOrderIsDiscoveryOrder(t *testing.T) {
+	t.Run("verify when decisions finish in reverse then the report still lists actions in discovery order", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		spec, _ := orderedActions(5)
+		// The first action is the slowest, so with every action in flight at once they finish last-first.
+		decider := &probeDecider{hold: func(ref githubactions.ActionRef) time.Duration {
+			return time.Duration('f'-rune(ref.Owner[0])) * 15 * time.Millisecond
+		}}
+
+		report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "", decider).SetParallelRequests(5))
+
+		require.NoError(t, err)
+		last := -1
+		for _, owner := range []string{"a-org", "b-org", "c-org", "d-org", "e-org"} {
+			idx := strings.Index(report, "| "+owner+"/act |")
+			require.GreaterOrEqual(t, idx, 0, "%s missing from the report:\n%s", owner, report)
+			assert.Greater(t, idx, last, "%s is out of discovery order:\n%s", owner, report)
+			last = idx
+		}
+	})
+}
+
+func TestCurationActionsCommand_Run_MixedOutcomes(t *testing.T) {
+	t.Run("verify when actions are approved, rejected and undecidable then each is its own row and the error names both failures", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		spec := runnerSpec{cacheDirs: []string{"actions/checkout/v4", "evil-org/backdoor/v1", "flaky-org/remote/v1"}}
+		decider := &scriptedDecider{rejected: []string{"evil-org/backdoor@v1"}, undecidable: []string{"flaky-org/remote@v1"}}
+
+		report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "", decider))
+
+		require.Error(t, err)
+		assert.Equal(t, 1, strings.Count(report, "| Approved |"), report)
+		assert.Equal(t, 1, strings.Count(report, "| Rejected |"), report)
+		assert.Equal(t, 1, strings.Count(report, "| Undetermined |"), report)
+		assert.ErrorContains(t, err, `evil-org/backdoor@v1: status "Rejected"`)
+		assert.ErrorContains(t, err, "flaky-org/remote@v1")
+		assert.ErrorContains(t, err, "decision service unavailable")
+		assert.NotContains(t, err.Error(), `status "Undetermined"`, "an Undetermined action is explained once, by its cause")
+	})
+	t.Run("verify when a decider returns Undetermined without an error then the command still fails", func(t *testing.T) {
+		pinRunnerEnv(t, testGithubRepo, "", "")
+		spec := runnerSpec{cacheDirs: []string{"actions/checkout/v4", "quiet-org/action/v1"}}
+		decider := &scriptedDecider{silentlyUndetermined: []string{"quiet-org/action@v1"}}
+
+		report, err := captureReport(t, spec.newCommand(t, noWorkflowFile, "", decider))
+
+		require.Error(t, err, "only an explicit Approved may clear the gate")
+		assert.Equal(t, 1, strings.Count(report, "| Undetermined |"), report)
+		assert.ErrorContains(t, err, `quiet-org/action@v1: status "Undetermined"`)
+	})
+}
+
+func TestCurationActionsCommand_Run_RequiresAServerWithoutATestDecider(t *testing.T) {
+	tests := []struct {
+		name          string
+		serverDetails *config.ServerDetails
+	}{
+		{name: "verify when no server details are set then the command reports no JFrog server"},
+		// What the CLI resolves when jf config holds no server: empty, not nil.
+		{name: "verify when the server details are empty then the command reports no JFrog server", serverDetails: &config.ServerDetails{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pinRunnerEnv(t, testGithubRepo, "", "")
+			workingDir, actionsCacheDir := runnerSpec{cacheDirs: []string{"actions/checkout/v4"}}.build(t)
+
+			err := NewCurationActionsCommand().SetWorkingDir(workingDir).SetActionsCacheDir(actionsCacheDir).
+				SetServerDetails(tt.serverDetails).Run()
+
+			assert.ErrorContains(t, err, "no JFrog server is configured")
 		})
 	}
 }
