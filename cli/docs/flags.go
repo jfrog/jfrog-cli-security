@@ -29,6 +29,7 @@ const (
 	UploadCdx            = "upload-cdx"
 	MaliciousScan        = "malicious-scan"
 	SastServer           = "sast-server"
+	Status               = "xr-status"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -159,6 +160,9 @@ const (
 	XrayLibPluginBinaryCustomPath = "xray-lib-plugin-path"
 	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
+	// Unique status flags
+	StatusOutput = "xr-status-format"
+
 	// Unique curation flags
 	CurationOutput        = "curation-format"
 	DockerImageName       = "image"
@@ -242,6 +246,9 @@ var commandFlags = map[string][]string{
 	},
 	SastServer: {
 		Port,
+	},
+	Status: {
+		Url, XrayUrl, user, password, accessToken, ServerId, scanProjectKey, StatusOutput, InsecureTls,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -355,6 +362,7 @@ var flagsMap = map[string]components.Flag{
 	XrayLibPluginBinaryCustomPath: components.NewStringFlag(XrayLibPluginBinaryCustomPath, "Defines the custom path to the xray-lib-plugin binary.", components.SetHiddenStrFlag()),
 	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	StatusOutput:                  components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	SolutionPath:                  components.NewStringFlag(SolutionPath, "Path to the .NET solution file (.sln or .slnx) to use when multiple solution files are present in the directory."),
 	IncludeCachedPackages:         components.NewBoolFlag(IncludeCachedPackages, "When set to true, the system will audit cached packages. This configuration is mandatory for Curation on-demand workflows, which rely on package caching."),
 	MvnIncludePluginDeps:          components.NewBoolFlag(MvnIncludePluginDeps, "[Maven] When set to true, Maven build-plugin transitive dependencies are resolved and included in the curation evaluation. By default only project dependencies are scanned."),
