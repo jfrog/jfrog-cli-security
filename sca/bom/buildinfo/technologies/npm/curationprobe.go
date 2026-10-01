@@ -236,10 +236,6 @@ func ParseProbe403Body(body []byte, dep *BlockedDirectDep) {
 	if !strings.Contains(lower, "jfrog packages curation") {
 		return
 	}
-	if strings.Contains(lower, "not being found") {
-		dep.Reason = "not_found"
-		return
-	}
 	dep.Reason = "blocked_policy"
 	for _, match := range probeCurationPolicyRegex.FindAllString(msg, -1) {
 		raw := strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
@@ -257,6 +253,10 @@ func ParseProbe403Body(body []byte, dep *BlockedDirectDep) {
 			p.Recommendation = makeLegibleProbePolicyDetail(strings.TrimSpace(parts[3]))
 		}
 		dep.Policies = append(dep.Policies, p)
+	}
+	// a server predating per-policy pending behavior sends no {policy,...} groups, only this substring
+	if len(dep.Policies) == 0 && strings.Contains(lower, "not being found") {
+		dep.Reason = "not_found"
 	}
 }
 

@@ -3121,18 +3121,20 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 		// if the error message contains the curation string key, then we can be sure it got blocked by Curation service.
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {
 			blockingReason := BlockingReasonPolicy
-			if strings.Contains(strings.ToLower(respError.Errors[0].Message), NotBeingFoundKey) {
-				blockingReason = BlockingReasonNotFound
-			} else if strings.Contains(strings.ToLower(respError.Errors[0].Message), IsOnDemand) {
-				blockingReason = BlockingReasonOnDemand
-			}
 			policies := nc.extractPoliciesFromMsg(respError)
-			// extractPoliciesFromMsg may return empty when BlockMessageKey is present
-			// but no {policy,...} groups were found in the message.  In that case
-			// keep the 403 signal but be honest: use BlockingReasonUnknown rather
-			// than "Policy violations" with every detail column blank.
-			if blockingReason == BlockingReasonPolicy && len(policies) == 0 {
-				blockingReason = BlockingReasonUnknown
+			if len(policies) == 0 {
+				// a server predating per-policy pending behavior sends no {policy,...} groups, only these substrings
+				lowerMsg := strings.ToLower(respError.Errors[0].Message)
+				switch {
+				case strings.Contains(lowerMsg, IsOnDemand):
+					blockingReason = BlockingReasonOnDemand
+					policies = []Policy{{Explanation: BlockingReasonOnDemand}}
+				case strings.Contains(lowerMsg, NotBeingFoundKey):
+					blockingReason = BlockingReasonNotFound
+					policies = []Policy{{Explanation: BlockingReasonNotFound}}
+				default:
+					blockingReason = BlockingReasonUnknown
+				}
 			}
 			return &PackageStatus{
 				PackageName:       name,
@@ -3169,29 +3171,21 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 func (nc *treeAnalyzer) extractPoliciesFromMsg(respError *ErrorsResp) []Policy {
 	var policies []Policy
 	msg := respError.Errors[0].Message
-	lowerMsg := strings.ToLower(msg)
-	switch {
-	case strings.Contains(lowerMsg, IsOnDemand):
-		policies = []Policy{{Explanation: BlockingReasonOnDemand}}
-	case strings.Contains(lowerMsg, NotBeingFoundKey):
-		policies = []Policy{{Explanation: BlockingReasonNotFound}}
-	default:
-		allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
-		for _, match := range allMatches {
-			match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
-			polCond := strings.Split(match, ",")
-			if len(polCond) >= 2 {
-				pol := polCond[0]
-				cond := polCond[1]
+	allMatches := nc.extractPoliciesRegex.FindAllString(msg, -1)
+	for _, match := range allMatches {
+		match = strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
+		polCond := strings.Split(match, ",")
+		if len(polCond) >= 2 {
+			pol := polCond[0]
+			cond := polCond[1]
 
-				if len(polCond) == 4 {
-					exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
-					policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
-						Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
-					continue
-				}
-				policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
+			if len(polCond) == 4 {
+				exp, rec := makeLegiblePolicyDetails(polCond[2], polCond[3])
+				policies = append(policies, Policy{Policy: strings.TrimSpace(pol),
+					Condition: strings.TrimSpace(cond), Explanation: strings.TrimSpace(exp), Recommendation: strings.TrimSpace(rec)})
+				continue
 			}
+			policies = append(policies, Policy{Policy: strings.TrimSpace(pol), Condition: strings.TrimSpace(cond)})
 		}
 	}
 	return policies
