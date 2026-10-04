@@ -356,8 +356,15 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	filteredSbom = &bom
 	bomIndex := NewBOMIndex(&bom, false)
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL); matchedBomComp == nil || bomIndex.GetComponentRelation(matchedBomComp.BOMRef) == RootRelation {
-			// If not a match or Root component, skip it
+		matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL)
+		if matchedBomComp == nil {
+			// Not a match, skip it
+			continue
+		}
+		if bomIndex.GetComponentRelation(matchedBomComp.BOMRef) == RootRelation {
+			// Root component unchanged since the target: keep it for graph structure, but strip its
+			// license so it stops triggering license violations on every scan
+			matchedBomComp.Licenses = nil
 			continue
 		}
 		// Exclude the component from the dependencies

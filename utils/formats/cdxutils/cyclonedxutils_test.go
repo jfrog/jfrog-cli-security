@@ -1688,6 +1688,29 @@ func TestExclude(t *testing.T) {
 				Dependencies: &[]cyclonedx.Dependency{},
 			},
 		},
+		{
+			name: "Exclude unchanged root component - strip license, keep graph structure",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "web", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			// Simulates the target branch's root component, unchanged between source and target
+			exclude: []cyclonedx.Component{{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "web", Dependencies: &[]string{"dep1"}},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
