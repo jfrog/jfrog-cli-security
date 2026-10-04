@@ -24,6 +24,7 @@ import (
 
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
+	TransitiveContextualAnalysisFeatureId     = "transitive_contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
 	defaultAnalyzerManagerVersion             = "1.50.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"

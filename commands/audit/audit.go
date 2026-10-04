@@ -442,6 +442,10 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		// Validate secret validation entitlement
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
+	// Indirect CVE contextual (reachability) paths from Catalog require this entitlement, on top of JAS entitlement
+	// and the new (V3) audit flow. A failed or negative check must not fail the audit - it only means Catalog is skipped.
+	// This is an internal gate, not output metadata, so it's stored as an unexported field on cmdResults.
+	cmdResults.SetTransitiveContextualAnalysisEnabled(isEntitledForTransitiveContextualAnalysis(entitledForJas, xrayManager, params))
 	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
 	if shouldIncludeSnippetDetection(params) {
 		entitledForSnippetDetection, err := isEntitledForSnippetDetection(entitledForJas, xrayManager, params)
@@ -470,6 +474,21 @@ func isEntitledForSnippetDetection(isEntitledForJas bool, xrayManager *xray.Xray
 	}
 	// Snippet detection requires JAS entitlement and also the Snippet Detection feature is enabled in Xray.
 	return xrayutils.IsEntitled(xrayManager, auditParams.GetXrayVersion(), xrayplugin.SnippetDetectionFeatureId)
+}
+
+// isEntitledForTransitiveContextualAnalysis reports whether the platform is entitled for the transitive_contextual_analysis
+// feature, required for fetching indirect CVE contextual (reachability) paths from Catalog. Unlike isEntitledForJas, a
+// failed entitlement check must not fail the audit - it only means Catalog is skipped for indirect CVE paths.
+func isEntitledForTransitiveContextualAnalysis(isEntitledForJas bool, xrayManager *xray.XrayServicesManager, auditParams *AuditParams) bool {
+	if !isEntitledForJas {
+		return false
+	}
+	entitled, err := jas.IsEntitledForTransitiveContextualAnalysis(xrayManager, auditParams.GetXrayVersion())
+	if err != nil {
+		log.Debug("failed to check entitlement for transitive contextual analysis, indirect CVE contextual paths will be skipped: " + err.Error())
+		return false
+	}
+	return entitled
 }
 
 func populateScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
@@ -1016,17 +1035,19 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 					}
 					return
 				},
-				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
-				ProjectKey:                  auditParams.resultsContext.ProjectKey,
-				ApplicableScanType:          applicability.ApplicabilityScannerType,
-				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
-				SastRules:                   auditParams.SastRules(),
-				SastChangedFilesMode:        auditParams.SastChangedFilesMode(),
-				ChangedFiles:                sast.SastChangedFilesForTarget(scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
-				ScanResults:                 targetResult,
-				TargetCount:                 len(scanResults.Targets),
-				TargetOutputDir:             auditParams.scanResultsOutputDir,
-				AllowPartialResults:         scanResults.AllowPartialResults,
+				ThirdPartyApplicabilityScan:         auditParams.thirdPartyApplicabilityScan,
+				ProjectKey:                          auditParams.resultsContext.ProjectKey,
+				V3Flow:                              isNewFlow,
+				TransitiveContextualAnalysisEnabled: scanResults.IsTransitiveContextualAnalysisEnabled(),
+				ApplicableScanType:                  applicability.ApplicabilityScannerType,
+				SignedDescriptions:                  getSignedDescriptions(auditParams.OutputFormat()),
+				SastRules:                           auditParams.SastRules(),
+				SastChangedFilesMode:                auditParams.SastChangedFilesMode(),
+				ChangedFiles:                        sast.SastChangedFilesForTarget(scanResults.GitContext, targetResult.Target, getRootDir(auditParams.rootDir, scanResults)),
+				ScanResults:                         targetResult,
+				TargetCount:                         len(scanResults.Targets),
+				TargetOutputDir:                     auditParams.scanResultsOutputDir,
+				AllowPartialResults:                 scanResults.AllowPartialResults,
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
 				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), scanResults.AllowPartialResults)

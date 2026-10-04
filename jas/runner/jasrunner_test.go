@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -38,6 +39,84 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 	assert.Error(t, err)
 	assert.NotNil(t, scanner)
 	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
+}
+
+func TestShouldFetchIndirectCvePaths(t *testing.T) {
+	newTargetResultsWithSbom := func(withSbom bool) *results.TargetResults {
+		targetResults := results.NewCommandResults(utils.SourceCode).NewScanResults(results.ScanTarget{Target: "target"})
+		if withSbom {
+			targetResults.SetSbom(cyclonedx.NewBOM())
+		}
+		return targetResults
+	}
+
+	testCases := []struct {
+		name           string
+		newFlow        bool
+		entitled       bool
+		indirectCves   []string
+		scanResults    *results.TargetResults
+		expectedResult bool
+	}{
+		{
+			name:           "V2 flow - not fetched even when entitled with cves and sbom",
+			newFlow:        false,
+			entitled:       true,
+			indirectCves:   []string{"CVE-2024-1234"},
+			scanResults:    newTargetResultsWithSbom(true),
+			expectedResult: false,
+		},
+		{
+			name:           "not entitled - not fetched even on new flow with cves and sbom",
+			newFlow:        true,
+			entitled:       false,
+			indirectCves:   []string{"CVE-2024-1234"},
+			scanResults:    newTargetResultsWithSbom(true),
+			expectedResult: false,
+		},
+		{
+			name:           "no indirect cves - not fetched",
+			newFlow:        true,
+			entitled:       true,
+			indirectCves:   nil,
+			scanResults:    newTargetResultsWithSbom(true),
+			expectedResult: false,
+		},
+		{
+			name:           "no sca results - not fetched",
+			newFlow:        true,
+			entitled:       true,
+			indirectCves:   []string{"CVE-2024-1234"},
+			scanResults:    results.NewCommandResults(utils.SourceCode).NewScanResults(results.ScanTarget{Target: "target"}),
+			expectedResult: false,
+		},
+		{
+			name:           "sca results with no sbom - not fetched",
+			newFlow:        true,
+			entitled:       true,
+			indirectCves:   []string{"CVE-2024-1234"},
+			scanResults:    newTargetResultsWithSbom(false),
+			expectedResult: false,
+		},
+		{
+			name:           "new flow, entitled, indirect cves and sbom - fetched",
+			newFlow:        true,
+			entitled:       true,
+			indirectCves:   []string{"CVE-2024-1234"},
+			scanResults:    newTargetResultsWithSbom(true),
+			expectedResult: true,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			params := &JasRunnerParams{
+				V3Flow:                              testCase.newFlow,
+				TransitiveContextualAnalysisEnabled: testCase.entitled,
+				ScanResults:                         testCase.scanResults,
+			}
+			assert.Equal(t, testCase.expectedResult, shouldFetchIndirectCvePaths(params, testCase.indirectCves))
+		})
+	}
 }
 
 func TestJasRunner(t *testing.T) {
