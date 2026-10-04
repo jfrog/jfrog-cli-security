@@ -213,7 +213,7 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 // context.
 func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, path string) (packageId, version, indexedSha256 string) {
 	for _, candidate := range []string{cmd.repo + "/" + path, "default/" + cmd.repo + "/" + path} {
-		summary, err := xrayManager.ArtifactSummary(services.ArtifactSummaryParams{Paths: []string{candidate}})
+		summary, err := xrayManager.ArtifactSummaryForCommand(services.ArtifactSummaryParams{Paths: []string{candidate}}, "xr_status")
 		if err != nil || summary == nil || len(summary.Artifacts) == 0 {
 			continue
 		}
