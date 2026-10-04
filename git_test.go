@@ -169,12 +169,12 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 4, Vulnerabilities: 16 + 4},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 4, Vulnerabilities: 16 + securityTestUtils.ExpectedServicesIssueCount(4)},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: 4},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(4)},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: 4}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(4)}},
 		},
 	)
 }
