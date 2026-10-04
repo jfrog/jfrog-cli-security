@@ -525,6 +525,10 @@ func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 	return xrayUtils.IsEntitled(xrayManager, xrayVersion, ApplicabilityFeatureId)
 }
 
+func IsEntitledForTransitiveContextualAnalysis(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
+	return xrayUtils.IsEntitled(xrayManager, xrayVersion, TransitiveContextualAnalysisFeatureId)
+}
+
 func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId int) (string, error) {
 	if scanner.TempDir == "" {
 		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
