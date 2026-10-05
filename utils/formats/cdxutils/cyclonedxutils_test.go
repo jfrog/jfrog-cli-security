@@ -1699,8 +1699,7 @@ func TestExclude(t *testing.T) {
 					{Ref: "web", Dependencies: &[]string{"dep1"}},
 				},
 			},
-			// Simulates the target branch's root component, unchanged between source and target.
-			// dep1 is new/changed (not in target), so it is not excluded, and web must stay as its anchor.
+			// dep1 is not in target, so web must stay as its anchor
 			exclude: []cyclonedx.Component{{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"}},
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
@@ -1723,7 +1722,6 @@ func TestExclude(t *testing.T) {
 					{Ref: "web", Dependencies: &[]string{"dep1"}},
 				},
 			},
-			// Simulates a README-only PR: both the root and its only dependency are unchanged from target.
 			exclude: []cyclonedx.Component{
 				{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"},
 				{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0"},
@@ -1734,9 +1732,7 @@ func TestExclude(t *testing.T) {
 			},
 		},
 		{
-			// Mirrors a real multi-root scan: a wrapper entry (e.g. the scanned file/workspace) lists every
-			// root as one of its own dependsOn children regardless of whether anything changed, so a root is
-			// never "unreferenced" on its own merely by removing its own declared-dependencies entry.
+			// Mirrors a real multi-root scan, where a wrapper entry lists every root as a dependsOn child
 			name: "Exclude fully unchanged roots referenced by a multi-root wrapper entry",
 			bom: cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
@@ -1751,7 +1747,6 @@ func TestExclude(t *testing.T) {
 					{Ref: "web", Dependencies: &[]string{"ms"}},
 				},
 			},
-			// Simulates a README-only PR: every root and its only dependency are unchanged from target.
 			exclude: []cyclonedx.Component{
 				{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0"},
 				{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21"},
