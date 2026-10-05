@@ -455,11 +455,14 @@ func (st ScanTarget) GetDeprecatedAppsConfigModuleExclusions(scanType jasutils.J
 }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
-	return &SecurityCommandResults{ResultsMetaData: ResultsMetaData{CmdType: cmdType}, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
+	return &SecurityCommandResults{ResultsMetaData: ResultsMetaData{CmdType: cmdType, StartTime: time.Now()}, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
 }
 
+// SetStartTime records when the scan started. A zero time is ignored so a failed or skipped scan will not update the start time.
 func (r *SecurityCommandResults) SetStartTime(startTime time.Time) *SecurityCommandResults {
-	r.StartTime = startTime
+	if !startTime.IsZero() {
+		r.StartTime = startTime
+	}
 	return r
 }
 
