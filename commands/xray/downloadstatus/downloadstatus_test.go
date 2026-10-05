@@ -91,9 +91,9 @@ func TestParseArtifact(t *testing.T) {
 			expectedRepo:  "25000",
 			expectedPaths: []string{"nginx/1.25/list.manifest.json", "nginx/1.25/manifest.json", "nginx:1.25"},
 		},
-		{
+		{ // #nosec G101 -- dummy userinfo used to assert the error redacts it
 			name:         "url with userinfo is redacted",
-			arg:          "https://user:s3cret@acme.jfrog.io/ui/repo/file.jar",
+			arg:          "https://user:s3cret@acme.jfrog.io/ui/repo/file.jar", // #nosec G101 -- dummy userinfo used to assert the error redacts it
 			expectError:  true,
 			forbiddenErr: "s3cret",
 		},
