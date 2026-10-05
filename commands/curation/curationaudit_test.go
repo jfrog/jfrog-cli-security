@@ -142,7 +142,7 @@ func getTestCasesForExtractPoliciesFromMsg() []struct {
 			expect: nil,
 		},
 		{
-			name: "on-demand in progress",
+			name: "on-demand in progress carries no policy groups",
 			errResp: &ErrorsResp{
 				Errors: []ErrorResp{
 					{
@@ -151,14 +151,10 @@ func getTestCasesForExtractPoliciesFromMsg() []struct {
 					},
 				},
 			},
-			expect: []Policy{
-				{
-					Explanation: BlockingReasonOnDemand,
-				},
-			},
+			expect: nil,
 		},
 		{
-			name: "package not found in catalog",
+			name: "package not found in catalog carries no policy groups",
 			errResp: &ErrorsResp{
 				Errors: []ErrorResp{
 					{
@@ -167,11 +163,7 @@ func getTestCasesForExtractPoliciesFromMsg() []struct {
 					},
 				},
 			},
-			expect: []Policy{
-				{
-					Explanation: BlockingReasonNotFound,
-				},
-			},
+			expect: nil,
 		},
 	}
 	return tests
@@ -687,14 +679,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
-				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
-				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
-				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
-				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
-				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
-				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
-				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
-				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v1.5.2.mod":                             filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                             filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                            filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                             filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                             filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                            filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
 				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
 			},
 			// example.com/localmod is a tripwire, not an expected call: it's local-replaced and must never
@@ -2496,6 +2488,99 @@ func TestGetBlockedPackageDetails_403UnparsableBodyReturnsBlocked(t *testing.T) 
 			assert.Equal(t, BlockingReasonUnknown, got.BlockingReason)
 			assert.Equal(t, pkgName, got.PackageName)
 			assert.Equal(t, pkgVersion, got.PackageVersion)
+		})
+	}
+}
+
+// A curation 403 that carries {policy,...} groups always renders as a full policy block; the
+// pending-package substrings only stand in for a server that predates per-policy pending behavior.
+func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testing.T) {
+	const (
+		pkgName    = "@milkio/stargate-worker"
+		pkgVersion = "1.3.65"
+	)
+
+	tests := []struct {
+		name         string
+		message      string
+		wantReason   string
+		wantPolicies []Policy
+		wantWaiver   bool
+	}{
+		{
+			name:         "old server: package not found in catalog",
+			message:      "package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the package not being found in catalog",
+			wantReason:   BlockingReasonNotFound,
+			wantPolicies: []Policy{{Explanation: BlockingReasonNotFound}},
+		},
+		{
+			name:         "old server: curation on-demand in progress",
+			message:      "package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the package not being found in catalog, curation on-demand scan in progress",
+			wantReason:   BlockingReasonOnDemand,
+			wantPolicies: []Policy{{Explanation: BlockingReasonOnDemand}},
+		},
+		{
+			name:       "new server: policy group wins over not-being-found",
+			message:    `package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the package not being found in catalog and the following policies violated {pending catalog test 159776,Malicious package,The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.,Request a waiver for this package or wait for the JFrog Catalog to analyze it.}. For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]`,
+			wantReason: BlockingReasonPolicy,
+			wantPolicies: []Policy{{
+				Policy:         "pending catalog test 159776",
+				Condition:      "Malicious package",
+				Explanation:    "The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.",
+				Recommendation: "Request a waiver for this package or wait for the JFrog Catalog to analyze it.",
+			}},
+			wantWaiver: true,
+		},
+		{
+			name:       "new server: policy group wins over on-demand",
+			message:    `package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to curation on-demand scan in progress and the following policies violated {pending catalog test 159776,Malicious package,This package is still being scanned so the policy cannot be evaluated against it. This policy is set to block until the scan finishes.,Retry the download once the scan completes. No waiver is needed.}. For details and alternatives, visit: http://localhost:8083/ui/catalog/onDemand/packages/details/npm/@milkio%2Fstargate-worker/1.3.65?ecosystem=generic`,
+			wantReason: BlockingReasonPolicy,
+			wantPolicies: []Policy{{
+				Policy:         "pending catalog test 159776",
+				Condition:      "Malicious package",
+				Explanation:    "This package is still being scanned so the policy cannot be evaluated against it. This policy is set to block until the scan finishes.",
+				Recommendation: "Retry the download once the scan completes. No waiver is needed.",
+			}},
+		},
+		{
+			name:       "curation block with neither policy groups nor a pending substring",
+			message:    `package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the following policies violated . For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]`,
+			wantReason: BlockingReasonUnknown,
+			wantWaiver: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, tt.message)
+			serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(blockJSON))
+			})
+			defer serverMock.Close()
+
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:            rtManager,
+				rtAuth:               rtAuth,
+				httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+				extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+				url:                  rtAuth.GetUrl(),
+				repo:                 "npm-remote",
+				tech:                 techutils.Npm,
+			}
+			packageUrl := fmt.Sprintf("%sapi/npm/npm-remote/%s/-/%s-%s.tgz", rtAuth.GetUrl(), pkgName, pkgName, pkgVersion)
+
+			got, err := analyzer.getBlockedPackageDetails(packageUrl, pkgName, pkgVersion)
+
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, blocked, got.Action)
+			assert.Equal(t, tt.wantReason, got.BlockingReason)
+			assert.Equal(t, tt.wantPolicies, got.Policy)
+			assert.Equal(t, tt.wantWaiver, got.WaiverAllowed)
 		})
 	}
 }
