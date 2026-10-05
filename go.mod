@@ -168,4 +168,4 @@ require (
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
 
-replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20261004103606-402a3466fb81
+replace github.com/jfrog/jfrog-client-go => github.com/orto17/jfrog-client-go v0.0.0-20261005082022-58d285570544
