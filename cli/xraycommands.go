@@ -161,15 +161,15 @@ func xrStatusCmd(c *components.Context) error {
 	if len(c.Arguments) != 1 {
 		return pluginsCommon.WrongNumberOfArgumentsHandler(c)
 	}
-	repo, pathCandidates, err := downloadstatus.ParseArtifact(c.Arguments[0])
-	if err != nil {
-		return err
-	}
 	serverDetails, err := CreateServerDetailsFromFlags(c)
 	if err != nil {
 		return err
 	}
 	if err = validateConnectionInputs(serverDetails); err != nil {
+		return err
+	}
+	repo, pathCandidates, err := downloadstatus.ParseArtifact(c.Arguments[0], serverDetails.Url)
+	if err != nil {
 		return err
 	}
 	format, err := outputFormat.ParseOutputFormat(c.GetStringFlagValue(flags.OutputFormat), []outputFormat.OutputFormat{outputFormat.Table, outputFormat.Json})

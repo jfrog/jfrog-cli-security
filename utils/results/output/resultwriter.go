@@ -111,6 +111,20 @@ func isPrettyOutputSupported() bool {
 	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
+// TerminalSupportsHyperlinks reports whether this process is attached to a terminal known to render OSC 8
+// hyperlinks. Terminal.app on macOS does not.
+func TerminalSupportsHyperlinks() bool {
+	if os.Getenv("WT_SESSION") != "" || os.Getenv("KITTY_WINDOW_ID") != "" {
+		return true
+	}
+	switch os.Getenv("TERM_PROGRAM") {
+	case "iTerm.app", "vscode", "Hyper", "WezTerm", "ghostty", "Tabby", "WarpTerminal":
+		return true
+	default:
+		return false
+	}
+}
+
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {

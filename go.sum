@@ -173,8 +173,8 @@ github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260928054331-4a0f3827cfa0 h1:F
 github.com/jfrog/jfrog-cli-artifactory v0.8.1-0.20260928054331-4a0f3827cfa0/go.mod h1:VaMX/0GKExKszogM+G62260Krx15l4EV/MQ0ftgbBW0=
 github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260925084932-b47892ded3a0 h1:SNXwdC0MIjNC2dCf8lNaZvMNpy6CLWdsZllcIhC/atQ=
 github.com/jfrog/jfrog-cli-core/v2 v2.60.1-0.20260925084932-b47892ded3a0/go.mod h1:SwV+DNLBnWLxBeNeZpJk+xxAbqJ8ywq1va56up+AGu4=
-github.com/jfrog/jfrog-client-go v1.55.1-0.20260922085904-ab72c67e288c h1:vPxRHP7zGszh9FAGdgWk7LwpwWwmWHy0XEkTtaxwKxU=
-github.com/jfrog/jfrog-client-go v1.55.1-0.20260922085904-ab72c67e288c/go.mod h1:7B7eMRKuMhZ0rOdMItbJVpWjRUe1L//J3Jq+PgjiNxI=
+github.com/jfrog/jfrog-client-go v1.55.1-0.20261005090941-0646d7b50f9a h1:KXO+LsENOD75ZCVvZEf7/1B4z7zgsornGa6924fALzg=
+github.com/jfrog/jfrog-client-go v1.55.1-0.20261005090941-0646d7b50f9a/go.mod h1:7B7eMRKuMhZ0rOdMItbJVpWjRUe1L//J3Jq+PgjiNxI=
 github.com/jhump/protoreflect v1.15.1 h1:HUMERORf3I3ZdX05WaQ6MIpd/NJ434hTp5YiKgfCL6c=
 github.com/jhump/protoreflect v1.15.1/go.mod h1:jD/2GMKKE6OqX8qTjhADU1e6DShO+gavG9e0Q693nKo=
 github.com/kevinburke/ssh_config v1.6.0 h1:J1FBfmuVosPHf5GRdltRLhPJtJpTlMdKTBjRgTaQBFY=
@@ -244,8 +244,6 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
-github.com/orto17/jfrog-client-go v0.0.0-20261005082022-58d285570544 h1:Bi8X3xQUvV9oB7a8Q32IE79nPIx0j1MmJYiaqSoERaQ=
-github.com/orto17/jfrog-client-go v0.0.0-20261005082022-58d285570544/go.mod h1:7B7eMRKuMhZ0rOdMItbJVpWjRUe1L//J3Jq+PgjiNxI=
 github.com/owenrumney/go-sarif/v3 v3.2.3 h1:n6mdX5ugKwCrZInvBsf6WumXmpAe3mbmQXgkXlIq34U=
 github.com/owenrumney/go-sarif/v3 v3.2.3/go.mod h1:1bV7t8SZg7pX41spaDkEUs8/yEjzk9JapztMoX1XNjg=
 github.com/package-url/packageurl-go v0.1.3 h1:4juMED3hHiz0set3Vq3KeQ75KD1avthoXLtmE3I0PLs=

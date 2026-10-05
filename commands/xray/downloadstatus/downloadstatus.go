@@ -2,9 +2,10 @@ package downloadstatus
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 
@@ -15,9 +16,14 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/docker"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
@@ -77,14 +83,16 @@ func (cmd *DownloadStatusCommand) CommandName() string {
 // ParseArtifact accepts a full platform URL (https://host/artifactory/repo/path), a bare 'repo/path' spec,
 // or a docker pull reference ([registry-host/]repo/image[:tag|@sha256:digest]), and resolves it to a repo
 // plus one or more candidate manifest paths to try (a tag can resolve to either a manifest list or a plain
-// manifest, depending on how the image was pushed).
-func ParseArtifact(arg string) (repo string, pathCandidates []string, err error) {
-	spec := arg
+// manifest, depending on how the image was pushed). platformUrl is the configured platform URL, used to
+// resolve Docker subdomain and port references from Set Me Up.
+func ParseArtifact(arg, platformUrl string) (repo string, pathCandidates []string, err error) {
+	safeArg := redactArtifactArg(arg)
+	spec := safeArg
 	if schemeIdx := strings.Index(spec, "://"); schemeIdx != -1 {
 		afterScheme := spec[schemeIdx+len("://"):]
 		markerIdx := strings.Index(afterScheme, artifactoryUrlMarker)
 		if markerIdx == -1 {
-			return "", nil, errorutils.CheckErrorf("expected '%s' in the provided URL: %s", artifactoryUrlMarker, arg)
+			return "", nil, errorutils.CheckErrorf("expected '%s' in the provided URL: %s", artifactoryUrlMarker, safeArg)
 		}
 		spec = afterScheme[markerIdx+len(artifactoryUrlMarker):]
 	}
@@ -96,20 +104,35 @@ func ParseArtifact(arg string) (repo string, pathCandidates []string, err error)
 	}
 	spec = strings.Trim(spec, "/")
 
-	if dockerRepo, dockerPaths, ok := parseDockerReference(spec); ok {
+	if dockerRepo, dockerPaths, ok := parseDockerReference(spec, platformUrl); ok {
 		return dockerRepo, dockerPaths, nil
 	}
 
 	repo, path, found := strings.Cut(spec, "/")
 	if !found || repo == "" || path == "" {
-		return "", nil, errorutils.CheckErrorf("expected '<repo>/<path>' or a full artifact URL, got: %s", arg)
+		return "", nil, errorutils.CheckErrorf("expected '<repo>/<path>' or a full artifact URL, got: %s", safeArg)
 	}
 	return repo, []string{path}, nil
 }
 
+func redactArtifactArg(arg string) string {
+	trimmed := strings.TrimSpace(arg)
+	if cut := strings.IndexAny(trimmed, "?#"); cut != -1 {
+		trimmed = trimmed[:cut]
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return trimmed
+	}
+	parsed.User = nil
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
 // parseDockerReference recognizes a docker pull-style reference by its trailing ':<tag>' or '@sha256:<digest>',
 // strips a leading registry host if present, and maps it to the Artifactory storage path(s) for that image.
-func parseDockerReference(spec string) (repo string, pathCandidates []string, ok bool) {
+func parseDockerReference(spec, platformUrl string) (repo string, pathCandidates []string, ok bool) {
 	lastSlash := strings.LastIndex(spec, "/")
 	if lastSlash == -1 {
 		return "", nil, false
@@ -134,9 +157,8 @@ func parseDockerReference(spec string) (repo string, pathCandidates []string, ok
 		return "", nil, false
 	}
 
-	repoAndImage := stripDockerRegistryHost(spec[:lastSlash]) + "/" + imageName
-	repo, imagePath, found := strings.Cut(repoAndImage, "/")
-	if !found || repo == "" || imagePath == "" {
+	repo, imagePath := resolveDockerRepoAndImage(spec[:lastSlash], imageName, tag, platformUrl)
+	if repo == "" || imagePath == "" {
 		return "", nil, false
 	}
 
@@ -156,6 +178,32 @@ func parseDockerReference(spec string) (repo string, pathCandidates []string, ok
 	}, true
 }
 
+func resolveDockerRepoAndImage(prefix, imageName, tag, platformUrl string) (repo, imagePath string) {
+	if platformUrl != "" && dockerPrefixHasRegistryHost(prefix) {
+		imageRef := prefix + "/" + imageName
+		if tag != "" {
+			imageRef += ":" + tag
+		}
+		info, err := docker.ParseDockerImageWithArtifactoryUrl(imageRef, platformUrl)
+		if err == nil && info != nil && info.Repo != "" && info.Image != "" {
+			log.Debug(fmt.Sprintf("Resolved docker reference %s to repo %s path %s", imageRef, info.Repo, info.Image))
+			return info.Repo, info.Image
+		}
+		log.Debug(fmt.Sprintf("Docker reference %s did not match platform URL %s", imageRef, redactArtifactArg(platformUrl)))
+	}
+	repoAndImage := stripDockerRegistryHost(prefix) + "/" + imageName
+	repo, imagePath, found := strings.Cut(repoAndImage, "/")
+	if !found {
+		return "", ""
+	}
+	return repo, imagePath
+}
+
+func dockerPrefixHasRegistryHost(prefix string) bool {
+	first, _, _ := strings.Cut(prefix, "/")
+	return strings.Contains(first, ".") || strings.Contains(first, ":") || first == "localhost"
+}
+
 // stripDockerRegistryHost drops a leading registry host segment, using the same heuristic docker itself
 // uses: a first path element is a host if it contains a '.' or ':', or is exactly 'localhost'.
 func stripDockerRegistryHost(prefix string) string {
@@ -170,19 +218,31 @@ func stripDockerRegistryHost(prefix string) string {
 }
 
 func (cmd *DownloadStatusCommand) Run() (err error) {
-	path, sha256, err := cmd.resolveArtifact()
+	result, err := cmd.FetchResult()
 	if err != nil {
 		return err
 	}
+	return printResult(cmd.outputFormat, result)
+}
+
+func (cmd *DownloadStatusCommand) FetchResult() (*Result, error) {
+	path, sha256, err := cmd.resolveArtifact()
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("Resolved artifact %s/%s sha256 %s", cmd.repo, path, sha256))
 
 	xrayManager, err := corexray.CreateXrayServiceManager(cmd.serverDetails, corexray.WithScopedProjectKey(cmd.project))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	scanStatus, err := xrayManager.GetArtifactStatus(cmd.repo, path)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if scanStatus != nil {
+		log.Debug(fmt.Sprintf("Violation scan status for %s/%s is %s", cmd.repo, path, scanStatus.Details.Violations.Status))
 	}
 
 	violationsResponse, err := xrayManager.GetViolations(
@@ -191,7 +251,7 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 			FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: cmd.repo, Path: path}),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	packageId, version, indexedSha256 := cmd.resolvePackageIdentity(xrayManager, path)
@@ -201,10 +261,12 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 	}
 	checksumMismatch := sha256 != "" && indexedSha256 != "" && !strings.EqualFold(sha256, indexedSha256)
 	if checksumMismatch {
+		log.Debug(fmt.Sprintf("Indexed sha256 %s does not match artifact sha256 %s", indexedSha256, sha256))
 		violations = nil
 	}
 	result := buildResult(cmd.repo, path, sha256, cmd.serverDetails.Url, packageId, version, checksumMismatch, scanStatus, violations)
-	return printResult(cmd.outputFormat, result)
+	log.Debug(fmt.Sprintf("Download status for %s/%s is %s (%s)", cmd.repo, path, result.DownloadStatus, result.StatusReason))
+	return result, nil
 }
 
 // resolvePackageIdentity looks up how Xray identifies this artifact as a package (e.g. 'deb://debian:12:libxml2'),
@@ -212,50 +274,79 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 // package type or the lookup fails - the resulting link still works, just without the platform's stricter package
 // context.
 func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, path string) (packageId, version, indexedSha256 string) {
-	for _, candidate := range []string{cmd.repo + "/" + path, "default/" + cmd.repo + "/" + path} {
+	candidates := cmd.artifactSummaryPaths(path)
+	log.Debug(fmt.Sprintf("Looking up package identity for %s/%s via %s", cmd.repo, path, strings.Join(candidates, ", ")))
+	for _, candidate := range candidates {
 		summary, err := xrayManager.ArtifactSummary(services.ArtifactSummaryParams{Paths: []string{candidate}, CliCommand: "xr_status"})
 		if err != nil || summary == nil || len(summary.Artifacts) == 0 {
+			log.Debug(fmt.Sprintf("Artifact summary miss for %s: %v", candidate, err))
 			continue
 		}
 		general := summary.Artifacts[0].General
-		pkgType := toXrayPkgPrefix(general.PkgType)
-		name, version := splitPackageNameAndVersion(pkgType, general.ComponentId)
-		return pkgType + "://" + name, version, general.Sha256
+		packageId, version = packageIdAndVersion(general.PkgType, general.ComponentId)
+		log.Debug(fmt.Sprintf("Resolved package identity %s version %s from %s", packageId, version, candidate))
+		return packageId, version, general.Sha256
 	}
 	base := path
 	if idx := strings.LastIndex(path, "/"); idx != -1 {
 		base = path[idx+1:]
 	}
+	log.Debug(fmt.Sprintf("No artifact summary for %s/%s, using generic identity", cmd.repo, path))
 	return "generic://" + base, "", ""
 }
 
-// toXrayPkgPrefix mirrors Xray's own package-type-to-URL-scheme mapping (e.g. Maven components are addressed
-// as 'gav://', not 'maven://').
-func toXrayPkgPrefix(pkgType string) string {
-	lower := strings.ToLower(pkgType)
-	if lower == "" {
-		return "generic"
+func (cmd *DownloadStatusCommand) artifactSummaryPaths(path string) []string {
+	repoPath := cmd.repo + "/" + path
+	candidates := []string{repoPath}
+	if cmd.project != "" {
+		candidates = append(candidates, cmd.project+"/"+repoPath)
 	}
-	if lower == "maven" {
-		return "gav"
-	}
-	return lower
+	return append(candidates, "default/"+repoPath)
 }
 
-// splitPackageNameAndVersion separates a component id's name from its version. Generic ids embed a
-// checksum ('sha256:<hex>/name') rather than a version, so they stay unsplit.
-func splitPackageNameAndVersion(pkgType, componentId string) (name, version string) {
+// packageIdAndVersion builds the scans-list package id. A component id that already has a scheme keeps that
+// scheme (deb:// stays deb://, gav:// stays gav:// for Gradle and Ivy). Display names are mapped through
+// techutils when the component id has no scheme. Generic ids keep their checksum form.
+func packageIdAndVersion(pkgType, componentId string) (packageId, version string) {
 	if schemeIdx := strings.Index(componentId, "://"); schemeIdx != -1 {
-		componentId = componentId[schemeIdx+len("://"):]
+		scheme := componentId[:schemeIdx]
+		if scheme == "generic" {
+			return componentId, ""
+		}
+		name, ver, splitScheme := techutils.SplitComponentIdRaw(componentId)
+		if splitScheme != "" {
+			scheme = splitScheme
+		}
+		if name == "" {
+			name = componentId[schemeIdx+len("://"):]
+		}
+		return scheme + "://" + name, ver
 	}
-	if pkgType == "generic" || componentId == "" {
-		return componentId, ""
+	scheme := xrayPackageScheme(pkgType)
+	if scheme == "generic" || componentId == "" {
+		return scheme + "://" + componentId, ""
 	}
-	colonIdx := strings.LastIndex(componentId, ":")
-	if colonIdx <= 0 || componentId[colonIdx-1] == ':' {
-		return componentId, ""
+	name, ver, _ := techutils.SplitComponentIdRaw(scheme + "://" + componentId)
+	return scheme + "://" + name, ver
+}
+
+func xrayPackageScheme(pkgType string) string {
+	lower := strings.ToLower(strings.TrimSpace(pkgType))
+	switch lower {
+	case "", "generic":
+		return "generic"
+	case "ivy":
+		return techutils.Gav
+	case "debian":
+		return string(techutils.Debian)
 	}
-	return componentId[:colonIdx], componentId[colonIdx+1:]
+	if tech := techutils.ToTechnology(lower); tech != techutils.NoTech {
+		return tech.GetXrayPackageType()
+	}
+	if mapped := techutils.ComponentPackageTypeToXrayType(lower); mapped != "" {
+		return mapped
+	}
+	return lower
 }
 
 // resolveArtifact tries each path candidate in turn (a docker tag can resolve to a manifest list or a plain
@@ -271,12 +362,22 @@ func (cmd *DownloadStatusCommand) resolveArtifact() (path, sha256 string, err er
 		if ferr == nil {
 			return candidate, fileInfo.Checksums.Sha256, nil
 		}
+		if !isArtifactNotFound(ferr) {
+			log.Debug(fmt.Sprintf("File info for %s/%s failed: %s", cmd.repo, candidate, ferr.Error()))
+			return "", "", ferr
+		}
+		log.Debug(fmt.Sprintf("Artifact %s/%s was not found", cmd.repo, candidate))
 		lastErr = ferr
 	}
 	if lastErr == nil {
 		return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s)", cmd.repo, strings.Join(cmd.pathCandidates, ", "))
 	}
 	return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s): %s", cmd.repo, strings.Join(cmd.pathCandidates, ", "), lastErr.Error())
+}
+
+func isArtifactNotFound(err error) bool {
+	var httpErr *errorutils.HttpResponseError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
 }
 
 type violationRow struct {
@@ -290,6 +391,7 @@ type violationRow struct {
 	Detail           string
 	ViolationId      string
 	Link             string
+	issueKey         string
 }
 
 type Result struct {
@@ -330,17 +432,19 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 		severityNumValue := severityutils.GetSeverityDetails(severity, jasutils.NotScanned).Priority
 		link := buildViolationUiLink(platformUrl, repo, path, packageId, version, artifactCompId, violation)
 		for _, policy := range violation.Policies {
+			ignored := violationIgnored(policy, violation)
 			row := violationRow{
 				Watch:            violation.Watch,
 				Policy:           policy.PolicyName,
 				Rule:             policy.Rule,
 				Severity:         string(violation.Severity),
 				SeverityNumValue: severityNumValue,
-				Blocking:         policy.IsBlocking && !policy.IsIgnored,
-				Ignored:          policy.IsIgnored,
+				Blocking:         policyBlocksDownload(policy, violation, ignored),
+				Ignored:          ignored,
 				Detail:           violationDetail(violation),
-				ViolationId:      violation.IssueId,
+				ViolationId:      violationIdentifier(violation),
 				Link:             link,
+				issueKey:         issueSortKey(violation),
 			}
 			blocking = blocking || row.Blocking
 			result.Violations = append(result.Violations, row)
@@ -351,7 +455,10 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 		if result.Violations[i].Blocking != result.Violations[j].Blocking {
 			return result.Violations[i].Blocking
 		}
-		return result.Violations[i].SeverityNumValue > result.Violations[j].SeverityNumValue
+		if result.Violations[i].SeverityNumValue != result.Violations[j].SeverityNumValue {
+			return result.Violations[i].SeverityNumValue > result.Violations[j].SeverityNumValue
+		}
+		return result.Violations[i].issueKey < result.Violations[j].issueKey
 	})
 
 	switch {
@@ -370,14 +477,78 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 	return result
 }
 
+func violationIgnored(policy services.ViolationPolicy, violation services.XrayViolation) bool {
+	if policy.IsIgnored {
+		return true
+	}
+	return violation.IgnoreInfo != nil && !violation.IgnoreInfo.IsExpired
+}
+
+func policyBlocksDownload(policy services.ViolationPolicy, violation services.XrayViolation, ignored bool) bool {
+	if !policy.IsBlocking || ignored {
+		return false
+	}
+	if policy.SkipNotApplicable && violationNotApplicable(violation) {
+		return false
+	}
+	return true
+}
+
+func violationNotApplicable(violation services.XrayViolation) bool {
+	saw := false
+	for _, details := range violation.ApplicabilityDetails {
+		saw = true
+		if details.Status != services.NotApplicable {
+			return false
+		}
+	}
+	for _, applicability := range violation.Applicability {
+		if applicability.Applicability == nil {
+			continue
+		}
+		saw = true
+		if *applicability.Applicability {
+			return false
+		}
+	}
+	return saw
+}
+
+func violationIdentifier(violation services.XrayViolation) string {
+	if violation.IssueId != "" {
+		return violation.IssueId
+	}
+	return violation.Id
+}
+
 func violationDetail(violation services.XrayViolation) string {
 	if violation.Summary != "" {
 		return violation.Summary
 	}
-	if len(violation.Cves) > 0 && violation.Cves[0].Id != "" {
-		return violation.Cves[0].Id
+	if id := results.GetIssueIdentifier(cveRows(violation.Cves), violation.IssueId, ", "); id != "" {
+		return id
+	}
+	if violation.Id != "" {
+		return violation.Id
 	}
 	return violation.Description
+}
+
+func issueSortKey(violation services.XrayViolation) string {
+	if key := results.GetIssueIdentifier(cveRows(violation.Cves), violation.IssueId, ", "); key != "" {
+		return key
+	}
+	return violation.Id
+}
+
+func cveRows(cves []services.CveDetails) []formats.CveRow {
+	rows := make([]formats.CveRow, 0, len(cves))
+	for _, cve := range cves {
+		if cve.Id != "" {
+			rows = append(rows, formats.CveRow{Id: cve.Id})
+		}
+	}
+	return rows
 }
 
 // buildViolationUiLink builds a deep link into Xray's Scans List -> Violation Details view for this exact
@@ -399,29 +570,19 @@ func buildArtifactScansListLink(platformUrl, repo, path, packageId, version stri
 }
 
 func buildScansListLink(platformUrl, repo, path, packageId, version, pageType, issueJson string) string {
-	if platformUrl == "" {
-		return ""
-	}
-
-	query := url.Values{}
-	if version != "" {
-		query.Set("version", version)
-	}
-	query.Set("package_id", packageId)
-	query.Set("path", repo+"/"+path)
-	query.Set("page_type", pageType)
-	if issueJson != "" {
-		query.Set("issue", issueJson)
-	}
-
-	artifactName := path
-	if idx := strings.LastIndex(path, "/"); idx != -1 {
-		artifactName = path[idx+1:]
-	}
-	return fmt.Sprintf("%s/ui/scans-list/repositories/%s/scan-descendants/%s?%s",
-		strings.TrimSuffix(platformUrl, "/"), url.PathEscape(repo), url.PathEscape(artifactName), query.Encode())
+	return utils.BuildRepositoryScansListLink(utils.RepositoryScansListLink{
+		BaseUrl:      platformUrl,
+		Repo:         repo,
+		ArtifactPath: path,
+		PackageID:    packageId,
+		Version:      version,
+		PageType:     pageType,
+		Issue:        issueJson,
+	})
 }
 
+// Field names follow the Xray scans-list issue query (is_blocking, is_skip_not_applicable).
+// violationutils.Policy uses a different JSON contract, so it cannot be reused here.
 type scansListMatchedPolicy struct {
 	Policy              string `json:"policy"`
 	Rule                string `json:"rule"`
@@ -530,7 +691,7 @@ func printResult(outputFormat format.OutputFormat, result *Result) error {
 	// The Link column only earns its place when the terminal can actually render it as a clickable OSC 8
 	// hyperlink (e.g. iTerm2, VS Code, Windows Terminal) - in a terminal that can't (e.g. Terminal.app), a
 	// column that looks like a link but does nothing would be misleading, so it's dropped entirely instead.
-	if terminalSupportsHyperlinks() {
+	if output.TerminalSupportsHyperlinks() {
 		rows := make([]violationTableRowWithLink, 0, len(result.Violations))
 		for _, violation := range result.Violations {
 			common := newViolationTableRow(violation)
@@ -566,20 +727,6 @@ func newViolationTableRow(violation violationRow) violationTableRow {
 		Watch:       violation.Watch,
 		Policy:      violation.Policy,
 		Rule:        violation.Rule,
-	}
-}
-
-// terminalSupportsHyperlinks reports whether this process is attached to a terminal known to render OSC 8
-// hyperlinks (not all terminals do - notably Terminal.app on macOS never implemented it).
-func terminalSupportsHyperlinks() bool {
-	if os.Getenv("WT_SESSION") != "" || os.Getenv("KITTY_WINDOW_ID") != "" {
-		return true
-	}
-	switch os.Getenv("TERM_PROGRAM") {
-	case "iTerm.app", "vscode", "Hyper", "WezTerm", "ghostty", "Tabby", "WarpTerminal":
-		return true
-	default:
-		return false
 	}
 }
 

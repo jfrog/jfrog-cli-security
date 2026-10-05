@@ -2,10 +2,13 @@ package downloadstatus
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
@@ -14,9 +17,11 @@ func TestParseArtifact(t *testing.T) {
 	tests := []struct {
 		name          string
 		arg           string
+		platformUrl   string
 		expectedRepo  string
 		expectedPaths []string
 		expectError   bool
+		forbiddenErr  string
 	}{
 		{name: "bare repo/path", arg: "libs-release-local/com/acme/foo-1.2.jar", expectedRepo: "libs-release-local", expectedPaths: []string{"com/acme/foo-1.2.jar"}},
 		{name: "full url", arg: "https://acme.jfrog.io/artifactory/libs-release-local/com/acme/foo-1.2.jar", expectedRepo: "libs-release-local", expectedPaths: []string{"com/acme/foo-1.2.jar"}},
@@ -72,13 +77,42 @@ func TestParseArtifact(t *testing.T) {
 			expectedRepo:  "libs-release-local",
 			expectedPaths: []string{"com/acme/foo-1.2.jar"},
 		},
+		{
+			name:          "docker subdomain reference",
+			arg:           "mycompany-docker-local.jfrog.io/nginx:1.25",
+			platformUrl:   "https://mycompany.jfrog.io/artifactory",
+			expectedRepo:  "docker-local",
+			expectedPaths: []string{"nginx/1.25/list.manifest.json", "nginx/1.25/manifest.json", "nginx:1.25"},
+		},
+		{
+			name:          "docker port reference",
+			arg:           "artifactory.example.com:25000/nginx:1.25",
+			platformUrl:   "https://artifactory.example.com:8081/artifactory",
+			expectedRepo:  "25000",
+			expectedPaths: []string{"nginx/1.25/list.manifest.json", "nginx/1.25/manifest.json", "nginx:1.25"},
+		},
+		{
+			name:         "url with userinfo is redacted",
+			arg:          "https://user:s3cret@acme.jfrog.io/ui/repo/file.jar",
+			expectError:  true,
+			forbiddenErr: "s3cret",
+		},
+		{
+			name:         "query token is redacted",
+			arg:          "libs-release-local?token=s3cret",
+			expectError:  true,
+			forbiddenErr: "s3cret",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			repo, paths, err := ParseArtifact(test.arg)
+			repo, paths, err := ParseArtifact(test.arg, test.platformUrl)
 			if test.expectError {
 				assert.Error(t, err)
+				if test.forbiddenErr != "" {
+					assert.NotContains(t, err.Error(), test.forbiddenErr)
+				}
 				return
 			}
 			assert.NoError(t, err)
@@ -179,8 +213,10 @@ func TestBuildResultOrdersByBlockingThenSeverity(t *testing.T) {
 	violations := []services.XrayViolation{
 		{Watch: "w", Severity: "Low", Policies: []services.ViolationPolicy{{PolicyName: "low-not-blocking"}}},
 		{Watch: "w", Severity: "Critical", Policies: []services.ViolationPolicy{{PolicyName: "critical-blocking", IsBlocking: true}}},
-		{Watch: "w", Severity: "High", Policies: []services.ViolationPolicy{{PolicyName: "high-not-blocking"}}},
-		{Watch: "w", Severity: "Medium", Policies: []services.ViolationPolicy{{PolicyName: "medium-blocking", IsBlocking: true}}},
+		{Watch: "w", Severity: "High", Cves: []services.CveDetails{{Id: "CVE-2020-0002"}}, Policies: []services.ViolationPolicy{{PolicyName: "high-cve-2"}}},
+		{Watch: "w", Severity: "High", Cves: []services.CveDetails{{Id: "CVE-2020-0001"}}, Policies: []services.ViolationPolicy{{PolicyName: "high-cve-1"}}},
+		{Watch: "w", Severity: "Medium", Cves: []services.CveDetails{{Id: "CVE-2019-0002"}}, Policies: []services.ViolationPolicy{{PolicyName: "medium-cve-2", IsBlocking: true}}},
+		{Watch: "w", Severity: "Medium", Cves: []services.CveDetails{{Id: "CVE-2019-0001"}}, Policies: []services.ViolationPolicy{{PolicyName: "medium-cve-1", IsBlocking: true}}},
 	}
 
 	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, violations)
@@ -189,7 +225,7 @@ func TestBuildResultOrdersByBlockingThenSeverity(t *testing.T) {
 	for i, v := range result.Violations {
 		names[i] = v.Policy
 	}
-	assert.Equal(t, []string{"critical-blocking", "medium-blocking", "high-not-blocking", "low-not-blocking"}, names)
+	assert.Equal(t, []string{"critical-blocking", "medium-cve-1", "medium-cve-2", "high-cve-1", "high-cve-2", "low-not-blocking"}, names)
 }
 
 func TestBuildViolationUiLinkEmptyPlatformUrl(t *testing.T) {
@@ -228,34 +264,32 @@ func TestBuildArtifactScansListLinkEmptyPlatformUrl(t *testing.T) {
 	assert.Empty(t, buildArtifactScansListLink("", "repo", "path", "generic://foo", ""))
 }
 
-func TestSplitPackageNameAndVersionDocker(t *testing.T) {
-	name, version := splitPackageNameAndVersion("docker", "version-test:1.2.3")
-	assert.Equal(t, "version-test", name)
-	assert.Equal(t, "1.2.3", version)
-}
-
-func TestSplitPackageNameAndVersionDockerNoTag(t *testing.T) {
-	name, version := splitPackageNameAndVersion("docker", "version-test")
-	assert.Equal(t, "version-test", name)
-	assert.Empty(t, version)
-}
-
-func TestSplitPackageNameAndVersionMaven(t *testing.T) {
-	name, version := splitPackageNameAndVersion("gav", "gav://com.acme:foo:1.2")
-	assert.Equal(t, "com.acme:foo", name)
-	assert.Equal(t, "1.2", version)
-}
-
-func TestSplitPackageNameAndVersionDebian(t *testing.T) {
-	name, version := splitPackageNameAndVersion("deb", "deb://debian:12:libxml2:2.9.14+dfsg-1.3~deb12u4")
-	assert.Equal(t, "debian:12:libxml2", name)
-	assert.Equal(t, "2.9.14+dfsg-1.3~deb12u4", version)
-}
-
-func TestSplitPackageNameAndVersionGenericLeftUnsplit(t *testing.T) {
-	name, version := splitPackageNameAndVersion("generic", "generic://sha256:abcd/analyzerManager.zip")
-	assert.Equal(t, "sha256:abcd/analyzerManager.zip", name)
-	assert.Empty(t, version)
+func TestPackageIdAndVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		pkgType     string
+		componentId string
+		packageId   string
+		version     string
+	}{
+		{name: "docker tag without scheme", pkgType: "docker", componentId: "version-test:1.2.3", packageId: "docker://version-test", version: "1.2.3"},
+		{name: "docker name without version", pkgType: "docker", componentId: "version-test", packageId: "docker://version-test"},
+		{name: "keeps gav scheme for gradle", pkgType: "Gradle", componentId: "gav://com.acme:foo:1.2", packageId: "gav://com.acme:foo", version: "1.2"},
+		{name: "maps maven display name to gav", pkgType: "Maven", componentId: "com.acme:foo:1.2", packageId: "gav://com.acme:foo", version: "1.2"},
+		{name: "maps gradle display name to gav", pkgType: "Gradle", componentId: "com.acme:foo:1.2", packageId: "gav://com.acme:foo", version: "1.2"},
+		{name: "maps ivy display name to gav", pkgType: "ivy", componentId: "com.acme:foo:1.2", packageId: "gav://com.acme:foo", version: "1.2"},
+		{name: "keeps deb scheme when pkg type is debian", pkgType: "Debian", componentId: "deb://debian:buster:glibc:2.28-10", packageId: "deb://debian:buster:glibc", version: "2.28-10"},
+		{name: "maps debian display name to deb", pkgType: "Debian", componentId: "debian:buster:glibc:2.28-10", packageId: "deb://debian:buster:glibc", version: "2.28-10"},
+		{name: "debian component id", pkgType: "deb", componentId: "deb://debian:12:libxml2:2.9.14+dfsg-1.3~deb12u4", packageId: "deb://debian:12:libxml2", version: "2.9.14+dfsg-1.3~deb12u4"},
+		{name: "generic checksum stays unsplit", pkgType: "generic", componentId: "generic://sha256:abcd/analyzerManager.zip", packageId: "generic://sha256:abcd/analyzerManager.zip"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			packageId, version := packageIdAndVersion(test.pkgType, test.componentId)
+			assert.Equal(t, test.packageId, packageId)
+			assert.Equal(t, test.version, version)
+		})
+	}
 }
 
 func TestBuildScansListIssueDefaultsWhenNoInfectedComponents(t *testing.T) {
@@ -351,4 +385,129 @@ func TestBuildResultNoViolationsIsAllowed(t *testing.T) {
 
 	assert.Equal(t, StatusAllowed, result.DownloadStatus)
 	assert.Empty(t, result.Violations)
+}
+
+func TestBuildResultFailedScanWithBlockingViolationStaysBlocked(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusFailed},
+	}}
+	violations := []services.XrayViolation{{
+		Severity: "Critical",
+		Policies: []services.ViolationPolicy{{PolicyName: "no-critical-cve", IsBlocking: true}},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, violations)
+
+	assert.Equal(t, StatusBlocked, result.DownloadStatus)
+}
+
+func TestBuildResultNonExpiredIgnoreDoesNotBlock(t *testing.T) {
+	scanStatus := doneScanStatus()
+	violations := []services.XrayViolation{{
+		Severity:   "Critical",
+		IgnoreInfo: &services.IgnoreRuleInfo{IsExpired: false},
+		Policies:   []services.ViolationPolicy{{PolicyName: "no-critical-cve", IsBlocking: true}},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, violations)
+
+	assert.Equal(t, StatusAllowed, result.DownloadStatus)
+	assert.True(t, result.Violations[0].Ignored)
+	assert.False(t, result.Violations[0].Blocking)
+}
+
+func TestBuildResultExpiredIgnoreStillBlocks(t *testing.T) {
+	scanStatus := doneScanStatus()
+	violations := []services.XrayViolation{{
+		Severity:   "Critical",
+		IgnoreInfo: &services.IgnoreRuleInfo{IsExpired: true},
+		Policies:   []services.ViolationPolicy{{PolicyName: "no-critical-cve", IsBlocking: true}},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, violations)
+
+	assert.Equal(t, StatusBlocked, result.DownloadStatus)
+	assert.False(t, result.Violations[0].Ignored)
+}
+
+func TestBuildResultSkipNotApplicableDoesNotBlock(t *testing.T) {
+	scanStatus := doneScanStatus()
+	notApplicable := false
+	violations := []services.XrayViolation{{
+		Severity:             "High",
+		ApplicabilityDetails: []services.CveApplicabilityDetails{{Status: services.NotApplicable}},
+		Applicability:        []services.CveApplicability{{Applicability: &notApplicable}},
+		Policies: []services.ViolationPolicy{
+			{PolicyName: "skip", IsBlocking: true, SkipNotApplicable: true},
+			{PolicyName: "also-skip", IsBlocking: true, SkipNotApplicable: true},
+		},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, violations)
+
+	assert.Equal(t, StatusAllowed, result.DownloadStatus)
+	assert.False(t, result.Violations[0].Blocking)
+	assert.False(t, result.Violations[1].Blocking)
+}
+
+func TestBuildResultSkipNotApplicableStillBlocksWhenAnotherPolicyDoesNotSkip(t *testing.T) {
+	scanStatus := doneScanStatus()
+	violations := []services.XrayViolation{{
+		Severity:             "High",
+		ApplicabilityDetails: []services.CveApplicabilityDetails{{Status: services.NotApplicable}},
+		Policies: []services.ViolationPolicy{
+			{PolicyName: "skip", IsBlocking: true, SkipNotApplicable: true},
+			{PolicyName: "enforce", IsBlocking: true},
+		},
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "gav://com.acme:foo", "1.2", false, scanStatus, violations)
+
+	assert.Equal(t, StatusBlocked, result.DownloadStatus)
+	blockingByPolicy := map[string]bool{}
+	for _, row := range result.Violations {
+		blockingByPolicy[row.Policy] = row.Blocking
+	}
+	assert.False(t, blockingByPolicy["skip"])
+	assert.True(t, blockingByPolicy["enforce"])
+}
+
+func TestBuildResultUsesIssueIdAndFallsBackToViolationId(t *testing.T) {
+	scanStatus := doneScanStatus()
+	withIssue := buildResult("repo", "a.jar", "", "https://acme.jfrog.io", "generic://a.jar", "", false, scanStatus, []services.XrayViolation{{
+		IssueId:  "XRAY-1",
+		Id:       "99",
+		Policies: []services.ViolationPolicy{{PolicyName: "p"}},
+	}})
+	assert.Equal(t, "XRAY-1", withIssue.Violations[0].ViolationId)
+
+	withRecordOnly := buildResult("repo", "a.jar", "", "https://acme.jfrog.io", "generic://a.jar", "", false, scanStatus, []services.XrayViolation{{
+		Id:       "99",
+		Policies: []services.ViolationPolicy{{PolicyName: "p"}},
+	}})
+	assert.Equal(t, "99", withRecordOnly.Violations[0].ViolationId)
+}
+
+func TestArtifactSummaryPathsIncludeProjectBeforeDefault(t *testing.T) {
+	cmd := NewDownloadStatusCommand().SetRepoAndPathCandidates("libs-release-local", nil)
+	assert.Equal(t, []string{"libs-release-local/com/acme/foo.jar", "default/libs-release-local/com/acme/foo.jar"}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
+
+	cmd.SetProject("team-a")
+	assert.Equal(t, []string{
+		"libs-release-local/com/acme/foo.jar",
+		"team-a/libs-release-local/com/acme/foo.jar",
+		"default/libs-release-local/com/acme/foo.jar",
+	}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
+}
+
+func TestIsArtifactNotFound(t *testing.T) {
+	assert.True(t, isArtifactNotFound(&errorutils.HttpResponseError{StatusCode: http.StatusNotFound}))
+	assert.False(t, isArtifactNotFound(&errorutils.HttpResponseError{StatusCode: http.StatusForbidden}))
+	assert.False(t, isArtifactNotFound(errors.New("connection reset")))
+}
+
+func doneScanStatus() *services.ArtifactStatusResponse {
+	return &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusDone},
+	}}
 }
