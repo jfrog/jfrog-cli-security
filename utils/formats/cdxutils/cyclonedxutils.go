@@ -355,6 +355,10 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	bomIndex := NewBOMIndex(&bom, false)
+	// Roots confirmed unchanged since the target (same purl). Their own declared-dependencies entry is
+	// not touched here - whether they end up excluded entirely depends on whether anything survives
+	// underneath them, decided below, once all their (non-root) children have been processed.
+	var unchangedRoots []cyclonedx.Component
 	for _, compToExclude := range componentsToExclude {
 		matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL)
 		if matchedBomComp == nil {
@@ -362,13 +366,26 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 			continue
 		}
 		if bomIndex.GetComponentRelation(matchedBomComp.BOMRef) == RootRelation {
-			// Root component unchanged since the target: keep it for graph structure, but strip its
-			// license so it stops triggering license violations on every scan
-			matchedBomComp.Licenses = nil
+			unchangedRoots = append(unchangedRoots, *matchedBomComp)
 			continue
 		}
 		// Exclude the component from the dependencies
 		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, bom.Components, compToExclude)
+	}
+	// A root whose declared children were all excluded above (nothing real survives underneath it) must
+	// be excluded entirely too, same as any other component - not just license-stripped. A multi-root
+	// scan's wrapper entry declares every root as one of its own dependsOn children regardless of whether
+	// anything changed, so a root is never "unreferenced" on its own; and the later SCA scan-graph/enrich
+	// step re-resolves license data fresh for every component still present, so clearing a field on a
+	// root that stays present would just get silently re-attached. Removing it from both the component
+	// list and the wrapper's dependsOn list is the only way to actually stop it being re-evaluated.
+	for _, root := range unchangedRoots {
+		rootEntry := SearchDependencyEntry(filteredSbom.Dependencies, root.BOMRef)
+		if rootEntry != nil && rootEntry.Dependencies != nil && len(*rootEntry.Dependencies) > 0 {
+			// At least one real (new/changed) child survives under this root - keep it as their anchor.
+			continue
+		}
+		filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, root)
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {

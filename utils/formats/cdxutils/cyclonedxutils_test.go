@@ -1689,7 +1689,7 @@ func TestExclude(t *testing.T) {
 			},
 		},
 		{
-			name: "Exclude unchanged root component - strip license, keep graph structure",
+			name: "Exclude unchanged root with a surviving child - root kept with its original data",
 			bom: cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
@@ -1699,16 +1699,68 @@ func TestExclude(t *testing.T) {
 					{Ref: "web", Dependencies: &[]string{"dep1"}},
 				},
 			},
-			// Simulates the target branch's root component, unchanged between source and target
+			// Simulates the target branch's root component, unchanged between source and target.
+			// dep1 is new/changed (not in target), so it is not excluded, and web must stay as its anchor.
 			exclude: []cyclonedx.Component{{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"}},
 			expected: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
 					{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "web", Dependencies: &[]string{"dep1"}},
 				},
+			},
+		},
+		{
+			name: "Exclude fully unchanged root (no surviving children) - root excluded entirely",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "web", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			// Simulates a README-only PR: both the root and its only dependency are unchanged from target.
+			exclude: []cyclonedx.Component{
+				{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"},
+				{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0"},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{},
+				Dependencies: &[]cyclonedx.Dependency{},
+			},
+		},
+		{
+			// Mirrors a real multi-root scan: a wrapper entry (e.g. the scanned file/workspace) lists every
+			// root as one of its own dependsOn children regardless of whether anything changed, so a root is
+			// never "unreferenced" on its own merely by removing its own declared-dependencies entry.
+			name: "Exclude fully unchanged roots referenced by a multi-root wrapper entry",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
+					{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "file:workspace", Dependencies: &[]string{"api", "web"}},
+					{Ref: "api", Dependencies: &[]string{"lodash"}},
+					{Ref: "web", Dependencies: &[]string{"ms"}},
+				},
+			},
+			// Simulates a README-only PR: every root and its only dependency are unchanged from target.
+			exclude: []cyclonedx.Component{
+				{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0"},
+				{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21"},
+				{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"},
+				{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3"},
+			},
+			expected: &cyclonedx.BOM{
+				Components:   &[]cyclonedx.Component{},
+				Dependencies: &[]cyclonedx.Dependency{},
 			},
 		},
 	}
@@ -1723,7 +1775,12 @@ func TestExclude(t *testing.T) {
 			} else if len(*tt.expected.Components) == 0 {
 				assert.NotNil(t, result.Components, "Expected components to not be nil after exclusion")
 				assert.Len(t, *result.Components, 0, "Expected components to be empty after exclusion")
-				assert.Nil(t, result.Dependencies, "Expected dependencies to be nil after exclusion")
+				if tt.bom.Dependencies == nil {
+					assert.Nil(t, result.Dependencies, "Expected dependencies to be nil after exclusion")
+				} else {
+					assert.NotNil(t, result.Dependencies, "Expected dependencies to not be nil after exclusion")
+					assert.Len(t, *result.Dependencies, 0, "Expected dependencies to be empty after exclusion")
+				}
 				return
 			}
 			assert.ElementsMatch(t, *tt.expected.Components, *result.Components, "Expected exclude result does not match")
