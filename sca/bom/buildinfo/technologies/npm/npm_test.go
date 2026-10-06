@@ -507,93 +507,141 @@ func TestBuildNpmTarballURL(t *testing.T) {
 }
 
 func TestParseProbe403Body(t *testing.T) {
-	t.Run("empty body falls back to unknown_403", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		ParseProbe403Body(nil, &dep)
-		assert.Equal(t, "unknown_403", dep.Reason)
-	})
-	t.Run("non-json body falls back to unknown_403", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		ParseProbe403Body([]byte("<html>503 bad gateway</html>"), &dep)
-		assert.Equal(t, "unknown_403", dep.Reason)
-	})
-	t.Run("non-curation 403 falls back to unknown_403", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		ParseProbe403Body([]byte(`{"errors":[{"status":403,"message":"some other reason"}]}`), &dep)
-		assert.Equal(t, "unknown_403", dep.Reason)
-	})
-	t.Run("not-being-found marks as not_found", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to it not being found in the index"}]}`)
-		ParseProbe403Body(body, &dep)
-		assert.Equal(t, "not_found", dep.Reason)
-	})
-	t.Run("policy quartet is parsed", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package and replace with an alternate}."}]}`)
-		ParseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.Reason)
-		if assert.Len(t, dep.Policies, 1) {
-			assert.Equal(t, "mal-policy", dep.Policies[0].Policy)
-			assert.Equal(t, "Malicious package", dep.Policies[0].Condition)
-			// makeLegibleProbePolicyDetail rewrites the first ": " into ":\n" — mirror curation's
-			// success-path layout. Our fixtures here have no ": " so the strings pass through unchanged.
-			assert.Equal(t, "Package version is malicious", dep.Policies[0].Explanation)
-			assert.Equal(t, "Remove the malicious package and replace with an alternate", dep.Policies[0].Recommendation)
-		}
-	})
-	t.Run("partial policy info parses what it can", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package foo:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {short-policy, short-condition}."}]}`)
-		ParseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.Reason)
-		if assert.Len(t, dep.Policies, 1) {
-			assert.Equal(t, "short-policy", dep.Policies[0].Policy)
-			assert.Equal(t, "short-condition", dep.Policies[0].Condition)
-			assert.Empty(t, dep.Policies[0].Explanation)
-			assert.Empty(t, dep.Policies[0].Recommendation)
-		}
-	})
-	t.Run("multiple policy quartets are all captured", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package},{cvss-policy, CVE with CVSS score of 9 or above, Package version contains the following vulnerability(s), Upgrade to the following version(s): 4.18.0}."}]}`)
-		ParseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.Reason)
-		if assert.Len(t, dep.Policies, 2) {
-			assert.Equal(t, "mal-policy", dep.Policies[0].Policy)
-			assert.Equal(t, "cvss-policy", dep.Policies[1].Policy)
-			assert.Equal(t, "CVE with CVSS score of 9 or above", dep.Policies[1].Condition)
-		}
-	})
-	t.Run("legible-detail normalisation matches curation success-path layout", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {cvss-policy, CVSS score above 9, Vulnerability: CVE-2026-4800 | CVE-2026-9999, Upgrade to: 4.18.0 | 5.0.0}."}]}`)
-		ParseProbe403Body(body, &dep)
-		if assert.Len(t, dep.Policies, 1) {
-			assert.Equal(t, "Vulnerability:\nCVE-2026-4800\nCVE-2026-9999", dep.Policies[0].Explanation)
-			assert.Equal(t, "Upgrade to:\n4.18.0\n5.0.0", dep.Policies[0].Recommendation)
-		}
-	})
-	// Real body from production where Policy/Condition/Recommendation parsed as empty for Express@3.0.1.
-	t.Run("real-world Express EOL body parses to full quartet", func(t *testing.T) {
-		dep := BlockedDirectDep{}
-		body := []byte(`{
+	tests := []struct {
+		name         string
+		body         []byte
+		wantReason   string
+		wantPolicies []ProbedPolicy
+	}{
+		{
+			name:       "empty body falls back to unknown_403",
+			wantReason: probeReasonUnknown,
+		},
+		{
+			name:       "non-json body falls back to unknown_403",
+			body:       []byte("<html>503 bad gateway</html>"),
+			wantReason: probeReasonUnknown,
+		},
+		{
+			name:       "non-curation 403 falls back to unknown_403",
+			body:       []byte(`{"errors":[{"status":403,"message":"some other reason"}]}`),
+			wantReason: probeReasonUnknown,
+		},
+		{
+			name:       "not-being-found marks as not_found",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to it not being found in the index"}]}`),
+			wantReason: probeReasonNotFound,
+		},
+		{
+			name:       "group-less response with both pending substrings prefers on-demand",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to it not being found in the index while the Curation on-demand scan is in progress"}]}`),
+			wantReason: probeReasonOnDemand,
+		},
+		{
+			name:       "new-server pending-catalog block parses as a policy block",
+			body:       []byte(`{"errors":[{"status":403,"message":"package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the following policies violated {pending catalog test 159776,Malicious package,The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.,Request a waiver for this package or wait for the JFrog Catalog to analyze it.}. For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]"}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:         "pending catalog test 159776",
+				Condition:      "Malicious package",
+				Explanation:    "The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.",
+				Recommendation: "Request a waiver for this package or wait for the JFrog Catalog to analyze it.",
+			}},
+		},
+		{
+			name:       "policy group wins over a not-being-found substring",
+			body:       []byte(`{"errors":[{"status":403,"message":"package mal-pkg:1.0.0 download was blocked by jfrog packages curation service due to it not being found in the index and the following policies violated {mal-policy, Malicious package}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:    "mal-policy",
+				Condition: "Malicious package",
+			}},
+		},
+		{
+			name:       "policy group wins over an on-demand substring",
+			body:       []byte(`{"errors":[{"status":403,"message":"package mal-pkg:1.0.0 download was blocked by jfrog packages curation service while the Curation on-demand scan is in progress and the following policies violated {mal-policy, Malicious package}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:    "mal-policy",
+				Condition: "Malicious package",
+			}},
+		},
+		{
+			name:       "policy quartet is parsed",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package mal-pkg:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package and replace with an alternate}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:         "mal-policy",
+				Condition:      "Malicious package",
+				Explanation:    "Package version is malicious",
+				Recommendation: "Remove the malicious package and replace with an alternate",
+			}},
+		},
+		{
+			name:       "partial policy info parses what it can",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package foo:1.0.0 download was blocked by JFrog Packages Curation service due to the following policies violated {short-policy, short-condition}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:    "short-policy",
+				Condition: "short-condition",
+			}},
+		},
+		{
+			name:       "multiple policy quartets are all captured",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {mal-policy, Malicious package, Package version is malicious, Remove the malicious package},{cvss-policy, CVE with CVSS score of 9 or above, Package version contains the following vulnerability(s), Upgrade to the following version(s): 4.18.0}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{
+				{
+					Policy:         "mal-policy",
+					Condition:      "Malicious package",
+					Explanation:    "Package version is malicious",
+					Recommendation: "Remove the malicious package",
+				},
+				{
+					Policy:         "cvss-policy",
+					Condition:      "CVE with CVSS score of 9 or above",
+					Explanation:    "Package version contains the following vulnerability(s)",
+					Recommendation: "Upgrade to the following version(s):\n4.18.0",
+				},
+			},
+		},
+		{
+			name:       "legible-detail normalisation matches curation success-path layout",
+			body:       []byte(`{"errors":[{"status":403,"message":"Package lodash:4.17.23 download was blocked by JFrog Packages Curation service due to the following policies violated {cvss-policy, CVSS score above 9, Vulnerability: CVE-2026-4800 | CVE-2026-9999, Upgrade to: 4.18.0 | 5.0.0}."}]}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:         "cvss-policy",
+				Condition:      "CVSS score above 9",
+				Explanation:    "Vulnerability:\nCVE-2026-4800\nCVE-2026-9999",
+				Recommendation: "Upgrade to:\n4.18.0\n5.0.0",
+			}},
+		},
+		{
+			name: "real-world Express EOL body parses to full quartet",
+			body: []byte(`{
   "errors" : [ {
     "status" : 403,
     "message" : "package Express:3.0.1 download was blocked by jfrog packages curation service due to the following policies violated {End of Life,Blocking Express as it is EOL,This package version is part of a pre-defined banned list. The following versions are banned:<br/> - 3.0.1,Replace the package with an alternative one or try to find a version of the current one that is not on the banned list.}. For details and alternatives, visit: https://example.jfrogdev.org/ui/catalog/packages/details/npm/Express/3.0.1?showVersions=true"
   } ]
-}`)
-		ParseProbe403Body(body, &dep)
-		assert.Equal(t, "blocked_policy", dep.Reason)
-		if assert.Len(t, dep.Policies, 1, "expected exactly one parsed policy from the canonical curation envelope") {
-			assert.Equal(t, "End of Life", dep.Policies[0].Policy)
-			assert.Equal(t, "Blocking Express as it is EOL", dep.Policies[0].Condition)
-			assert.Contains(t, dep.Policies[0].Explanation, "pre-defined banned list",
-				"explanation must be populated, not collapsed into the 'response could not be parsed' fallback")
-			assert.Contains(t, dep.Policies[0].Recommendation, "Replace the package",
-				"recommendation must be populated, not collapsed into the 'response could not be parsed' fallback")
-		}
-	})
+}`),
+			wantReason: probeReasonBlockedPolicy,
+			wantPolicies: []ProbedPolicy{{
+				Policy:         "End of Life",
+				Condition:      "Blocking Express as it is EOL",
+				Explanation:    "This package version is part of a pre-defined banned list. The following versions are banned:<br/> - 3.0.1",
+				Recommendation: "Replace the package with an alternative one or try to find a version of the current one that is not on the banned list.",
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dep := BlockedDirectDep{}
+			ParseProbe403Body(tt.body, &dep)
+			assert.Equal(t, tt.wantReason, dep.Reason)
+			assert.Equal(t, tt.wantPolicies, dep.Policies)
+		})
+	}
 }
 
 func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
@@ -650,16 +698,19 @@ func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
 			assert.Equal(t, "2", rows[1].ID)
 		}
 	})
-	t.Run("not_found and unknown_403 produce explanation-only rows when policies slice is empty", func(t *testing.T) {
+	t.Run("group-less reasons produce explanation-only rows", func(t *testing.T) {
 		rows := buildBlockedDirectDepsTableRows([]BlockedDirectDep{
-			{Name: "missing-pkg", ProbedVersion: "1.0.0", Reason: "not_found"},
-			{Name: "weird-pkg", ProbedVersion: "2.0.0", Reason: "unknown_403"},
+			{Name: "missing-pkg", ProbedVersion: "1.0.0", Reason: probeReasonNotFound},
+			{Name: "scanning-pkg", ProbedVersion: "2.0.0", Reason: probeReasonOnDemand},
+			{Name: "weird-pkg", ProbedVersion: "3.0.0", Reason: probeReasonUnknown},
 		}, techutils.Yarn)
-		if assert.Len(t, rows, 2) {
-			assert.Equal(t, "Package pending update", rows[0].Explanation)
-			assert.Equal(t, "Blocked by curation (response could not be parsed)", rows[1].Explanation)
+		if assert.Len(t, rows, 3) {
+			assert.Equal(t, probeBlockingReasonNotFound, rows[0].Explanation)
+			assert.Equal(t, probeBlockingReasonOnDemand, rows[1].Explanation)
+			assert.Equal(t, probeBlockingReasonUnknown, rows[2].Explanation)
 			assert.Empty(t, rows[0].Policy)
 			assert.Empty(t, rows[1].Policy)
+			assert.Empty(t, rows[2].Policy)
 		}
 	})
 	t.Run("direct-row: name and version match in both Direct and Blocked columns", func(t *testing.T) {
@@ -674,6 +725,43 @@ func TestBuildBlockedDirectDepsTableRows(t *testing.T) {
 			assert.Equal(t, rows[0].ParentVersion, rows[0].PackageVersion)
 		}
 	})
+}
+
+func TestConvertBlockedDepsToJSONRendersGroupLessReasons(t *testing.T) {
+	tests := []struct {
+		name       string
+		reason     string
+		wantReason string
+	}{
+		{
+			name:       "not found",
+			reason:     probeReasonNotFound,
+			wantReason: probeBlockingReasonNotFound,
+		},
+		{
+			name:       "on-demand",
+			reason:     probeReasonOnDemand,
+			wantReason: probeBlockingReasonOnDemand,
+		},
+		{
+			name:       "unknown",
+			reason:     probeReasonUnknown,
+			wantReason: probeBlockingReasonUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows := convertBlockedDepsToJSON([]BlockedDirectDep{{
+				Name:          "example",
+				ProbedVersion: "1.0.0",
+				Reason:        tt.reason,
+			}}, techutils.Yarn)
+
+			require.Len(t, rows, 1)
+			assert.Equal(t, tt.wantReason, rows[0].BlockingReason)
+		})
+	}
 }
 
 func TestMergeDirectDeps(t *testing.T) {

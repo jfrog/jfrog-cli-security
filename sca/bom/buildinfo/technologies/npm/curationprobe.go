@@ -23,12 +23,23 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+const (
+	probeReasonBlockedPolicy = "blocked_policy"
+	probeReasonNotFound      = "not_found"
+	probeReasonOnDemand      = "on_demand"
+	probeReasonUnknown       = "unknown_403"
+
+	probeBlockingReasonNotFound = "Package pending update"
+	probeBlockingReasonOnDemand = "Package pending — Curation on-demand scan in progress"
+	probeBlockingReasonUnknown  = "Blocked by curation (response could not be parsed)"
+)
+
 // BlockedDirectDep is one direct dependency the curation repo rejected with 403; Policies holds every violated policy.
 type BlockedDirectDep struct {
 	Name            string
 	DeclaredVersion string
 	ProbedVersion   string
-	Reason          string // "blocked_policy" | "not_found" | "unknown_403"
+	Reason          string
 	Policies        []ProbedPolicy
 }
 
@@ -218,7 +229,7 @@ var npmConcreteVersionRegex = regexp.MustCompile(`^\d+\.\d+\.\d+([-+][0-9A-Za-z.
 
 // ParseProbe403Body extracts curation policy details from a 403 response body, falling back gracefully when it's not a recognizable curation message.
 func ParseProbe403Body(body []byte, dep *BlockedDirectDep) {
-	dep.Reason = "unknown_403"
+	dep.Reason = probeReasonUnknown
 	if len(body) == 0 {
 		return
 	}
@@ -236,11 +247,7 @@ func ParseProbe403Body(body []byte, dep *BlockedDirectDep) {
 	if !strings.Contains(lower, "jfrog packages curation") {
 		return
 	}
-	if strings.Contains(lower, "not being found") {
-		dep.Reason = "not_found"
-		return
-	}
-	dep.Reason = "blocked_policy"
+	dep.Reason = probeReasonBlockedPolicy
 	for _, match := range probeCurationPolicyRegex.FindAllString(msg, -1) {
 		raw := strings.TrimSuffix(strings.TrimPrefix(match, "{"), "}")
 		parts := strings.Split(raw, ",")
@@ -257,6 +264,15 @@ func ParseProbe403Body(body []byte, dep *BlockedDirectDep) {
 			p.Recommendation = makeLegibleProbePolicyDetail(strings.TrimSpace(parts[3]))
 		}
 		dep.Policies = append(dep.Policies, p)
+	}
+	// A server predating per-policy pending behavior sends no {policy,...} groups, only these substrings.
+	if len(dep.Policies) == 0 {
+		switch {
+		case strings.Contains(lower, "on-demand"):
+			dep.Reason = probeReasonOnDemand
+		case strings.Contains(lower, "not being found"):
+			dep.Reason = probeReasonNotFound
+		}
 	}
 }
 
@@ -401,12 +417,13 @@ func convertBlockedDepsToJSON(blocked []BlockedDirectDep, pkgType techutils.Tech
 			PkgType:        string(pkgType),
 		}
 		if len(dep.Policies) == 0 {
-			if dep.Reason == "not_found" {
-				// mirrors curation.BlockingReasonNotFound — import cycle prevents direct use
-				row.BlockingReason = "Package pending update"
-			} else {
-				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
-				row.BlockingReason = "Blocked by curation (response could not be parsed)"
+			switch dep.Reason {
+			case probeReasonNotFound:
+				row.BlockingReason = probeBlockingReasonNotFound
+			case probeReasonOnDemand:
+				row.BlockingReason = probeBlockingReasonOnDemand
+			default:
+				row.BlockingReason = probeBlockingReasonUnknown
 			}
 		} else {
 			row.BlockingReason = "Policy violations"
@@ -441,12 +458,12 @@ func buildBlockedDirectDepsTableRows(blocked []BlockedDirectDep, pkgType techuti
 		if len(dep.Policies) == 0 {
 			row := baseRow
 			switch dep.Reason {
-			case "not_found":
-				// mirrors curation.BlockingReasonNotFound — import cycle prevents direct use
-				row.Explanation = "Package pending update"
+			case probeReasonNotFound:
+				row.Explanation = probeBlockingReasonNotFound
+			case probeReasonOnDemand:
+				row.Explanation = probeBlockingReasonOnDemand
 			default:
-				// mirrors curation.BlockingReasonUnknown — import cycle prevents direct use
-				row.Explanation = "Blocked by curation (response could not be parsed)"
+				row.Explanation = probeBlockingReasonUnknown
 			}
 			rows = append(rows, row)
 			continue

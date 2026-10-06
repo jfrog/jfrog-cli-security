@@ -2,6 +2,7 @@ package results
 
 import (
 	"testing"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -494,4 +495,21 @@ func TestScanTarget_GetDeprecatedAppsConfigModuleExclusions(t *testing.T) {
 func TestSecurityCommandResults_SetUploadedArtifactPath(t *testing.T) {
 	cmdResults := NewCommandResults(utils.SourceCode).SetUploadedArtifactPath("myproject-frogbot/git.com/org/repo/commits/results.cdx.json")
 	assert.Equal(t, "myproject-frogbot/git.com/org/repo/commits/results.cdx.json", cmdResults.UploadedArtifactPath)
+}
+
+func TestSecurityCommandResults_StartTime(t *testing.T) {
+	before := time.Now()
+	cmdResults := NewCommandResults(utils.SourceCode)
+	after := time.Now()
+
+	assert.False(t, cmdResults.StartTime.IsZero())
+	assert.False(t, cmdResults.StartTime.Before(before))
+	assert.False(t, cmdResults.StartTime.After(after))
+
+	explicit := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	cmdResults.SetStartTime(explicit)
+	assert.Equal(t, explicit, cmdResults.StartTime)
+
+	cmdResults.SetStartTime(time.Time{})
+	assert.Equal(t, explicit, cmdResults.StartTime)
 }

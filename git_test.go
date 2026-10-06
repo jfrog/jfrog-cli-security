@@ -169,12 +169,12 @@ func TestGitAuditStaticScaSimpleJson(t *testing.T) {
 		},
 		xrayVersion, "", "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 4, Vulnerabilities: 16 + 4},
+			Total: &validations.TotalCount{Licenses: 85, Violations: 12 + 4, Vulnerabilities: 16 + securityTestUtils.ExpectedServicesIssueCount(4)},
 			Vulnerabilities: &validations.VulnerabilityCount{
-				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: 4},
+				ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Iac: 4, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(4)},
 			},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: 4}},
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2, Services: securityTestUtils.ExpectedServicesIssueCount(4)}},
 		},
 	)
 }
@@ -314,8 +314,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 75, Sast: 5, Secrets: 4},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 64, NotCovered: 10, MissingContext: 1, Inactive: 1},
+				ValidateScan:                &validations.ScanCount{Sca: 75, Sast: 5, Secrets: 6},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 65, NotCovered: 9, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},
@@ -349,8 +349,8 @@ func TestGitAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 11, Sast: 5, Secrets: 4},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 10, MissingContext: 1, Inactive: 1},
+				ValidateScan:                &validations.ScanCount{Sca: 10, Sast: 5, Secrets: 6},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 9, MissingContext: 1, Inactive: 1},
 			},
 			ExactResultsMatch: true,
 		},

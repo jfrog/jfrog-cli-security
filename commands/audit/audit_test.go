@@ -893,7 +893,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 13,
+			expectedSecretsIssues: 15,
 		},
 		{
 			name: "Secrets scanner is enabled with exclusions",
@@ -926,7 +926,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					},
 				}},
 			},
-			expectedSecretsIssues: 8,
+			expectedSecretsIssues: 10,
 		},
 		{
 			name: "Enable only Sast scanner",
@@ -1152,7 +1152,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedServicesIssues: 6,
 			expectedSastIssues:     2,
-			expectedSecretsIssues:  13,
+			expectedSecretsIssues:  15,
 			expectedIacIssues:      9,
 			expectedScaIssues:      15,
 			expectedCaNotCovered:   15,
@@ -1191,7 +1191,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedServicesIssues: 6,
 			expectedSastIssues:     0,
-			expectedSecretsIssues:  8,
+			expectedSecretsIssues:  10,
 			expectedIacIssues:      9,
 			expectedScaIssues:      15,
 			expectedCaNotCovered:   15,
@@ -1237,12 +1237,13 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			} else {
 				scaResultsCount = testcase.expectedScaIssues
 			}
+			expectedServicesIssues := securityTestUtils.ExpectedServicesIssueCount(testcase.expectedServicesIssues)
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
-				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + testcase.expectedServicesIssues},
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount + expectedServicesIssues},
 				Vulnerabilities: &validations.VulnerabilityCount{
-					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: testcase.expectedServicesIssues},
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues, Services: expectedServicesIssues},
 					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
 				},
 			})

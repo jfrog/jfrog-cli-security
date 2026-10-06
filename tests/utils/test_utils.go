@@ -20,6 +20,7 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/jas"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -53,6 +54,16 @@ func SkipTestIfDurationNotPassed(t *testing.T, dateStr string, durationDays int,
 	} else if daysSinceDate > durationDays {
 		t.Logf("Continuing test. Required duration has passed. remove or update the SkipTestIfDurationNotPassed call. (%s)", msg)
 	}
+}
+
+// ExpectedServicesIssueCount returns the expected JAS Services findings for the current OS.
+// Analyzer Manager's GitHub Actions services scanner currently does not detect workflow files on Windows.
+// Scanner bug is tracked in XRAY-159123.
+func ExpectedServicesIssueCount(count int) int {
+	if coreutils.IsWindows() {
+		return 0
+	}
+	return count
 }
 
 func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {
