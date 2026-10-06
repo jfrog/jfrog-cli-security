@@ -39,7 +39,7 @@ func TestParseArtifact(t *testing.T) {
 			name:          "docker pull reference without host",
 			arg:           "my-docker-repo/my-image:3",
 			expectedRepo:  "my-docker-repo",
-			expectedPaths: []string{"my-image/3/list.manifest.json", "my-image/3/manifest.json", "my-image:3"},
+			expectedPaths: []string{"my-image:3", "my-image/3/list.manifest.json", "my-image/3/manifest.json"},
 		},
 		{
 			name:          "docker pull reference with nested image path",
@@ -63,7 +63,7 @@ func TestParseArtifact(t *testing.T) {
 			name:          "filename containing a colon keeps the literal path",
 			arg:           "libs-release-local/backup:latest.tar",
 			expectedRepo:  "libs-release-local",
-			expectedPaths: []string{"backup/latest.tar/list.manifest.json", "backup/latest.tar/manifest.json", "backup:latest.tar"},
+			expectedPaths: []string{"backup:latest.tar", "backup/latest.tar/list.manifest.json", "backup/latest.tar/manifest.json"},
 		},
 		{
 			name:          "url query and fragment are stripped",

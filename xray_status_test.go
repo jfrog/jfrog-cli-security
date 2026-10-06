@@ -12,10 +12,12 @@ import (
 
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
+	corexray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-security/commands/xray/downloadstatus"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	integration "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
 
 	clientartifactory "github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/artifactory/services"
@@ -47,9 +49,24 @@ func TestXrStatusUploadedArtifact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, failed)
 	require.Equal(t, 1, uploaded)
+	defer func() {
+		deleteParams := services.NewDeleteParams()
+		deleteParams.Pattern = repo + "/" + name
+		reader, delErr := rtManager.GetPathsToDelete(deleteParams)
+		if assert.NoError(t, delErr) {
+			defer reader.Close()
+			_, delErr = rtManager.DeleteFiles(reader)
+			assert.NoError(t, delErr)
+		}
+	}()
 
 	repoName, paths, err := downloadstatus.ParseArtifact(repo+"/"+name, server.Url)
 	require.NoError(t, err)
+
+	xrayManager, err := corexray.CreateXrayServiceManager(&server)
+	require.NoError(t, err)
+	require.NoError(t, artifact.WaitForArtifactScanStatus(xrayManager, repoName, paths[0], artifact.OverallCompletion()))
+
 	result, err := downloadstatus.NewDownloadStatusCommand().
 		SetServerDetails(&server).
 		SetRepoAndPathCandidates(repoName, paths).
@@ -58,5 +75,7 @@ func TestXrStatusUploadedArtifact(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, repo, result.Repo)
 	assert.Equal(t, name, result.Path)
-	assert.Contains(t, []string{downloadstatus.StatusAllowed, downloadstatus.StatusBlocked, downloadstatus.StatusUnknown}, result.DownloadStatus)
+	// No watch targets this artifact, so once scanning is done, nothing can block it.
+	assert.Equal(t, downloadstatus.StatusAllowed, result.DownloadStatus)
+	assert.Empty(t, result.Violations)
 }

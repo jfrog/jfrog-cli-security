@@ -111,9 +111,12 @@ func isPrettyOutputSupported() bool {
 	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
-// TerminalSupportsHyperlinks reports whether this process is attached to a terminal known to render OSC 8
-// hyperlinks. Terminal.app on macOS does not.
+// TerminalSupportsHyperlinks reports whether stdout is attached to a terminal known to render OSC 8
+// hyperlinks. Terminal.app on macOS does not, and piped output isn't a terminal at all.
 func TerminalSupportsHyperlinks() bool {
+	if !log.IsStdOutTerminal() {
+		return false
+	}
 	if os.Getenv("WT_SESSION") != "" || os.Getenv("KITTY_WINDOW_ID") != "" {
 		return true
 	}

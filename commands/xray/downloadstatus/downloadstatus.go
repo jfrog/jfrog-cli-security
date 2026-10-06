@@ -171,11 +171,18 @@ func parseDockerReference(spec, platformUrl string) (repo string, pathCandidates
 			imagePath + "@" + digest,
 		}, true
 	}
-	return repo, []string{
+	literal := imagePath + ":" + tag
+	manifestGuesses := []string{
 		fmt.Sprintf("%s/%s/list.manifest.json", imagePath, tag),
 		fmt.Sprintf("%s/%s/manifest.json", imagePath, tag),
-		imagePath + ":" + tag,
-	}, true
+	}
+	if !dockerPrefixHasRegistryHost(spec[:lastSlash]) {
+		// Without a registry-style host prefix this could just as easily be a literal
+		// path that happens to contain a colon (e.g. 'repo/backup:latest.tar'), so try
+		// it before the docker-tag guesses rather than after.
+		return repo, append([]string{literal}, manifestGuesses...), true
+	}
+	return repo, append(manifestGuesses, literal), true
 }
 
 func resolveDockerRepoAndImage(prefix, imageName, tag, platformUrl string) (repo, imagePath string) {
