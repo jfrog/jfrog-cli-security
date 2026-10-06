@@ -12,13 +12,6 @@ jobs:
     # "frogbot" GitHub environment can approve the pull request to be scanned.
     environment: frogbot
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          allow-unsafe-pr-checkout: true
-          
       - uses: jfrog/frogbot@v3
         env:
           JFROG_CLI_LOG_LEVEL: "DEBUG"
