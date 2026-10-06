@@ -54,7 +54,7 @@ func TestXrStatusUploadedArtifact(t *testing.T) {
 		deleteParams.Pattern = repo + "/" + name
 		reader, delErr := rtManager.GetPathsToDelete(deleteParams)
 		if assert.NoError(t, delErr) {
-			defer reader.Close()
+			defer func() { assert.NoError(t, reader.Close()) }()
 			_, delErr = rtManager.DeleteFiles(reader)
 			assert.NoError(t, delErr)
 		}
