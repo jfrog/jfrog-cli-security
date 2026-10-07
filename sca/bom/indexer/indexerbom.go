@@ -33,7 +33,7 @@ const (
 	XrayPasswordEnvVariable = "JFROG_XRAY_PASSWORD"
 	// #nosec G101 -- Not credentials.
 	XrayTokenEnvVariable      = "JFROG_XRAY_TOKEN"
-	XrayProjectKeyEnvVariable = "JFROG_XRAY_PROJECT"
+	XrayProjectKeyEnvVariable = "JFROG_XRAY_PROJECT_KEY"
 )
 
 // IndexerBomGenerator is a BomGenerator that uses the Xray Indexer to generate a CycloneDX SBOM.
