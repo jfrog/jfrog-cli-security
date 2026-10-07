@@ -349,9 +349,14 @@ func ConvertToAffectedVersions(affectedComponent cyclonedx.Component, fixedVersi
 }
 
 func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
-	if bom.Components == nil || len(*bom.Components) == 0 || bom.Dependencies == nil || len(*bom.Dependencies) == 0 {
-		// No components or dependencies to filter, return the original BOM
+	if bom.Components == nil || len(*bom.Components) == 0 {
+		// No components to filter, return the original BOM
 		return &bom
+	}
+	if bom.Dependencies == nil || len(*bom.Dependencies) == 0 {
+		// No dependency graph at all (e.g. a library root with no declared dependencies): excluding is
+		// just a purl match against componentsToExclude, nothing to untangle.
+		return excludeComponentsOnly(bom, componentsToExclude)
 	}
 	filteredSbom = &bom
 	bomIndex := NewBOMIndex(&bom, false)
@@ -369,14 +374,27 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 		// Exclude the component from the dependencies
 		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, bom.Components, compToExclude)
 	}
-	// A root is excluded entirely, including from any wrapper's dependsOn list, only once nothing
-	// real survives under it - re-enrichment would otherwise just re-attach its license anyway.
-	for _, root := range unchangedRoots {
-		rootEntry := SearchDependencyEntry(filteredSbom.Dependencies, root.BOMRef)
-		if rootEntry != nil && rootEntry.Dependencies != nil && len(*rootEntry.Dependencies) > 0 {
-			continue
+	// A root is excluded entirely, including from any wrapper's dependsOn list, only once nothing real
+	// survives under it. One pass isn't enough: excluding one root can empty out a parent root's own
+	// dependsOn (e.g. a monorepo wrapper listing app and lib, where app itself depends on lib), so keep
+	// going until a full pass excludes nothing more - re-enrichment would otherwise re-attach a license
+	// to any root left behind regardless of what we clear on it.
+	for {
+		excludedAny := false
+		var stillUnchanged []cyclonedx.Component
+		for _, root := range unchangedRoots {
+			rootEntry := SearchDependencyEntry(filteredSbom.Dependencies, root.BOMRef)
+			if rootEntry != nil && rootEntry.Dependencies != nil && len(*rootEntry.Dependencies) > 0 {
+				stillUnchanged = append(stillUnchanged, root)
+				continue
+			}
+			filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, root)
+			excludedAny = true
 		}
-		filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, root)
+		unchangedRoots = stillUnchanged
+		if !excludedAny {
+			break
+		}
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
@@ -416,6 +434,24 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom.Dependencies = &cleanDeps
 	return filteredSbom
+}
+
+// excludeComponentsOnly drops any component matching componentsToExclude by purl, used when the BOM has
+// no dependency graph at all so there is no parent/child structure to preserve.
+func excludeComponentsOnly(bom cyclonedx.BOM, componentsToExclude []cyclonedx.Component) *cyclonedx.BOM {
+	excludePurls := datastructures.MakeSet[string]()
+	for _, comp := range componentsToExclude {
+		excludePurls.Add(techutils.PurlToXrayComponentId(comp.PackageURL))
+	}
+	kept := make([]cyclonedx.Component, 0, len(*bom.Components))
+	for _, comp := range *bom.Components {
+		if excludePurls.Exists(techutils.PurlToXrayComponentId(comp.PackageURL)) {
+			continue
+		}
+		kept = append(kept, comp)
+	}
+	bom.Components = &kept
+	return &bom
 }
 
 func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents ...string) *[]cyclonedx.Component {

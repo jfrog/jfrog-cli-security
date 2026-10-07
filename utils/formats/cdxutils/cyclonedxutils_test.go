@@ -1732,9 +1732,13 @@ func TestExclude(t *testing.T) {
 			},
 		},
 		{
-			// Mirrors a real multi-root scan, where a wrapper entry lists every root as a dependsOn child
-			name: "Exclude fully unchanged roots referenced by a multi-root wrapper entry",
+			// Metadata.Component is the Xray-Lib-Plugin wrapper: GetRootDependenciesEntries treats every
+			// one of its dependsOn children as a root (see TestGetRootDependenciesEntries)
+			name: "Exclude fully unchanged roots under a Metadata.Component wrapper",
 			bom: cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{BOMRef: "file-root", Type: cyclonedx.ComponentTypeFile},
+				},
 				Components: &[]cyclonedx.Component{
 					{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
 					{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21", Type: cyclonedx.ComponentTypeLibrary},
@@ -1742,7 +1746,7 @@ func TestExclude(t *testing.T) {
 					{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "file:workspace", Dependencies: &[]string{"api", "web"}},
+					{Ref: "file-root", Dependencies: &[]string{"api", "web"}},
 					{Ref: "api", Dependencies: &[]string{"lodash"}},
 					{Ref: "web", Dependencies: &[]string{"ms"}},
 				},
@@ -1756,6 +1760,95 @@ func TestExclude(t *testing.T) {
 			expected: &cyclonedx.BOM{
 				Components:   &[]cyclonedx.Component{},
 				Dependencies: &[]cyclonedx.Dependency{},
+			},
+		},
+		{
+			// app is itself a root that depends on another root, lib. Excluding app before lib empties
+			// app's own dependsOn, but app must not be kept just because it was checked before lib was
+			// removed - the exclusion pass must cascade until nothing more becomes childless.
+			name: "Exclude cascades when an unchanged root depends on another unchanged root",
+			bom: cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{BOMRef: "file-root", Type: cyclonedx.ComponentTypeFile},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "app", PackageURL: "pkg:npm/app@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "lib", PackageURL: "pkg:npm/lib@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "file-root", Dependencies: &[]string{"app", "lib"}},
+					{Ref: "app", Dependencies: &[]string{"lib"}},
+				},
+			},
+			// app is listed first, before its own dependency lib is processed
+			exclude: []cyclonedx.Component{
+				{BOMRef: "app", PackageURL: "pkg:npm/app@1.0.0"},
+				{BOMRef: "lib", PackageURL: "pkg:npm/lib@1.0.0"},
+			},
+			expected: &cyclonedx.BOM{
+				Components:   &[]cyclonedx.Component{},
+				Dependencies: &[]cyclonedx.Dependency{},
+			},
+		},
+		{
+			name: "Exclude mixed roots under a wrapper - one kept with a surviving child, one dropped",
+			bom: cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{BOMRef: "file-root", Type: cyclonedx.ComponentTypeFile},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "keep", PackageURL: "pkg:npm/keep@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "newchild", PackageURL: "pkg:npm/newchild@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "drop", PackageURL: "pkg:npm/drop@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "file-root", Dependencies: &[]string{"keep", "drop"}},
+					{Ref: "keep", Dependencies: &[]string{"newchild"}},
+				},
+			},
+			// newchild is new (not in target), so it is not excluded, and keep must stay as its anchor
+			exclude: []cyclonedx.Component{
+				{BOMRef: "keep", PackageURL: "pkg:npm/keep@1.0.0"},
+				{BOMRef: "drop", PackageURL: "pkg:npm/drop@1.0.0"},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "keep", PackageURL: "pkg:npm/keep@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "newchild", PackageURL: "pkg:npm/newchild@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "file-root", Dependencies: &[]string{"keep"}},
+					{Ref: "keep", Dependencies: &[]string{"newchild"}},
+				},
+			},
+		},
+		{
+			// A component with no dependencies of its own is written with no Dependencies entry at all -
+			// a dependency-free root must still be excluded when unchanged, not skipped by a bom-wide guard
+			name: "Exclude unchanged root when the BOM has no dependency graph at all",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+				},
+			},
+			exclude: []cyclonedx.Component{{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{},
+			},
+		},
+		{
+			name: "Do not exclude an unmatched component when the BOM has no dependency graph at all",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+					{BOMRef: "newroot", PackageURL: "pkg:npm/newroot@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+			},
+			exclude: []cyclonedx.Component{{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "newroot", PackageURL: "pkg:npm/newroot@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
 			},
 		},
 	}
