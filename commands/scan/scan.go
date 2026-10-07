@@ -393,6 +393,7 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 				indexer.WithXray(xrayManager, scanCmd.xrayVersion),
 				indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits),
 				indexer.WithServerDetails(scanCmd.serverDetails),
+				indexer.WithProjectKey(scanCmd.resultsContext.ProjectKey),
 			).PrepareGenerator()
 		})
 	} else {
