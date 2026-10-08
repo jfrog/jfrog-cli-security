@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // #nosec G101 -- Dummy token for tests
@@ -196,11 +197,12 @@ func TestIsGradleWrapperExist(t *testing.T) {
 
 func TestGetDepTreeArtifactoryRepository(t *testing.T) {
 	tests := []struct {
-		name        string
-		remoteRepo  string
-		server      *config.ServerDetails
-		expectedUrl string
-		expectedErr string
+		name          string
+		remoteRepo    string
+		server        *config.ServerDetails
+		isCurationCmd bool
+		expectedUrl   string
+		expectedErr   string
 	}{
 		{
 			name:       "WithAccessToken",
@@ -226,10 +228,33 @@ func TestGetDepTreeArtifactoryRepository(t *testing.T) {
 			expectedErr: "",
 		},
 		{
-			name:       "MissingCredentials",
+			name:       "AnonymousAccess",
 			remoteRepo: "my-remote-repo",
 			server: &config.ServerDetails{
-				Url: "https://myartifactory.com",
+				Url:            "https://myartifactory.com",
+				ArtifactoryUrl: "https://myartifactory.com/artifactory/",
+			},
+			isCurationCmd: true,
+			expectedUrl:   "\n\t\tmaven {\n\t\t\turl \"https://myartifactory.com/artifactory/my-remote-repo\"\n\t\t}",
+			expectedErr:   "",
+		},
+		{
+			name:       "AnonymousAccessNonCurationStillErrors",
+			remoteRepo: "my-remote-repo",
+			server: &config.ServerDetails{
+				Url:            "https://myartifactory.com",
+				ArtifactoryUrl: "https://myartifactory.com/artifactory/",
+			},
+			isCurationCmd: false,
+			expectedUrl:   "",
+			expectedErr:   "either username/password or access token must be set for https://myartifactory.com",
+		},
+		{
+			name:       "UsernameWithoutPassword",
+			remoteRepo: "my-remote-repo",
+			server: &config.ServerDetails{
+				Url:  "https://myartifactory.com",
+				User: "my-username",
 			},
 			expectedUrl: "",
 			expectedErr: "either username/password or access token must be set for https://myartifactory.com",
@@ -238,12 +263,14 @@ func TestGetDepTreeArtifactoryRepository(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			url, err := getDepTreeArtifactoryRepository(test.remoteRepo, test.server)
-			if err != nil {
+			url, err := getDepTreeArtifactoryRepository(test.remoteRepo, test.server, test.isCurationCmd)
+			if test.expectedErr != "" {
+				require.Error(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
-			} else {
-				assert.Equal(t, test.expectedUrl, url)
+				return
 			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedUrl, url)
 		})
 	}
 }
@@ -312,7 +339,7 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 				// Reset the environment variable after each test case
 				assert.NoError(t, os.Unsetenv(coreutils.ReleasesRemoteEnv))
 			}()
-			actualRepo, actualErr := constructReleasesRemoteRepo()
+			actualRepo, actualErr := constructReleasesRemoteRepo(false)
 			assert.Equal(t, tc.expectedRepo, actualRepo)
 			assert.Equal(t, tc.expectedErr, actualErr)
 		}()

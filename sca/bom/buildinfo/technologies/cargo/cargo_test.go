@@ -1,6 +1,7 @@
 package cargo
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,6 +124,29 @@ func curationParams() technologies.BuildInfoBomGeneratorParams {
 		ServerDetails:          &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/", User: "admin", Password: "pw"},
 		DependenciesRepository: "curation-repo",
 	}
+}
+
+// With no credentials (Artifactory anonymous access), the dependency tree is still built.
+func TestBuildDependencyTreeAnonymousAccess(t *testing.T) {
+	skipIfCargoUnavailable(t)
+	hermeticCargoEnv(t)
+	root := t.TempDir()
+	writeCargoPackage(t, root, "leaf", nil)
+	writeCargoPackage(t, root, "member", map[string]string{"leaf": "../leaf"})
+	require.NoError(t, os.WriteFile(filepath.Join(root, "Cargo.toml"), []byte(`
+[workspace]
+members = ["member", "leaf"]
+`), 0600))
+
+	params := curationParams()
+	params.ServerDetails = &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/"}
+	chdir(t, filepath.Join(root, "member"))
+	trees, uniqueDeps, err := BuildDependencyTree(params)
+	require.NoError(t, err)
+
+	require.Len(t, trees, 1)
+	assert.Equal(t, PackageTypeIdentifier+"member:0.1.0", trees[0].Id)
+	assert.Contains(t, uniqueDeps, PackageTypeIdentifier+"leaf:0.1.0")
 }
 
 // Auditing a member of a root-crate workspace must report the member's own deps, not the root crate's.
@@ -274,6 +299,88 @@ index = "sparse+https://ambient.example.com/artifactory/api/cargo/cargo-remote/i
 	var decoded map[string]interface{}
 	_, decErr := toml.Decode(string(written), &decoded)
 	require.NoError(t, decErr, "the isolated config.toml must always be valid TOML, written:\n%s", string(written))
+}
+
+// Credentials are written to the temp CARGO_HOME only when the server has them; with none, cargo runs anonymously.
+func TestProtectCargoCurationEnvironmentCredentials(t *testing.T) {
+	testCases := []struct {
+		name          string
+		server        *config.ServerDetails
+		expectAuth    bool
+		expectedErr   string
+		expectedToken string
+	}{
+		{
+			name:          "username and password",
+			server:        &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/", User: "admin", Password: "pw"},
+			expectAuth:    true,
+			expectedToken: "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:pw")),
+		},
+		{
+			name:   "anonymous access",
+			server: &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/"},
+		},
+		{
+			name:        "username without password",
+			server:      &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/", User: "admin"},
+			expectedErr: "cargo: Artifactory server has no password or access token configured for curation authentication",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CARGO_HOME", t.TempDir())
+			chdir(t, t.TempDir())
+
+			restore, err := protectCargoCurationEnvironment(tc.server, "curation-repo")
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				assert.Equal(t, tc.expectedErr, err.Error())
+				return
+			}
+			require.NoError(t, err)
+			defer func() { require.NoError(t, restore()) }()
+
+			cargoHome := os.Getenv("CARGO_HOME")
+			written, err := os.ReadFile(filepath.Join(cargoHome, "config.toml")) // #nosec G703 -- test-controlled temp CARGO_HOME, not attacker input
+			require.NoError(t, err)
+			var decoded map[string]interface{}
+			_, decErr := toml.Decode(string(written), &decoded)
+			require.NoError(t, decErr, "the isolated config.toml must always be valid TOML, written:\n%s", string(written))
+			assert.Contains(t, string(written), "sparse+https://curation.example.com/artifactory/api/cargo/curation-repo/index/")
+			assert.Contains(t, string(written), "[source.crates-io]")
+
+			credsPath := filepath.Join(cargoHome, "credentials.toml")
+			if !tc.expectAuth {
+				assert.NotContains(t, string(written), "global-credential-providers")
+				assert.NoFileExists(t, credsPath, "no credentials.toml for anonymous access")
+				return
+			}
+			assert.Contains(t, string(written), `global-credential-providers = ["cargo:token"]`)
+			creds, err := os.ReadFile(credsPath) // #nosec G703 -- test-controlled temp CARGO_HOME, not attacker input
+			require.NoError(t, err)
+			assert.Contains(t, string(creds), tc.expectedToken)
+		})
+	}
+}
+
+// Anonymous access (no credentials configured) must be logged, so a support engineer can tell
+// "deliberately anonymous" from "credentials silently dropped" when investigating curation/audit logs.
+func TestProtectCargoCurationEnvironmentLogsAnonymousAccess(t *testing.T) {
+	t.Setenv("CARGO_HOME", t.TempDir())
+	chdir(t, t.TempDir())
+
+	var buf bytes.Buffer
+	previousLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(previousLogger)
+
+	server := &config.ServerDetails{ArtifactoryUrl: "https://curation.example.com/artifactory/"}
+	restore, err := protectCargoCurationEnvironment(server, "curation-repo")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, restore()) }()
+
+	assert.Contains(t, buf.String(), "anonymous")
+	assert.Contains(t, buf.String(), "https://curation.example.com/artifactory/")
 }
 
 func TestEnsureCargoLockfileWrapsUnderlyingError(t *testing.T) {

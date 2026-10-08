@@ -3,6 +3,7 @@ package npm
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -19,6 +21,84 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// With no credentials, curation sets npm_config_registry to the repo and restores its previous value afterwards.
+func TestConfigNpmResolutionServerAnonymousCuration(t *testing.T) {
+	testCases := []struct {
+		name     string
+		previous *string
+	}{
+		{name: "no previous registry"},
+		{name: "previous registry restored", previous: func() *string { s := "https://registry.example.com/"; return &s }()},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.previous != nil {
+				t.Setenv(npmConfigRegistryEnv, *tc.previous)
+			} else {
+				t.Setenv(npmConfigRegistryEnv, "")
+				require.NoError(t, os.Unsetenv(npmConfigRegistryEnv))
+			}
+			params := &technologies.BuildInfoBomGeneratorParams{
+				IsCurationCmd:          true,
+				DependenciesRepository: "npm-repo",
+				ServerDetails:          &config.ServerDetails{Url: "https://myartifactory.com/", ArtifactoryUrl: "https://myartifactory.com/artifactory/"},
+			}
+
+			restore, err := configNpmResolutionServerIfNeeded(params)
+			require.NoError(t, err)
+			require.NotNil(t, restore)
+			assert.Equal(t, "https://myartifactory.com/artifactory/api/npm/npm-repo", os.Getenv(npmConfigRegistryEnv))
+
+			require.NoError(t, restore())
+			value, exists := os.LookupEnv(npmConfigRegistryEnv)
+			if tc.previous != nil {
+				assert.Equal(t, *tc.previous, value)
+			} else {
+				assert.False(t, exists, "npm_config_registry must be unset after restore")
+			}
+		})
+	}
+}
+
+// With a scoped registry already configured (e.g. from a project .npmrc), the anonymous curation
+// path must override it too -- otherwise packages under that scope silently bypass curation entirely.
+func TestConfigNpmResolutionServerAnonymousCurationOverridesScopedRegistry(t *testing.T) {
+	npmExecPath, err := exec.LookPath("npm")
+	if err != nil {
+		t.Skip("npm not installed")
+	}
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"x","version":"1.0.0"}`), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".npmrc"), []byte("@myscope:registry=https://scoped.example.com/\n"), 0600))
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(wd)) }()
+
+	params := &technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd:          true,
+		DependenciesRepository: "npm-repo",
+		ServerDetails:          &config.ServerDetails{Url: "https://myartifactory.com/", ArtifactoryUrl: "https://myartifactory.com/artifactory/"},
+	}
+	restore, err := configNpmResolutionServerIfNeeded(params)
+	require.NoError(t, err)
+	require.NotNil(t, restore)
+	defer func() { require.NoError(t, restore()) }()
+
+	out, err := exec.Command(npmExecPath, "config", "get", "@myscope:registry").Output()
+	require.NoError(t, err)
+	assert.Equal(t, "https://myartifactory.com/artifactory/api/npm/npm-repo", strings.TrimSpace(string(out)),
+		"scoped packages must resolve from the curation repo, not bypass it")
+}
+
+func TestIsAnonymousServer(t *testing.T) {
+	assert.True(t, isAnonymousServer(&config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory/"}))
+	assert.False(t, isAnonymousServer(&config.ServerDetails{User: "admin", Password: "pw"}))
+	assert.False(t, isAnonymousServer(&config.ServerDetails{AccessToken: "token"}))
+	assert.False(t, isAnonymousServer(&config.ServerDetails{User: "admin"}))
+	assert.False(t, isAnonymousServer(nil))
+}
 
 func TestParseNpmDependenciesList(t *testing.T) {
 	// Create and change directory to test workspace
