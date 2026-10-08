@@ -642,7 +642,7 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 // has no usable credentials, so the anonymous case is unchanged.
 func injectCurationFallbackAuthEnv(serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
 	noOpRestore := func() error { return nil }
-	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "") {
+	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "" && serverDetails.Password == "") {
 		return noOpRestore, nil
 	}
 	_, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
