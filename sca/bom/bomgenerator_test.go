@@ -74,6 +74,9 @@ func TestGetDiff(t *testing.T) {
 			},
 		},
 		{
+			// component1 is unchanged (same purl as in target), but component2 is new - added as its
+			// child by this PR. component1 (and root above it) must stay untouched to anchor it, instead
+			// of being wholesale-dropped and silently hiding the new dependency from the scan.
 			name: "Diff Mode, With results to compare",
 			params: SbomGeneratorParams{
 				Target:   &results.TargetResults{ScanTarget: results.ScanTarget{Target: "source bom"}},
@@ -107,10 +110,12 @@ func TestGetDiff(t *testing.T) {
 			expectedSbom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
 					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "root", Version: "1.0"},
+					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component1", PackageURL: "pkg:component1", Version: "1.0"},
 					{Type: cyclonedx.ComponentTypeLibrary, BOMRef: "component2", PackageURL: "pkg:component2", Version: "2.0"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "root", Dependencies: &[]string{"component2"}},
+					{Ref: "root", Dependencies: &[]string{"component1", "component2"}},
+					{Ref: "component1", Dependencies: &[]string{"component2"}},
 				},
 			},
 		},

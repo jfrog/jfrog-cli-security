@@ -359,42 +359,30 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 		return excludeComponentsOnly(bom, componentsToExclude)
 	}
 	filteredSbom = &bom
-	bomIndex := NewBOMIndex(&bom, false)
-	var unchangedRoots []cyclonedx.Component
+	matchedRefs := datastructures.MakeSet[string]()
+	matchedComponents := map[string]cyclonedx.Component{}
 	for _, compToExclude := range componentsToExclude {
 		matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL)
 		if matchedBomComp == nil {
-			// Not a match, skip it
+			// Not a match (new, or its purl changed since the target), skip it
 			continue
 		}
-		if bomIndex.GetComponentRelation(matchedBomComp.BOMRef) == RootRelation {
-			unchangedRoots = append(unchangedRoots, *matchedBomComp)
-			continue
-		}
-		// Exclude the component from the dependencies
-		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, bom.Components, compToExclude)
+		matchedRefs.Add(matchedBomComp.BOMRef)
+		matchedComponents[matchedBomComp.BOMRef] = *matchedBomComp
 	}
-	// A root is excluded entirely, including from any wrapper's dependsOn list, only once nothing real
-	// survives under it. One pass isn't enough: excluding one root can empty out a parent root's own
-	// dependsOn (e.g. a monorepo wrapper listing app and lib, where app itself depends on lib), so keep
-	// going until a full pass excludes nothing more - re-enrichment would otherwise re-attach a license
-	// to any root left behind regardless of what we clear on it.
-	for {
-		excludedAny := false
-		var stillUnchanged []cyclonedx.Component
-		for _, root := range unchangedRoots {
-			rootEntry := SearchDependencyEntry(filteredSbom.Dependencies, root.BOMRef)
-			if rootEntry != nil && rootEntry.Dependencies != nil && len(*rootEntry.Dependencies) > 0 {
-				stillUnchanged = append(stillUnchanged, root)
-				continue
-			}
-			filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, root)
-			excludedAny = true
+	// A matched (unchanged) component is only excluded once it cannot reach anything real - no new or
+	// changed component, and no other matched component that itself can. Root or not, a matched node with
+	// a real descendant must stay to anchor it, and a closed group of matched nodes with no escape (a
+	// monorepo wrapper's two packages depending on each other, for instance) is excluded together.
+	escapingRefs := calculateEscapingRefs(bom.Dependencies, matchedRefs)
+	var toExcludeComponents []cyclonedx.Component
+	for ref, comp := range matchedComponents {
+		if !escapingRefs.Exists(ref) {
+			toExcludeComponents = append(toExcludeComponents, comp)
 		}
-		unchangedRoots = stillUnchanged
-		if !excludedAny {
-			break
-		}
+	}
+	if len(toExcludeComponents) > 0 {
+		filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, toExcludeComponents...)
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
@@ -434,6 +422,33 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom.Dependencies = &cleanDeps
 	return filteredSbom
+}
+
+// calculateEscapingRefs returns the subset of matchedRefs that can reach, via any dependsOn path, a
+// component outside matchedRefs - i.e. something new or changed that must not be silently dropped. A
+// matched ref that cannot escape has nothing real left underneath it, including a ref stuck in a cycle
+// made up entirely of other non-escaping matched refs.
+func calculateEscapingRefs(dependencies *[]cyclonedx.Dependency, matchedRefs *datastructures.Set[string]) *datastructures.Set[string] {
+	escapes := datastructures.MakeSet[string]()
+	for {
+		changed := false
+		for _, ref := range matchedRefs.ToSlice() {
+			if escapes.Exists(ref) {
+				continue
+			}
+			for _, child := range GetDirectDependencies(dependencies, ref) {
+				if !matchedRefs.Exists(child) || escapes.Exists(child) {
+					escapes.Add(ref)
+					changed = true
+					break
+				}
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	return escapes
 }
 
 // excludeComponentsOnly drops any component matching componentsToExclude by purl, used when the BOM has
