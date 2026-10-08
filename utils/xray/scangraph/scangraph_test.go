@@ -32,13 +32,13 @@ func TestUseXscGraphScan(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "binary never uses XSC even with analytics ids",
+			name: "binary with analytics ids uses XSC",
 			params: &services.XrayGraphScanParams{
 				ScanType:    services.Binary,
 				XscVersion:  "1.16.0",
 				MultiScanId: "msi",
 			},
-			want: false,
+			want: true,
 		},
 		{
 			name: "dependency without multi scan id stays on Xray",
@@ -57,10 +57,28 @@ func TestUseXscGraphScan(t *testing.T) {
 }
 
 func TestDisableXscForBinaryScan(t *testing.T) {
-	binary := &services.XrayGraphScanParams{ScanType: services.Binary, XscVersion: "1.16.0", MultiScanId: "msi"}
-	disableXscForBinaryScan(binary)
-	assert.Empty(t, binary.XscVersion)
-	assert.Empty(t, binary.MultiScanId)
+	leaf := &services.XrayGraphScanParams{
+		ScanType:    services.Binary,
+		XscVersion:  "1.16.0",
+		MultiScanId: "msi",
+		BinaryGraph: &xrayUtils.BinaryGraphNode{Id: "npm://left-pad:1.3.0"},
+	}
+	disableXscForBinaryScan(leaf)
+	assert.Empty(t, leaf.XscVersion)
+	assert.Empty(t, leaf.MultiScanId)
+
+	withNodes := &services.XrayGraphScanParams{
+		ScanType:    services.Binary,
+		XscVersion:  "1.16.0",
+		MultiScanId: "msi",
+		BinaryGraph: &xrayUtils.BinaryGraphNode{
+			Id:    "docker://xmas:secrets",
+			Nodes: []*xrayUtils.BinaryGraphNode{{Id: "deb://ubuntu:openssl:1.1.1"}},
+		},
+	}
+	disableXscForBinaryScan(withNodes)
+	assert.Equal(t, "1.16.0", withNodes.XscVersion)
+	assert.Equal(t, "msi", withNodes.MultiScanId)
 
 	dep := &services.XrayGraphScanParams{ScanType: services.Dependency, XscVersion: "1.16.0", MultiScanId: "msi"}
 	disableXscForBinaryScan(dep)
@@ -101,7 +119,52 @@ func TestBinaryScanWithEmptyGraphTargetsXrayEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, postPath, "api/v1/scan/graph")
 	assert.NotContains(t, postPath, "sca/scan/graph")
+	assert.NotContains(t, postPath, "multi_scan_id")
 	assert.Contains(t, postBody, "npm://left-pad:1.3.0")
+}
+
+func TestBinaryScanWithChildNodesTargetsXscEndpoint(t *testing.T) {
+	var postPath, postBody, getPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			postPath = r.URL.RequestURI()
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err)
+			postBody = string(body)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"scan_id":"scan-1"}`))
+			return
+		}
+		getPath = r.URL.Path
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	params := NewScanGraphParams().
+		SetServerDetails(&config.ServerDetails{XrayUrl: server.URL + "/"}).
+		SetXrayGraphScanParams(&services.XrayGraphScanParams{
+			ScanType:    services.Binary,
+			XrayVersion: "3.120.0",
+			XscVersion:  "1.16.0",
+			MultiScanId: "msi-from-analytics",
+			BinaryGraph: &xrayUtils.BinaryGraphNode{
+				Id:    "docker://xmas:secrets",
+				Nodes: []*xrayUtils.BinaryGraphNode{{Id: "deb://ubuntu:openssl:1.1.1"}},
+			},
+		})
+	xrayManager, err := coreXray.CreateXrayServiceManager(params.ServerDetails())
+	assert.NoError(t, err)
+
+	_, err = RunScanGraphAndGetResults(params, xrayManager)
+	assert.NoError(t, err)
+	assert.Contains(t, postPath, "sca/scan/graph")
+	assert.Contains(t, postPath, "multi_scan_id=msi-from-analytics")
+	assert.Contains(t, postPath, "scan_type=binary")
+	assert.Contains(t, postBody, "docker://xmas:secrets")
+	assert.Contains(t, postBody, "deb://ubuntu:openssl:1.1.1")
+	assert.Contains(t, getPath, "sca/scan/graph")
+	assert.Equal(t, "msi-from-analytics", params.XrayGraphScanParams().MultiScanId)
 }
 
 func TestScanGraphParamsCloneDoesNotShareMutableGraph(t *testing.T) {

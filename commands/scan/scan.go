@@ -586,6 +586,8 @@ func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams 
 		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
+		MultiScanId:            scanCmd.multiScanId,
+		XscVersion:             scanCmd.xscVersion,
 		XrayVersion:            scanCmd.xrayVersion,
 	}
 	return scangraph.NewScanGraphParams().
