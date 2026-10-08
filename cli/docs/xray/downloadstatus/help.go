@@ -21,6 +21,8 @@ Notes:
 - This command checks an artifact. It does not accept build-info or a release bundle.
 - The reported download status is computed from the current violation and scan data, not from a live download attempt.
 - UNKNOWN means the violation scan has not finished, failed, or is partial, or the indexed checksum does not match the current file. A watch that blocks unscanned artifacts can still block the download while the status is UNKNOWN.
+- A blocking violation always reports BLOCKED, even if the scan itself failed or is partial.
+- A scan status of "not supported" reports ALLOWED, even though a watch that blocks unscanned artifacts could still block the real download.
 - A docker pull reference ([host/]<repo>/<image>:<tag>, or @sha256:<digest>) is resolved to the manifest Artifactory stores for that image.
 
 Common patterns:

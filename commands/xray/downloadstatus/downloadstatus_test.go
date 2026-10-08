@@ -139,6 +139,26 @@ func TestBuildResultBlockedByViolation(t *testing.T) {
 	assert.True(t, result.Violations[0].Blocking)
 }
 
+func TestBuildResultViolationWithNoPoliciesIsStillVisible(t *testing.T) {
+	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
+		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusDone},
+	}}
+	violations := []services.XrayViolation{{
+		Watch:    "prod-watch",
+		Severity: "Critical",
+		Summary:  "no matched policy",
+	}}
+
+	result := buildResult("libs-release-local", "com/acme/foo-1.2.jar", "sha", "https://acme.jfrog.io", "deb://debian:12:libxml2", "", false, scanStatus, violations)
+
+	assert.Equal(t, StatusAllowed, result.DownloadStatus)
+	if assert.Len(t, result.Violations, 1) {
+		assert.False(t, result.Violations[0].Blocking)
+		assert.Equal(t, "prod-watch", result.Violations[0].Watch)
+		assert.Equal(t, "no matched policy", result.Violations[0].Detail)
+	}
+}
+
 func TestBuildResultIgnoredViolationDoesNotBlock(t *testing.T) {
 	scanStatus := &services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{
 		Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusDone},
@@ -488,14 +508,14 @@ func TestBuildResultUsesIssueIdAndFallsBackToViolationId(t *testing.T) {
 	assert.Equal(t, "99", withRecordOnly.Violations[0].ViolationId)
 }
 
-func TestArtifactSummaryPathsIncludeProjectBeforeDefault(t *testing.T) {
+func TestArtifactSummaryPathsTriesProjectScopeFirst(t *testing.T) {
 	cmd := NewDownloadStatusCommand().SetRepoAndPathCandidates("libs-release-local", nil)
 	assert.Equal(t, []string{"libs-release-local/com/acme/foo.jar", "default/libs-release-local/com/acme/foo.jar"}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
 
 	cmd.SetProject("team-a")
 	assert.Equal(t, []string{
-		"libs-release-local/com/acme/foo.jar",
 		"team-a/libs-release-local/com/acme/foo.jar",
+		"libs-release-local/com/acme/foo.jar",
 		"default/libs-release-local/com/acme/foo.jar",
 	}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
 }

@@ -77,7 +77,7 @@ func (cmd *DownloadStatusCommand) ServerDetails() (*config.ServerDetails, error)
 }
 
 func (cmd *DownloadStatusCommand) CommandName() string {
-	return "xr_download_status"
+	return "xr_status"
 }
 
 // ParseArtifact accepts a full platform URL (https://host/artifactory/repo/path), a bare 'repo/path' spec,
@@ -304,11 +304,12 @@ func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayS
 
 func (cmd *DownloadStatusCommand) artifactSummaryPaths(path string) []string {
 	repoPath := cmd.repo + "/" + path
-	candidates := []string{repoPath}
 	if cmd.project != "" {
-		candidates = append(candidates, cmd.project+"/"+repoPath)
+		// Project-scoped first: an unscoped or default/ hit can belong to a
+		// different project and carry a checksum that doesn't match this artifact.
+		return []string{cmd.project + "/" + repoPath, repoPath, "default/" + repoPath}
 	}
-	return append(candidates, "default/"+repoPath)
+	return []string{repoPath, "default/" + repoPath}
 }
 
 // packageIdAndVersion builds the scans-list package id. A component id that already has a scheme keeps that
@@ -388,16 +389,16 @@ func isArtifactNotFound(err error) bool {
 }
 
 type violationRow struct {
-	Watch            string
-	Policy           string
-	Rule             string
-	Severity         string
-	SeverityNumValue int `json:"-"`
-	Blocking         bool
-	Ignored          bool
-	Detail           string
-	ViolationId      string
-	Link             string
+	Watch            string `json:"watch"`
+	Policy           string `json:"policy"`
+	Rule             string `json:"rule"`
+	Severity         string `json:"severity"`
+	SeverityNumValue int    `json:"-"`
+	Blocking         bool   `json:"blocking"`
+	Ignored          bool   `json:"ignored"`
+	Detail           string `json:"detail"`
+	ViolationId      string `json:"violation_id"`
+	Link             string `json:"link,omitempty"`
 	issueKey         string
 }
 
@@ -438,6 +439,20 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 		severity := severityutils.XraySeverityToSeverity(violation.Severity)
 		severityNumValue := severityutils.GetSeverityDetails(severity, jasutils.NotScanned).Priority
 		link := buildViolationUiLink(platformUrl, repo, path, packageId, version, artifactCompId, violation)
+		if len(violation.Policies) == 0 {
+			// No matched policy means no basis to call it blocking, but the violation
+			// must still be visible rather than silently dropped from the table.
+			result.Violations = append(result.Violations, violationRow{
+				Watch:            violation.Watch,
+				Severity:         string(violation.Severity),
+				SeverityNumValue: severityNumValue,
+				Detail:           violationDetail(violation),
+				ViolationId:      violationIdentifier(violation),
+				Link:             link,
+				issueKey:         issueSortKey(violation),
+			})
+			continue
+		}
 		for _, policy := range violation.Policies {
 			ignored := violationIgnored(policy, violation)
 			row := violationRow{
