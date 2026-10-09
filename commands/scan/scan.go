@@ -393,6 +393,7 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 				indexer.WithXray(xrayManager, scanCmd.xrayVersion),
 				indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits),
 				indexer.WithServerDetails(scanCmd.serverDetails),
+				indexer.WithProjectKey(scanCmd.resultsContext.ProjectKey),
 			).PrepareGenerator()
 		})
 	} else {
@@ -585,6 +586,8 @@ func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams 
 		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
+		MultiScanId:            scanCmd.multiScanId,
+		XscVersion:             scanCmd.xscVersion,
 		XrayVersion:            scanCmd.xrayVersion,
 	}
 	return scangraph.NewScanGraphParams().

@@ -32,7 +32,8 @@ const (
 	// #nosec G101 -- Not credentials.
 	XrayPasswordEnvVariable = "JFROG_XRAY_PASSWORD"
 	// #nosec G101 -- Not credentials.
-	XrayTokenEnvVariable = "JFROG_XRAY_TOKEN"
+	XrayTokenEnvVariable      = "JFROG_XRAY_TOKEN"
+	XrayProjectKeyEnvVariable = "JFROG_XRAY_PROJECT_KEY"
 )
 
 // IndexerBomGenerator is a BomGenerator that uses the Xray Indexer to generate a CycloneDX SBOM.
@@ -40,6 +41,7 @@ const (
 type IndexerBomGenerator struct {
 	bypassArchiveLimits bool
 	serverDetails       *config.ServerDetails
+	projectKey          string
 
 	xrayManager *xray.XrayServicesManager
 	xrayVersion string
@@ -73,6 +75,14 @@ func WithServerDetails(serverDetails *config.ServerDetails) bom.SbomGeneratorOpt
 	return func(sg bom.SbomGenerator) {
 		if ibg, ok := sg.(*IndexerBomGenerator); ok {
 			ibg.serverDetails = serverDetails
+		}
+	}
+}
+
+func WithProjectKey(projectKey string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if ibg, ok := sg.(*IndexerBomGenerator); ok {
+			ibg.projectKey = projectKey
 		}
 	}
 }
@@ -144,6 +154,9 @@ func (ibg *IndexerBomGenerator) getIndexerEnvVars() utils.EnvironmentVariables {
 			platformEnv[XrayUserEnvVariable] = ibg.serverDetails.User
 			platformEnv[XrayPasswordEnvVariable] = ibg.serverDetails.Password
 		}
+	}
+	if ibg.projectKey != "" {
+		platformEnv[XrayProjectKeyEnvVariable] = ibg.projectKey
 	}
 	if len(platformEnv) == 0 {
 		return nil
