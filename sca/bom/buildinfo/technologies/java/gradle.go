@@ -53,6 +53,12 @@ allprojects {
 				password = '%s'
 			}
 		}`
+	// Used for anonymous access: no credentials block.
+	// #nosec G101 -- Not credentials.
+	artifactoryRepositoryWithoutCredentials = `
+		maven {
+			url "%s/%s"
+		}`
 )
 
 //go:embed resources/gradle-dep-tree.jar
@@ -128,21 +134,21 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 // server - the Artifactory server details on which the repositories reside in.
 // Returns the constructed sections.
 func getRemoteRepos(depsRepo string, server *config.ServerDetails, isCurationCmd bool) (string, string, error) {
-	constructedReleasesRepo, err := constructReleasesRemoteRepo()
+	constructedReleasesRepo, err := constructReleasesRemoteRepo(isCurationCmd)
 	if err != nil {
 		return "", "", err
 	}
 	if isCurationCmd && depsRepo != "" {
 		depsRepo = path.Join("api/curation/audit", depsRepo)
 	}
-	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server)
+	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server, isCurationCmd)
 	if err != nil {
 		return "", "", err
 	}
 	return constructedReleasesRepo, constructedDepsRepo, nil
 }
 
-func constructReleasesRemoteRepo() (string, error) {
+func constructReleasesRemoteRepo(isCurationCmd bool) (string, error) {
 	// Try to retrieve the serverID and remote repository that proxies https://releases.jfrog.io, from the environment variable
 	serverId, repoName, err := coreutils.GetServerIdAndRepo(coreutils.ReleasesRemoteEnv)
 	if err != nil || serverId == "" || repoName == "" {
@@ -155,7 +161,7 @@ func constructReleasesRemoteRepo() (string, error) {
 
 	releasesPath := fmt.Sprintf("%s/%s", repoName, remoteDepTreePath)
 	log.Debug("The `"+gradleDepTreeJarFile+"` will be resolved from", repoName)
-	return getDepTreeArtifactoryRepository(releasesPath, releasesServer)
+	return getDepTreeArtifactoryRepository(releasesPath, releasesServer, isCurationCmd)
 }
 
 func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFileContent []byte, err error) {
@@ -195,16 +201,21 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	return
 }
 
-func getDepTreeArtifactoryRepository(remoteRepo string, server *config.ServerDetails) (string, error) {
+func getDepTreeArtifactoryRepository(remoteRepo string, server *config.ServerDetails, isCurationCmd bool) (string, error) {
 	if remoteRepo == "" || server.IsEmpty() {
 		return "", nil
 	}
-	username, password, err := getArtifactoryAuthFromServer(server)
+	username, password, err := getArtifactoryAuthFromServer(server, isCurationCmd)
 	if err != nil {
 		return "", err
 	}
 
 	log.Debug("The project dependencies will be resolved from", server.ArtifactoryUrl, "from the", remoteRepo, "repository")
+	if username == "" && password == "" {
+		return fmt.Sprintf(artifactoryRepositoryWithoutCredentials,
+			strings.TrimSuffix(server.ArtifactoryUrl, "/"),
+			remoteRepo), nil
+	}
 	return fmt.Sprintf(artifactoryRepository,
 		strings.TrimSuffix(server.ArtifactoryUrl, "/"),
 		remoteRepo,

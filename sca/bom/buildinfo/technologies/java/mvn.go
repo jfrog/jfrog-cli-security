@@ -358,7 +358,7 @@ func removeMavenConfig() (func() error, error) {
 // For curation runs it seeds from ~/.m2/settings.xml (preserving proxies etc.) and upserts
 // curation entries on top. For plain audit runs it uses the built-in template directly.
 func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(settingsXmlPath string) error {
-	username, password, err := getArtifactoryAuthFromServer(mdt.server)
+	username, password, err := getArtifactoryAuthFromServer(mdt.server, mdt.isCurationCmd)
 	if err != nil {
 		return err
 	}
@@ -480,6 +480,10 @@ func xmlSetChild(parent *etree.Element, name, text string) {
 }
 
 func upsertCurationServer(root *etree.Element, username, password string) {
+	if username == "" && password == "" {
+		// Anonymous access: no <server> entry.
+		return
+	}
 	servers := xmlGetOrCreate(root, "servers")
 	server := xmlGetOrCreateByID(servers, "server", curationSettingsID)
 	xmlSetChild(server, "id", curationSettingsID)

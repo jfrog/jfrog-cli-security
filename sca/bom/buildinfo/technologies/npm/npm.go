@@ -1,17 +1,21 @@
 package npm
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/npm"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/exp/maps"
@@ -22,7 +26,12 @@ const (
 	IgnoreScriptsFlag     = "--ignore-scripts"
 	LegacyPeerDepsFlag    = "--legacy-peer-deps"
 	disableWorkspacesFlag = "--workspaces=false"
-	artifactoryApiNpmPath = "/api/npm/"
+	npmConfigRegistryEnv  = "npm_config_registry"
+	npmConfigEnvPrefix    = "npm_config_"
+	// npmScopedRegistrySuffix marks an npm config key that overrides the registry for one scope
+	// (e.g. "@myorg:registry"); it always wins over the plain "registry" key for that scope.
+	npmScopedRegistrySuffix = ":registry"
+	artifactoryApiNpmPath   = "/api/npm/"
 	// npmAuthTokenSuffix is the npm config-key suffix used to look up a registry's auth token in .npmrc
 	// (e.g. //registry.example.com/:_authToken=...). It is a key name, not a credential value.
 	npmAuthTokenSuffix = ":_authToken" // #nosec G101 -- Not credentials, this is the npm config-key suffix.
@@ -84,8 +93,90 @@ func configNpmResolutionServerIfNeeded(params *technologies.BuildInfoBomGenerato
 	if params.DependenciesRepository == "" || params.NpmRunNative {
 		return
 	}
+	if params.IsCurationCmd && isAnonymousServer(params.ServerDetails) {
+		return setAnonymousNpmRegistry(params.ServerDetails, params.DependenciesRepository)
+	}
 	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(params.ServerDetails, params.DependenciesRepository)
 	return
+}
+
+func isAnonymousServer(server *config.ServerDetails) bool {
+	return server != nil && server.User == "" && server.Password == "" && server.AccessToken == ""
+}
+
+// setAnonymousNpmRegistry points npm at the repo with no credentials (the usual setup fails anonymously:
+// /api/npm/auth returns 400), also overriding any existing scoped registry so it isn't bypassed.
+func setAnonymousNpmRegistry(server *config.ServerDetails, repo string) (restore func() error, err error) {
+	registry := strings.TrimSuffix(server.ArtifactoryUrl, "/") + artifactoryApiNpmPath + repo
+	envKeys, err := anonymousNpmRegistryEnvKeys()
+	if err != nil {
+		return nil, err
+	}
+	type previousEnv struct {
+		value  string
+		exists bool
+	}
+	previous := make(map[string]previousEnv, len(envKeys))
+	for _, key := range envKeys {
+		value, exists := os.LookupEnv(key)
+		previous[key] = previousEnv{value, exists}
+	}
+	restore = func() error {
+		var restoreErr error
+		for _, key := range envKeys {
+			prev := previous[key]
+			if prev.exists {
+				restoreErr = errors.Join(restoreErr, os.Setenv(key, prev.value))
+			} else {
+				restoreErr = errors.Join(restoreErr, os.Unsetenv(key))
+			}
+		}
+		return errorutils.CheckError(restoreErr)
+	}
+	for _, key := range envKeys {
+		if err = os.Setenv(key, registry); err != nil {
+			return nil, errors.Join(errorutils.CheckError(err), restore())
+		}
+	}
+	log.Info(fmt.Sprintf("Resolving dependencies anonymously from '%s' from repo '%s'", server.Url, repo))
+	return
+}
+
+// anonymousNpmRegistryEnvKeys returns the env vars to set so the default registry and any scoped
+// ("@scope:registry") entries all resolve through the anonymous curation repo.
+func anonymousNpmRegistryEnvKeys() ([]string, error) {
+	envKeys := []string{npmConfigRegistryEnv}
+	scopedKeys, err := listScopedRegistryKeys()
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range scopedKeys {
+		envKeys = append(envKeys, npmConfigEnvPrefix+key)
+	}
+	return envKeys, nil
+}
+
+// listScopedRegistryKeys returns the "@scope:registry" keys currently configured for npm (e.g. from .npmrc).
+func listScopedRegistryKeys() ([]string, error) {
+	_, npmExecPath, err := biutils.GetNpmVersionAndExecPath(log.Logger)
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := biutils.RunNpmCmd(npmExecPath, "", []string{"config", "list", "--json"}, log.Logger)
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	var npmConfig map[string]any
+	if err = json.Unmarshal(data, &npmConfig); err != nil {
+		return nil, errorutils.CheckError(fmt.Errorf("failed to parse npm config: %w", err))
+	}
+	var keys []string
+	for key := range npmConfig {
+		if strings.HasPrefix(key, "@") && strings.HasSuffix(key, npmScopedRegistrySuffix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
 }
 
 // GetNativeNpmRegistryConfig reads the npm registry URL from the native npm configuration
