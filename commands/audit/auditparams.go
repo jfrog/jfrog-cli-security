@@ -219,11 +219,12 @@ func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditPara
 
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
 	return &services.XrayGraphScanParams{
-		RepoPath:               params.resultsContext.RepoPath,
-		Watches:                params.resultsContext.Watches,
-		ProjectKey:             params.resultsContext.ProjectKey,
-		GitRepoHttpsCloneUrl:   params.resultsContext.GitRepoHttpsCloneUrl,
-		IncludeVulnerabilities: params.resultsContext.IncludeVulnerabilities,
+		RepoPath:             params.resultsContext.RepoPath,
+		Watches:              params.resultsContext.Watches,
+		ProjectKey:           params.resultsContext.ProjectKey,
+		GitRepoHttpsCloneUrl: params.resultsContext.GitRepoHttpsCloneUrl,
+		// Always fetch vulnerabilities regardless of watches, so JAS scanners (e.g. Contextual Analysis) get the full CVE set.
+		IncludeVulnerabilities: true,
 		IncludeLicenses:        params.resultsContext.IncludeLicenses,
 		ScanType:               services.Dependency,
 	}
