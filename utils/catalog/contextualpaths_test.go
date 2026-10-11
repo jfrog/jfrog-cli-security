@@ -80,6 +80,26 @@ func TestGetIndirectCvePaths_ServerReturnsMalformedJson_ReturnsError(t *testing.
 	assert.Nil(t, result)
 }
 
+func TestToCatalogPackageVersionKeys(t *testing.T) {
+	got := toCatalogPackageVersionKeys([]xrayutils.PackageVersionKey{
+		{Type: "golang", Namespace: "golang.org", Name: "x/sys", Version: "0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "golang", Namespace: "github.com/jfrog", Name: "core", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "npm", Namespace: "@protobufjs", Name: "aspromise", Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "pypi", Name: "requests", Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "maven", Namespace: "org.apache.logging.log4j", Name: "log4j-core", Version: "2.14.1", Ecosystem: xrayutils.GenericEcosystem},
+	})
+
+	assert.Equal(t, []xrayutils.PackageVersionKey{
+		{Type: "go", Name: "golang.org/x/sys", Namespace: "public", Version: "v0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "go", Name: "github.com/jfrog/core", Namespace: "public", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "npm", Name: "@protobufjs/aspromise", Namespace: "public", Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "npm", Name: "lodash", Namespace: "public", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "pypi", Name: "requests", Namespace: "public", Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "maven", Name: "org.apache.logging.log4j:log4j-core", Namespace: "public", Version: "2.14.1", Ecosystem: xrayutils.GenericEcosystem},
+	}, got)
+}
+
 func TestGetIndirectCvePaths_Success_SendsExpectedRequestAndParsesResponse(t *testing.T) {
 	var gotBody struct {
 		Cves     []string                      `json:"cves"`
@@ -104,7 +124,7 @@ func TestGetIndirectCvePaths_Success_SendsExpectedRequestAndParsesResponse(t *te
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CVE-2024-1234"}, gotBody.Cves)
-	assert.Equal(t, []xrayutils.PackageVersionKey{{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem}}, gotBody.Packages)
+	assert.Equal(t, []xrayutils.PackageVersionKey{{Type: "npm", Name: "lodash", Namespace: "public", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem}}, gotBody.Packages)
 	assert.Equal(t, "projectKey=myproj", gotQuery)
 	require.Contains(t, result, "CVE-2024-1234")
 	assert.Equal(t, "lodash", result["CVE-2024-1234"].Name)
