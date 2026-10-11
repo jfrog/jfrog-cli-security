@@ -300,12 +300,12 @@ func (rw *ResultsWriter) printSimpleJson() error {
 }
 
 func (rw *ResultsWriter) printJson() error {
-	// Since JSON printing is not going through the convertor's own IncludeVulnerabilities gating, so vulnerabilities must be stripped out here explicitly
+	// JSON output bypasses the convertor's IncludeVulnerabilities gating, so vulnerabilities are stripped here
 	return rw.outputJson(rw.stripUnrequestedVulnerabilities(rw.commandResults.GetScaScansXrayResults()))
 }
 
 func (rw *ResultsWriter) stripUnrequestedVulnerabilities(scaResults []services.ScanResponse) []services.ScanResponse {
-	if rw.commandResults.IncludesVulnerabilities() {
+	if len(scaResults) == 0 || rw.commandResults.IncludesVulnerabilities() {
 		return scaResults
 	}
 	filtered := make([]services.ScanResponse, len(scaResults))
