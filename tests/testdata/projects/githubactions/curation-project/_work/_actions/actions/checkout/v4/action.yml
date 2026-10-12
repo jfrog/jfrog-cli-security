@@ -1,5 +1,0 @@
-name: 'Checkout'
-description: 'Checkout a Git repository'
-runs:
-  using: 'node20'
-  main: 'dist/index.js'
