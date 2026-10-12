@@ -91,8 +91,8 @@ func TestToCatalogPackageVersionKeys(t *testing.T) {
 	})
 
 	assert.Equal(t, []xrayutils.PackageVersionKey{
-		{Type: "go", Name: "golang.org/x/sys", Namespace: "public", Version: "v0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "go", Name: "github.com/jfrog/core", Namespace: "public", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "golang", Name: "golang.org/x/sys", Namespace: "public", Version: "v0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
+		{Type: "golang", Name: "github.com/jfrog/core", Namespace: "public", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
 		{Type: "npm", Name: "@protobufjs/aspromise", Namespace: "public", Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem},
 		{Type: "npm", Name: "lodash", Namespace: "public", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
 		{Type: "pypi", Name: "requests", Namespace: "public", Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem},

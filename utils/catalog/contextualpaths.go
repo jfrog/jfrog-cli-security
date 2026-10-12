@@ -15,7 +15,6 @@ import (
 
 const (
 	catalogNamespacePublic = "public"
-	catalogTypeGo          = "go"
 	purlTypeGolang         = "golang"
 	purlTypeNPM            = "npm"
 	purlTypeMaven          = "maven"
@@ -54,7 +53,7 @@ func toCatalogPackageVersionKey(pkg xrayutils.PackageVersionKey) xrayutils.Packa
 	pkgType := pkg.Type
 	switch pkg.Type {
 	case purlTypeGolang:
-		pkgType = catalogTypeGo
+		// Contextual analysis keys Go packages by purl type "golang", not the stored catalog type "go".
 		name = joinPackageName(pkg.Namespace, pkg.Name, "/")
 		if version != "" && !strings.HasPrefix(version, "v") {
 			version = "v" + version
