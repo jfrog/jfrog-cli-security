@@ -12,13 +12,14 @@ func TestGetIndexerEnvVars(t *testing.T) {
 	tests := []struct {
 		name          string
 		serverDetails *config.ServerDetails
+		projectKey    string
 		wantKeys      map[string]string
 		wantAbsent    []string
 	}{
 		{
 			name:          "nil server details",
 			serverDetails: nil,
-			wantAbsent:    []string{XrayUrlEnvVariable, XrayUserEnvVariable, XrayPasswordEnvVariable, XrayTokenEnvVariable},
+			wantAbsent:    []string{XrayUrlEnvVariable, XrayUserEnvVariable, XrayPasswordEnvVariable, XrayTokenEnvVariable, XrayProjectKeyEnvVariable},
 		},
 		{
 			name: "access token preferred",
@@ -32,7 +33,7 @@ func TestGetIndexerEnvVars(t *testing.T) {
 				XrayUrlEnvVariable:   "https://xray.example/",
 				XrayTokenEnvVariable: "tok",
 			},
-			wantAbsent: []string{XrayUserEnvVariable, XrayPasswordEnvVariable},
+			wantAbsent: []string{XrayUserEnvVariable, XrayPasswordEnvVariable, XrayProjectKeyEnvVariable},
 		},
 		{
 			name: "user and password",
@@ -46,13 +47,35 @@ func TestGetIndexerEnvVars(t *testing.T) {
 				XrayUserEnvVariable:     "u",
 				XrayPasswordEnvVariable: "p",
 			},
-			wantAbsent: []string{XrayTokenEnvVariable},
+			wantAbsent: []string{XrayTokenEnvVariable, XrayProjectKeyEnvVariable},
+		},
+		{
+			name: "project key with access token",
+			serverDetails: &config.ServerDetails{
+				XrayUrl:     "https://xray.example/",
+				AccessToken: "tok",
+			},
+			projectKey: "my-project",
+			wantKeys: map[string]string{
+				XrayUrlEnvVariable:        "https://xray.example/",
+				XrayTokenEnvVariable:      "tok",
+				XrayProjectKeyEnvVariable: "my-project",
+			},
+			wantAbsent: []string{XrayUserEnvVariable, XrayPasswordEnvVariable},
+		},
+		{
+			name:       "project key without server details",
+			projectKey: "my-project",
+			wantKeys: map[string]string{
+				XrayProjectKeyEnvVariable: "my-project",
+			},
+			wantAbsent: []string{XrayUrlEnvVariable, XrayUserEnvVariable, XrayPasswordEnvVariable, XrayTokenEnvVariable},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ibg := &IndexerBomGenerator{serverDetails: tt.serverDetails}
+			ibg := &IndexerBomGenerator{serverDetails: tt.serverDetails, projectKey: tt.projectKey}
 			env := ibg.getIndexerEnvVars()
 			for k, v := range tt.wantKeys {
 				assert.Equal(t, v, env[k], "key %s", k)
@@ -61,8 +84,8 @@ func TestGetIndexerEnvVars(t *testing.T) {
 				_, ok := env[k]
 				assert.False(t, ok, "key %s should be absent", k)
 			}
-			// When server details are set, env must include process env (PATH at minimum).
-			if tt.serverDetails != nil {
+			// When platform env is set, env must include process env (PATH at minimum).
+			if tt.serverDetails != nil || tt.projectKey != "" {
 				require.NotEmpty(t, env["PATH"])
 			}
 		})

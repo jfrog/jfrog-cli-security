@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -58,4 +59,16 @@ func TestGetActualUrl(t *testing.T) {
 			assert.Equal(t, expectedUrl, actualUrl)
 		})
 	}
+}
+
+func TestBinaryGraphParamsKeepXscIds(t *testing.T) {
+	cmd := &ScanCommand{
+		xrayVersion: "3.120.0",
+		xscVersion:  "1.16.0",
+		multiScanId: "msi-from-analytics",
+	}
+	params := cmd.getXrayScanGraphParams().XrayGraphScanParams()
+	assert.Equal(t, services.Binary, params.ScanType)
+	assert.Equal(t, "1.16.0", params.XscVersion)
+	assert.Equal(t, "msi-from-analytics", params.MultiScanId)
 }

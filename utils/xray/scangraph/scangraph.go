@@ -15,17 +15,22 @@ const (
 	CocoapodsScanMinXrayVersion = "3.103.3"
 )
 
-// Binary scans stay on Xray api/v1/scan/graph; XSC is only used for dependency scans with analytics ids.
+// XSC sca/scan/graph is used when analytics ids are present.
+// Binary leaf graphs drop those ids first, so they stay on Xray api/v1/scan/graph.
 func useXscGraphScan(params *services.XrayGraphScanParams) bool {
-	if params == nil || params.ScanType == services.Binary {
+	if params == nil {
 		return false
 	}
 	return params.XscVersion != "" && params.MultiScanId != ""
 }
 
-// XSC sca/scan/graph requires "nodes"; binary leaf graphs omit it, so drop XSC ids and stay on Xray.
+// XSC sca/scan/graph requires "nodes". Binary graphs that have child nodes keep the analytics ids
+// so Xray can link the scan to its meta scan. Leaf graphs omit "nodes", so drop the ids and stay on Xray.
 func disableXscForBinaryScan(params *services.XrayGraphScanParams) {
 	if params == nil || params.ScanType != services.Binary {
+		return
+	}
+	if params.BinaryGraph != nil && len(params.BinaryGraph.Nodes) > 0 {
 		return
 	}
 	params.XscVersion = ""

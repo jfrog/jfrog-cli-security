@@ -296,22 +296,60 @@ func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteS
 	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
 }
 
+// RepositoryScansListLink is a deep link into Xray's Scans List for one artifact.
+// Issue is the JSON payload the UI reads to open a specific violation. PageType defaults to "overview".
+type RepositoryScansListLink struct {
+	BaseUrl      string
+	Repo         string
+	ArtifactPath string
+	PackageID    string
+	Version      string
+	PageType     string
+	Issue        string
+}
+
 func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID string) string {
-	repoName := repoPath
-	if strings.Contains(repoPath, "/") {
-		// If repoPath contains a slash, it may be a repository path with sub-paths.
-		// We need to extract the repository name from the path.
-		repoName = strings.Split(repoPath, "/")[0]
+	repo := repoPath
+	artifactPath := artifactName
+	if slash := strings.Index(repoPath, "/"); slash != -1 {
+		repo = repoPath[:slash]
+		artifactPath = repoPath[slash+1:] + "/" + artifactName
 	}
-	// Path
-	path := fmt.Sprintf("ui/scans-list/repositories/%s/scan-descendants/%s", url.PathEscape(repoName), url.PathEscape(artifactName))
+	return BuildRepositoryScansListLink(RepositoryScansListLink{
+		BaseUrl:      baseUrl,
+		Repo:         repo,
+		ArtifactPath: artifactPath,
+		PackageID:    packageID,
+		PageType:     "overview",
+	})
+}
 
-	// Query params
+func BuildRepositoryScansListLink(link RepositoryScansListLink) string {
+	if link.BaseUrl == "" {
+		return ""
+	}
+	pageType := link.PageType
+	if pageType == "" {
+		pageType = "overview"
+	}
+	artifactName := link.ArtifactPath
+	queryPath := link.Repo
+	if link.ArtifactPath != "" {
+		queryPath = link.Repo + "/" + link.ArtifactPath
+		if idx := strings.LastIndex(link.ArtifactPath, "/"); idx != -1 {
+			artifactName = link.ArtifactPath[idx+1:]
+		}
+	}
 	query := url.Values{}
-	query.Set("package_id", packageID)
-	query.Set("path", fmt.Sprintf("%s/%s", repoPath, artifactName))
-	query.Set("page_type", "overview")
-
-	// Final URL
-	return fmt.Sprintf("%s%s?%s", baseUrl, path, query.Encode())
+	if link.Version != "" {
+		query.Set("version", link.Version)
+	}
+	query.Set("package_id", link.PackageID)
+	query.Set("path", queryPath)
+	query.Set("page_type", pageType)
+	if link.Issue != "" {
+		query.Set("issue", link.Issue)
+	}
+	scansPath := fmt.Sprintf("ui/scans-list/repositories/%s/scan-descendants/%s", url.PathEscape(link.Repo), url.PathEscape(artifactName))
+	return fmt.Sprintf("%s/%s?%s", strings.TrimSuffix(link.BaseUrl, "/"), scansPath, query.Encode())
 }
