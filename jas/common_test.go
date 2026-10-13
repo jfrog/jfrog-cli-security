@@ -882,7 +882,7 @@ func TestFormatMissingSoftwareError(t *testing.T) {
 	assert.Contains(t, singleErr.Error(), "'git'")
 	assert.NotContains(t, singleErr.Error(), "any of")
 
-	multiErr := formatMissingSoftwareError([]string{"unzip", "7z"})
-	assert.Contains(t, multiErr.Error(), "'unzip', '7z'")
+	multiErr := formatMissingSoftwareError([]string{"first-tool", "second-tool"})
+	assert.Contains(t, multiErr.Error(), "'first-tool', 'second-tool'")
 	assert.Contains(t, multiErr.Error(), "any of")
 }
