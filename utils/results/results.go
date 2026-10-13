@@ -51,18 +51,20 @@ type SecurityCommandResults struct {
 
 type ResultsMetaData struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId          string                         `json:"multi_scan_id,omitempty"`
-	XrayVersion          string                         `json:"xray_version"`
-	XscVersion           string                         `json:"xsc_version,omitempty"`
-	Entitlements         Entitlements                   `json:"entitlements"`
-	SecretValidation     bool                           `json:"secret_validation"`
-	CmdType              utils.CommandType              `json:"command_type"`
-	ResultContext        ResultContext                  `json:"result_context"`
-	GitContext           *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime            time.Time                      `json:"start_time"`
-	ResultsPlatformUrl   string                         `json:"results_platform_url,omitempty"`
-	AllowPartialResults  bool                           `json:"allow_partial_results,omitempty"`
-	UploadedArtifactPath string                         `json:"uploaded_artifact_path,omitempty"`
+	MultiScanId string `json:"multi_scan_id,omitempty"`
+	XrayVersion string `json:"xray_version"`
+	XscVersion  string `json:"xsc_version,omitempty"`
+	// The Analyzer Manager version that ran, when JAS scans were performed.
+	AnalyzerManagerVersion string                         `json:"analyzer_manager_version,omitempty"`
+	Entitlements           Entitlements                   `json:"entitlements"`
+	SecretValidation       bool                           `json:"secret_validation"`
+	CmdType                utils.CommandType              `json:"command_type"`
+	ResultContext          ResultContext                  `json:"result_context"`
+	GitContext             *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
+	StartTime              time.Time                      `json:"start_time"`
+	ResultsPlatformUrl     string                         `json:"results_platform_url,omitempty"`
+	AllowPartialResults    bool                           `json:"allow_partial_results,omitempty"`
+	UploadedArtifactPath   string                         `json:"uploaded_artifact_path,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralErrors []SkippableError `json:"general_errors,omitempty"`
 }
@@ -473,6 +475,11 @@ func (r *SecurityCommandResults) SetXrayVersion(xrayVersion string) *SecurityCom
 
 func (r *SecurityCommandResults) SetXscVersion(xscVersion string) *SecurityCommandResults {
 	r.XscVersion = xscVersion
+	return r
+}
+
+func (r *SecurityCommandResults) SetAnalyzerManagerVersion(analyzerManagerVersion string) *SecurityCommandResults {
+	r.AnalyzerManagerVersion = analyzerManagerVersion
 	return r
 }
 

@@ -12,7 +12,8 @@ import (
 )
 
 func TestRunSourceMcpHappyFlow(t *testing.T) {
-	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded("", nil, 0))
+	_, err := jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
+	assert.NoError(t, err)
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 	scanner, initError := jas.NewJasScanner(serverDetails)
@@ -32,7 +33,7 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 		ErrorPipe:     &errorBuffer,
 	}
 
-	err := mcp_cmd.runWithTimeout(5, "mcp-sast", amEnv)
+	err = mcp_cmd.runWithTimeout(5, "mcp-sast", amEnv)
 	assert.NoError(t, err) // returns error because it was terminated upon timeout
 	if !assert.Contains(t, errorBuffer.String(), "Generated IR") {
 		t.Error(errorBuffer.String())
@@ -44,7 +45,8 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 }
 
 func TestRunSourceMcpScannerError(t *testing.T) {
-	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded("", nil, 0))
+	_, err := jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
+	assert.NoError(t, err)
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 	scanner, initError := jas.NewJasScanner(serverDetails)
@@ -63,6 +65,6 @@ func TestRunSourceMcpScannerError(t *testing.T) {
 		OutputPipe:    &outputBuffer,
 		ErrorPipe:     &errorBuffer,
 	}
-	err := mcpCmd.runWithTimeout(0, "mcp-sast1", amEnv) // no such command
+	err = mcpCmd.runWithTimeout(0, "mcp-sast1", amEnv) // no such command
 	assert.ErrorContains(t, err, "exit status 99")
 }

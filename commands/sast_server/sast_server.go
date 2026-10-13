@@ -24,7 +24,7 @@ type SastServerCommand struct {
 }
 
 func (sastCmd *SastServerCommand) runWithTimeout(timeout int, envVars utils.EnvironmentVariables) (err error) {
-	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
+	return jas.RunAnalyzerManagerWithPipesAndDownload(sastCmd.ServerDetails, envVars, cmd, sastCmd.InputPipe, sastCmd.OutputPipe, sastCmd.ErrorPipe, timeout, sastCmd.Arguments...)
 }
 
 func (sastCmd *SastServerCommand) Run() (err error) {

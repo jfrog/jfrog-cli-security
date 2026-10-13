@@ -1000,9 +1000,11 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			if auditParams.configProfile != nil {
 				centralConfigDownloadPath = auditParams.configProfile.GeneralConfig.ScannersDownloadPath
 			}
-			if generalError = jas.DownloadAnalyzerManagerIfNeeded(centralConfigDownloadPath, serverDetails, threadId); generalError != nil {
+			var analyzerManagerVersion string
+			if analyzerManagerVersion, generalError = jas.DownloadAnalyzerManagerIfNeeded(centralConfigDownloadPath, serverDetails, auditParams.resultsContext.ProjectKey, threadId); generalError != nil {
 				return fmt.Errorf("failed to download analyzer manager: %s", generalError.Error())
 			}
+			scanResults.SetAnalyzerManagerVersion(analyzerManagerVersion)
 			if scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
 				return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 			}
