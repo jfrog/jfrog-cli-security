@@ -786,25 +786,34 @@ func protectCargoCurationEnvironment(server *config.ServerDetails, repoName stri
 	sourceBlock := fmt.Sprintf("\n[source.%s-remote]\nregistry = %q\n\n[source.crates-io]\nreplace-with = %q\n",
 		cargoRegistryName, sparseUrl, cargoRegistryName+"-remote")
 
+	// Anonymous access (no user, password or token): skip the credential provider and credentials.toml.
+	anonymous := server.GetUser() == "" && server.GetPassword() == "" && server.GetAccessToken() == ""
+	credentialProvidersLine := "\nglobal-credential-providers = [\"cargo:token\"]" // #nosec G101 -- Not credentials, this is a cargo config line.
+	if anonymous {
+		credentialProvidersLine = ""
+		log.Info(fmt.Sprintf("No credentials are configured for '%s'; resolving dependencies with Artifactory anonymous access.", server.GetArtifactoryUrl()))
+	}
+
 	configContent := fmt.Sprintf(`[registry]
-default = %q
-global-credential-providers = ["cargo:token"]
+default = %q%s
 
 [registries.%s]
 index = %q
-%s`, registriesName, registriesName, sparseUrl, sourceBlock)
+%s`, registriesName, credentialProvidersLine, registriesName, sparseUrl, sourceBlock)
 
 	if err = os.WriteFile(filepath.Join(tempHome, "config.toml"), []byte(configContent), 0600); err != nil { // #nosec G306 -- isolated temp CARGO_HOME, not the user's real config
 		return nil, errors.Join(err, cleanup())
 	}
 
-	token, tokenErr := cargoBasicAuthToken(server)
-	if tokenErr != nil {
-		return nil, errors.Join(tokenErr, cleanup())
-	}
-	credsContent := fmt.Sprintf("[registries.%s]\ntoken = %q\n", registriesName, token)
-	if err = os.WriteFile(filepath.Join(tempHome, "credentials.toml"), []byte(credsContent), 0600); err != nil { // #nosec G306 -- isolated temp CARGO_HOME
-		return nil, errors.Join(err, cleanup())
+	if !anonymous {
+		token, tokenErr := cargoBasicAuthToken(server)
+		if tokenErr != nil {
+			return nil, errors.Join(tokenErr, cleanup())
+		}
+		credsContent := fmt.Sprintf("[registries.%s]\ntoken = %q\n", registriesName, token)
+		if err = os.WriteFile(filepath.Join(tempHome, "credentials.toml"), []byte(credsContent), 0600); err != nil { // #nosec G306 -- isolated temp CARGO_HOME
+			return nil, errors.Join(err, cleanup())
+		}
 	}
 
 	previousHome, hadHome := os.LookupEnv("CARGO_HOME")

@@ -2,6 +2,7 @@ package java
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
@@ -179,7 +181,13 @@ func parseDepTreeFile(path string) (results *moduleDepTree, err error) {
 	return
 }
 
-func getArtifactoryAuthFromServer(server *config.ServerDetails) (string, string, error) {
+// getArtifactoryAuthFromServer returns the server credentials, or empty ones for anonymous access (no user,
+// password or token) during curation-audit.
+func getArtifactoryAuthFromServer(server *config.ServerDetails, isCurationCmd bool) (string, string, error) {
+	if isCurationCmd && server.User == "" && server.Password == "" && server.AccessToken == "" {
+		log.Info(fmt.Sprintf("No credentials are configured for '%s'; resolving dependencies with Artifactory anonymous access.", server.ArtifactoryUrl))
+		return "", "", nil
+	}
 	username, password, err := server.GetAuthenticationCredentials()
 	if err != nil {
 		return "", "", err
