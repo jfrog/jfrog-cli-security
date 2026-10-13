@@ -34,7 +34,8 @@ func getFreePort() (int, error) {
 }
 
 func TestRunSastServerHappyFlow(t *testing.T) {
-	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded("", nil, 0))
+	_, err := jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
+	assert.NoError(t, err)
 	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 	scanner, initError := jas.NewJasScanner(serverDetails)

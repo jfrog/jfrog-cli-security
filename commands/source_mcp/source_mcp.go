@@ -25,7 +25,7 @@ type McpCommand struct {
 }
 
 func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string, envVars utils.EnvironmentVariables) (err error) {
-	return jas.RunAnalyzerManagerWithPipesAndDownload(envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
+	return jas.RunAnalyzerManagerWithPipesAndDownload(mcpCmd.ServerDetails, envVars, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
 }
 
 func (mcpCmd *McpCommand) Run() (err error) {

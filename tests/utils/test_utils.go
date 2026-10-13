@@ -478,7 +478,8 @@ func PrepareAnalyzerManagerResource() (err error) {
 		}
 		return nil
 	}
-	return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
+	_, err = jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
+	return
 }
 
 func PrepareIndexerAppResource(details *config.ServerDetails) (err error) {
