@@ -1742,16 +1742,17 @@ func TestExclude(t *testing.T) {
 		{
 			// Metadata.Component is the Xray-Lib-Plugin wrapper: GetRootDependenciesEntries treats every
 			// one of its dependsOn children as a root (see TestGetRootDependenciesEntries)
+			// Purls carry a ?hash= qualifier, as the real Xray-Lib Plugin output does.
 			name: "Exclude fully unchanged roots under a Metadata.Component wrapper",
 			bom: cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{BOMRef: "file-root", Type: cyclonedx.ComponentTypeFile},
 				},
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
-					{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
-					{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0?hash=98d521d8", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "ISC"}}}},
+					{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21?hash=ab0bf448", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0?hash=4af913d9", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3?hash=d485e609", Type: cyclonedx.ComponentTypeLibrary},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "file-root", Dependencies: &[]string{"api", "web"}},
@@ -1759,11 +1760,12 @@ func TestExclude(t *testing.T) {
 					{Ref: "web", Dependencies: &[]string{"ms"}},
 				},
 			},
+			// Same name+version, different hash than the source - still an unchanged match
 			exclude: []cyclonedx.Component{
-				{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0"},
-				{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21"},
-				{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0"},
-				{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3"},
+				{BOMRef: "api", PackageURL: "pkg:npm/api@1.0.0?hash=00000000"},
+				{BOMRef: "lodash", PackageURL: "pkg:npm/lodash@4.17.21?hash=00000000"},
+				{BOMRef: "web", PackageURL: "pkg:npm/web@1.0.0?hash=00000000"},
+				{BOMRef: "ms", PackageURL: "pkg:npm/ms@2.1.3?hash=00000000"},
 			},
 			expected: &cyclonedx.BOM{
 				Components:   &[]cyclonedx.Component{},
@@ -1971,6 +1973,51 @@ func TestExclude(t *testing.T) {
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "outer", Dependencies: &[]string{"inner"}},
 				},
+			},
+		},
+		{
+			// a and b share a normalized purl (same name+version, different hash) but are distinct bom-refs.
+			// a is a leaf and must be excluded; b has a new child (leaf) and must not be, even though
+			// matching by purl alone would conflate the two.
+			name: "Exclude does not conflate two components that share a normalized purl",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "a", PackageURL: "pkg:npm/same@1.0.0?hash=aaa", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "b", PackageURL: "pkg:npm/same@1.0.0?hash=bbb", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "leaf", PackageURL: "pkg:npm/leaf@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "b", Dependencies: &[]string{"leaf"}},
+				},
+			},
+			exclude: []cyclonedx.Component{{BOMRef: "same", PackageURL: "pkg:npm/same@1.0.0?hash=ccc"}},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "b", PackageURL: "pkg:npm/same@1.0.0?hash=bbb", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "leaf", PackageURL: "pkg:npm/leaf@1.0.0", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "b", Dependencies: &[]string{"leaf"}},
+				},
+			},
+		},
+		{
+			// root's only child, missing-ref, does not resolve to any real component (a dangling or
+			// malformed dependsOn entry). It must not count as a real/changed descendant, so root - with
+			// nothing actually new beneath it - is still excluded.
+			name: "Exclude treats a dependsOn ref that resolves to no component as no signal",
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", PackageURL: "pkg:npm/root@1.0.0", Type: cyclonedx.ComponentTypeLibrary, Licenses: &cyclonedx.Licenses{{License: &cyclonedx.License{ID: "MIT"}}}},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"missing-ref"}},
+				},
+			},
+			exclude: []cyclonedx.Component{{BOMRef: "root", PackageURL: "pkg:npm/root@1.0.0"}},
+			expected: &cyclonedx.BOM{
+				Components:   &[]cyclonedx.Component{},
+				Dependencies: &[]cyclonedx.Dependency{},
 			},
 		},
 	}

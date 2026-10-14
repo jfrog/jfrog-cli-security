@@ -360,30 +360,28 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	matchedRefs := datastructures.MakeSet[string]()
-	matchedComponents := map[string]cyclonedx.Component{}
 	for _, compToExclude := range componentsToExclude {
-		matchedBomComp := SearchComponentByCleanPurl(bom.Components, compToExclude.PackageURL)
-		if matchedBomComp == nil {
-			// Not a match (new, or its purl changed since the target), skip it
-			continue
+		excludePurl := techutils.PurlToXrayComponentId(compToExclude.PackageURL)
+		for _, comp := range *bom.Components {
+			// Match by normalized purl: every component sharing it (e.g. same name+version with a
+			// different hash) is a distinct bom-ref and must be tracked - and later excluded - on its own.
+			if techutils.PurlToXrayComponentId(comp.PackageURL) == excludePurl {
+				matchedRefs.Add(comp.BOMRef)
+			}
 		}
-		matchedRefs.Add(matchedBomComp.BOMRef)
-		matchedComponents[matchedBomComp.BOMRef] = *matchedBomComp
 	}
 	// A matched (unchanged) component is only excluded once it cannot reach anything real - no new or
 	// changed component, and no other matched component that itself can. Root or not, a matched node with
 	// a real descendant must stay to anchor it, and a closed group of matched nodes with no escape (a
 	// monorepo wrapper's two packages depending on each other, for instance) is excluded together.
-	escapingRefs := calculateEscapingRefs(bom.Dependencies, matchedRefs)
-	var toExcludeComponents []cyclonedx.Component
-	for ref, comp := range matchedComponents {
+	escapingRefs := calculateEscapingRefs(bom.Dependencies, bom.Components, matchedRefs)
+	toExcludeRefs := datastructures.MakeSet[string]()
+	for _, ref := range matchedRefs.ToSlice() {
 		if !escapingRefs.Exists(ref) {
-			toExcludeComponents = append(toExcludeComponents, comp)
+			toExcludeRefs.Add(ref)
 		}
 	}
-	if len(toExcludeComponents) > 0 {
-		filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, bom.Components, toExcludeComponents...)
-	}
+	filteredSbom.Dependencies = excludeFromDependencies(filteredSbom.Dependencies, toExcludeRefs)
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
 		if comp.Type != cyclonedx.ComponentTypeLibrary {
@@ -428,7 +426,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 // component outside matchedRefs - i.e. something new or changed that must not be silently dropped. A
 // matched ref that cannot escape has nothing real left underneath it, including a ref stuck in a cycle
 // made up entirely of other non-escaping matched refs.
-func calculateEscapingRefs(dependencies *[]cyclonedx.Dependency, matchedRefs *datastructures.Set[string]) *datastructures.Set[string] {
+func calculateEscapingRefs(dependencies *[]cyclonedx.Dependency, components *[]cyclonedx.Component, matchedRefs *datastructures.Set[string]) *datastructures.Set[string] {
 	escapes := datastructures.MakeSet[string]()
 	for {
 		changed := false
@@ -437,6 +435,10 @@ func calculateEscapingRefs(dependencies *[]cyclonedx.Dependency, matchedRefs *da
 				continue
 			}
 			for _, child := range GetDirectDependencies(dependencies, ref) {
+				if SearchComponentByRef(components, child) == nil {
+					// Not a real component (e.g. a dangling/malformed dependsOn ref) - no signal either way
+					continue
+				}
 				if !matchedRefs.Exists(child) || escapes.Exists(child) {
 					escapes.Add(ref)
 					changed = true
@@ -486,25 +488,24 @@ func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents 
 	return &filteredComponents
 }
 
-func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[]cyclonedx.Component, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Dependency {
-	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
+// excludeFromDependencies drops excludeRefs's own dependsOn entries entirely and strips them wherever they
+// appear as someone else's child. Matching is by bom-ref, not purl: two distinct components can share a
+// normalized purl (e.g. same name+version with a different hash), and only the refs actually decided for
+// exclusion must be touched, never every component with the same identity.
+func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeRefs *datastructures.Set[string]) *[]cyclonedx.Dependency {
+	if dependencies == nil || len(*dependencies) == 0 || len(excludeRefs.ToSlice()) == 0 {
 		return dependencies
-	}
-	excludePurls := datastructures.MakeSet[string]()
-	for _, component := range excludeComponents {
-		excludePurls.Add(techutils.PurlToXrayComponentId(component.PackageURL))
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
-		if excludePurls.Exists(GetTrimmedPurlByRef(dep.Ref, components)) {
+		if excludeRefs.Exists(dep.Ref) {
 			// This dependency is excluded, skip it
 			continue
 		}
 		filteredDep := cyclonedx.Dependency{Ref: dep.Ref}
 		if dep.Dependencies != nil {
-			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
-				if !excludePurls.Exists(GetTrimmedPurlByRef(depRef, components)) {
+				if !excludeRefs.Exists(depRef) {
 					if filteredDep.Dependencies == nil {
 						filteredDep.Dependencies = &[]string{}
 					}
@@ -515,15 +516,6 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, components *[
 		filteredDependencies = append(filteredDependencies, filteredDep)
 	}
 	return &filteredDependencies
-}
-
-func GetTrimmedPurlByRef(dep string, components *[]cyclonedx.Component) string {
-	component := SearchComponentByRef(components, dep)
-	if component == nil {
-		// couldn't find component
-		return ""
-	}
-	return techutils.PurlToXrayComponentId(component.PackageURL)
 }
 
 // ScanLicenseToCycloneDx maps an Xray license key/name to a CycloneDX license.
