@@ -69,7 +69,6 @@ type JasDiffScanEnvValue string
 // Each inner slice represents a single capability, and  entry within a group can satisfies the requirement
 var scannersRequiredInstalledSoftware = [][]string{
 	{"git"},
-	{"unzip", "7z"},
 	{"curl"},
 }
 
