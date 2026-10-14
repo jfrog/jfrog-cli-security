@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1138,7 +1140,45 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
 	}
-	return tests
+	// Same cases with a server that has no credentials (Artifactory anonymous access).
+	return append(tests, anonymousAccessCases(tests,
+		"maven tree - one blocked package",
+		"gradle tree - one blocked package",
+		"npm tree - two blocked package ",
+	)...)
+}
+
+// anonymousAccessCases returns copies of the named cases that run with a server without credentials.
+func anonymousAccessCases(tests []testCase, names ...string) (anonymousCases []testCase) {
+	for _, tc := range tests {
+		if !slices.Contains(names, tc.name) {
+			continue
+		}
+		tc.name = strings.TrimSpace(tc.name) + " - anonymous access"
+		tc.createServerWithoutCreds = true
+		// The mock server and the validation update these, so each case needs its own copy.
+		tc.expectedBuildRequest = maps.Clone(tc.expectedBuildRequest)
+		tc.expectedRequest = maps.Clone(tc.expectedRequest)
+		tc.requestToFail = maps.Clone(tc.requestToFail)
+		tc.requestToError = maps.Clone(tc.requestToError)
+		tc.expectedResp = cloneCurationReports(tc.expectedResp)
+		anonymousCases = append(anonymousCases, tc)
+	}
+	return
+}
+
+func cloneCurationReports(reports map[string]*CurationReport) map[string]*CurationReport {
+	cloned := make(map[string]*CurationReport, len(reports))
+	for key, report := range reports {
+		reportCopy := *report
+		reportCopy.packagesStatus = make([]*PackageStatus, len(report.packagesStatus))
+		for i, status := range report.packagesStatus {
+			statusCopy := *status
+			reportCopy.packagesStatus[i] = &statusCopy
+		}
+		cloned[key] = &reportCopy
+	}
+	return cloned
 }
 
 func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool, resourceToServe map[string]string) (*httptest.Server, *config.ServerDetails) {
@@ -1181,11 +1221,103 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 					"\"message\": \"Package download was blocked by JFrog Packages " +
 					"Curation service due to the following policies violated {pol1, cond1}\"\n        }\n    ]\n}"))
 				assert.NoError(t, err)
+				return
+			}
+			// Maven 3.10+ rejects empty checksum files, POMs and plugin jars, so serve none of them.
+			if isMavenChecksumFile(r.URL.Path) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if isMavenDepTreePluginJar(r.URL.Path) {
+				jar, err := os.ReadFile(mavenDepTreePluginJarPath(t))
+				require.NoError(t, err)
+				_, err = w.Write(jar)
+				assert.NoError(t, err)
+				return
+			}
+			if pom := minimalMavenPom(r.URL.Path); pom != "" {
+				_, err := w.Write([]byte(pom))
+				assert.NoError(t, err)
 			}
 		}
 	})
 	config.XrayUrl = config.Url + "xray/"
 	return serverMock, config
+}
+
+func isMavenChecksumFile(path string) bool {
+	for _, ext := range []string{".md5", ".sha1", ".sha256", ".sha512"} {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+func isMavenDepTreePluginJar(path string) bool {
+	version := java.GetMavenDepTreeVersion()
+	return strings.HasSuffix(path, "/com/jfrog/maven-dep-tree/"+version+"/maven-dep-tree-"+version+".jar")
+}
+
+// mavenDepTreePluginJarPath returns the maven-dep-tree plugin jar embedded in the java package.
+func mavenDepTreePluginJarPath(t *testing.T) string {
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "sca", "bom", "buildinfo", "technologies", "java", "resources", "maven-dep-tree.jar")
+}
+
+// mavenDepTreePomDependencies declares the real chain maven-jar-plugin -> maven-archiver -> plexus-archiver
+// -> asm:9.8, keyed by "groupId:artifactId:version", so the plugin-dependency test can resolve down to it.
+var mavenDepTreePomDependencies = map[string]string{
+	"org.apache.maven.plugins:maven-jar-plugin:3.4.1": `
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-archiver</artifactId>
+      <version>3.6.2</version>
+    </dependency>
+  </dependencies>`,
+	"org.apache.maven:maven-archiver:3.6.2": `
+  <dependencies>
+    <dependency>
+      <groupId>org.codehaus.plexus</groupId>
+      <artifactId>plexus-archiver</artifactId>
+      <version>4.9.2</version>
+    </dependency>
+  </dependencies>`,
+	"org.codehaus.plexus:plexus-archiver:4.9.2": `
+  <dependencies>
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.8</version>
+    </dependency>
+  </dependencies>`,
+}
+
+// minimalMavenPom returns a valid POM for a curation-API POM request, or "" otherwise.
+// It has no dependencies, except for the GAVs listed in mavenDepTreePomDependencies.
+func minimalMavenPom(path string) string {
+	const curationApiPrefix = "/api/curation/audit/"
+	if !strings.HasPrefix(path, curationApiPrefix) || !strings.HasSuffix(path, ".pom") {
+		return ""
+	}
+	// Drop the repository key; what remains is the group path, artifactId, version and file name.
+	parts := strings.Split(strings.TrimPrefix(path, curationApiPrefix), "/")[1:]
+	if len(parts) < 4 {
+		return ""
+	}
+	groupId := strings.Join(parts[:len(parts)-3], ".")
+	artifactId, version := parts[len(parts)-3], parts[len(parts)-2]
+	dependencies := mavenDepTreePomDependencies[groupId+":"+artifactId+":"+version]
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>%s</groupId>
+  <artifactId>%s</artifactId>
+  <version>%s</version>%s
+</project>
+`, groupId, artifactId, version, dependencies)
 }
 
 func getResourceToServe(resourcesToServe map[string]string, pathToRes string) string {
@@ -7325,6 +7457,76 @@ func TestDoCurationAudit_Cargo(t *testing.T) {
 	defer mockServer.Close()
 
 	tt := testCase{pathToProject: pathToProject}
+	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
+	defer cleanUpHome()
+
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, pathToProject))
+	defer cleanUpTestPathDir()
+
+	// Cargo has no 'jf cargo-config'; wire the registry via .cargo/config.toml with the mock server's real URL.
+	require.NoError(t, os.MkdirAll(filepath.Join(testDirPath, ".cargo"), 0755))
+	cargoConfig := fmt.Sprintf(`[source.crates-io]
+replace-with = "artifactory-remote"
+
+[source.artifactory-remote]
+registry = "sparse+%s/api/cargo/cargo-test-repo/index/"
+`, strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/"))
+	require.NoError(t, os.WriteFile(filepath.Join(testDirPath, ".cargo", "config.toml"), []byte(cargoConfig), 0600))
+
+	results, err := createCurationCmdAndRun(tt)
+	require.NoError(t, err)
+
+	expected := map[string]*CurationReport{
+		"probe:0.1.0": {
+			packagesStatus: []*PackageStatus{
+				{
+					Action: "blocked",
+					// A direct dependency's ParentName/Version mirror its own identity (see the gem-tree test).
+					ParentName:        "widget",
+					ParentVersion:     "1.0.0",
+					BlockedPackageUrl: strings.TrimSuffix(serverConfig.ArtifactoryUrl, "/") + "/api/cargo/cargo-test-repo/v1/crates/widget/1.0.0/download",
+					PackageName:       "widget",
+					PackageVersion:    "1.0.0",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "direct",
+					PkgType:           "cargo",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+			},
+			totalNumberOfPackages: 1,
+		},
+	}
+	assert.Equal(t, expected, results)
+}
+
+// Same as TestDoCurationAudit_Cargo, but with a server that has no credentials (Artifactory anonymous
+// access). TestDoCurationAudit_Cargo is a standalone function rather than a case in
+// getTestCasesForDoCurationAudit()'s table, so it isn't covered by anonymousAccessCases and needs its
+// own anonymous variant to keep end-to-end coverage of the anonymous curation-audit path for Cargo.
+func TestDoCurationAudit_Cargo_AnonymousAccess(t *testing.T) {
+	skipIfCargoUnavailable(t)
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+	pathToProject := filepath.Join("projects", "package-managers", "cargo", "curation-project")
+
+	requestToFail := map[string]bool{
+		"/api/cargo/cargo-test-repo/v1/crates/widget/1.0.0/download": true,
+	}
+	mockServer, serverConfig := curationServer(t, nil, nil, requestToFail, nil, map[string]string{
+		"config.json":  filepath.Join(basePathToTests, pathToProject, "resources", "config.json"),
+		"wi/dg/widget": filepath.Join(basePathToTests, pathToProject, "resources", "widget-index"),
+	})
+	defer mockServer.Close()
+
+	tt := testCase{pathToProject: pathToProject, createServerWithoutCreds: true}
 	cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, tt, serverConfig)
 	defer cleanUpHome()
 

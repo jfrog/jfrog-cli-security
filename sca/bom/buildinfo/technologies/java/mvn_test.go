@@ -1,6 +1,7 @@
 package java
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -409,6 +411,173 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 	actualContent = []byte(strings.ReplaceAll(string(actualContent), "\r\n", "\n"))
 	assert.NoError(t, err)
 	assert.Equal(t, settingsXmlWithAccessToken, string(actualContent))
+}
+
+// With no credentials, curation-audit's settings.xml has no <servers> block and Maven runs anonymously
+func TestCreateSettingsXmlAnonymousAccess(t *testing.T) {
+	serversBlock := func(id string) string {
+		return "\n    <servers>\n        <server>\n            <id>" + id + "</id>\n" +
+			"            <username>testUser</username>\n            <password>testPass</password>\n" +
+			"        </server>\n    </servers>"
+	}
+	testCases := []struct {
+		name          string
+		isCurationCmd bool
+		expected      string
+		expectedErr   string
+	}{
+		{
+			name:        "audit",
+			expectedErr: "either username/password or access token must be set for https://myartifactory.com/artifactory",
+		},
+		{
+			name:          "curation",
+			isCurationCmd: true,
+			expected:      strings.Replace(settingsXmlWithUsernameAndPasswordAndCurationDedicatedAPi, serversBlock(curationSettingsID), "", 1),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mdt := MavenDepTreeManager{
+				DepTreeManager: DepTreeManager{
+					server:   &config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory"},
+					depsRepo: "testRepo",
+				},
+				isCurationCmd:       tc.isCurationCmd,
+				userSettingsXmlPath: filepath.Join(t.TempDir(), "no-settings.xml"),
+			}
+			tempDir := t.TempDir()
+			err := mdt.createSettingsXmlWithConfiguredArtifactory(tempDir)
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				assert.Equal(t, tc.expectedErr, err.Error())
+				return
+			}
+			require.NoError(t, err)
+
+			actualContent, readErr := os.ReadFile(filepath.Join(tempDir, settingsXmlFile))
+			require.NoError(t, readErr)
+			actualContent = []byte(strings.ReplaceAll(string(actualContent), "\r\n", "\n"))
+			assert.NotContains(t, tc.expected, "<servers>", "expected fixture must not contain credentials")
+			assert.Equal(t, tc.expected, string(actualContent))
+		})
+	}
+}
+
+// With no credentials, no curation <server> is added to the user's settings.xml; their own servers are kept.
+func TestCreateSettingsXmlFromExistingAnonymousAccess(t *testing.T) {
+	t.Parallel()
+	//#nosec G101 - test credentials only
+	userSettings := `<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+    <servers>
+        <server>
+            <id>corp</id>
+            <username>corpUser</username>
+            <password>corpPass</password>
+        </server>
+    </servers>
+</settings>`
+
+	userSettingsPath := filepath.Join(t.TempDir(), "settings.xml")
+	require.NoError(t, os.WriteFile(userSettingsPath, []byte(userSettings), 0600))
+
+	mdt := MavenDepTreeManager{
+		DepTreeManager: DepTreeManager{
+			server:   &config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory"},
+			depsRepo: "testRepo",
+		},
+		isCurationCmd:       true,
+		userSettingsXmlPath: userSettingsPath,
+	}
+
+	tempDir := t.TempDir()
+	require.NoError(t, mdt.createSettingsXmlWithConfiguredArtifactory(tempDir))
+
+	doc := etree.NewDocument()
+	require.NoError(t, doc.ReadFromFile(filepath.Join(tempDir, settingsXmlFile)))
+	root := doc.SelectElement("settings")
+
+	servers := root.SelectElement("servers").SelectElements("server")
+	require.Len(t, servers, 1, "only the user's own server must remain")
+	assert.Equal(t, "corp", servers[0].SelectElement("id").Text())
+	assert.Nil(t, xmlFindByID(root.SelectElement("servers"), "server", curationSettingsID), "no curation <server> for anonymous access")
+
+	mirror := xmlFindByID(root.SelectElement("mirrors"), "mirror", curationSettingsID)
+	require.NotNil(t, mirror, "curation mirror must still be injected")
+	assert.Equal(t, "https://myartifactory.com/artifactory/api/curation/audit/testRepo", mirror.SelectElement("url").Text())
+}
+
+// Anonymous access (no credentials configured) must be logged, so a support engineer can tell
+// "deliberately anonymous" from "credentials silently dropped" when investigating curation/audit logs.
+func TestGetArtifactoryAuthFromServerLogsAnonymousAccess(t *testing.T) {
+	var buf bytes.Buffer
+	previousLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.INFO, &buf))
+	defer log.SetLogger(previousLogger)
+
+	username, password, err := getArtifactoryAuthFromServer(&config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory/"}, true)
+	require.NoError(t, err)
+	assert.Empty(t, username)
+	assert.Empty(t, password)
+	assert.Contains(t, buf.String(), "anonymous")
+	assert.Contains(t, buf.String(), "https://myartifactory.com/artifactory/")
+}
+
+func TestGetArtifactoryAuthFromServer(t *testing.T) {
+	testCases := []struct {
+		name             string
+		server           *config.ServerDetails
+		isCurationCmd    bool
+		expectedUser     string
+		expectedPassword string
+		expectErr        bool
+	}{
+		{
+			name:          "anonymous access, curation",
+			server:        &config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory"},
+			isCurationCmd: true,
+		},
+		{
+			name:      "anonymous access, non-curation still errors",
+			server:    &config.ServerDetails{ArtifactoryUrl: "https://myartifactory.com/artifactory"},
+			expectErr: true,
+		},
+		{
+			name:             "username and password",
+			server:           &config.ServerDetails{User: "testUser", Password: "testPass"},
+			expectedUser:     "testUser",
+			expectedPassword: "testPass",
+		},
+		{
+			name:             "access token only",
+			server:           &config.ServerDetails{AccessToken: dummyToken},
+			expectedUser:     "admin",
+			expectedPassword: dummyToken,
+		},
+		{
+			name:      "username without password",
+			server:    &config.ServerDetails{User: "testUser"},
+			expectErr: true,
+		},
+		{
+			name:      "password without username",
+			server:    &config.ServerDetails{Password: "testPass"},
+			expectErr: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			username, password, err := getArtifactoryAuthFromServer(tc.server, tc.isCurationCmd)
+			if tc.expectErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedUser, username)
+			assert.Equal(t, tc.expectedPassword, password)
+		})
+	}
 }
 
 // TestCreateSettingsXmlPreservesExistingProxy verifies that when the user already has a

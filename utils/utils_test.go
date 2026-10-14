@@ -1,9 +1,24 @@
 package utils
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 )
 
 func TestUniqueIntersection(t *testing.T) {
@@ -231,4 +246,77 @@ func TestElementsEqual(t *testing.T) {
 			assert.Equal(t, tc.expected, ElementsEqual(tc.slice1, tc.slice2))
 		})
 	}
+}
+
+const (
+	encryptedArchiveName    = "resource.zip"
+	encryptedArchivePath    = "resources/" + encryptedArchiveName
+	encryptedArchiveContent = "resource executable"
+	resourcesRemoteRepo     = "resources-remote"
+)
+
+func TestRemoteResourceDownloadEncrypted(t *testing.T) {
+	key := bytes.Repeat([]byte{1}, 16)
+	encryptedArchive := encryptAesCtr(t, key, createZip(t, "resource", encryptedArchiveContent))
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		encryptedArchiveSha256 := sha256.Sum256(encryptedArchive)
+		w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(encryptedArchiveSha256[:]))
+		if r.Method == http.MethodGet {
+			_, err := w.Write(encryptedArchive)
+			assert.NoError(t, err)
+		}
+	}))
+	defer mockServer.Close()
+
+	testCases := []struct {
+		name          string
+		decryptionKey []byte
+		expectError   bool
+	}{
+		{name: "Correct key", decryptionKey: key},
+		{name: "Wrong key", decryptionKey: bytes.Repeat([]byte{9}, 16), expectError: true},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			targetDir := t.TempDir()
+			resource, err := GetRemoteResource("Resource", encryptedArchivePath, resourcesRemoteRepo, &config.ServerDetails{ArtifactoryUrl: mockServer.URL + "/artifactory/"})
+			require.NoError(t, err)
+
+			err = resource.Download(targetDir, encryptedArchiveName, true, 0, testCase.decryptionKey)
+
+			assert.Equal(t, testCase.expectError, err != nil)
+			cached, cacheErr := resource.IsCached(targetDir)
+			require.NoError(t, cacheErr)
+			assert.Equal(t, !testCase.expectError, cached)
+			extracted, readErr := os.ReadFile(filepath.Join(targetDir, "resource"))
+			if testCase.expectError {
+				assert.True(t, os.IsNotExist(readErr))
+				return
+			}
+			require.NoError(t, readErr)
+			assert.Equal(t, encryptedArchiveContent, string(extracted))
+		})
+	}
+}
+
+func createZip(t *testing.T, fileName, content string) []byte {
+	var buffer bytes.Buffer
+	zipWriter := zip.NewWriter(&buffer)
+	fileWriter, err := zipWriter.Create(fileName)
+	require.NoError(t, err)
+	_, err = fileWriter.Write([]byte(content))
+	require.NoError(t, err)
+	require.NoError(t, zipWriter.Close())
+	return buffer.Bytes()
+}
+
+func encryptAesCtr(t *testing.T, key, plaintext []byte) []byte {
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+	iv := make([]byte, aes.BlockSize)
+	_, err = rand.Read(iv)
+	require.NoError(t, err)
+	ciphertext := make([]byte, len(plaintext))
+	cipher.NewCTR(block, iv).XORKeyStream(ciphertext, plaintext)
+	return slices.Concat(iv, ciphertext)
 }

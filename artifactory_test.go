@@ -245,7 +245,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	defer setEnvCallBack()
 
 	// Download
-	err := jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
+	_, err := jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
 	assert.NoError(t, err)
 
 	// Validate Analyzer manager app & checksum.sh2 file exist
@@ -266,7 +266,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	// Validate no second download occurred
 	firstFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)
-	err = jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
+	_, err = jas.DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
 	assert.NoError(t, err)
 	secondFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)

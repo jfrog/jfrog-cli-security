@@ -361,7 +361,8 @@ var FakeBasicXrayResults = []services.ScanResponse{
 }
 
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
-	assert.NoError(t, DownloadAnalyzerManagerIfNeeded("", nil, 0))
+	_, err := DownloadAnalyzerManagerIfNeeded("", nil, "", 0)
+	assert.NoError(t, err)
 	scanner, err := NewJasScanner(&FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {

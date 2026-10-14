@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -26,7 +27,9 @@ const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	TransitiveContextualAnalysisFeatureId     = "transitive_contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.60.0"
+	defaultAnalyzerManagerVersion             = "1.61.0"
+	firstEncryptedAnalyzerManagerVersion      = "1.61.0"
+	lastUnencryptedAnalyzerManagerVersion     = "1.60.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -124,19 +127,23 @@ func GetDiffScanTypeValue(diffScan bool, resultsToCompare *results.SecurityComma
 	return SecondScanDiffScanEnvValue
 }
 
-func GetAnalyzerManagerDownloadPath() (string, error) {
+func getAnalyzerManagerDownloadPath(analyzerManagerVersion string) (string, error) {
 	osAndArc, err := coreutils.GetOSAndArc()
 	if err != nil {
 		return "", err
 	}
-	return path.Join(analyzerManagerDownloadPath, GetAnalyzerManagerVersion(), osAndArc, AnalyzerManagerZipName), nil
+	return path.Join(analyzerManagerDownloadPath, analyzerManagerVersion, osAndArc, AnalyzerManagerZipName), nil
 }
 
 func GetAnalyzerManagerVersion() string {
-	if analyzerManagerVersion := os.Getenv(jfrogCliAnalyzerManagerVersionEnvVariable); analyzerManagerVersion != "" {
-		return analyzerManagerVersion
+	if isAnalyzerManagerVersionPinned() {
+		return os.Getenv(jfrogCliAnalyzerManagerVersionEnvVariable)
 	}
 	return defaultAnalyzerManagerVersion
+}
+
+func isAnalyzerManagerVersionPinned() bool {
+	return os.Getenv(jfrogCliAnalyzerManagerVersionEnvVariable) != ""
 }
 
 func GetAnalyzerManagerDirAbsolutePath() (string, error) {
@@ -212,18 +219,53 @@ func GetAnalyzerManagerExitCode(err error) int {
 	return 0
 }
 
-// Download the latest AnalyzerManager executable if not cached locally.
-// By default, the zip is downloaded directly from jfrog releases.
-func DownloadAnalyzerManagerIfNeeded(remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
-	downloadPath, err := GetAnalyzerManagerDownloadPath()
-	if err != nil {
-		return err
-	}
+// Download the AnalyzerManager executable if not cached locally, from the given remote repository, the JFROG_CLI_RELEASES_REPO remote repository or jfrog releases.
+// When the encrypted Analyzer Manager cannot be downloaded or decrypted, the last unencrypted version is downloaded instead.
+// Returns the version of the Analyzer Manager that is ready to run.
+func DownloadAnalyzerManagerIfNeeded(remoteRepo string, serverDetails *config.ServerDetails, projectKey string, threadId int) (string, error) {
 	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
 	if err != nil {
+		return "", err
+	}
+	analyzerManagerVersion := GetAnalyzerManagerVersion()
+	if !version.NewVersion(analyzerManagerVersion).AtLeast(firstEncryptedAnalyzerManagerVersion) {
+		err = downloadAnalyzerManagerIfNeeded(analyzerManagerVersion, analyzerManagerDir, remoteRepo, serverDetails, threadId)
+	} else if err = downloadEncryptedAnalyzerManagerIfNeeded(analyzerManagerVersion, analyzerManagerDir, remoteRepo, serverDetails, projectKey, threadId); err != nil && !isAnalyzerManagerVersionPinned() {
+		log.Warn(fmt.Sprintf("Using an older Analyzer Manager (%s) because Analyzer Manager %s couldn't be retrieved: %s. Check the JAS entitlement and the connection to Xray.", lastUnencryptedAnalyzerManagerVersion, analyzerManagerVersion, err.Error()))
+		analyzerManagerVersion = lastUnencryptedAnalyzerManagerVersion
+		err = downloadAnalyzerManagerIfNeeded(analyzerManagerVersion, analyzerManagerDir, remoteRepo, serverDetails, threadId)
+	}
+	if err != nil {
+		return "", err
+	}
+	return analyzerManagerVersion, nil
+}
+
+func downloadEncryptedAnalyzerManagerIfNeeded(analyzerManagerVersion, analyzerManagerDir, remoteRepo string, serverDetails *config.ServerDetails, projectKey string, threadId int) error {
+	downloadPath, err := getAnalyzerManagerDownloadPath(analyzerManagerVersion)
+	if err != nil {
 		return err
 	}
-	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, remoteRepo, remoteServerDetails, threadId)
+	analyzerManager, err := utils.GetRemoteResource("Analyzer Manager", downloadPath, remoteRepo, serverDetails)
+	if err != nil {
+		return err
+	}
+	if cached, err := analyzerManager.IsCached(analyzerManagerDir); err != nil || cached {
+		return err
+	}
+	decryptionKey, err := getAnalyzerManagerKey(serverDetails, projectKey)
+	if err != nil {
+		return err
+	}
+	return analyzerManager.Download(analyzerManagerDir, AnalyzerManagerZipName, true, threadId, decryptionKey)
+}
+
+func downloadAnalyzerManagerIfNeeded(analyzerManagerVersion, analyzerManagerDir, remoteRepo string, serverDetails *config.ServerDetails, threadId int) error {
+	downloadPath, err := getAnalyzerManagerDownloadPath(analyzerManagerVersion)
+	if err != nil {
+		return err
+	}
+	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, remoteRepo, serverDetails, threadId)
 }
 
 func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
@@ -331,8 +373,8 @@ func RunAnalyzerManagerWithPipes(env utils.EnvironmentVariables, cmd string, inp
 }
 
 // RunAnalyzerManagerWithPipesAndDownload downloads the analyzer manager if needed and runs the command with pipes.
-func RunAnalyzerManagerWithPipesAndDownload(envVars utils.EnvironmentVariables, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
-	if err := DownloadAnalyzerManagerIfNeeded("", nil, 0); err != nil {
+func RunAnalyzerManagerWithPipesAndDownload(serverDetails *config.ServerDetails, envVars utils.EnvironmentVariables, cmd string, inputPipe io.Reader, outputPipe io.Writer, errorPipe io.Writer, timeout int, args ...string) error {
+	if _, err := DownloadAnalyzerManagerIfNeeded("", serverDetails, "", 0); err != nil {
 		return fmt.Errorf("failed to download Analyzer Manager: %w", err)
 	}
 	return RunAnalyzerManagerWithPipes(envVars, cmd, inputPipe, outputPipe, errorPipe, timeout, args...)

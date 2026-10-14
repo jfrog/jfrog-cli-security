@@ -24,6 +24,7 @@ import (
 
 	"time"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -437,34 +438,88 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 }
 
 func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, remoteRepo string, remoteServerDetails *config.ServerDetails, threadId int) error {
-	// Get JPD / Releases remote details to download the resource from.
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
+	resource, err := GetRemoteResource(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return err
 	}
-	// Check if the resource should be downloaded.
-	// First get the latest resource checksum from Artifactory.
+	if cached, err := resource.IsCached(targetDir); err != nil || cached {
+		return err
+	}
+	return resource.Download(targetDir, targetArtifactName, explodeArtifact, threadId, nil)
+}
+
+type RemoteResource struct {
+	name          string
+	serverDetails *config.ServerDetails
+	path          string
+	details       *fileutils.FileDetails
+}
+
+// Get the details of the resource from the JPD / Releases remote it is downloaded from.
+func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (*RemoteResource, error) {
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
+	if err != nil {
+		return nil, err
+	}
 	client, httpClientDetails, err := dependencies.CreateHttpClient(rtDetails)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
 	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
 	if err != nil {
-		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
+		return nil, fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
 	}
-	// Find current resource checksum.
-	checksumFilePath := filepath.Join(targetDir, dependencies.ChecksumFileName)
-	if match, err := isArtifactChecksumsMatch(remoteFileDetails, checksumFilePath, true); err != nil || match {
-		// If the checksums are identical, there's no need to download.
+	return &RemoteResource{name: resourceName, serverDetails: rtDetails, path: remotePath, details: remoteFileDetails}, nil
+}
+
+// Returns true when targetDir already holds the latest version of the resource.
+func (rr *RemoteResource) IsCached(targetDir string) (bool, error) {
+	return isArtifactChecksumsMatch(rr.details, filepath.Join(targetDir, dependencies.ChecksumFileName), true)
+}
+
+// When decryptionKey is set, the downloaded archive is decrypted before it is extracted.
+func (rr *RemoteResource) Download(targetDir, targetArtifactName string, explodeArtifact bool, threadId int, decryptionKey []byte) (err error) {
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", rr.name))
+	if decryptionKey == nil {
+		err = dependencies.DownloadDependency(rr.serverDetails, rr.path, filepath.Join(targetDir, targetArtifactName), explodeArtifact)
+	} else {
+		err = downloadEncryptedArchive(rr.serverDetails, rr.path, targetDir, targetArtifactName, explodeArtifact, decryptionKey)
+	}
+	if err != nil {
 		return err
 	}
-	// Download & unzip the resource files
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", resourceName))
-	if err = dependencies.DownloadDependency(rtDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
+	return dependencies.CreateChecksumFile(filepath.Join(targetDir, dependencies.ChecksumFileName), rr.details.Checksum.Sha256)
+}
+
+func downloadEncryptedArchive(rtDetails *config.ServerDetails, remotePath, targetDir, archiveName string, explodeArchive bool, decryptionKey []byte) (err error) {
+	tempDirPath, err := fileutils.CreateTempDir()
+	if err != nil {
 		return err
 	}
-	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+	defer func() {
+		err = errors.Join(err, fileutils.RemoveTempDir(tempDirPath))
+	}()
+	encryptedArchivePath := filepath.Join(tempDirPath, "encrypted", archiveName)
+	if err = dependencies.DownloadDependency(rtDetails, remotePath, encryptedArchivePath, false); err != nil {
+		return err
+	}
+	decryptedDirPath := filepath.Join(tempDirPath, "decrypted")
+	if err = errorutils.CheckError(os.Mkdir(decryptedDirPath, 0700)); err != nil {
+		return err
+	}
+	if err = decryptAesCtrFile(decryptionKey, encryptedArchivePath, filepath.Join(decryptedDirPath, archiveName)); err != nil {
+		return err
+	}
+	if explodeArchive {
+		if err = clientutils.ExtractArchive(decryptedDirPath, archiveName, archiveName, "", false); err != nil {
+			return fmt.Errorf("failed to extract the decrypted %s, the decryption key may be wrong: %w", archiveName, err)
+		}
+	}
+	if err = coreutils.SetPermissionsRecursively(decryptedDirPath, 0755); err != nil {
+		return err
+	}
+	return biutils.CopyDir(decryptedDirPath, targetDir, true, nil)
 }
 
 func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFilePath string, contentIsTheChecksum bool) (match bool, err error) {

@@ -65,7 +65,7 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	return
 }
 
-func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, scanError error) {
+func SendScanEndedEvent(xrayVersion, xscVersion, analyzerManagerVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, scanError error) {
 	if !shouldReportEvents(xscVersion) {
 		return
 	}
@@ -80,7 +80,7 @@ func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.S
 		return
 	}
 
-	event := CreateFinalizedEvent(xrayVersion, multiScanId, startTime, totalFindings, resultsContext, scanTypesExecuted, uploadedArtifactPath, scanError)
+	event := CreateFinalizedEvent(xrayVersion, analyzerManagerVersion, multiScanId, startTime, totalFindings, resultsContext, scanTypesExecuted, uploadedArtifactPath, scanError)
 
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
 		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
@@ -96,6 +96,7 @@ func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *
 	SendScanEndedEvent(
 		cmdResults.XrayVersion,
 		cmdResults.XscVersion,
+		cmdResults.AnalyzerManagerVersion,
 		serviceDetails,
 		cmdResults.MultiScanId,
 		cmdResults.StartTime,
@@ -107,7 +108,7 @@ func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *
 	)
 }
 
-func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, err error) xscservices.XscAnalyticsGeneralEventFinalize {
+func CreateFinalizedEvent(xrayVersion, analyzerManagerVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanTypesExecuted []string, uploadedArtifactPath string, err error) xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(startTime)
 	eventStatus := xscservices.Completed
 	if err != nil {
@@ -135,9 +136,10 @@ func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, 
 		ProjectKey:           projectKey,
 		UploadedArtifactPath: uploadedArtifactPath,
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
-			EventStatus:       eventStatus,
-			TotalFindings:     totalFindings,
-			TotalScanDuration: totalDuration.String(),
+			EventStatus:            eventStatus,
+			TotalFindings:          totalFindings,
+			TotalScanDuration:      totalDuration.String(),
+			AnalyzerManagerVersion: analyzerManagerVersion,
 		},
 	}
 }
@@ -178,7 +180,7 @@ func checkVersionForExternalAnalyticsFields(xrayVersion string) bool {
 }
 
 func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults),
+	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.AnalyzerManagerVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults),
 		&cmdResults.ResultContext, utils.SubScanTypesToStrings(cmdResults.GetStatusCodes().GetExecutedScanTypes()), cmdResults.UploadedArtifactPath, cmdResults.GetErrors())
 }
 
