@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	catalogNamespacePublic = "public"
-	purlTypeGolang         = "golang"
-	purlTypeNPM            = "npm"
-	purlTypeMaven          = "maven"
+	catalogNamespacePublic      = "public"
+	purlTypeGolang              = "golang"
+	purlTypeMaven               = "maven"
+	defaultPackageNameSeparator = "/"
 )
 
 // GetIndirectCvePaths asks Catalog for the dependency-chain path(s) that make each of the given indirect CVEs
@@ -47,31 +47,40 @@ func toCatalogPackageVersionKeys(packages []xrayutils.PackageVersionKey) []xrayu
 	return normalized
 }
 
+// toCatalogPackageVersionKey folds a non-empty purl namespace into the name for every package type (Maven uses
+// its own "groupId:artifactId" separator, everything else uses "/"), since Catalog forces namespace to "public"
+// below and would otherwise silently lose it. Namespace folding isn't limited to the ecosystems Catalog currently
+// enables for transitive analysis (npm/maven/golang/pypi/nuget): keeping it unconditional means a newly enabled,
+// namespaced ecosystem (e.g. Swift, CocoaPods) won't silently collide same-named packages from different
+// namespaces the day Catalog starts processing it.
 func toCatalogPackageVersionKey(pkg xrayutils.PackageVersionKey) xrayutils.PackageVersionKey {
-	name := pkg.Name
+	separator := defaultPackageNameSeparator
+	if pkg.Type == purlTypeMaven {
+		separator = ":"
+	}
 	version := pkg.Version
-	pkgType := pkg.Type
-	switch pkg.Type {
-	case purlTypeGolang:
-		// Contextual analysis keys Go packages by purl type "golang", not the stored catalog type "go".
-		name = joinPackageName(pkg.Namespace, pkg.Name, "/")
+	if pkg.Type == purlTypeGolang {
+		// Catalog's Go index is built from go.sum/proxy data, which always carries the "v" prefix (v1.2.3,
+		// pseudo-versions like v0.0.0-...). This repo's own purls strip it (matching Xray's convention), so
+		// it has to be restored here before querying Catalog.
 		if version != "" && !strings.HasPrefix(version, "v") {
 			version = "v" + version
 		}
-	case purlTypeNPM:
-		name = joinPackageName(pkg.Namespace, pkg.Name, "/")
-	case purlTypeMaven:
-		name = joinPackageName(pkg.Namespace, pkg.Name, ":")
 	}
 	return xrayutils.PackageVersionKey{
-		Type:      pkgType,
-		Name:      name,
+		Type:      pkg.Type,
+		Name:      joinPackageName(pkg.Namespace, pkg.Name, separator),
 		Namespace: catalogNamespacePublic,
 		Version:   version,
 		Ecosystem: xrayutils.GenericEcosystem,
 	}
 }
 
+// joinPackageName mirrors the default "/" join techutils.SplitPackageURL applies when turning a purl back into
+// a display name, but isn't a drop-in for it: this works on the already-split PackageVersionKey produced by
+// cdxutils.ExtractPackageVersionKeys (whose own test expects namespace and name kept apart, not rejoined), and
+// the separator is a Catalog request rule, not purl syntax - Maven needs ":" because ToPackageUrl replaces
+// Maven's "group:artifact" colon with "/" when building the purl in the first place.
 func joinPackageName(namespace, name, separator string) string {
 	if namespace == "" {
 		return name

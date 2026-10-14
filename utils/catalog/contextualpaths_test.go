@@ -8,6 +8,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	catalogServices "github.com/jfrog/jfrog-client-go/catalog/services"
 	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -80,24 +81,89 @@ func TestGetIndirectCvePaths_ServerReturnsMalformedJson_ReturnsError(t *testing.
 	assert.Nil(t, result)
 }
 
-func TestToCatalogPackageVersionKeys(t *testing.T) {
-	got := toCatalogPackageVersionKeys([]xrayutils.PackageVersionKey{
-		{Type: "golang", Namespace: "golang.org", Name: "x/sys", Version: "0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "golang", Namespace: "github.com/jfrog", Name: "core", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "npm", Namespace: "@protobufjs", Name: "aspromise", Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "npm", Name: "lodash", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "pypi", Name: "requests", Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "maven", Namespace: "org.apache.logging.log4j", Name: "log4j-core", Version: "2.14.1", Ecosystem: xrayutils.GenericEcosystem},
-	})
+// TestToCatalogPackageVersionKeys_FromRealPurls drives each case through a real purl string via
+// cdxutils.ExtractPackageVersionKeys, the same path GetIndirectCvePaths uses, rather than hand-building
+// PackageVersionKey values. A hand-built Namespace/Name split can't catch a wrong or missing fold: joinPackageName
+// is a plain concatenation, so any split of the same full string reassembles to the same result (e.g. splitting
+// "golang.org/x/sys" as namespace "golang.org"/name "x/sys", or as namespace "golang.org/x"/name "sys" - which is
+// what the real purl library actually returns - both rejoin to the identical string). Only exercising the real
+// extractor proves the split/fold pipeline is correct end-to-end.
+func TestToCatalogPackageVersionKeys_FromRealPurls(t *testing.T) {
+	testCases := []struct {
+		name     string
+		purl     string
+		expected xrayutils.PackageVersionKey
+	}{
+		{
+			name: "namespaced type outside the switch keeps its namespace folded in",
+			purl: "pkg:cocoapods/AppAuth/Core@1.7.5",
+			expected: xrayutils.PackageVersionKey{
+				Type: "cocoapods", Name: "AppAuth/Core", Namespace: catalogNamespacePublic, Version: "1.7.5", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "go v2+ module path is reconstructed regardless of where the real purl splits namespace/name",
+			purl: "pkg:golang/github.com/foo/bar/v2@2.3.4",
+			expected: xrayutils.PackageVersionKey{
+				Type: "golang", Name: "github.com/foo/bar/v2", Namespace: catalogNamespacePublic, Version: "v2.3.4", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "go pseudo-version that already has v is not double-prefixed",
+			purl: "pkg:golang/golang.org/x/sys@v0.0.0-20200116001909-b77594299b42",
+			expected: xrayutils.PackageVersionKey{
+				Type: "golang", Name: "golang.org/x/sys", Namespace: catalogNamespacePublic, Version: "v0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "go +incompatible version round-trips untouched",
+			purl: "pkg:golang/github.com/old/pkg@v3.0.0+incompatible",
+			expected: xrayutils.PackageVersionKey{
+				Type: "golang", Name: "github.com/old/pkg", Namespace: catalogNamespacePublic, Version: "v3.0.0+incompatible", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "scoped npm package decodes the percent-encoded @ and keeps its single-segment namespace",
+			purl: "pkg:npm/%40protobufjs/aspromise@1.1.2",
+			expected: xrayutils.PackageVersionKey{
+				Type: "npm", Name: "@protobufjs/aspromise", Namespace: catalogNamespacePublic, Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "unscoped npm package has no namespace to fold",
+			purl: "pkg:npm/lodash@4.17.21",
+			expected: xrayutils.PackageVersionKey{
+				Type: "npm", Name: "lodash", Namespace: catalogNamespacePublic, Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "pypi package has no namespace to fold",
+			purl: "pkg:pypi/requests@2.28.0",
+			expected: xrayutils.PackageVersionKey{
+				Type: "pypi", Name: "requests", Namespace: catalogNamespacePublic, Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+		{
+			name: "maven groupId:artifactId is rejoined with : instead of the purl's /",
+			purl: "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+			expected: xrayutils.PackageVersionKey{
+				Type: "maven", Name: "org.apache.logging.log4j:log4j-core", Namespace: catalogNamespacePublic, Version: "2.14.1", Ecosystem: xrayutils.GenericEcosystem,
+			},
+		},
+	}
 
-	assert.Equal(t, []xrayutils.PackageVersionKey{
-		{Type: "golang", Name: "golang.org/x/sys", Namespace: "public", Version: "v0.0.0-20200116001909-b77594299b42", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "golang", Name: "github.com/jfrog/core", Namespace: "public", Version: "v1.2.3", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "npm", Name: "@protobufjs/aspromise", Namespace: "public", Version: "1.1.2", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "npm", Name: "lodash", Namespace: "public", Version: "4.17.21", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "pypi", Name: "requests", Namespace: "public", Version: "2.28.0", Ecosystem: xrayutils.GenericEcosystem},
-		{Type: "maven", Name: "org.apache.logging.log4j:log4j-core", Namespace: "public", Version: "2.14.1", Ecosystem: xrayutils.GenericEcosystem},
-	}, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bom := &cyclonedx.BOM{Components: &[]cyclonedx.Component{{PackageURL: tc.purl}}}
+			extracted := cdxutils.ExtractPackageVersionKeys(bom)
+			require.Len(t, extracted, 1)
+
+			got := toCatalogPackageVersionKeys(extracted)
+
+			require.Len(t, got, 1)
+			assert.Equal(t, tc.expected, got[0])
+		})
+	}
 }
 
 func TestGetIndirectCvePaths_Success_SendsExpectedRequestAndParsesResponse(t *testing.T) {
