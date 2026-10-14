@@ -581,9 +581,10 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 
 func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams {
 	params := &services.XrayGraphScanParams{
-		Watches:                scanCmd.resultsContext.Watches,
-		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+		Watches:         scanCmd.resultsContext.Watches,
+		IncludeLicenses: scanCmd.resultsContext.IncludeLicenses,
+		// Always fetch vulnerabilities regardless of watches, so Contextual Analysis scanner gets the full CVE set.
+		IncludeVulnerabilities: true,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
 		MultiScanId:            scanCmd.multiScanId,

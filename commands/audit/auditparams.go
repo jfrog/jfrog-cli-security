@@ -223,7 +223,7 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		Watches:              params.resultsContext.Watches,
 		ProjectKey:           params.resultsContext.ProjectKey,
 		GitRepoHttpsCloneUrl: params.resultsContext.GitRepoHttpsCloneUrl,
-		// Always fetch vulnerabilities regardless of watches, so JAS scanners (e.g. Contextual Analysis) get the full CVE set.
+		// Always fetch vulnerabilities regardless of watches, so Contextual Analysis scanner get the full CVE set.
 		IncludeVulnerabilities: true,
 		IncludeLicenses:        params.resultsContext.IncludeLicenses,
 		ScanType:               services.Dependency,
