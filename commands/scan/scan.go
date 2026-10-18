@@ -377,7 +377,9 @@ func (scanCmd *ScanCommand) prepareForScan(cmdResults *results.SecurityCommandRe
 	if cmdResults.Entitlements.Jas && cmdResults.IsJASRequested(scanCmd.scansToPerform...) {
 		if scanCmd.customAnalyzerManagerPath == "" {
 			AnalyzerErrGroup.Go(func() error {
-				return jas.DownloadAnalyzerManagerIfNeeded("", nil, 0)
+				analyzerManagerVersion, err := jas.DownloadAnalyzerManagerIfNeeded("", scanCmd.serverDetails, scanCmd.resultsContext.ProjectKey, 0)
+				cmdResults.SetAnalyzerManagerVersion(analyzerManagerVersion)
+				return err
 			})
 		} else {
 			log.Debug("Using custom analyzer manager binary path, skipping download")
@@ -581,9 +583,10 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 
 func (scanCmd *ScanCommand) getXrayScanGraphParams() *scangraph.ScanGraphParams {
 	params := &services.XrayGraphScanParams{
-		Watches:                scanCmd.resultsContext.Watches,
-		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+		Watches:         scanCmd.resultsContext.Watches,
+		IncludeLicenses: scanCmd.resultsContext.IncludeLicenses,
+		// Always fetch vulnerabilities regardless of watches, so Contextual Analysis scanner gets the full CVE set.
+		IncludeVulnerabilities: true,
 		ProjectKey:             scanCmd.resultsContext.ProjectKey,
 		ScanType:               services.Binary,
 		MultiScanId:            scanCmd.multiScanId,

@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -147,13 +148,9 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Table:
 		return rw.printTables()
 	case format.SimpleJson:
-		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
-		if err != nil {
-			return err
-		}
-		return rw.printJson(simpleJson)
+		return rw.printSimpleJson()
 	case format.Json:
-		return rw.printJson(rw.commandResults.GetScaScansXrayResults())
+		return rw.printJson()
 	case format.Sarif:
 		return rw.printSarif()
 	case format.CycloneDx:
@@ -175,7 +172,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 	})
 }
 
-func (rw *ResultsWriter) printJson(output interface{}) (err error) {
+func (rw *ResultsWriter) outputJson(output interface{}) (err error) {
 	outputBytes, err := utils.GetAsJsonBytes(output, true, true)
 	if err != nil {
 		return
@@ -292,6 +289,31 @@ func (rw *ResultsWriter) printTables() (err error) {
 		printMessages(rw.tableNotes)
 	}
 	return
+}
+
+func (rw *ResultsWriter) printSimpleJson() error {
+	simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
+	if err != nil {
+		return err
+	}
+	return rw.outputJson(simpleJson)
+}
+
+func (rw *ResultsWriter) printJson() error {
+	// JSON output bypasses the convertor's IncludeVulnerabilities gating, so vulnerabilities are stripped here
+	return rw.outputJson(rw.stripUnrequestedVulnerabilities(rw.commandResults.GetScaScansXrayResults()))
+}
+
+func (rw *ResultsWriter) stripUnrequestedVulnerabilities(scaResults []services.ScanResponse) []services.ScanResponse {
+	if len(scaResults) == 0 || rw.commandResults.IncludesVulnerabilities() {
+		return scaResults
+	}
+	filtered := make([]services.ScanResponse, len(scaResults))
+	for i, scaResult := range scaResults {
+		scaResult.Vulnerabilities = nil
+		filtered[i] = scaResult
+	}
+	return filtered
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {

@@ -151,6 +151,19 @@ func TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials(t *testing.T) {
 	}
 }
 
+// A Password-only server must not be treated as anonymous (it used to be, since the old predicate
+// ignored Password entirely); this proves it now attempts real auth instead of a silent no-op.
+func TestInjectCurationFallbackAuthEnvAttemptsAuthWithPasswordOnlyServer(t *testing.T) {
+	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
+		require.NoError(t, os.Unsetenv(key))
+	}
+	server := &config.ServerDetails{ArtifactoryUrl: "http://127.0.0.1:1/artifactory/", Password: "some-password"}
+
+	_, err := injectCurationFallbackAuthEnv(server, "some-repo")
+
+	assert.Error(t, err, "a Password-only server must not be silently treated as anonymous")
+}
+
 func TestParseYarnDependenciesMap(t *testing.T) {
 	npmId := techutils.Npm.GetXrayPackageTypeId()
 
