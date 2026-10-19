@@ -314,8 +314,8 @@ func TestApplicabilityScan_CreateConfigFile_IndirectCvePaths_KeepsFunctionsOnlyR
 
 // TestApplicabilityScan_CreateConfigFile_CatalogIntegration exercises the full pipeline from a real (httptest-mocked)
 // Catalog HTTP call through to the written config file, rather than a map the test constructs itself: a Catalog
-// error must still let applicability run with the CVE lists and no transitive_paths, and a successful body's
-// content must be exactly what lands in transitive_paths.
+// error must still let applicability run with the CVE lists and no transitive-paths, and a successful body's
+// content must be exactly what lands in transitive-paths.
 func TestApplicabilityScan_CreateConfigFile_CatalogIntegration(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
@@ -338,7 +338,7 @@ func TestApplicabilityScan_CreateConfigFile_CatalogIntegration(t *testing.T) {
 		return string(fileContent)
 	}
 
-	t.Run("catalog HTTP 500 - applicability still runs with CVE lists and no transitive_paths", func(t *testing.T) {
+	t.Run("catalog HTTP 500 - applicability still runs with CVE lists and no transitive-paths", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -349,7 +349,7 @@ func TestApplicabilityScan_CreateConfigFile_CatalogIntegration(t *testing.T) {
 		assert.Nil(t, indirectCvePaths)
 
 		fileContent := writeConfigFile(t, indirectCvePaths)
-		assert.NotContains(t, fileContent, "transitive_paths")
+		assert.NotContains(t, fileContent, "transitive-paths")
 
 		var parsedConfig applicabilityScanConfig
 		require.NoError(t, yaml.Unmarshal([]byte(fileContent), &parsedConfig))
@@ -357,7 +357,7 @@ func TestApplicabilityScan_CreateConfigFile_CatalogIntegration(t *testing.T) {
 		assert.Contains(t, parsedConfig.Scans[0].IndirectCveWhitelist, "CVE-2024-1234")
 	})
 
-	t.Run("catalog success - response body lands in transitive_paths", func(t *testing.T) {
+	t.Run("catalog success - response body lands in transitive-paths", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -406,7 +406,7 @@ func TestApplicabilityScan_CreateConfigFile_NoIndirectCvePaths(t *testing.T) {
 	fileContent, err := os.ReadFile(applicabilityManager.configFileName)
 	assert.NoError(t, err)
 	assert.NotContains(t, string(fileContent), "indirect-cve-paths")
-	assert.NotContains(t, string(fileContent), "transitive_paths")
+	assert.NotContains(t, string(fileContent), "transitive-paths")
 }
 
 func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
