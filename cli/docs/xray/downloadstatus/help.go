@@ -23,6 +23,8 @@ Notes:
 - UNKNOWN means the violation scan has not finished, failed, or is partial, or the indexed checksum does not match the current file. A watch that blocks unscanned artifacts can still block the download while the status is UNKNOWN.
 - A blocking violation always reports BLOCKED, even if the scan itself failed or is partial.
 - A scan status of "not supported" reports ALLOWED, even though a watch that blocks unscanned artifacts could still block the real download.
+- The repository can be local, remote or virtual. A remote repo is resolved to its cache repo, and a virtual repo to the member repo that serves the artifact. The resolved repo is reported next to the one you passed.
+- For a multi-arch docker image, each platform manifest present in the repository is checked and listed. If any of them is blocked, the image is reported as BLOCKED, and the violations show which platform they belong to.
 - A docker pull reference ([host/]<repo>/<image>:<tag>, or @sha256:<digest>) is resolved to the manifest Artifactory stores for that image.
 
 Common patterns:
