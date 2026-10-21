@@ -219,27 +219,27 @@ func parseArtifactoryPypiUrl(rawUrl string) (artiUrl, repoName string, err error
 	return
 }
 
-// BuildDependencyTree is supported only for jf curation-audit. It verifies the uv
-// version, ensures a temp copy of the project has an up-to-date uv.lock,
+// BuildDependencyTree supports both 'jf audit' and 'jf curation-audit'.
+// For curation-audit, it verifies the uv version, ensures a temp copy of the project has an up-to-date uv.lock,
 // parses it, and returns the dependency tree and download URLs.
-// When params.ScriptPath is set, it audits that single PEP 723 inline script instead
+// For audit, it reads or generates uv.lock and returns the dependency tree.
+// When params.ScriptPath is set, it audits that single PEP 723 inline script instead.
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (
 	depTree []*clientutils.GraphNode,
 	uniqueDeps []string,
 	downloadUrls map[string]string,
 	err error,
 ) {
+	if params.ScriptPath != "" {
+		return buildDependencyTreeForScript(params)
+	}
+
 	if !params.IsCurationCmd {
-		err = errorutils.CheckErrorf("uv is supported only for 'jf curation-audit', not 'jf audit'")
-		return
+		return buildAuditDependencyTree()
 	}
 
 	if err = verifyUvVersionSupportedForCuration(); err != nil {
 		return
-	}
-
-	if params.ScriptPath != "" {
-		return buildDependencyTreeForScript(params)
 	}
 
 	artiIndexUrl, artifactoryUrl, repoName := "", "", ""
@@ -272,6 +272,76 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (
 	}
 	downloadUrls = buildUvDownloadUrlsMap(params, packages)
 	return
+}
+
+// buildAuditDependencyTree generates or reads uv.lock for standard 'jf audit' commands
+// and builds the dependency tree. If wd is inside a uv workspace, it locates the workspace
+// root uv.lock file in parent directories.
+func buildAuditDependencyTree() (
+	depTree []*clientutils.GraphNode,
+	uniqueDeps []string,
+	downloadUrls map[string]string,
+	err error,
+) {
+	wd, err := os.Getwd()
+	if err != nil {
+		err = errorutils.CheckError(err)
+		return
+	}
+
+	lockPath, lockExists := findUvLockFile(wd)
+
+	var lockContent string
+	if lockExists {
+		data, readErr := os.ReadFile(lockPath)
+		if readErr != nil {
+			err = errorutils.CheckErrorf("uv: could not read lock file %s: %w", lockPath, readErr)
+			return
+		}
+		lockContent = string(data)
+	} else {
+		log.Info("uv: no uv.lock found — attempting to generate lockfile via 'uv lock'")
+		cmd := exec.Command("uv", "lock")
+		cmd.Dir = wd
+		out, execErr := cmd.CombinedOutput()
+		if execErr != nil {
+			err = errorutils.CheckErrorf("uv: failed to generate uv.lock using 'uv lock': %s — %s", execErr, string(out))
+			return
+		}
+		genLockPath := filepath.Join(wd, uvLockFile)
+		data, readErr := os.ReadFile(genLockPath)
+		if readErr != nil {
+			err = errorutils.CheckErrorf("uv: could not read generated lock file %s: %w", genLockPath, readErr)
+			return
+		}
+		lockContent = string(data)
+	}
+
+	packages := parseUvLock(lockContent)
+	if len(packages) == 0 {
+		err = errorutils.CheckErrorf("uv.lock is empty or could not be parsed")
+		return
+	}
+
+	depTree, uniqueDeps = buildUvDepTree(packages)
+	return
+}
+
+// findUvLockFile returns the path to uv.lock by checking dir and its parent directories up to root.
+func findUvLockFile(dir string) (string, bool) {
+	curr := dir
+	for {
+		lockPath := filepath.Join(curr, uvLockFile)
+		if exists, err := fileutils.IsFileExists(lockPath, false); err == nil && exists {
+			return lockPath, true
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr || parent == "." || parent == "" {
+			break
+		}
+		curr = parent
+	}
+	return "", false
 }
 
 // generateUvLockForCuration ensures a temp copy of the project has a uv.lock that is

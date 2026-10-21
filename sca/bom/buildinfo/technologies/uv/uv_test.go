@@ -1366,13 +1366,79 @@ source = { registry = "` + allowedBase + `" }
 	assert.False(t, allPackagesUseRegistry(content, "https://other.example.com/api/pypi/repo/simple"))
 }
 
-func TestBuildDependencyTreeRejectsAuditMode(t *testing.T) {
+func TestBuildDependencyTreeAuditMode(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "uv.lock")
+	lockContent := `
+version = 1
+revision = 1
+
+[[package]]
+name = "demo"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+`
+	require.NoError(t, os.WriteFile(lockPath, []byte(lockContent), 0644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origWd) }()
+	require.NoError(t, os.Chdir(dir))
+
 	params := technologies.BuildInfoBomGeneratorParams{
 		IsCurationCmd: false,
 	}
-	_, _, _, err := BuildDependencyTree(params)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "jf curation-audit")
+	depTree, uniqueDeps, downloadUrls, err := BuildDependencyTree(params)
+	require.NoError(t, err)
+	assert.Nil(t, downloadUrls)
+	assert.NotEmpty(t, depTree)
+	assert.Contains(t, uniqueDeps, "pypi://requests:2.31.0")
+}
+
+func TestBuildDependencyTreeAuditModeWorkspaceSubdirectory(t *testing.T) {
+	rootDir := t.TempDir()
+	lockPath := filepath.Join(rootDir, "uv.lock")
+	lockContent := `
+version = 1
+revision = 1
+
+[[package]]
+name = "workspace-root"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "urllib3" },
+]
+
+[[package]]
+name = "urllib3"
+version = "1.26.5"
+`
+	require.NoError(t, os.WriteFile(lockPath, []byte(lockContent), 0644))
+
+	subDir := filepath.Join(rootDir, "sub", "pkg")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(origWd) }()
+	require.NoError(t, os.Chdir(subDir))
+
+	params := technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd: false,
+	}
+	depTree, uniqueDeps, downloadUrls, err := BuildDependencyTree(params)
+	require.NoError(t, err)
+	assert.Nil(t, downloadUrls)
+	assert.NotEmpty(t, depTree)
+	assert.Contains(t, uniqueDeps, "pypi://urllib3:1.26.5")
 }
 
 func TestClassifyUvCurationLockError_WheelFetchBlocked(t *testing.T) {

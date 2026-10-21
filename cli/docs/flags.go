@@ -51,6 +51,7 @@ const (
 	Pip       = "pip"
 	Pipenv    = "pipenv"
 	Poetry    = "poetry"
+	Uv        = "uv"
 	Swift     = "swift"
 	Cocoapods = "cocoapods"
 )
@@ -216,7 +217,7 @@ var commandFlags = map[string][]string{
 	Audit: {
 		Url, XrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Snippet, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
-		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, Uv, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		auditSca, auditIac, auditSast, auditSecrets, auditServices, auditWithoutCA, SecretValidation, ScanVuln, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
 		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UseIncludedBuilds, AddSastRules,
 	},
@@ -347,6 +348,7 @@ var flagsMap = map[string]components.Flag{
 	Pip:          components.NewBoolFlag(Pip, "Set to true to request audit for a Pip project."),
 	Pipenv:       components.NewBoolFlag(Pipenv, "Set to true to request audit for a Pipenv project."),
 	Poetry:       components.NewBoolFlag(Poetry, "Set to true to request audit for a Poetry project."),
+	Uv:           components.NewBoolFlag(Uv, "Set to true to request audit for a uv project."),
 	Go:           components.NewBoolFlag(Go, "Set to true to request audit for a Go project."),
 	Swift:        components.NewBoolFlag(Swift, "Set to true to request audit for a Swift project."),
 	Cocoapods:    components.NewBoolFlag(Cocoapods, "Set to true to request audit for a Cocoapods project."),
