@@ -115,13 +115,12 @@ func SubScanTypesToStrings(scanTypes []SubScanType) []string {
 }
 
 const (
-	SourceCode      CommandType = "source_code"
-	Binary          CommandType = "binary"
-	DockerImage     CommandType = "docker_image"
-	Build           CommandType = "build"
-	Curation        CommandType = "curation"
-	CurationActions CommandType = "curate_gh_actions"
-	SBOM            CommandType = "SBOM"
+	SourceCode  CommandType = "source_code"
+	Binary      CommandType = "binary"
+	DockerImage CommandType = "docker_image"
+	Build       CommandType = "build"
+	Curation    CommandType = "curation"
+	SBOM        CommandType = "SBOM"
 )
 
 type CommandType string
