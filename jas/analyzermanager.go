@@ -27,7 +27,7 @@ const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	TransitiveContextualAnalysisFeatureId     = "transitive_contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.61.0"
+	defaultAnalyzerManagerVersion             = "1.62.0"
 	firstEncryptedAnalyzerManagerVersion      = "1.61.0"
 	lastUnencryptedAnalyzerManagerVersion     = "1.60.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"

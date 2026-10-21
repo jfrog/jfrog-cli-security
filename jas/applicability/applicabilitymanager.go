@@ -138,7 +138,7 @@ type scanConfiguration struct {
 	GrepDisable          bool              `yaml:"grep-disable"`
 	CveWhitelist         []string          `yaml:"cve-whitelist"`
 	IndirectCveWhitelist []string          `yaml:"indirect-cve-whitelist"`
-	TransitivePaths      map[string]string `yaml:"transitive_paths,omitempty"`
+	TransitivePaths      map[string]string `yaml:"transitive-paths,omitempty"`
 	SkippedDirs          []string          `yaml:"skipped-folders"`
 	ScanType             string            `yaml:"scantype"`
 }
