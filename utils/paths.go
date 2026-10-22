@@ -116,6 +116,32 @@ func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
 	return fullPathsWorkingDirs, nil
 }
 
+// IsPathExcludedFromRoot reports whether path matches exclusions relative to root.
+// The scan root, and any path outside it, is compared by its own name, so a parent directory outside the project cannot exclude it.
+// A path inside root is compared by its path from root. A path that cannot be made relative is not excluded.
+func IsPathExcludedFromRoot(root, path string, exclusions []string) bool {
+	matchPath, err := exclusionMatchPath(root, path)
+	if err != nil {
+		log.Warn("Failed to compare path for exclusions:", err.Error())
+		return false
+	}
+	return IsPathExcluded(matchPath, exclusions)
+}
+
+func exclusionMatchPath(root, path string) (string, error) {
+	if root == "" {
+		return filepath.Base(path), nil
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.Base(path), nil
+	}
+	return rel, nil
+}
+
 func IsPathExcluded(path string, exclusions []string) bool {
 	if len(exclusions) == 0 {
 		return false
