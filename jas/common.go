@@ -408,7 +408,7 @@ func ShouldSkipScannerByModule(target results.ScanTarget, scanType jasutils.JasS
 		return true
 	}
 	exclusions := target.GetDeprecatedAppsConfigModuleExclusions(scanType)
-	if len(exclusions) > 0 && utils.IsPathExcluded(target.Target, exclusions) {
+	if len(exclusions) > 0 && utils.IsPathExcludedFromRoot(target.Target, target.Target, exclusions) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as target is excluded by local module config...", scanType))
 		return true
 	}
