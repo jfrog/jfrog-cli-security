@@ -901,13 +901,23 @@ func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string]
 //  2. Otherwise, a project-local uv signal (uv.lock or a pyproject.toml [tool.uv] /
 //     [[tool.uv.*]] table) → Uv wins, Pip is dropped.
 //
-// Machine-global ~/.config/uv/uv.toml is not a project signal: it is common on developer
-// machines and must not rewrite a pip-only PEP 621 project to Uv.
+// ~/.config/uv/uv.toml (machine-global) is not checked here; 'jf curation-audit' uses
+// PromotePipToUvForCurationAudit instead, which also honors it.
 //
 // dir is the working directory being evaluated - callers must pass it explicitly rather
 // than relying on the process's current directory, since a single process may evaluate
 // several targets without changing it.
 func PromotePipToUv(techs []Technology, dir string) []Technology {
+	return promotePipToUv(techs, dir, false)
+}
+
+// PromotePipToUvForCurationAudit is PromotePipToUv, plus: a machine-global
+// ~/.config/uv/uv.toml also counts as a uv signal, for 'jf curation-audit' only.
+func PromotePipToUvForCurationAudit(techs []Technology, dir string) []Technology {
+	return promotePipToUv(techs, dir, true)
+}
+
+func promotePipToUv(techs []Technology, dir string, considerGlobalUvConfig bool) []Technology {
 	if !containsTechnology(techs, Pip) {
 		return techs
 	}
@@ -923,6 +933,12 @@ func PromotePipToUv(techs []Technology, dir string) []Technology {
 	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
 		(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
 		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
+	} else if considerGlobalUvConfig {
+		if home, homeErr := os.UserHomeDir(); homeErr == nil {
+			if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
+				uvSignal = "~/.config/uv/uv.toml detected"
+			}
+		}
 	}
 	if uvSignal == "" {
 		return techs

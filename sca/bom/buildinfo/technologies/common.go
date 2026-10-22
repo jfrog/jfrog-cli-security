@@ -2,9 +2,12 @@ package technologies
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
@@ -157,6 +160,97 @@ func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams
 
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {
 	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", sourceDir))
+}
+
+// windowsBatchForwarderSource: tiny helper EnsureWindowsExeShim compiles and places next to
+// each fake poetry/uv/pipenv ".bat", forwarding to it by explicit path via cmd.exe.
+const windowsBatchForwarderSource = `package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+func main() {
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "winbatforward: cannot resolve own path:", err)
+		os.Exit(1)
+	}
+	script := strings.TrimSuffix(self, filepath.Ext(self)) + ".bat"
+	cmd := exec.Command("cmd.exe", append([]string{"/c", script}, os.Args[1:]...)...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	runErr := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		os.Exit(exitErr.ExitCode())
+	}
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, "winbatforward:", runErr)
+		os.Exit(1)
+	}
+}
+`
+
+var (
+	windowsBatchForwarderMu   sync.Mutex
+	windowsBatchForwarderPath string
+)
+
+// EnsureWindowsExeShim drops a real bareName+".exe" next to a fake bareName+".bat" in
+// dir, so Windows launches it reliably. No-op on other platforms.
+func EnsureWindowsExeShim(t *testing.T, dir, bareName string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	forwarder, err := buildWindowsBatchForwarder()
+	if err != nil {
+		t.Fatalf("building windows batch forwarder shim: %s", err)
+	}
+	data, err := os.ReadFile(forwarder)
+	if err != nil {
+		t.Fatalf("reading windows batch forwarder shim: %s", err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, bareName+".exe"), data, 0755); err != nil { // #nosec G703 -- dir is a test-controlled t.TempDir(), bareName a hardcoded literal from the caller
+		t.Fatalf("writing windows batch forwarder shim: %s", err)
+	}
+}
+
+// buildWindowsBatchForwarder compiles the forwarder once per process (pid-scoped path)
+// and caches it only on success, so a transient build failure is retried, not permanent.
+func buildWindowsBatchForwarder() (string, error) {
+	windowsBatchForwarderMu.Lock()
+	defer windowsBatchForwarderMu.Unlock()
+	if windowsBatchForwarderPath != "" {
+		return windowsBatchForwarderPath, nil
+	}
+	srcFile, err := os.CreateTemp("", "winbatforward-*.go")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(srcFile.Name()) }()
+	if _, err = srcFile.WriteString(windowsBatchForwarderSource); err != nil {
+		_ = srcFile.Close()
+		return "", err
+	}
+	if err = srcFile.Close(); err != nil {
+		return "", err
+	}
+	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("jfrog-cli-sec-winbatforward-%d.exe", os.Getpid()))
+	cmd := exec.Command("go", "build", "-o", outPath, srcFile.Name())
+	if out, buildErr := cmd.CombinedOutput(); buildErr != nil {
+		return "", fmt.Errorf("go build failed: %w: %s", buildErr, out)
+	}
+	windowsBatchForwarderPath = outPath
+	return windowsBatchForwarderPath, nil
 }
 
 // GetExecutableVersion gets an executable version and prints to the debug log if possible.

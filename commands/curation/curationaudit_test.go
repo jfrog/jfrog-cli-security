@@ -6645,10 +6645,9 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 	})
 }
 
-// TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
-// [tool.uv]/[[tool.uv.index]]), confirms pip-exclusive files always win, and confirms it
-// collapses a tech list already containing both pip and uv into one. Global ~/.config/uv/uv.toml
-// is not a project signal and must not rewrite pip-only projects.
+// TestPromotePipToUv covers every uv signal promotePipToUvIn checks for curation-audit —
+// uv.lock, pyproject.toml [tool.uv], and ~/.config/uv/uv.toml — and confirms a
+// pip-exclusive file always wins over all of them.
 func TestPromotePipToUv(t *testing.T) {
 	pip := techutils.Pip.String()
 	uv := techutils.Uv.String()
@@ -6713,13 +6712,13 @@ func TestPromotePipToUv(t *testing.T) {
 			expectedHasPip: true,
 		},
 		{
-			name:           "pip + ~/.config/uv/uv.toml — stays pip",
-			techs:          []string{pip},
-			hasUvToml:      true,
-			expectedHasPip: true,
+			name:          "pip + ~/.config/uv/uv.toml — promoted to uv",
+			techs:         []string{pip},
+			hasUvToml:     true,
+			expectedHasUv: true,
 		},
 		{
-			name:           "pip-exclusive file is unaffected by ~/.config/uv/uv.toml — stays pip",
+			name:           "pip-exclusive file takes priority over ~/.config/uv/uv.toml — stays pip",
 			techs:          []string{pip},
 			hasPipFile:     "Pipfile",
 			hasUvToml:      true,

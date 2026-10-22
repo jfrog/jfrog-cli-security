@@ -904,6 +904,7 @@ func writeFakeExecutable(t *testing.T, dir, executableName, shContent, batConten
 	}
 	require.NoError(t, os.WriteFile(name, []byte(content), 0755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	technologies.EnsureWindowsExeShim(t, dir, executableName)
 }
 
 func TestValidateMinimumPoetryVersionUnparsableMajorErrors(t *testing.T) {
