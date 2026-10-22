@@ -1735,7 +1735,7 @@ func TestExclude(t *testing.T) {
 				{BOMRef: "dep1", PackageURL: "pkg:npm/dep1@1.0.0"},
 			},
 			expected: &cyclonedx.BOM{
-				Components: &[]cyclonedx.Component{},
+				Components:   &[]cyclonedx.Component{},
 				Dependencies: &[]cyclonedx.Dependency{},
 			},
 		},
