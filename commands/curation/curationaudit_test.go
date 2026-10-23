@@ -885,48 +885,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem": true,
 			},
 
-			// Expect a report containing the exact blocked package.
+			// actionpack's subtree collapses every path to activesupport into one entry (XRAY-167222).
 			expectedResp: map[string]*CurationReport{
 				"Ruby-Project": {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "actionview",
+							ParentName:        "actionpack",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "indirect",
-							PkgType:           "ruby",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-						{
-							Action:            "blocked",
-							ParentName:        "activesupport",
-							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "direct",
-							PkgType:           "ruby",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-						{
-							Action:            "blocked",
-							ParentName:        "rails-dom-testing",
-							ParentVersion:     "2.3.0",
 							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
