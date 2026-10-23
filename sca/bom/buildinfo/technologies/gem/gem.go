@@ -158,10 +158,9 @@ func getGemCmd(execPath, workingDir, cmd string, args ...string) *io.Command {
 }
 
 // calculateDependencies orchestrates the generation and parsing of Gemfile.lock to build the dependency graph.
-// It first runs 'bundle lock' to ensure Gemfile.lock is up-to-date, then parses the lock file,
-//
-//	dependencyTrees: A slice of top-level dependency nodes.
-//	uniqueDeps: A slice of unique dependency IDs found in the graph.
+// It first runs 'bundle lock' to ensure Gemfile.lock is up-to-date, then parses the lock file.
+// dependencyTrees must wrap direct deps in one project-root node, like every other tech builder does —
+// curation-audit skips auditing whatever Id it sees as a "root".
 func calculateDependencies(bundleExecPath, workingDir string, _ technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	log.Debug("Ensuring Gemfile.lock is up to date using 'bundle lock'...")
 	if _, err = getGemCmd(bundleExecPath, workingDir, "lock").RunWithOutput(); err != nil {
@@ -187,16 +186,16 @@ func calculateDependencies(bundleExecPath, workingDir string, _ technologies.Bui
 
 	projectRootNode := buildFullGemDependencyGraph(*gemInput, workingDir)
 
+	directDepCount := 0
+	dependencyTrees = []*xrayUtils.GraphNode{}
 	if projectRootNode != nil {
-		dependencyTrees = projectRootNode.Nodes
-	}
-
-	if dependencyTrees == nil {
-		dependencyTrees = []*xrayUtils.GraphNode{}
+		directDepCount = len(projectRootNode.Nodes)
+		dependencyTrees = []*xrayUtils.GraphNode{projectRootNode}
 	}
 
 	uniqueDeps = calculateUniqueDependencies(dependencyTrees)
-	log.Debug("Calculated dependency trees (children of root): %d trees found.", len(dependencyTrees))
+
+	log.Debug(fmt.Sprintf("Calculated gem dependency tree: %d direct dependencies, %d total nodes.", directDepCount, len(uniqueDeps)))
 
 	return
 }
