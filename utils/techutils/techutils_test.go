@@ -1323,6 +1323,17 @@ import requests
 	}
 }
 
+func TestHasUnauditedPep723Script_FindsScriptUnderMatchingAncestor(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "attestation", "proj")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	pep723Content := "# /// script\n# dependencies = [\"requests\"]\n# ///\n\nimport requests\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "script.py"), []byte(pep723Content), 0644))
+
+	found, err := hasUnauditedPep723Script(dir)
+	require.NoError(t, err)
+	assert.True(t, found)
+}
+
 func TestHasUnauditedPep723Script_FindsNestedScript(t *testing.T) {
 	dir := t.TempDir()
 

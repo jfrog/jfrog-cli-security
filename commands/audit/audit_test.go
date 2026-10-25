@@ -541,6 +541,47 @@ func TestDetectScanTargetsOldFlowJasOnlyNoTechnologies(t *testing.T) {
 	}
 }
 
+func TestDetectScanTargetsKeepsProjectUnderMatchingAncestor(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	projectDir := filepath.Join(baseDir, "attestation", "myproject")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetExclusions([]string{"*test*"})
+
+	detectScanTargets(cmdRes, params)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
+}
+
+func TestDetectScanTargetsNewFlowKeepsProjectUnderMatchingAncestor(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	projectDir := filepath.Join(baseDir, "attestation", "myproject")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetExclusions([]string{"*test*"})
+
+	detectScanTargets(cmdRes, params)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
+}
+
 func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
