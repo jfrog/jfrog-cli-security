@@ -254,9 +254,11 @@ func (cmd *DownloadStatusCommand) FetchResult() (*Result, error) {
 	}
 
 	if isManifestListPath(path) {
-		platforms, listErr := cmd.evaluatePlatformManifests(artifactoryManager, xrayManager, repo, path)
-		if listErr != nil {
-			log.Debug(fmt.Sprintf("Could not expand manifest list %s/%s: %s", repo, path, listErr.Error()))
+		platforms, err := evaluatePlatformManifests(artifactoryManager, repo, path, func(platformPath, platformSha256 string) (*Result, error) {
+			return cmd.evaluateArtifact(xrayManager, repo, platformPath, platformSha256)
+		})
+		if err != nil {
+			return nil, err
 		}
 		mergePlatformResults(result, platforms)
 	}
@@ -266,22 +268,6 @@ func (cmd *DownloadStatusCommand) FetchResult() (*Result, error) {
 	}
 	log.Debug(fmt.Sprintf("Download status for %s/%s is %s (%s)", repo, path, result.DownloadStatus, result.StatusReason))
 	return result, nil
-}
-
-func (cmd *DownloadStatusCommand) evaluatePlatformManifests(source manifestSource, xrayManager *xray.XrayServicesManager, repo, listPath string) ([]platformResult, error) {
-	manifests, err := listPlatformManifests(source, repo, listPath)
-	if err != nil {
-		return nil, err
-	}
-	var platforms []platformResult
-	for _, manifest := range manifests {
-		platformResultValue, err := cmd.evaluateArtifact(xrayManager, repo, manifest.path, manifest.sha256)
-		if err != nil {
-			return platforms, err
-		}
-		platforms = append(platforms, platformResult{platform: manifest.platform, result: platformResultValue})
-	}
-	return platforms, nil
 }
 
 func (cmd *DownloadStatusCommand) evaluateArtifact(xrayManager *xray.XrayServicesManager, repo, path, sha256 string) (*Result, error) {

@@ -1,7 +1,9 @@
 package downloadstatus
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	artifactoryUtils "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
@@ -32,7 +34,7 @@ type locatedArtifact struct {
 
 // Xray only tracks concrete repos: local ones and the '-cache' repo behind a remote one.
 func locateArtifact(locator artifactLocator, repo string, pathCandidates []string) (*locatedArtifact, error) {
-	found, lastErr := locateInRepo(locator, repo, pathCandidates, map[string]bool{}, 0)
+	found, lastErr := locateInRepo(locator, repo, pathCandidates, map[string]bool{})
 	if found != nil {
 		return found, nil
 	}
@@ -46,8 +48,8 @@ func locateArtifact(locator artifactLocator, repo string, pathCandidates []strin
 	return nil, errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s): %s", repo, tried, lastErr.Error())
 }
 
-func locateInRepo(locator artifactLocator, repo string, pathCandidates []string, visited map[string]bool, depth int) (*locatedArtifact, error) {
-	if visited[repo] || depth > maxVirtualDepth {
+func locateInRepo(locator artifactLocator, repo string, pathCandidates []string, visited map[string]bool) (*locatedArtifact, error) {
+	if visited[repo] {
 		return nil, nil
 	}
 	visited[repo] = true
@@ -64,16 +66,25 @@ func locateInRepo(locator artifactLocator, repo string, pathCandidates []string,
 	log.Debug(fmt.Sprintf("Repo '%s' is virtual, looking for the artifact in its members: %s", repo, strings.Join(config.Repositories, ", ")))
 	var lastErr error
 	for _, member := range config.Repositories {
-		found, err := locateInRepo(locator, member, pathCandidates, visited, depth+1)
+		found, err := locateInRepo(locator, member, pathCandidates, visited)
 		if found != nil {
 			log.Debug(fmt.Sprintf("Artifact found in member repo '%s' of virtual repo '%s'", found.repo, repo))
 			return found, nil
 		}
-		if err != nil {
-			lastErr = err
+		if err == nil {
+			continue
 		}
+		if !isSkippableMemberError(err) {
+			return nil, err
+		}
+		lastErr = err
 	}
 	return nil, lastErr
+}
+
+func isSkippableMemberError(err error) bool {
+	var httpErr *errorutils.HttpResponseError
+	return errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusForbidden)
 }
 
 // For a remote repo the storage API answers with the '-cache' repo that holds the file.

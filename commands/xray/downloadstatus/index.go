@@ -92,12 +92,31 @@ func listPlatformManifests(source manifestSource, repo, listPath string) ([]plat
 		path := imagePath + "/" + strings.Replace(entry.Digest, ":", "__", 1) + "/manifest.json"
 		fileInfo, err := source.FileInfo(repo + "/" + path)
 		if err != nil {
+			if !isArtifactNotFound(err) {
+				return nil, err
+			}
 			log.Debug(fmt.Sprintf("Platform manifest %s/%s (%s) is not available: %s", repo, path, platform, err.Error()))
 			continue
 		}
 		manifests = append(manifests, platformManifest{platform: platform, path: path, sha256: fileInfo.Checksums.Sha256})
 	}
 	return manifests, nil
+}
+
+func evaluatePlatformManifests(source manifestSource, repo, listPath string, evaluate func(path, sha256 string) (*Result, error)) ([]platformResult, error) {
+	manifests, err := listPlatformManifests(source, repo, listPath)
+	if err != nil {
+		return nil, err
+	}
+	platforms := make([]platformResult, 0, len(manifests))
+	for _, manifest := range manifests {
+		result, err := evaluate(manifest.path, manifest.sha256)
+		if err != nil {
+			return nil, err
+		}
+		platforms = append(platforms, platformResult{platform: manifest.platform, result: result})
+	}
+	return platforms, nil
 }
 
 func downloadStatusRank(status string) int {

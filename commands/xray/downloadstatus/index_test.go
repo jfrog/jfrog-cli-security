@@ -2,7 +2,9 @@ package downloadstatus
 
 import (
 	"errors"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -117,5 +119,60 @@ func TestMergePlatformResults(t *testing.T) {
 			&services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusScanning}}}, nil)
 		mergePlatformResults(result, []platformResult{{platform: "linux/amd64", result: incomplete}})
 		assert.Equal(t, StatusUnknown, result.DownloadStatus)
+	})
+}
+
+func TestListPlatformManifestsLookupFailureIsNotSkipped(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusInternalServerError} {
+		source := &fakeManifestSource{
+			fakeLocator: fakeLocator{
+				files:  map[string]artifactoryUtils.FileInfo{"docker-cache/team/app/sha256__bbb/manifest.json": fileInfo("docker-cache", "sha-arm64")},
+				errors: map[string]error{"docker-cache/team/app/sha256__aaa/manifest.json": &errorutils.HttpResponseError{StatusCode: status}},
+			},
+			content: map[string]string{"docker-cache/team/app/1.0/list.manifest.json": testManifestList},
+		}
+		_, err := listPlatformManifests(source, "docker-cache", "team/app/1.0/list.manifest.json")
+		assert.Error(t, err, "status %d", status)
+	}
+}
+
+func TestEvaluatePlatformManifests(t *testing.T) {
+	source := &fakeManifestSource{
+		fakeLocator: fakeLocator{files: map[string]artifactoryUtils.FileInfo{
+			"docker-cache/team/app/sha256__aaa/manifest.json": fileInfo("docker-cache", "sha-amd64"),
+			"docker-cache/team/app/sha256__bbb/manifest.json": fileInfo("docker-cache", "sha-arm64"),
+		}},
+		content: map[string]string{"docker-cache/team/app/1.0/list.manifest.json": testManifestList},
+	}
+
+	t.Run("evaluates every platform", func(t *testing.T) {
+		var evaluated []string
+		platforms, err := evaluatePlatformManifests(source, "docker-cache", "team/app/1.0/list.manifest.json", func(path, sha256 string) (*Result, error) {
+			evaluated = append(evaluated, path+"@"+sha256)
+			return allowedResult(path), nil
+		})
+		assert.NoError(t, err)
+		assert.Len(t, platforms, 2)
+		assert.Equal(t, []string{"team/app/sha256__aaa/manifest.json@sha-amd64", "team/app/sha256__bbb/manifest.json@sha-arm64"}, evaluated)
+	})
+
+	t.Run("platform status failure is returned", func(t *testing.T) {
+		calls := 0
+		platforms, err := evaluatePlatformManifests(source, "docker-cache", "team/app/1.0/list.manifest.json", func(path, sha256 string) (*Result, error) {
+			calls++
+			if calls == 2 {
+				return nil, errors.New("xray unavailable")
+			}
+			return allowedResult(path), nil
+		})
+		assert.EqualError(t, err, "xray unavailable")
+		assert.Nil(t, platforms)
+	})
+
+	t.Run("unreadable manifest list is returned", func(t *testing.T) {
+		_, err := evaluatePlatformManifests(source, "docker-cache", "team/app/2.0/list.manifest.json", func(path, sha256 string) (*Result, error) {
+			return allowedResult(path), nil
+		})
+		assert.Error(t, err)
 	})
 }

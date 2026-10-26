@@ -3,6 +3,7 @@ package downloadstatus
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -146,4 +147,48 @@ func TestLocateArtifactUnknownRepoConfigFallsBackToProbing(t *testing.T) {
 	located, err := locateArtifact(locator, "repo", []string{"a.jar"})
 	assert.NoError(t, err)
 	assert.Equal(t, "repo", located.repo)
+}
+
+func TestLocateArtifactStopsOnNonSkippableMemberError(t *testing.T) {
+	locator := &fakeLocator{
+		configs: map[string]repoConfig{
+			"v":  {Rclass: "virtual", Repositories: []string{"l1", "l2"}},
+			"l1": {Rclass: "local"},
+			"l2": {Rclass: "local"},
+		},
+		files:  map[string]artifactoryUtils.FileInfo{"l2/a.jar": fileInfo("l2", "two")},
+		errors: map[string]error{"l1/a.jar": &errorutils.HttpResponseError{StatusCode: http.StatusInternalServerError}},
+	}
+	_, err := locateArtifact(locator, "v", []string{"a.jar"})
+	assert.Error(t, err)
+	assert.NotContains(t, err.Error(), "could not find artifact")
+	assert.Equal(t, []string{"l1/a.jar"}, locator.probed)
+}
+
+func TestLocateArtifactEarlierFailureIsNotHiddenByLaterNotFound(t *testing.T) {
+	locator := &fakeLocator{
+		configs: map[string]repoConfig{
+			"v":  {Rclass: "virtual", Repositories: []string{"l1", "l2"}},
+			"l1": {Rclass: "local"},
+			"l2": {Rclass: "local"},
+		},
+		errors: map[string]error{"l1/a.jar": errors.New("connection reset")},
+	}
+	_, err := locateArtifact(locator, "v", []string{"a.jar"})
+	assert.EqualError(t, err, "connection reset")
+}
+
+func TestLocateArtifactDeepVirtualHierarchy(t *testing.T) {
+	const depth = 25
+	configs := map[string]repoConfig{"local": {Rclass: "local"}}
+	next := "local"
+	for i := 0; i < depth; i++ {
+		key := fmt.Sprintf("virtual-%d", i)
+		configs[key] = repoConfig{Rclass: "virtual", Repositories: []string{next}}
+		next = key
+	}
+	locator := &fakeLocator{configs: configs, files: map[string]artifactoryUtils.FileInfo{"local/a.jar": fileInfo("local", "sha")}}
+	located, err := locateArtifact(locator, next, []string{"a.jar"})
+	assert.NoError(t, err)
+	assert.Equal(t, "local", located.repo)
 }
