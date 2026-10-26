@@ -735,13 +735,13 @@ func promoteYarnWorkspaceMember(techs []string) []string {
 	}
 }
 
-// promotePipToUvIn applies techutils.PromotePipToUv against dir. Callers must pass the
-// project directory; an empty dir is a no-op so this never falls back to the process cwd.
+// promotePipToUvIn applies techutils.PromotePipToUvForCurationAudit against dir; an empty
+// dir is a no-op. Unlike 'jf audit'/'jf scan', also treats ~/.config/uv/uv.toml as a uv signal.
 func promotePipToUvIn(techs []string, dir string) []string {
 	if dir == "" {
 		return techs
 	}
-	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), dir)
+	promoted := techutils.PromotePipToUvForCurationAudit(techutils.ToTechnologies(techs), dir)
 	result := make([]string, 0, len(promoted))
 	for _, t := range promoted {
 		result = append(result, t.String())

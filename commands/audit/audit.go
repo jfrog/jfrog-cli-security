@@ -661,10 +661,14 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 		if isDir, err := fileutils.IsDirExists(includePattern, false); err != nil {
 			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
 			continue
-		} else if isDir && !utils.IsPathExcluded(includePattern, exclude) {
+		} else if isDir {
 			includePath := includePattern
 			if !filepath.IsAbs(includePattern) {
 				includePath = filepath.Join(root, includePattern)
+			}
+			if utils.IsPathExcludedFromRoot(root, includePath, exclude) {
+				log.Debug(fmt.Sprintf("Skipping include path '%s' as it matches exclusion patterns %s", includePath, strings.Join(exclude, ", ")))
+				continue
 			}
 			dirs.Add(includePath)
 			continue
@@ -679,7 +683,7 @@ func createScanTarget(root string, exclude []string, includes ...string) *result
 		dirs.AddElements(includeDirs...)
 	}
 	include := dirs.ToSlice()
-	if utils.IsPathExcluded(root, exclude) {
+	if utils.IsPathExcludedFromRoot(root, root, exclude) {
 		if len(include) == 0 {
 			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", root, strings.Join(exclude, ", ")))
 			return nil
@@ -804,7 +808,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
 			continue
 		}
-		if isExcluded := utils.IsPathExcluded(requestedDirectory, exclusions); isExcluded {
+		if isExcluded := utils.IsPathExcludedFromRoot(requestedDirectory, requestedDirectory, exclusions); isExcluded {
 			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", requestedDirectory, strings.Join(exclusions, ", ")))
 			continue
 		}

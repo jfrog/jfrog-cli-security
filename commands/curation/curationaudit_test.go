@@ -885,48 +885,14 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem": true,
 			},
 
-			// Expect a report containing the exact blocked package.
+			// actionpack's subtree collapses every path to activesupport into one entry (XRAY-167222).
 			expectedResp: map[string]*CurationReport{
 				"Ruby-Project": {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "actionview",
+							ParentName:        "actionpack",
 							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "indirect",
-							PkgType:           "ruby",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-						{
-							Action:            "blocked",
-							ParentName:        "activesupport",
-							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "direct",
-							PkgType:           "ruby",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-						{
-							Action:            "blocked",
-							ParentName:        "rails-dom-testing",
-							ParentVersion:     "2.3.0",
 							BlockedPackageUrl: "/api/gems/ruby-yaml-repo/gems/activesupport-5.2.3.gem",
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
@@ -6645,10 +6611,9 @@ func TestPromoteYarnWorkspaceMember(t *testing.T) {
 	})
 }
 
-// TestPromotePipToUv covers every uv signal promotePipToUv checks (uv.lock, pyproject.toml
-// [tool.uv]/[[tool.uv.index]]), confirms pip-exclusive files always win, and confirms it
-// collapses a tech list already containing both pip and uv into one. Global ~/.config/uv/uv.toml
-// is not a project signal and must not rewrite pip-only projects.
+// TestPromotePipToUv covers every uv signal promotePipToUvIn checks for curation-audit —
+// uv.lock, pyproject.toml [tool.uv], and ~/.config/uv/uv.toml — and confirms a
+// pip-exclusive file always wins over all of them.
 func TestPromotePipToUv(t *testing.T) {
 	pip := techutils.Pip.String()
 	uv := techutils.Uv.String()
@@ -6713,13 +6678,13 @@ func TestPromotePipToUv(t *testing.T) {
 			expectedHasPip: true,
 		},
 		{
-			name:           "pip + ~/.config/uv/uv.toml — stays pip",
-			techs:          []string{pip},
-			hasUvToml:      true,
-			expectedHasPip: true,
+			name:          "pip + ~/.config/uv/uv.toml — promoted to uv",
+			techs:         []string{pip},
+			hasUvToml:     true,
+			expectedHasUv: true,
 		},
 		{
-			name:           "pip-exclusive file is unaffected by ~/.config/uv/uv.toml — stays pip",
+			name:           "pip-exclusive file takes priority over ~/.config/uv/uv.toml — stays pip",
 			techs:          []string{pip},
 			hasPipFile:     "Pipfile",
 			hasUvToml:      true,

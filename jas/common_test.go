@@ -76,6 +76,16 @@ func TestShouldSkipScannerByModule(t *testing.T) {
 	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.IaC))
 	assert.True(t, ShouldSkipScannerByModule(results.ScanTarget{DeprecatedAppsConfigModule: &module}, jasutils.Sast))
 
+	module = jfrogAppsConfig.Module{ExcludePatterns: []string{"*test*"}}
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{
+		Target:                     filepath.Join(string(filepath.Separator), "ci", "attestation", "myproject"),
+		DeprecatedAppsConfigModule: &module,
+	}, jasutils.IaC))
+	assert.True(t, ShouldSkipScannerByModule(results.ScanTarget{
+		Target:                     filepath.Join(string(filepath.Separator), "ci", "my-test-project"),
+		DeprecatedAppsConfigModule: &module,
+	}, jasutils.IaC))
+
 	// no module
 	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.IaC))
 	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{}, jasutils.Sast))

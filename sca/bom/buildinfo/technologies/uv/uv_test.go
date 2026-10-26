@@ -1468,6 +1468,7 @@ exit /b 1
 	}
 	require.NoError(t, os.WriteFile(name, []byte(script), 0755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	technologies.EnsureWindowsExeShim(t, dir, "uv")
 }
 
 const (
