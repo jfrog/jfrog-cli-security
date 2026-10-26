@@ -28,10 +28,10 @@ import (
 func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	key := bytes.Repeat([]byte{1}, 16)
 	bundles := map[string][]byte{
-		"1.63.0": encryptAesCtr(t, key, createZip(t, "analyzerManager", "1.63.0")),
-		"1.62.0": encryptAesCtr(t, key, createZip(t, "analyzerManager", "1.62.0")),
-		"1.61.0": encryptAesCtr(t, key, createZip(t, "analyzerManager", "1.61.0")),
-		"1.60.0": createZip(t, "analyzerManager", "1.60.0"),
+		"1.63.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.63.0")),
+		"1.62.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.62.0")),
+		"1.61.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.61.0")),
+		"1.60.0": createAnalyzerManagerZip(t, "1.60.0"),
 	}
 	testCases := []struct {
 		name                          string
@@ -120,10 +120,10 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	}
 }
 
-func createZip(t *testing.T, fileName, content string) []byte {
+func createAnalyzerManagerZip(t *testing.T, content string) []byte {
 	var buffer bytes.Buffer
 	zipWriter := zip.NewWriter(&buffer)
-	fileWriter, err := zipWriter.Create(fileName)
+	fileWriter, err := zipWriter.Create("analyzerManager")
 	require.NoError(t, err)
 	_, err = fileWriter.Write([]byte(content))
 	require.NoError(t, err)
