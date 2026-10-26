@@ -552,12 +552,12 @@ func hasUnauditedPep723Script(dir string) (bool, error) {
 			return nil //nolint:nilerr // a single unreadable entry shouldn't abort the whole yes/no scan
 		}
 		if d.IsDir() {
-			if utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+			if utils.IsPathExcludedFromRoot(dir, path, utils.DefaultScaExcludePatterns) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !strings.HasSuffix(d.Name(), ".py") || utils.IsPathExcluded(path, utils.DefaultScaExcludePatterns) {
+		if !strings.HasSuffix(d.Name(), ".py") || utils.IsPathExcludedFromRoot(dir, path, utils.DefaultScaExcludePatterns) {
 			return nil
 		}
 		data, readErr := os.ReadFile(path) // #nosec G122 -- path comes from WalkDir over dir, a local project directory the CLI was already pointed at
