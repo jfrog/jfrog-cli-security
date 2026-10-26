@@ -40,21 +40,30 @@ func TestBuildDependencyTree(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gem"))
 	defer cleanUp()
 	params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
-	actualTopLevelTrees, uniqueDeps, err := BuildDependencyTree(params)
-	assert.NoError(t, err, "BuildDependencyTree should not return an error")
-	expectedTopLevelTrees := expectedResult.Nodes
-	if !reflect.DeepEqual(expectedTopLevelTrees, actualTopLevelTrees) {
-		expectedJSON, err := utils.GetAsJsonString(expectedTopLevelTrees, true, false)
+	actualTrees, uniqueDeps, err := BuildDependencyTree(params)
+	require.NoError(t, err, "BuildDependencyTree should not return an error")
+
+	// Must return one project-root node wrapping the direct deps, not the deps themselves (XRAY-167222).
+	require.Len(t, actualTrees, 1, "BuildDependencyTree should return a single project-root node")
+	actualRoot := actualTrees[0]
+	assert.NotEmpty(t, actualRoot.Id, "the project-root node should carry the working directory name as its Id")
+
+	expectedDirectDeps := expectedResult.Nodes
+	actualDirectDeps := actualRoot.Nodes
+	if !reflect.DeepEqual(expectedDirectDeps, actualDirectDeps) {
+		expectedJSON, err := utils.GetAsJsonString(expectedDirectDeps, true, false)
 		if err != nil {
 			t.Fatalf("Failed to marshal expected dependency tree to JSON for error reporting: %v", err)
 		}
 
-		actualJSON, err := utils.GetAsJsonString(actualTopLevelTrees, true, false)
+		actualJSON, err := utils.GetAsJsonString(actualDirectDeps, true, false)
 		if err != nil {
 			t.Fatalf("Failed to marshal actual dependency tree to JSON for error reporting: %v", err)
 		}
 		t.Errorf("Dependency tree mismatch.\nExpected (JSON):\n%s\nGot (JSON):\n%s", expectedJSON, actualJSON)
 	}
+
+	// The root's own Id isn't a real package and must stay out of uniqueDeps.
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "Unique dependencies mismatch. First is actual, Second is Expected")
 }
 
