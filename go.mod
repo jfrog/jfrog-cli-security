@@ -47,7 +47,7 @@ require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/buger/jsonparser v1.3.0 // indirect
 	github.com/c-bata/go-prompt v0.2.6 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
