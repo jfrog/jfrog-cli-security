@@ -3,6 +3,7 @@ package xrayplugin
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -133,7 +134,7 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		BomRef:         cdxutils.GetFileRef(target.Target),
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
-		IgnorePatterns: target.GetCentralConfigExclusions(utils.ScaScan),
+		IgnorePatterns: ignorePatternsForTarget(target),
 		IncludeDirs:    target.Include,
 		Ecosystems:     sbg.specificTechs,
 	}
@@ -141,6 +142,28 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
+}
+
+// ignorePatternsForTarget is the ignore list sent to the Xray-Lib plugin.
+// A config profile replaces the CLI flag. With no profile, the flag is used, and an empty flag falls back to the default list.
+func ignorePatternsForTarget(target results.ScanTarget) []string {
+	var patterns []string
+	if len(target.CentralConfigModules) > 0 {
+		patterns = target.GetCentralConfigExclusions(utils.ScaScan)
+	} else if len(target.Exclude) > 0 {
+		patterns = target.Exclude
+	} else {
+		patterns = utils.DefaultScaExcludePatterns
+	}
+	normalized := make([]string, len(patterns))
+	for i, pattern := range patterns {
+		pattern = strings.ReplaceAll(pattern, `\`, "/")
+		for strings.HasPrefix(pattern, "./") {
+			pattern = strings.TrimPrefix(pattern, "./")
+		}
+		normalized[i] = pattern
+	}
+	return normalized
 }
 
 func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {

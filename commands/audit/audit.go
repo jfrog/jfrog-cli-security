@@ -637,6 +637,9 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 		return
 	}
 	log.Debug("Creating scan targets from config profile:", configProfile.ProfileName)
+	if cliExclusions := params.Exclusions(); len(cliExclusions) > 0 && !utils.ElementsEqual(cliExclusions, utils.DefaultScaExcludePatterns) {
+		log.Debug(fmt.Sprintf("Config profile exclusions replace --exclusions; discarding CLI patterns: %s", strings.Join(cliExclusions, ";")))
+	}
 	for _, module := range configProfile.Modules {
 		moduleRoot := rootDir
 		if module.PathFromRoot != "" && module.PathFromRoot != "." {
