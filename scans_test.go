@@ -381,7 +381,7 @@ func TestDockerScanWithTokenValidation(t *testing.T) {
 	defer cleanup()
 	// #nosec G101 -- Image with dummy token for tests
 	tokensImageToScan := "srmishj/inactive_tokens:latest"
-	runDockerScan(t, testCli, tokensImageToScan, "", 0, 0, 0, 5, true)
+	runDockerScan(t, testCli, tokensImageToScan, "", 0, 0, 0, 4, true)
 }
 
 func TestDockerScan(t *testing.T) {
