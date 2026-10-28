@@ -131,7 +131,10 @@ func downloadStatusRank(status string) int {
 }
 
 func mergePlatformResults(result *Result, platforms []platformResult) {
-	worst, worstPlatform := result, ""
+	if len(platforms) == 0 {
+		return
+	}
+	worst, worstPlatform := platforms[0].result, platforms[0].platform
 	for _, platform := range platforms {
 		child := platform.result
 		result.Platforms = append(result.Platforms, PlatformStatus{
@@ -148,10 +151,11 @@ func mergePlatformResults(result *Result, platforms []platformResult) {
 			worst, worstPlatform = child, platform.platform
 		}
 	}
-	if worst != result {
-		result.DownloadStatus = worst.DownloadStatus
+	result.DownloadStatus = worst.DownloadStatus
+	result.StatusReason = ""
+	if worst.StatusReason != "" {
 		result.StatusReason = fmt.Sprintf("%s (%s)", worst.StatusReason, worstPlatform)
-		result.ScanStatus = worst.ScanStatus
 	}
+	result.ScanStatus = worst.ScanStatus
 	sortViolationRows(result.Violations)
 }

@@ -113,6 +113,19 @@ func TestMergePlatformResults(t *testing.T) {
 		assert.Empty(t, result.Platforms)
 	})
 
+	t.Run("incomplete list scan does not affect allowed platforms", func(t *testing.T) {
+		list := buildResult("repo", "app/1/list.manifest.json", "", "https://acme.jfrog.io", "gav://a:b", "1", false,
+			&services.ArtifactStatusResponse{Details: services.ArtifactDetailedStatus{Violations: services.ArtifactScanStatus{Status: services.ArtifactStatusScanning}}}, nil)
+		assert.Equal(t, StatusUnknown, list.DownloadStatus)
+		mergePlatformResults(list, []platformResult{
+			{platform: "linux/amd64", result: allowedResult("app/sha256__a/manifest.json")},
+			{platform: "linux/arm64", result: allowedResult("app/sha256__b/manifest.json")},
+		})
+		assert.Equal(t, StatusAllowed, list.DownloadStatus)
+		assert.Empty(t, list.StatusReason)
+		assert.Equal(t, services.ArtifactStatusDone, list.ScanStatus.Violations.Status)
+	})
+
 	t.Run("incomplete scan makes the list unknown", func(t *testing.T) {
 		result := allowedResult("app/1/list.manifest.json")
 		incomplete := buildResult("repo", "app/sha256__a/manifest.json", "", "https://acme.jfrog.io", "gav://a:b", "1", false,

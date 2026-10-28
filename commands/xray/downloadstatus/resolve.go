@@ -11,10 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-const (
-	rclassVirtual   = "virtual"
-	maxVirtualDepth = 10
-)
+const rclassVirtual = "virtual"
 
 type artifactLocator interface {
 	GetRepository(repoKey string, repoDetails interface{}) error
