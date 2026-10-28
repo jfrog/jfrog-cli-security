@@ -154,6 +154,9 @@ func (m *mockVcsClient) TriggerWorkflow(_ context.Context, _, _, _ string, _ map
 func (m *mockVcsClient) AddOrganizationSecret(_ context.Context, _, _, _ string) error {
 	return nil
 }
+func (m *mockVcsClient) CheckIfOrgSecretExists(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
 func (m *mockVcsClient) CreateOrgVariable(_ context.Context, _, _, _ string) error { return nil }
 func (m *mockVcsClient) CommitAndPushFiles(_ context.Context, _, _, _, _, _, _ string, _ []vcsclient.FileToCommit) error {
 	return nil

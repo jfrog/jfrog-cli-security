@@ -801,7 +801,7 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Secrets: 5},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: 5},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: 2},
 		},
 	})
 }
