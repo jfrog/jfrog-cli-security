@@ -148,11 +148,12 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 // A config profile replaces the CLI flag. With no profile, the flag is used, and an empty flag falls back to the default list.
 func ignorePatternsForTarget(target results.ScanTarget) []string {
 	var patterns []string
-	if len(target.CentralConfigModules) > 0 {
+	switch {
+	case len(target.CentralConfigModules) > 0:
 		patterns = target.GetCentralConfigExclusions(utils.ScaScan)
-	} else if len(target.Exclude) > 0 {
+	case len(target.Exclude) > 0:
 		patterns = target.Exclude
-	} else {
+	default:
 		patterns = utils.DefaultScaExcludePatterns
 	}
 	normalized := make([]string, len(patterns))
