@@ -233,35 +233,62 @@ func (cmd *DownloadStatusCommand) Run() (err error) {
 }
 
 func (cmd *DownloadStatusCommand) FetchResult() (*Result, error) {
-	path, sha256, err := cmd.resolveArtifact()
+	artifactoryManager, err := artifactoryUtils.CreateServiceManager(cmd.serverDetails, -1, 0, false)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug(fmt.Sprintf("Resolved artifact %s/%s sha256 %s", cmd.repo, path, sha256))
+	located, err := locateArtifact(artifactoryManager, cmd.repo, cmd.pathCandidates)
+	if err != nil {
+		return nil, err
+	}
+	repo, path := located.repo, located.path
+	log.Debug(fmt.Sprintf("Resolved artifact %s/%s sha256 %s", repo, path, located.sha256))
 
 	xrayManager, err := corexray.CreateXrayServiceManager(cmd.serverDetails, corexray.WithScopedProjectKey(cmd.project))
 	if err != nil {
 		return nil, err
 	}
+	result, err := cmd.evaluateArtifact(xrayManager, repo, path, located.sha256)
+	if err != nil {
+		return nil, err
+	}
 
-	scanStatus, err := xrayManager.GetArtifactStatus(cmd.repo, path)
+	if isManifestListPath(path) {
+		platforms, err := evaluatePlatformManifests(artifactoryManager, repo, path, func(platformPath, platformSha256 string) (*Result, error) {
+			return cmd.evaluateArtifact(xrayManager, repo, platformPath, platformSha256)
+		})
+		if err != nil {
+			return nil, err
+		}
+		mergePlatformResults(result, platforms)
+	}
+
+	if repo != cmd.repo {
+		result.RequestedRepo = cmd.repo
+	}
+	log.Debug(fmt.Sprintf("Download status for %s/%s is %s (%s)", repo, path, result.DownloadStatus, result.StatusReason))
+	return result, nil
+}
+
+func (cmd *DownloadStatusCommand) evaluateArtifact(xrayManager *xray.XrayServicesManager, repo, path, sha256 string) (*Result, error) {
+	scanStatus, err := xrayManager.GetArtifactStatus(repo, path)
 	if err != nil {
 		return nil, err
 	}
 	if scanStatus != nil {
-		log.Debug(fmt.Sprintf("Violation scan status for %s/%s is %s", cmd.repo, path, scanStatus.Details.Violations.Status))
+		log.Debug(fmt.Sprintf("Violation scan status for %s/%s is %s", repo, path, scanStatus.Details.Violations.Status))
 	}
 
 	violationsResponse, err := xrayManager.GetViolations(
 		xrayUtils.NewViolationsRequest().
 			IncludeDetails(true).
-			FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: cmd.repo, Path: path}),
+			FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: repo, Path: path}),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	packageId, version, indexedSha256 := cmd.resolvePackageIdentity(xrayManager, path)
+	packageId, version, indexedSha256 := cmd.resolvePackageIdentity(xrayManager, repo, path)
 	var violations []services.XrayViolation
 	if violationsResponse != nil {
 		violations = violationsResponse.Violations
@@ -271,17 +298,15 @@ func (cmd *DownloadStatusCommand) FetchResult() (*Result, error) {
 		log.Debug(fmt.Sprintf("Indexed sha256 %s does not match artifact sha256 %s", indexedSha256, sha256))
 		violations = nil
 	}
-	result := buildResult(cmd.repo, path, sha256, cmd.serverDetails.Url, packageId, version, checksumMismatch, scanStatus, violations)
-	log.Debug(fmt.Sprintf("Download status for %s/%s is %s (%s)", cmd.repo, path, result.DownloadStatus, result.StatusReason))
-	return result, nil
+	return buildResult(repo, path, sha256, cmd.serverDetails.Url, packageId, version, checksumMismatch, scanStatus, violations), nil
 }
 
 // resolvePackageIdentity looks up how Xray identifies this artifact as a package (e.g. 'deb://debian:12:libxml2'),
 // which the scans-list UI needs in its URL. Falls back to a generic identity if the artifact isn't a recognized
 // package type or the lookup fails - the resulting link still works, just without the platform's stricter package
 // context.
-func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, path string) (packageId, version, indexedSha256 string) {
-	candidates := cmd.artifactSummaryPaths(path)
+func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayServicesManager, repo, path string) (packageId, version, indexedSha256 string) {
+	candidates := cmd.artifactSummaryPaths(repo, path)
 	log.Debug(fmt.Sprintf("Looking up package identity for %s/%s via %s", cmd.repo, path, strings.Join(candidates, ", ")))
 	for _, candidate := range candidates {
 		summary, err := xrayManager.ArtifactSummary(services.ArtifactSummaryParams{Paths: []string{candidate}, CliCommand: "xr_status"})
@@ -302,8 +327,8 @@ func (cmd *DownloadStatusCommand) resolvePackageIdentity(xrayManager *xray.XrayS
 	return "generic://" + base, "", ""
 }
 
-func (cmd *DownloadStatusCommand) artifactSummaryPaths(path string) []string {
-	repoPath := cmd.repo + "/" + path
+func (cmd *DownloadStatusCommand) artifactSummaryPaths(repo, path string) []string {
+	repoPath := repo + "/" + path
 	if cmd.project != "" {
 		// Project-scoped first: an unscoped or default/ hit can belong to a
 		// different project and carry a checksum that doesn't match this artifact.
@@ -357,32 +382,6 @@ func xrayPackageScheme(pkgType string) string {
 	return lower
 }
 
-// resolveArtifact tries each path candidate in turn (a docker tag can resolve to a manifest list or a plain
-// manifest) and returns the first one Artifactory actually has, along with its sha256.
-func (cmd *DownloadStatusCommand) resolveArtifact() (path, sha256 string, err error) {
-	artifactoryManager, err := artifactoryUtils.CreateServiceManager(cmd.serverDetails, -1, 0, false)
-	if err != nil {
-		return "", "", err
-	}
-	var lastErr error
-	for _, candidate := range cmd.pathCandidates {
-		fileInfo, ferr := artifactoryManager.FileInfo(cmd.repo + "/" + candidate)
-		if ferr == nil {
-			return candidate, fileInfo.Checksums.Sha256, nil
-		}
-		if !isArtifactNotFound(ferr) {
-			log.Debug(fmt.Sprintf("File info for %s/%s failed: %s", cmd.repo, candidate, ferr.Error()))
-			return "", "", ferr
-		}
-		log.Debug(fmt.Sprintf("Artifact %s/%s was not found", cmd.repo, candidate))
-		lastErr = ferr
-	}
-	if lastErr == nil {
-		return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s)", cmd.repo, strings.Join(cmd.pathCandidates, ", "))
-	}
-	return "", "", errorutils.CheckErrorf("could not find artifact under repo '%s' (tried: %s): %s", cmd.repo, strings.Join(cmd.pathCandidates, ", "), lastErr.Error())
-}
-
 func isArtifactNotFound(err error) bool {
 	var httpErr *errorutils.HttpResponseError
 	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
@@ -399,17 +398,20 @@ type violationRow struct {
 	Detail           string `json:"detail"`
 	ViolationId      string `json:"violation_id"`
 	Link             string `json:"link,omitempty"`
+	Platform         string `json:"platform,omitempty"`
 	issueKey         string
 }
 
 type Result struct {
 	Repo           string                          `json:"repo"`
+	RequestedRepo  string                          `json:"requested_repo,omitempty"`
 	Path           string                          `json:"path"`
 	Sha256         string                          `json:"sha256,omitempty"`
 	ScansListLink  string                          `json:"scans_list_link,omitempty"`
 	ScanStatus     services.ArtifactDetailedStatus `json:"scan_status"`
 	DownloadStatus string                          `json:"download_status"`
 	StatusReason   string                          `json:"status_reason,omitempty"`
+	Platforms      []PlatformStatus                `json:"platforms,omitempty"`
 	Violations     []violationRow                  `json:"violations"`
 }
 
@@ -473,15 +475,7 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 		}
 	}
 
-	sort.SliceStable(result.Violations, func(i, j int) bool {
-		if result.Violations[i].Blocking != result.Violations[j].Blocking {
-			return result.Violations[i].Blocking
-		}
-		if result.Violations[i].SeverityNumValue != result.Violations[j].SeverityNumValue {
-			return result.Violations[i].SeverityNumValue > result.Violations[j].SeverityNumValue
-		}
-		return result.Violations[i].issueKey < result.Violations[j].issueKey
-	})
+	sortViolationRows(result.Violations)
 
 	switch {
 	case checksumMismatch:
@@ -497,6 +491,18 @@ func buildResult(repo, path, sha256, platformUrl, packageId, version string, che
 		result.DownloadStatus = StatusAllowed
 	}
 	return result
+}
+
+func sortViolationRows(rows []violationRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Blocking != rows[j].Blocking {
+			return rows[i].Blocking
+		}
+		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
+			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
+		}
+		return rows[i].issueKey < rows[j].issueKey
+	})
 }
 
 func violationIgnored(policy services.ViolationPolicy, violation services.XrayViolation) bool {
@@ -698,6 +704,9 @@ func printResult(outputFormat format.OutputFormat, result *Result) error {
 	}
 
 	log.Output(fmt.Sprintf("Artifact:         %s/%s", result.Repo, result.Path))
+	if result.RequestedRepo != "" {
+		log.Output(fmt.Sprintf("Resolved From:    %s", result.RequestedRepo))
+	}
 	if result.Sha256 != "" {
 		log.Output(fmt.Sprintf("Sha256:           %s", result.Sha256))
 	}
@@ -708,6 +717,9 @@ func printResult(outputFormat format.OutputFormat, result *Result) error {
 	}
 	if result.ScansListLink != "" {
 		log.Output(fmt.Sprintf("Results:          %s", result.ScansListLink))
+	}
+	for _, platform := range result.Platforms {
+		log.Output(fmt.Sprintf("Platform:         %s  %s", platform.Platform, colorizeDownloadStatus(platform.DownloadStatus)))
 	}
 
 	// The Link column only earns its place when the terminal can actually render it as a clickable OSC 8
@@ -740,10 +752,14 @@ func printResult(outputFormat format.OutputFormat, result *Result) error {
 }
 
 func newViolationTableRow(violation violationRow) violationTableRow {
+	detail := violation.Detail
+	if violation.Platform != "" {
+		detail = "[" + violation.Platform + "] " + detail
+	}
 	return violationTableRow{
 		Blocking:    colorizeBlocking(violation.Blocking),
 		Severity:    colorizeSeverity(violation.Severity),
-		Detail:      violation.Detail,
+		Detail:      detail,
 		State:       violationState(violation.Ignored),
 		ViolationId: violation.ViolationId,
 		Watch:       violation.Watch,

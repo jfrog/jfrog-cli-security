@@ -510,14 +510,14 @@ func TestBuildResultUsesIssueIdAndFallsBackToViolationId(t *testing.T) {
 
 func TestArtifactSummaryPathsTriesProjectScopeFirst(t *testing.T) {
 	cmd := NewDownloadStatusCommand().SetRepoAndPathCandidates("libs-release-local", nil)
-	assert.Equal(t, []string{"libs-release-local/com/acme/foo.jar", "default/libs-release-local/com/acme/foo.jar"}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
+	assert.Equal(t, []string{"libs-release-local/com/acme/foo.jar", "default/libs-release-local/com/acme/foo.jar"}, cmd.artifactSummaryPaths("libs-release-local", "com/acme/foo.jar"))
 
 	cmd.SetProject("team-a")
 	assert.Equal(t, []string{
 		"team-a/libs-release-local/com/acme/foo.jar",
 		"libs-release-local/com/acme/foo.jar",
 		"default/libs-release-local/com/acme/foo.jar",
-	}, cmd.artifactSummaryPaths("com/acme/foo.jar"))
+	}, cmd.artifactSummaryPaths("libs-release-local", "com/acme/foo.jar"))
 }
 
 func TestIsArtifactNotFound(t *testing.T) {
