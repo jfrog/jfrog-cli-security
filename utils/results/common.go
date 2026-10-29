@@ -948,7 +948,9 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 }
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
-	parsed := datastructures.MakeSet[string]()
+	// Distinct occurrences of the same component can have different children.
+	// Visit each node object; AppendComponents and AppendDependencies merge by ref.
+	parsed := datastructures.MakeSet[*xrayUtils.GraphNode]()
 	bom := cyclonedx.NewBOM()
 	bom.Components = &[]cyclonedx.Component{}
 	bom.Dependencies = &[]cyclonedx.Dependency{}
@@ -966,15 +968,15 @@ func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Comp
 	return bom.Components, bom.Dependencies
 }
 
-func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string]) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[*xrayUtils.GraphNode]) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
 	bom := cyclonedx.NewBOM()
 	bom.Components = &[]cyclonedx.Component{}
 	bom.Dependencies = &[]cyclonedx.Dependency{}
-	if parsed.Exists(node.Id) {
-		// The node was already parsed, no need to parse it again
+	if parsed.Exists(node) {
+		// This exact node was already traversed (including shared subgraphs and cycles).
 		return bom.Components, bom.Dependencies
 	}
-	parsed.Add(node.Id)
+	parsed.Add(node)
 	// Create a new component and add it to the sbom
 	*bom.Components = append(*bom.Components, CreateScaComponentFromXrayCompId(node.Id))
 	if len(node.Nodes) > 0 {
