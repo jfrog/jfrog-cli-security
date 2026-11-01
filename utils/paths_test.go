@@ -20,11 +20,11 @@ func TestIsPathExcludedFromRoot(t *testing.T) {
 		expected   bool
 	}{
 		{
-			name:       "Project folder name matches",
+			name:       "Project folder name does not exclude it",
 			root:       filepath.Join(string(filepath.Separator), "ci", "my-test-project"),
 			path:       filepath.Join(string(filepath.Separator), "ci", "my-test-project"),
 			exclusions: []string{"*test*"},
-			expected:   true,
+			expected:   false,
 		},
 		{
 			name:       "Subfolder inside the project matches",
@@ -44,6 +44,13 @@ func TestIsPathExcludedFromRoot(t *testing.T) {
 			name:       "Include kept when only a parent folder matches",
 			root:       root,
 			path:       filepath.Join(string(filepath.Separator), "ci", "attestation", "sibling"),
+			exclusions: []string{"*test*"},
+			expected:   false,
+		},
+		{
+			name:       "Path outside the project is kept when its own name matches",
+			root:       root,
+			path:       filepath.Join(string(filepath.Separator), "ci", "my-test-sibling"),
 			exclusions: []string{"*test*"},
 			expected:   false,
 		},

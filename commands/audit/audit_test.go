@@ -584,6 +584,27 @@ func TestDetectScanTargetsNewFlowKeepsProjectUnderMatchingAncestor(t *testing.T)
 	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
 }
 
+func TestDetectScanTargetsNewFlowKeepsProjectNamedLikeExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	projectDir := filepath.Join(baseDir, "my-test-project")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetExclusions([]string{"*test*"})
+
+	detectScanTargets(cmdRes, params)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
+}
+
 func TestNewFlowProfileDiscardsCliExclusions(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
@@ -633,40 +654,45 @@ func TestNewFlowProfileDiscardsCliExclusions(t *testing.T) {
 	}
 }
 
-func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
+func TestDetectScanTargetsKeepsProjectNamedLikeExclusion(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
 
-	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_cli_audit")
-	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
-	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+	projectDir := filepath.Join(baseDir, "my-test-project")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
-	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
+	params.SetExclusions([]string{"*test*"})
 
 	detectScanTargets(cmdRes, params)
-	assert.Empty(t, cmdRes.Targets)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
 }
 
-func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
+func TestDetectScanTargetsKeepsExplicitWorkingDirNamedLikeExclusion(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
 
-	excludedOnly := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
-	assert.NoError(t, os.MkdirAll(excludedOnly, 0o755))
-	createEmptyFile(t, filepath.Join(excludedOnly, "package.json"))
+	projectDir := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
 
 	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
-	params.SetWorkingDirs([]string{excludedOnly})
+	params.SetWorkingDirs([]string{projectDir})
 	params.SetIsRecursiveScan(false)
 	params.SetExclusions([]string{"*cli_exclude_workdir_only_audit*"})
 
 	detectScanTargets(cmdRes, params)
-	assert.Empty(t, cmdRes.Targets)
+	require.NotEmpty(t, cmdRes.Targets)
+	assert.Equal(t, projectDir, cmdRes.Targets[0].Target)
 }
 
 func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
