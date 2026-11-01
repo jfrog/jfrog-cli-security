@@ -145,7 +145,8 @@ func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target re
 }
 
 // ignorePatternsForTarget is the ignore list sent to the Xray-Lib plugin.
-// A config profile replaces the CLI flag. With no profile, the flag is used, and an empty flag falls back to the default list.
+// A config profile replaces the CLI flag. With no profile, the flag is used.
+// An omitted flag falls back to the default list. An explicit empty flag stays empty, so a scan can run without exclusions.
 func ignorePatternsForTarget(target results.ScanTarget) []string {
 	var patterns []string
 	switch {
@@ -156,15 +157,40 @@ func ignorePatternsForTarget(target results.ScanTarget) []string {
 	default:
 		patterns = utils.DefaultScaExcludePatterns
 	}
-	normalized := make([]string, len(patterns))
-	for i, pattern := range patterns {
-		pattern = strings.ReplaceAll(pattern, `\`, "/")
+	return normalizeIgnorePatterns(patterns)
+}
+
+func normalizeIgnorePatterns(patterns []string) []string {
+	normalized := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern = normalizeIgnorePatternSeparators(pattern)
 		for strings.HasPrefix(pattern, "./") {
 			pattern = strings.TrimPrefix(pattern, "./")
 		}
-		normalized[i] = pattern
+		if pattern != "" {
+			normalized = append(normalized, pattern)
+		}
 	}
 	return normalized
+}
+
+func normalizeIgnorePatternSeparators(pattern string) string {
+	var normalized strings.Builder
+	normalized.Grow(len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '\\' && i+1 < len(pattern) && (pattern[i+1] == '*' || pattern[i+1] == '?') {
+			normalized.WriteByte('\\')
+			i++
+			normalized.WriteByte(pattern[i])
+			continue
+		}
+		if pattern[i] == '\\' {
+			normalized.WriteByte('/')
+			continue
+		}
+		normalized.WriteByte(pattern[i])
+	}
+	return normalized.String()
 }
 
 func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {
