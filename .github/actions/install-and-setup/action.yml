@@ -23,7 +23,8 @@ runs:
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
-        ruby-version: 3.3.0
+        # Newer runner images only publish the latest patch of each Ruby series.
+        ruby-version: '3.3'
     - name: Install cocoapods
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
       run: gem install cocoapods
