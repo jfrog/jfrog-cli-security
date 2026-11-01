@@ -66,6 +66,9 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y mono-devel
+        # Ubuntu's Mono ships without cert-sync, so its TLS trust store starts empty; point it at the system CAs.
+        sudo mkdir -p /usr/share/.mono/new-certs
+        sudo ln -sfn /etc/ssl/certs /usr/share/.mono/new-certs/Trust
 
       if: runner.os == 'Linux'
       shell: 'bash'
