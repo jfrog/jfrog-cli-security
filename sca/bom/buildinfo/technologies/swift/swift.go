@@ -44,7 +44,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
+			log.Warn(fmt.Sprintf("Cannot support other files besides Package.swift: %s", descriptorPath))
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -256,7 +256,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		err = fmt.Errorf("failed while retrieving swift path: %s", err.Error())
 		return
 	}
-	log.Debug("Swift version: %s", version.GetVersion())
+	log.Debug(fmt.Sprintf("Swift version: %s", version.GetVersion()))
 	// Calculate pod dependencies
 	data, err := GetDependenciesData(exePath, currentDir)
 	if err != nil {

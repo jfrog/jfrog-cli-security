@@ -1,6 +1,7 @@
 package tableparser
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -111,7 +112,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
 	err = results.ForEachSbomComponent(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error {
 		if relation == cdxutils.UnknownRelation {
 			if relation == cdxutils.UnknownRelation {
-				log.Debug("Component %s (%s) has an unknown relation in the SBOM. It will not be included in the results table.", component.Name, component.PackageURL)
+				log.Debug(fmt.Sprintf("Component %s (%s) has an unknown relation in the SBOM. It will not be included in the results table.", component.Name, component.PackageURL))
 			}
 			// No need to show the component as an entry
 			return nil
