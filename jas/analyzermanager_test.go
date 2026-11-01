@@ -29,9 +29,9 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	key := bytes.Repeat([]byte{1}, 16)
 	bundles := map[string][]byte{
 		defaultAnalyzerManagerVersion: encryptAesCtr(t, key, createAnalyzerManagerZip(t, defaultAnalyzerManagerVersion)),
-		"1.62.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.62.0")),
-		"1.61.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.61.0")),
-		"1.60.0": createAnalyzerManagerZip(t, "1.60.0"),
+		"1.62.0":                      encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.62.0")),
+		"1.61.0":                      encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.61.0")),
+		"1.60.0":                      createAnalyzerManagerZip(t, "1.60.0"),
 	}
 	testCases := []struct {
 		name                          string
