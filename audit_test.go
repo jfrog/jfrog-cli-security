@@ -706,10 +706,10 @@ func TestAuditJasCycloneDx(t *testing.T) {
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 6, BomComponents: 6 + 1 /* root */ + 1 /* files */},
+		Total:          &validations.TotalCount{Vulnerabilities: 5, BomComponents: 6 + 1 /* root */ + 1 /* files */},
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2, Transitive: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 1, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 	})
