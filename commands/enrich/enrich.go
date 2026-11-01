@@ -94,7 +94,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	if len(xrayResults) == 0 {
 		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
-		log.Warn("Received %d results, parsing only first result", len(xrayResults))
+		log.Warn(fmt.Sprintf("Received %d results, parsing only first result", len(xrayResults)))
 	}
 	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
@@ -118,7 +118,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 	if len(xrayResults) == 0 {
 		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
-		log.Warn("Received %d results, parsing only first result", len(xrayResults))
+		log.Warn(fmt.Sprintf("Received %d results, parsing only first result", len(xrayResults)))
 	}
 	vulns := destination.CreateElement("vulnerabilities")
 	for _, vuln := range xrayResults[0].Vulnerabilities {

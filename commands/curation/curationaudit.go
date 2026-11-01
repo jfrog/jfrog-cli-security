@@ -1457,7 +1457,7 @@ func getSelectedPackages(requestedRows string, blockedPackages []*PackageStatus)
 	// Check if the indices are valid
 	for i := range indices {
 		if i < 1 || i > len(blockedPackages) {
-			log.Error("Invalid row number: %d", i)
+			log.Error(fmt.Sprintf("Invalid row number: %d", i))
 			return nil, false
 		}
 	}

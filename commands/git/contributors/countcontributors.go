@@ -492,11 +492,11 @@ func (cc *VcsCountContributors) GetCommitsWithQueryOptions(repo string, options 
 			var rateLimitError *github.RateLimitError
 			if errors.As(err, &rateLimitError) {
 				sleepDuration := time.Until(rateLimitError.Rate.Reset.Time)
-				log.Warn("Rate limit exceeded, sleeping for %v seconds", sleepDuration)
+				log.Warn(fmt.Sprintf("Rate limit exceeded, sleeping for %v seconds", sleepDuration))
 				time.Sleep(sleepDuration)
 				continue
 			}
-			log.Error("Error getting commits: %v", err)
+			log.Error(fmt.Sprintf("Error getting commits: %v", err))
 			return nil, err
 		} else {
 			return commits, nil

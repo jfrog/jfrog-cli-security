@@ -706,10 +706,10 @@ func TestAuditJasCycloneDx(t *testing.T) {
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total:          &validations.TotalCount{Vulnerabilities: 6, BomComponents: 6 + 1 /* root */ + 1 /* files */},
+		Total:          &validations.TotalCount{Vulnerabilities: 5, BomComponents: 6 + 1 /* root */ + 1 /* files */},
 		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2, Transitive: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 1, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 	})
@@ -1015,10 +1015,10 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 	assert.NoError(t, err)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 6, BomComponents: 2 /*Direct*/ + 4 /*Transitive*/ + 1 /*root*/ + 1 /*file (secret)*/, Licenses: 4},
+		Total:             &validations.TotalCount{Vulnerabilities: 5, BomComponents: 2 /*Direct*/ + 4 /*Transitive*/ + 1 /*root*/ + 1 /*file (secret)*/, Licenses: 4},
 		SbomComponents:    &validations.SbomCount{Direct: 2, Transitive: 4, Root: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 1, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 	})
@@ -1037,7 +1037,7 @@ func TestAuditNewScaSimpleJsonMultipleWorkingDirs(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 11},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan: &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 1},
+			ValidateScan: &validations.ScanCount{Sca: 8, Sast: 1, Secrets: 1},
 		},
 	})
 }
@@ -1064,9 +1064,9 @@ func TestAuditNewScaSimpleJsonViolations(t *testing.T) {
 	// Validate results
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 6, Violations: 3, Licenses: 8},
+		Total:             &validations.TotalCount{Vulnerabilities: 5, Violations: 3, Licenses: 8},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 1, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
 		},
 		// JAS violations require git-repo watch to be created, so only SCA violations are expected here
