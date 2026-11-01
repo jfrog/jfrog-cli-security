@@ -28,7 +28,7 @@ import (
 func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	key := bytes.Repeat([]byte{1}, 16)
 	bundles := map[string][]byte{
-		"1.63.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.63.0")),
+		"1.66.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.66.0")),
 		"1.62.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.62.0")),
 		"1.61.0": encryptAesCtr(t, key, createAnalyzerManagerZip(t, "1.61.0")),
 		"1.60.0": createAnalyzerManagerZip(t, "1.60.0"),
@@ -44,7 +44,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 		{
 			name:                          "Default version is decrypted with the published key",
 			publishedKey:                  hex.EncodeToString(key),
-			expectedVersion:               "1.63.0",
+			expectedVersion:               "1.66.0",
 			expectedKeyRequests:           1,
 			expectedKeyRequestsAfterRerun: 1,
 		},
