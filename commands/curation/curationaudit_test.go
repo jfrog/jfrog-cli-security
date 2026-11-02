@@ -4976,6 +4976,67 @@ func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
 	}
 }
 
+// TestSendBoundedRequestFollowsCloudStorageRedirect covers XRAY-167698: a redirect to cloud
+// storage (e.g. S3) must be followed, without leaking credentials or custom headers to it.
+func TestSendBoundedRequestFollowsCloudStorageRedirect(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var storageAuth, storageWaiver string
+			var storageRequests atomic.Int32
+			storage := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				storageRequests.Add(1)
+				storageAuth = r.Header.Get("Authorization")
+				storageWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("binary-content"))
+			}))
+			defer storage.Close()
+
+			var artifactoryWaiver string
+			var requests atomic.Int32
+			artifactory := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				artifactoryWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				http.Redirect(w, r, storage.URL+"/presigned?sig=abc", http.StatusFound)
+			}))
+			defer artifactory.Close()
+
+			serverDetails := &config.ServerDetails{
+				Url:            artifactory.URL + "/",
+				ArtifactoryUrl: artifactory.URL + "/",
+				AccessToken:    "super-secret-token",
+				InsecureTls:    true,
+			}
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+			}
+			requestDetails := analyzer.httpClientDetails.Clone()
+			requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+			resp, body, err := analyzer.sendBoundedRequest(http.MethodGet,
+				strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+
+			require.NoError(t, err, "a redirect to Artifactory's own cloud storage backend must be followed, not rejected")
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "binary-content", string(body))
+			assert.Equal(t, int32(1), requests.Load())
+			assert.Equal(t, int32(1), storageRequests.Load())
+
+			assert.Equal(t, "syn", artifactoryWaiver, "the configured Artifactory server must still receive the waiver header")
+			assert.Empty(t, storageAuth, "credentials must never be forwarded to the cloud storage host")
+			assert.Empty(t, storageWaiver, "custom curation headers must never be forwarded to the cloud storage host")
+		})
+	}
+}
+
 func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 	tests := []struct {
 		name string

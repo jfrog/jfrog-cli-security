@@ -1248,7 +1248,7 @@ func populateBinaryNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclon
 func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
 	component := cdxutils.SearchComponentByRef(sbom.Components, ref)
 	if component == nil {
-		log.Debug("Binary Component with ref %s not found in SBOM, skipping.", ref)
+		log.Debug(fmt.Sprintf("Binary Component with ref %s not found in SBOM, skipping.", ref))
 		return nil
 	}
 	// Create a new BinaryGraphNode and set its ID
