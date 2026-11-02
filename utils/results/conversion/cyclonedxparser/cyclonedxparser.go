@@ -61,7 +61,7 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error
 	// Append git context to the BOM metadata if exists
 	if cdc.gitContext != nil {
 		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
-			log.Warn("Failed to serialize git context to JSON: %v", err)
+			log.Warn(fmt.Sprintf("Failed to serialize git context to JSON: %v", err))
 		} else {
 			if bom.Metadata.Component == nil {
 				bom.Metadata.Component = &cyclonedx.Component{}

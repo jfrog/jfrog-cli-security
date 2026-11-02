@@ -40,7 +40,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, descriptorFileName) {
-			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+			log.Logger.Warn(fmt.Sprintf("Cannot support other files besides Podfile: %s", descriptorPath))
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -98,7 +98,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 	for _, descriptorPath := range descriptorPaths {
 		descriptorPath = filepath.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, descriptorFileName) {
-			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+			log.Logger.Warn(fmt.Sprintf("Cannot support other files besides Podfile: %s", descriptorPath))
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
