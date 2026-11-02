@@ -344,7 +344,7 @@ func parseGemfileLockDeps(lockFilePath string) (*GemGraphInput, error) {
 		for depNameKey, internalDep := range igem.Dependencies {
 			resolvedDepVersion, found := resolvedVersions[internalDep.Name]
 			if !found {
-				log.Debug("Could not find resolved version for dependency '%s', skipping it.", internalDep.Name)
+				log.Debug(fmt.Sprintf("Could not find resolved version for dependency '%s', skipping it.", internalDep.Name))
 				continue
 			}
 			depRefString := jsonGemPrefix + internalDep.Name + ":" + resolvedDepVersion
@@ -372,7 +372,7 @@ func parseGemDependencyGraphRecursive(id string, graph map[string]GemRef, visite
 	}
 	gemRef, ok := graph[id]
 	if !ok {
-		log.Debug("Warning: Gem with ID '%s' not found in graph map. Creating as leaf node.", id)
+		log.Debug(fmt.Sprintf("Warning: Gem with ID '%s' not found in graph map. Creating as leaf node.", id))
 		leafNode := &xrayUtils.GraphNode{Id: id, Nodes: []*xrayUtils.GraphNode{}}
 		visitedNodes[id] = leafNode
 		return leafNode
@@ -459,7 +459,7 @@ func calculateUniqueDependencies(trees []*xrayUtils.GraphNode) []string {
 		visitedInThisTraversal[node] = true
 		if node.Id != "" {
 			if node.Id == gemVirtualRootID {
-				log.Debug("Skipping virtual root ID ('%s') found within dependency trees.", gemVirtualRootID)
+				log.Debug(fmt.Sprintf("Skipping virtual root ID ('%s') found within dependency trees.", gemVirtualRootID))
 			} else {
 				uniqueIDsSet[node.Id] = struct{}{}
 			}
