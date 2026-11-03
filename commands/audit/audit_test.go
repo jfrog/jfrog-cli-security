@@ -2007,3 +2007,28 @@ func TestInitAuditCmdResults_TransitiveContextualAnalysis_ErrorDoesNotFailAuditO
 	require.NoError(t, err)
 	assert.NotContains(t, string(entitlementsJson), "transitive_contextual_analysis")
 }
+
+func TestNestedJasDirectoryScanAssignment(t *testing.T) {
+	root := t.TempDir()
+	parentDir := root
+	childDir := filepath.Join(root, "subproject")
+	cmdResults := results.NewCommandResults(utils.SourceCode)
+	cmdResults.NewScanResults(results.ScanTarget{Target: parentDir})
+	child := cmdResults.NewScanResults(results.ScanTarget{Target: childDir})
+	params := NewAuditParams()
+	runnable := []bool{true, true}
+	directoryScans := []utils.SubScanType{utils.SecretsScan, utils.IacScan, utils.SastScan, utils.ServicesScan}
+
+	parentCovered, _ := nestedJasDirectoryScans(cmdResults, 0, params, runnable)
+	assert.Empty(t, parentCovered)
+
+	childCovered, coveredBy := nestedJasDirectoryScans(cmdResults, 1, params, runnable)
+	assert.ElementsMatch(t, directoryScans, childCovered)
+	for _, scan := range directoryScans {
+		assert.Equal(t, parentDir, coveredBy[scan])
+	}
+
+	child.Exclude = []string{"*.py"}
+	childCovered, _ = nestedJasDirectoryScans(cmdResults, 1, params, runnable)
+	assert.ElementsMatch(t, directoryScans, childCovered)
+}
