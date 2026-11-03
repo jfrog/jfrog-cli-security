@@ -198,7 +198,7 @@ func shouldIncludeSnippetDetection(params *AuditParams) bool {
 }
 
 func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansToPerform []utils.SubScanType, includeSbom bool, rootDir string) (projectPath string, includeDirs []string, isRecursiveScan bool, err error) {
-	includeDirs, err = utils.GetFullPathsWorkingDirs(workingDirs)
+	includeDirs, err = resolveAuditWorkingDirs(rootDir, workingDirs)
 	if err != nil {
 		return
 	}
@@ -219,6 +219,43 @@ func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansT
 		}
 	}
 	return
+}
+
+// resolveAuditWorkingDirs makes working directories absolute against the scan root.
+// A relative directory is joined to rootDir when that root is set, and to the process directory otherwise.
+// Wildcard patterns stay as given. An absolute pattern such as /repo/src/* does not match the repo-relative path src/api produced while listing the scan root.
+func resolveAuditWorkingDirs(rootDir string, workingDirs []string) ([]string, error) {
+	if len(workingDirs) == 0 {
+		return nil, nil
+	}
+	base := rootDir
+	if base == "" {
+		cwd, err := coreutils.GetWorkingDirectory()
+		if err != nil {
+			return nil, err
+		}
+		base = cwd
+	}
+	base, err := filepath.Abs(base)
+	if err != nil {
+		return nil, err
+	}
+	resolved := make([]string, 0, len(workingDirs))
+	for _, wd := range workingDirs {
+		if isWildcardInclude(wd) {
+			resolved = append(resolved, wd)
+			continue
+		}
+		if !filepath.IsAbs(wd) {
+			wd = filepath.Join(base, wd)
+		}
+		absWd, err := filepath.Abs(wd)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, absWd)
+	}
+	return resolved, nil
 }
 
 func isNewFlow(bomGenerator bom.SbomGenerator) bool {
@@ -630,7 +667,7 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 			msg += fmt.Sprintf(" and working dirs: %s", strings.Join(includeDirs, ", "))
 		}
 		log.Debug(msg)
-		if scanTarget := createScanTarget(rootDir, params.Exclusions(), includeDirs...); scanTarget != nil {
+		if scanTarget := createScanTarget(rootDir, params.Exclusions(), true, includeDirs...); scanTarget != nil {
 			scanTarget.Technologies = detectTechnologiesInTarget(*scanTarget, params)
 			cmdResults.NewScanResults(*scanTarget)
 		}
@@ -645,7 +682,11 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 		if module.PathFromRoot != "" && module.PathFromRoot != "." {
 			moduleRoot = filepath.Join(rootDir, module.PathFromRoot)
 		}
-		scanTarget := createScanTarget(moduleRoot, module.ExcludePatterns, module.IncludePatterns...)
+		if moduleRoot != rootDir && utils.IsPathExcludedFromRoot(rootDir, moduleRoot, module.ExcludePatterns) {
+			log.Warn(fmt.Sprintf("The module directory '%s' matches exclusion patterns %s. Skipping...", moduleRoot, strings.Join(module.ExcludePatterns, ", ")))
+			continue
+		}
+		scanTarget := createScanTarget(moduleRoot, module.ExcludePatterns, false, module.IncludePatterns...)
 		if scanTarget == nil {
 			continue
 		}
@@ -656,44 +697,64 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 }
 
 // Create a scan target from the given root directory, exclude patterns and optionally include patterns.
-func createScanTarget(root string, exclude []string, includes ...string) *results.ScanTarget {
+// keepNamedDirectories keeps a directory the user named, even when that directory's own name matches an exclusion.
+func createScanTarget(root string, exclude []string, keepNamedDirectories bool, includes ...string) *results.ScanTarget {
 	dirs := datastructures.MakeSet[string]()
 	// Validate include patterns
 	for _, includePattern := range includes {
-		// Check if the include pattern is a file or a directory.
-		if isDir, err := fileutils.IsDirExists(includePattern, false); err != nil {
-			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
-			continue
-		} else if isDir {
+		// A wildcard is not a filesystem path. Stat-ing it on Windows returns an error that is not "not exist", which drops the pattern before listing.
+		if !isWildcardInclude(includePattern) {
 			includePath := includePattern
 			if !filepath.IsAbs(includePattern) {
 				includePath = filepath.Join(root, includePattern)
 			}
-			if utils.IsPathExcludedFromRoot(root, includePath, exclude) {
-				log.Debug(fmt.Sprintf("Skipping include path '%s' as it matches exclusion patterns %s", includePath, strings.Join(exclude, ", ")))
+			isDir, err := fileutils.IsDirExists(includePath, false)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePath, err.Error()))
 				continue
 			}
-			dirs.Add(includePath)
-			continue
+			if isDir {
+				if !keepNamedDirectories && utils.IsPathExcludedFromRoot(root, includePath, exclude) {
+					log.Debug(fmt.Sprintf("Skipping include path '%s' as it matches exclusion patterns %s", includePath, strings.Join(exclude, ", ")))
+					continue
+				}
+				dirs.Add(includePath)
+				continue
+			}
+			if keepNamedDirectories && !fileutils.IsPathExists(includePath, false) {
+				log.Warn(fmt.Sprintf("The working directory '%s' doesn't exist. Skipping...", includePattern))
+				continue
+			}
 		}
 		// the pattern is not a directory, so we need to list the directories in the pattern.
 		log.Debug(fmt.Sprintf("The pattern '%s' is not a directory, listing directories in the pattern...", includePattern))
-		includeDirs, err := utils.ListDirs(root, includePattern == root, true, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, includePattern == root), includePattern)
+		// A pattern such as src/* has to walk into subdirectories. A literal name is matched only at the root.
+		listRecursive := includePattern == root || isNestedWildcard(includePattern)
+		includeDirs, err := utils.ListDirs(root, listRecursive, true, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, listRecursive), includePattern)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Failed to list directories for '%s': %s", includePattern, err.Error()))
 			continue
 		}
 		dirs.AddElements(includeDirs...)
 	}
-	include := dirs.ToSlice()
-	if utils.IsPathExcludedFromRoot(root, root, exclude) {
-		if len(include) == 0 {
-			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", root, strings.Join(exclude, ", ")))
-			return nil
-		}
-		log.Debug(fmt.Sprintf("Root directory '%s' is excluded; creating scan target from %d explicit include path(s)", root, len(include)))
+	// Named includes that resolve to nothing must not fall back to scanning the project root.
+	// An empty Include is the root scan. A request that names no includes still uses that fallback.
+	if keepNamedDirectories && len(includes) > 0 && dirs.Size() == 0 {
+		return nil
 	}
+	include := dirs.ToSlice()
 	return &results.ScanTarget{Target: root, Include: include, Exclude: exclude}
+}
+
+// isWildcardInclude reports whether includePattern is expanded by directory listing.
+// A literal missing directory is skipped. A pattern such as src/* is not a path on disk.
+func isWildcardInclude(includePattern string) bool {
+	return strings.Contains(includePattern, "*")
+}
+
+// isNestedWildcard reports whether includePattern can match a directory below the project root.
+func isNestedWildcard(includePattern string) bool {
+	return strings.Contains(includePattern, "*") && strings.ContainsAny(includePattern, `/\`)
 }
 
 func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditParams) (technologies []techutils.Technology) {
@@ -811,10 +872,6 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
 			continue
 		}
-		if isExcluded := utils.IsPathExcludedFromRoot(requestedDirectory, requestedDirectory, exclusions); isExcluded {
-			log.Warn(fmt.Sprintf("The working directory '%s' matches exclusion patterns %s. Skipping...", requestedDirectory, strings.Join(exclusions, ", ")))
-			continue
-		}
 		dirsToDetect = append(dirsToDetect, requestedDirectory)
 	}
 	for _, requestedDirectory := range dirsToDetect {
@@ -835,7 +892,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 				// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 				if len(workingDirs) == 0 {
 					// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
-					scanTarget := createScanTarget(requestedDirectory, exclusions)
+					scanTarget := createScanTarget(requestedDirectory, exclusions, false)
 					if scanTarget == nil {
 						continue
 					}
@@ -844,7 +901,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 				}
 				for workingDir, descriptors := range workingDirs {
 					// Add scan for each detected working directory.
-					scanTarget := createScanTarget(workingDir, exclusions)
+					scanTarget := createScanTarget(workingDir, exclusions, false)
 					if scanTarget == nil {
 						continue
 					}
@@ -859,7 +916,7 @@ func detectScaTargetsFromTechnologies(cmdResults *results.SecurityCommandResults
 		// If this working dir produced no targets (e.g. JAS-only with no package managers),
 		// still create a target so secrets/IaC/SAST can run.
 		if len(cmdResults.Targets) == targetsBefore {
-			if scanTarget := createScanTarget(requestedDirectory, exclusions); scanTarget != nil {
+			if scanTarget := createScanTarget(requestedDirectory, exclusions, false); scanTarget != nil {
 				cmdResults.NewScanResults(*scanTarget)
 			}
 		}
