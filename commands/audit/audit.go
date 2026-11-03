@@ -681,21 +681,39 @@ func createScanTarget(root string, exclude []string, keepNamedDirectories bool, 
 			dirs.Add(includePath)
 			continue
 		}
-		if keepNamedDirectories && !fileutils.IsPathExists(includePattern, false) {
+		if keepNamedDirectories && !isWildcardInclude(includePattern) && !fileutils.IsPathExists(includePattern, false) {
 			log.Warn(fmt.Sprintf("The working directory '%s' doesn't exist. Skipping...", includePattern))
 			continue
 		}
 		// the pattern is not a directory, so we need to list the directories in the pattern.
 		log.Debug(fmt.Sprintf("The pattern '%s' is not a directory, listing directories in the pattern...", includePattern))
-		includeDirs, err := utils.ListDirs(root, includePattern == root, true, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, includePattern == root), includePattern)
+		// A pattern such as src/* has to walk into subdirectories. A literal name is matched only at the root.
+		listRecursive := includePattern == root || isNestedWildcard(includePattern)
+		includeDirs, err := utils.ListDirs(root, listRecursive, true, true, utils.GetExcludePattern(exclude, utils.DefaultScaExcludePatterns, listRecursive), includePattern)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Failed to list directories for '%s': %s", includePattern, err.Error()))
 			continue
 		}
 		dirs.AddElements(includeDirs...)
 	}
+	// Named includes that resolve to nothing must not fall back to scanning the project root.
+	// An empty Include is the root scan. A request that names no includes still uses that fallback.
+	if keepNamedDirectories && len(includes) > 0 && dirs.Size() == 0 {
+		return nil
+	}
 	include := dirs.ToSlice()
 	return &results.ScanTarget{Target: root, Include: include, Exclude: exclude}
+}
+
+// isWildcardInclude reports whether includePattern is expanded by directory listing.
+// A literal missing directory is skipped. A pattern such as src/* is not a path on disk.
+func isWildcardInclude(includePattern string) bool {
+	return strings.Contains(includePattern, "*")
+}
+
+// isNestedWildcard reports whether includePattern can match a directory below the project root.
+func isNestedWildcard(includePattern string) bool {
+	return strings.Contains(includePattern, "*") && strings.ContainsAny(includePattern, `/\`)
 }
 
 func detectTechnologiesInTarget(target results.ScanTarget, otherParams *AuditParams) (technologies []techutils.Technology) {

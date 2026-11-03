@@ -838,6 +838,63 @@ func TestDetectScanTargetsNewFlowWarnsWhenWorkingDirIsMissing(t *testing.T) {
 	assert.Contains(t, buf.String(), "missing-proj")
 }
 
+func TestDetectScanTargetsNewFlowExpandsWildcardWorkingDir(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	apiDir := filepath.Join(resolvedBase, "src", "api")
+	webDir := filepath.Join(resolvedBase, "src", "web")
+	assert.NoError(t, os.MkdirAll(apiDir, 0o755))
+	assert.NoError(t, os.MkdirAll(webDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{filepath.Join("src", "*")})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, apiDir)
+	assert.Contains(t, cmdRes.Targets[0].Include, webDir)
+	assert.NotContains(t, buf.String(), "doesn't exist")
+}
+
+func TestDetectScanTargetsNewFlowOmitsTargetWhenAllWorkingDirsMissing(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{
+		filepath.Join(resolvedBase, "missing-a"),
+		filepath.Join(resolvedBase, "missing-b"),
+	})
+
+	detectScanTargets(cmdRes, params)
+
+	assert.Empty(t, cmdRes.Targets)
+	assert.Contains(t, buf.String(), "missing-a")
+	assert.Contains(t, buf.String(), "missing-b")
+}
+
 func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
