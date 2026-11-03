@@ -868,6 +868,96 @@ func TestDetectScanTargetsNewFlowExpandsWildcardWorkingDir(t *testing.T) {
 	assert.NotContains(t, buf.String(), "doesn't exist")
 }
 
+func TestGetTargetsInfoResolvesRelativeWorkingDirAgainstRoot(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	appDir := filepath.Join(root, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	defer securityTestUtils.ChangeWDWithCallback(t, otherDir)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{"app"}, xrayplugin.NewXrayLibBomGenerator(), nil, false, root)
+	require.NoError(t, err)
+	require.Len(t, includeDirs, 1)
+	got, err := filepath.EvalSymlinks(includeDirs[0])
+	require.NoError(t, err)
+	want, err := filepath.EvalSymlinks(appDir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestGetTargetsInfoKeepsAbsoluteWorkingDir(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	appDir := filepath.Join(otherDir, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, root)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{appDir}, xrayplugin.NewXrayLibBomGenerator(), nil, false, root)
+	require.NoError(t, err)
+	require.Len(t, includeDirs, 1)
+	got, err := filepath.EvalSymlinks(includeDirs[0])
+	require.NoError(t, err)
+	want, err := filepath.EvalSymlinks(appDir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestDetectScanTargetsNewFlowResolvesRelativeWorkingDirAgainstRoot(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	appDir := filepath.Join(resolvedRoot, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	defer securityTestUtils.ChangeWDWithCallback(t, otherDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetRootDir(resolvedRoot)
+	params.SetWorkingDirs([]string{"app"})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, appDir)
+}
+
+func TestDetectScanTargetsNewFlowExpandsWildcardAfterWorkingDirNormalization(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	apiDir := filepath.Join(resolvedBase, "src", "api")
+	webDir := filepath.Join(resolvedBase, "src", "web")
+	assert.NoError(t, os.MkdirAll(apiDir, 0o755))
+	assert.NoError(t, os.MkdirAll(webDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{filepath.Join("src", "*")}, xrayplugin.NewXrayLibBomGenerator(), nil, false, "")
+	require.NoError(t, err)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs(includeDirs)
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, apiDir)
+	assert.Contains(t, cmdRes.Targets[0].Include, webDir)
+}
+
 func TestDetectScanTargetsNewFlowOmitsTargetWhenAllWorkingDirsMissing(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()

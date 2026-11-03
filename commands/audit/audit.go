@@ -198,7 +198,7 @@ func shouldIncludeSnippetDetection(params *AuditParams) bool {
 }
 
 func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansToPerform []utils.SubScanType, includeSbom bool, rootDir string) (projectPath string, includeDirs []string, isRecursiveScan bool, err error) {
-	includeDirs, err = utils.GetFullPathsWorkingDirs(workingDirs)
+	includeDirs, err = resolveAuditWorkingDirs(rootDir, workingDirs)
 	if err != nil {
 		return
 	}
@@ -219,6 +219,43 @@ func GetTargetsInfo(workingDirs []string, bomGenerator bom.SbomGenerator, scansT
 		}
 	}
 	return
+}
+
+// resolveAuditWorkingDirs makes working directories absolute against the scan root.
+// A relative directory is joined to rootDir when that root is set, and to the process directory otherwise.
+// Wildcard patterns stay as given. An absolute pattern such as /repo/src/* does not match the repo-relative path src/api produced while listing the scan root.
+func resolveAuditWorkingDirs(rootDir string, workingDirs []string) ([]string, error) {
+	if len(workingDirs) == 0 {
+		return nil, nil
+	}
+	base := rootDir
+	if base == "" {
+		cwd, err := coreutils.GetWorkingDirectory()
+		if err != nil {
+			return nil, err
+		}
+		base = cwd
+	}
+	base, err := filepath.Abs(base)
+	if err != nil {
+		return nil, err
+	}
+	resolved := make([]string, 0, len(workingDirs))
+	for _, wd := range workingDirs {
+		if isWildcardInclude(wd) {
+			resolved = append(resolved, wd)
+			continue
+		}
+		if !filepath.IsAbs(wd) {
+			wd = filepath.Join(base, wd)
+		}
+		absWd, err := filepath.Abs(wd)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, absWd)
+	}
+	return resolved, nil
 }
 
 func isNewFlow(bomGenerator bom.SbomGenerator) bool {
@@ -665,25 +702,29 @@ func createScanTarget(root string, exclude []string, keepNamedDirectories bool, 
 	dirs := datastructures.MakeSet[string]()
 	// Validate include patterns
 	for _, includePattern := range includes {
-		// Check if the include pattern is a file or a directory.
-		if isDir, err := fileutils.IsDirExists(includePattern, false); err != nil {
-			log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePattern, err.Error()))
-			continue
-		} else if isDir {
+		// A wildcard is not a filesystem path. Stat-ing it on Windows returns an error that is not "not exist", which drops the pattern before listing.
+		if !isWildcardInclude(includePattern) {
 			includePath := includePattern
 			if !filepath.IsAbs(includePattern) {
 				includePath = filepath.Join(root, includePattern)
 			}
-			if !keepNamedDirectories && utils.IsPathExcludedFromRoot(root, includePath, exclude) {
-				log.Debug(fmt.Sprintf("Skipping include path '%s' as it matches exclusion patterns %s", includePath, strings.Join(exclude, ", ")))
+			isDir, err := fileutils.IsDirExists(includePath, false)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to check if '%s' is a directory: %s", includePath, err.Error()))
 				continue
 			}
-			dirs.Add(includePath)
-			continue
-		}
-		if keepNamedDirectories && !isWildcardInclude(includePattern) && !fileutils.IsPathExists(includePattern, false) {
-			log.Warn(fmt.Sprintf("The working directory '%s' doesn't exist. Skipping...", includePattern))
-			continue
+			if isDir {
+				if !keepNamedDirectories && utils.IsPathExcludedFromRoot(root, includePath, exclude) {
+					log.Debug(fmt.Sprintf("Skipping include path '%s' as it matches exclusion patterns %s", includePath, strings.Join(exclude, ", ")))
+					continue
+				}
+				dirs.Add(includePath)
+				continue
+			}
+			if keepNamedDirectories && !fileutils.IsPathExists(includePath, false) {
+				log.Warn(fmt.Sprintf("The working directory '%s' doesn't exist. Skipping...", includePattern))
+				continue
+			}
 		}
 		// the pattern is not a directory, so we need to list the directories in the pattern.
 		log.Debug(fmt.Sprintf("The pattern '%s' is not a directory, listing directories in the pattern...", includePattern))
