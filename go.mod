@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/jedib0t/go-pretty/v6 v6.8.3
-	github.com/jfrog/build-info-go v1.13.1-0.20261028123549-f0cd26bfc2de
+	github.com/jfrog/build-info-go v1.13.1-0.20261105093150-46c74789c5ff
 	github.com/jfrog/froggit-go v1.24.0
 	github.com/jfrog/gofrog v1.7.7
 	github.com/jfrog/jfrog-apps-config v1.0.1
