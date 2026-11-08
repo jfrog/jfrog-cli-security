@@ -314,7 +314,7 @@ func TestGetRemoteResourceFallsBackToPathWithoutArtifactory(t *testing.T) {
 		expectedPath     string
 		expectedRequests []string
 		expectedErrUrls  []string
-		expectedErrCode  string
+		expectedErrCodes []string
 	}{
 		{
 			name:             "Found under artifactory",
@@ -333,21 +333,27 @@ func TestGetRemoteResourceFallsBackToPathWithoutArtifactory(t *testing.T) {
 			statusByPath:     map[string]int{},
 			expectedRequests: []string{withArtifactory, withoutArtifactory},
 			expectedErrUrls:  []string{withArtifactory, withoutArtifactory},
-			expectedErrCode:  "404",
+			expectedErrCodes: []string{"404", "404"},
 		},
 		{
-			name:             "Non 404 error under artifactory is not retried",
+			name:             "Forbidden under artifactory, found in root",
 			statusByPath:     map[string]int{withArtifactory: http.StatusForbidden, withoutArtifactory: http.StatusOK},
+			expectedPath:     path.Join(resourcesRemoteRepo, encryptedArchivePath),
+			expectedRequests: []string{withArtifactory, withoutArtifactory},
+		},
+		{
+			name:             "Unauthorized under artifactory is not retried",
+			statusByPath:     map[string]int{withArtifactory: http.StatusUnauthorized, withoutArtifactory: http.StatusOK},
 			expectedRequests: []string{withArtifactory},
 			expectedErrUrls:  []string{withArtifactory},
-			expectedErrCode:  "403",
+			expectedErrCodes: []string{"401"},
 		},
 		{
-			name:             "Not found under artifactory, non 404 error in root",
+			name:             "Both errors are reported when the fallback fails differently",
 			statusByPath:     map[string]int{withoutArtifactory: http.StatusForbidden},
 			expectedRequests: []string{withArtifactory, withoutArtifactory},
 			expectedErrUrls:  []string{withArtifactory, withoutArtifactory},
-			expectedErrCode:  "403",
+			expectedErrCodes: []string{"404", "403"},
 		},
 	}
 	for _, testCase := range testCases {
@@ -370,9 +376,11 @@ func TestGetRemoteResourceFallsBackToPathWithoutArtifactory(t *testing.T) {
 			resource, err := GetRemoteResource("Resource", encryptedArchivePath, resourcesRemoteRepo, &config.ServerDetails{ArtifactoryUrl: mockServer.URL + "/artifactory/"})
 
 			assert.Equal(t, testCase.expectedRequests, requests)
-			if testCase.expectedErrCode != "" {
+			if len(testCase.expectedErrCodes) > 0 {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), testCase.expectedErrCode)
+				for _, expectedCode := range testCase.expectedErrCodes {
+					assert.Contains(t, err.Error(), expectedCode)
+				}
 				for _, expectedUrl := range testCase.expectedErrUrls {
 					assert.Contains(t, err.Error(), mockServer.URL+expectedUrl)
 				}

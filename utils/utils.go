@@ -467,17 +467,23 @@ func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServ
 	}
 	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
 	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
-	var httpErr *errorutils.HttpResponseError
-	if err != nil && fallbackRemotePath != "" && errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+	if err != nil && fallbackRemotePath != "" && isLayoutMismatchError(err) {
 		fallbackUrl := rtDetails.ArtifactoryUrl + fallbackRemotePath
-		if remoteFileDetails, _, err = client.GetRemoteFileDetails(fallbackUrl, &httpClientDetails); err != nil {
-			return nil, fmt.Errorf("couldn't get remote file details for %s or %s: %s", downloadUrl, fallbackUrl, err.Error())
+		var fallbackErr error
+		if remoteFileDetails, _, fallbackErr = client.GetRemoteFileDetails(fallbackUrl, &httpClientDetails); fallbackErr != nil {
+			return nil, fmt.Errorf("couldn't get remote file details for %s: %w; and for %s: %w", downloadUrl, err, fallbackUrl, fallbackErr)
 		}
 		remotePath = fallbackRemotePath
 	} else if err != nil {
 		return nil, fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
 	}
 	return &RemoteResource{name: resourceName, serverDetails: rtDetails, path: remotePath, details: remoteFileDetails}, nil
+}
+
+// A wrong repository layout returns 404, or 403 when the user's permissions cover only specific folders of the repository.
+func isLayoutMismatchError(err error) bool {
+	var httpErr *errorutils.HttpResponseError
+	return errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusForbidden)
 }
 
 // Returns true when targetDir already holds the latest version of the resource.
