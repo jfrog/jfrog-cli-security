@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -154,5 +155,5 @@ func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
 		return "", err
 	}
 	// Extract the host and path, removing any .git suffix
-	return gitUrlParsed.Host + "/" + gitUrlParsed.Path[:len(gitUrlParsed.Path)-len(path.Ext(gitUrlParsed.Path))] + "/" + sourceBranchName, nil
+	return path.Join(gitUrlParsed.Host, strings.TrimSuffix(gitUrlParsed.Path, ".git"), sourceBranchName), nil
 }
