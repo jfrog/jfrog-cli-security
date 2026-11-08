@@ -5,11 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+const (
+	downloadPath = "xray-scan-lib/xray-scan-lib-1.6.0-linux-amd64.tar.gz"
+	envServerId  = "envServer"
 )
 
 func TestIsPathExcludedFromRoot(t *testing.T) {
@@ -168,12 +174,15 @@ func TestGetFullPathsWorkingDirs(t *testing.T) {
 }
 
 func TestGetReleasesRemoteDetails(t *testing.T) {
-	const downloadPath = "xray-scan-lib/xray-scan-lib-1.6.0-linux-amd64.tar.gz"
 	profileServer := &config.ServerDetails{ArtifactoryUrl: "https://profile.example.com/artifactory/"}
+	envServer := &config.ServerDetails{ServerId: envServerId, Url: "https://env.example.com/", ArtifactoryUrl: "https://env.example.com/artifactory/"}
+	t.Setenv(coreutils.HomeDir, t.TempDir())
+	require.NoError(t, commonCommands.NewConfigCommand(commonCommands.AddOrEdit, envServerId).SetDetails(envServer).SetInteractive(false).SetEncPassword(false).Run())
 	testCases := []struct {
 		name                       string
 		remoteRepo                 string
 		remoteServer               *config.ServerDetails
+		envValue                   string
 		expectedServerUrl          string
 		expectedRemotePath         string
 		expectedFallbackRemotePath string
@@ -187,6 +196,13 @@ func TestGetReleasesRemoteDetails(t *testing.T) {
 			expectedFallbackRemotePath: "releases-remote/" + downloadPath,
 		},
 		{
+			name:                       "Env var remote repository",
+			envValue:                   envServerId + "/releases-remote",
+			expectedServerUrl:          envServer.ArtifactoryUrl,
+			expectedRemotePath:         "releases-remote/artifactory/" + downloadPath,
+			expectedFallbackRemotePath: "releases-remote/" + downloadPath,
+		},
+		{
 			name:               "Not configured, download from releases.jfrog.io",
 			expectedServerUrl:  coreutils.JfrogReleasesUrl,
 			expectedRemotePath: downloadPath,
@@ -194,7 +210,7 @@ func TestGetReleasesRemoteDetails(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Setenv(coreutils.ReleasesRemoteEnv, "")
+			t.Setenv(coreutils.ReleasesRemoteEnv, testCase.envValue)
 			server, remotePath, fallbackRemotePath, err := GetReleasesRemoteDetails("Resource", downloadPath, testCase.remoteRepo, testCase.remoteServer)
 			require.NoError(t, err)
 			assert.Equal(t, testCase.expectedServerUrl, server.ArtifactoryUrl)
