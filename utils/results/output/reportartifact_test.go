@@ -82,6 +82,48 @@ func TestUploadViaXrayApi_ServerError_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetGitContextArtifactPath(t *testing.T) {
+	testCases := []struct {
+		name           string
+		gitContext     *clientservices.XscGitInfoContext
+		expectedResult string
+	}{
+		{
+			name: "commit scan",
+			gitContext: &clientservices.XscGitInfoContext{
+				Source: clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://github.com/org/repo.git", BranchName: "main"},
+			},
+			expectedResult: "github.com/org/repo/main/commits",
+		},
+		{
+			name: "commit scan with a port in the clone url",
+			gitContext: &clientservices.XscGitInfoContext{
+				Source: clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://git.example.com:8443/collection/repo.git", BranchName: "main"},
+			},
+			expectedResult: "git.example.com:8443/collection/repo/main/commits",
+		},
+		{
+			name: "pull request scan with a port in the clone url",
+			gitContext: &clientservices.XscGitInfoContext{
+				Source: clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://git.example.com:8443/collection/repo.git", BranchName: "feature"},
+				GitDiffContext: clientservices.GitDiffContext{
+					Target:      &clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://git.example.com:8443/collection/repo.git", BranchName: "main"},
+					PullRequest: &clientservices.PullRequestContext{PullRequestId: 1},
+				},
+			},
+			expectedResult: "git.example.com:8443/collection/repo/feature/PR",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := getGitContextArtifactPath(testCase.gitContext)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.expectedResult, result)
+		})
+	}
+}
+
 func TestGetLocalArtifactPath(t *testing.T) {
 	testCases := []struct {
 		name           string
