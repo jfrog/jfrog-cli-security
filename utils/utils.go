@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -456,7 +457,7 @@ type RemoteResource struct {
 
 // Get the details of the resource from the JPD / Releases remote it is downloaded from.
 func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (*RemoteResource, error) {
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
+	rtDetails, remotePath, fallbackRemotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +467,14 @@ func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServ
 	}
 	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
 	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
-	if err != nil {
+	var httpErr *errorutils.HttpResponseError
+	if err != nil && fallbackRemotePath != "" && errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+		fallbackUrl := rtDetails.ArtifactoryUrl + fallbackRemotePath
+		if remoteFileDetails, _, err = client.GetRemoteFileDetails(fallbackUrl, &httpClientDetails); err != nil {
+			return nil, fmt.Errorf("couldn't get remote file details for %s or %s: %s", downloadUrl, fallbackUrl, err.Error())
+		}
+		remotePath = fallbackRemotePath
+	} else if err != nil {
 		return nil, fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
 	}
 	return &RemoteResource{name: resourceName, serverDetails: rtDetails, path: remotePath, details: remoteFileDetails}, nil

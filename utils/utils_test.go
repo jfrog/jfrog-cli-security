@@ -11,8 +11,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -295,6 +298,89 @@ func TestRemoteResourceDownloadEncrypted(t *testing.T) {
 			}
 			require.NoError(t, readErr)
 			assert.Equal(t, encryptedArchiveContent, string(extracted))
+		})
+	}
+}
+
+func TestGetRemoteResourceFallsBackToPathWithoutArtifactory(t *testing.T) {
+	const (
+		repoPrefix         = "/artifactory/" + resourcesRemoteRepo + "/"
+		withArtifactory    = repoPrefix + "artifactory/" + encryptedArchivePath
+		withoutArtifactory = repoPrefix + encryptedArchivePath
+	)
+	testCases := []struct {
+		name             string
+		statusByPath     map[string]int
+		expectedPath     string
+		expectedRequests []string
+		expectedErrUrls  []string
+		expectedErrCode  string
+	}{
+		{
+			name:             "Found under artifactory",
+			statusByPath:     map[string]int{withArtifactory: http.StatusOK},
+			expectedPath:     path.Join(resourcesRemoteRepo, "artifactory", encryptedArchivePath),
+			expectedRequests: []string{withArtifactory},
+		},
+		{
+			name:             "Not found under artifactory, found in root",
+			statusByPath:     map[string]int{withoutArtifactory: http.StatusOK},
+			expectedPath:     path.Join(resourcesRemoteRepo, encryptedArchivePath),
+			expectedRequests: []string{withArtifactory, withoutArtifactory},
+		},
+		{
+			name:             "Not found in both",
+			statusByPath:     map[string]int{},
+			expectedRequests: []string{withArtifactory, withoutArtifactory},
+			expectedErrUrls:  []string{withArtifactory, withoutArtifactory},
+			expectedErrCode:  "404",
+		},
+		{
+			name:             "Non 404 error under artifactory is not retried",
+			statusByPath:     map[string]int{withArtifactory: http.StatusForbidden, withoutArtifactory: http.StatusOK},
+			expectedRequests: []string{withArtifactory},
+			expectedErrUrls:  []string{withArtifactory},
+			expectedErrCode:  "403",
+		},
+		{
+			name:             "Not found under artifactory, non 404 error in root",
+			statusByPath:     map[string]int{withoutArtifactory: http.StatusForbidden},
+			expectedRequests: []string{withArtifactory, withoutArtifactory},
+			expectedErrUrls:  []string{withArtifactory, withoutArtifactory},
+			expectedErrCode:  "403",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var mutex sync.Mutex
+			var requests []string
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mutex.Lock()
+				requests = append(requests, r.URL.Path)
+				mutex.Unlock()
+				status, exists := testCase.statusByPath[r.URL.Path]
+				if !exists {
+					status = http.StatusNotFound
+				}
+				w.Header().Set("X-Checksum-Sha256", "checksum")
+				w.WriteHeader(status)
+			}))
+			defer mockServer.Close()
+
+			resource, err := GetRemoteResource("Resource", encryptedArchivePath, resourcesRemoteRepo, &config.ServerDetails{ArtifactoryUrl: mockServer.URL + "/artifactory/"})
+
+			assert.Equal(t, testCase.expectedRequests, requests)
+			if testCase.expectedErrCode != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.expectedErrCode)
+				for _, expectedUrl := range testCase.expectedErrUrls {
+					assert.Contains(t, err.Error(), mockServer.URL+expectedUrl)
+				}
+				assert.Equal(t, len(testCase.expectedErrUrls), strings.Count(err.Error(), mockServer.URL))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, testCase.expectedPath, resource.path)
 		})
 	}
 }

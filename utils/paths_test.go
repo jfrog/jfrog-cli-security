@@ -5,8 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsPathExcludedFromRoot(t *testing.T) {
@@ -160,6 +163,43 @@ func TestGetFullPathsWorkingDirs(t *testing.T) {
 			for _, p := range result {
 				assert.True(t, filepath.IsAbs(p), "expected absolute path, got: %s", p)
 			}
+		})
+	}
+}
+
+func TestGetReleasesRemoteDetails(t *testing.T) {
+	const downloadPath = "xray-scan-lib/xray-scan-lib-1.6.0-linux-amd64.tar.gz"
+	profileServer := &config.ServerDetails{ArtifactoryUrl: "https://profile.example.com/artifactory/"}
+	testCases := []struct {
+		name                       string
+		remoteRepo                 string
+		remoteServer               *config.ServerDetails
+		expectedServerUrl          string
+		expectedRemotePath         string
+		expectedFallbackRemotePath string
+	}{
+		{
+			name:                       "Config profile remote repository",
+			remoteRepo:                 "releases-remote",
+			remoteServer:               profileServer,
+			expectedServerUrl:          profileServer.ArtifactoryUrl,
+			expectedRemotePath:         "releases-remote/artifactory/" + downloadPath,
+			expectedFallbackRemotePath: "releases-remote/" + downloadPath,
+		},
+		{
+			name:               "Not configured, download from releases.jfrog.io",
+			expectedServerUrl:  coreutils.JfrogReleasesUrl,
+			expectedRemotePath: downloadPath,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv(coreutils.ReleasesRemoteEnv, "")
+			server, remotePath, fallbackRemotePath, err := GetReleasesRemoteDetails("Resource", downloadPath, testCase.remoteRepo, testCase.remoteServer)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.expectedServerUrl, server.ArtifactoryUrl)
+			assert.Equal(t, testCase.expectedRemotePath, remotePath)
+			assert.Equal(t, testCase.expectedFallbackRemotePath, fallbackRemotePath)
 		})
 	}
 }
