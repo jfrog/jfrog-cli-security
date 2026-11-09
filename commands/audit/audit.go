@@ -1020,12 +1020,15 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "using custom analyzer manager binary path")
 		}
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
+		// A target the old flow cannot scan must not cover a nested target, or that nested directory would be scanned by nobody.
+		runnableTargets := jasTargetsToRun(scanResults.Targets, isNewFlow)
 		// Run JAS scanners for each scan target
-		for _, targetResult := range scanResults.Targets {
+		for targetIndex, targetResult := range scanResults.Targets {
 			if !isNewFlow && targetResult.DeprecatedAppsConfigModule == nil {
 				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), scanResults.AllowPartialResults)
 				continue
 			}
+			coveredDirectoryScans, coveredByDirectory := nestedJasDirectoryScans(scanResults, targetIndex, auditParams, runnableTargets)
 			params := runner.JasRunnerParams{
 				Runner:                 auditParallelRunner,
 				ServerDetails:          serverDetails,
@@ -1057,6 +1060,8 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				TargetCount:                         len(scanResults.Targets),
 				TargetOutputDir:                     auditParams.scanResultsOutputDir,
 				AllowPartialResults:                 scanResults.AllowPartialResults,
+				CoveredDirectoryScans:               coveredDirectoryScans,
+				CoveredBy:                           coveredByDirectory,
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
 				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), scanResults.AllowPartialResults)
@@ -1066,6 +1071,20 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+// nestedJasDirectoryScans reports which directory scans this target skips because an outer target already walks them, and which target walks each one.
+func nestedJasDirectoryScans(scanResults *results.SecurityCommandResults, targetIndex int, auditParams *AuditParams, runnable []bool) ([]utils.SubScanType, map[utils.SubScanType]string) {
+	return runner.CoveredDirectoryScans(scanResults.Targets, targetIndex, auditParams.ScansToPerform(), auditParams.GetConfigProfile(), runnable)
+}
+
+// jasTargetsToRun reports which targets will actually run JAS. The old flow skips a target with no module.
+func jasTargetsToRun(targets []*results.TargetResults, isNewFlow bool) []bool {
+	runnable := make([]bool, len(targets))
+	for i, target := range targets {
+		runnable[i] = target != nil && (isNewFlow || target.DeprecatedAppsConfigModule != nil)
+	}
+	return runnable
 }
 
 func getRootDir(rootDir string, scanResults *results.SecurityCommandResults) string {

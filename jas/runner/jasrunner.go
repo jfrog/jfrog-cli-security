@@ -3,8 +3,11 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -60,6 +63,10 @@ type JasRunnerParams struct {
 	SastRules            string
 	// Outputs
 	TargetOutputDir string
+	// CoveredDirectoryScans are directory scans an outer target already walks. Applicability is never skipped by this list.
+	CoveredDirectoryScans []utils.SubScanType
+	// CoveredBy names the target path that already walks each covered scan.
+	CoveredBy map[utils.SubScanType]string
 }
 
 func (params JasRunnerParams) runAllScanners() bool {
@@ -108,10 +115,202 @@ func AddJasScannersTasks(params JasRunnerParams) error {
 	return errorsCollection
 }
 
+// directoryScanTypes are the scans that walk a target directory. Applicability is absent: it uses that target's own vulnerabilities.
+var directoryScanTypes = []utils.SubScanType{utils.SecretsScan, utils.IacScan, utils.SastScan, utils.ServicesScan}
+
+// CoveredDirectoryScans reports directory scans an outer target already walks for targets[index].
+// The inner target skips those scans. The outer scan keeps the nested files. A target at the same directory is not covered.
+// An empty result means this target keeps its directory scans.
+func CoveredDirectoryScans(targets []*results.TargetResults, index int, scansToPerform []utils.SubScanType, configProfile *services.ConfigProfile, runnable []bool) ([]utils.SubScanType, map[utils.SubScanType]string) {
+	if index < 0 || index >= len(targets) || targets[index] == nil {
+		return nil, nil
+	}
+	var covered []utils.SubScanType
+	coveredBy := map[utils.SubScanType]string{}
+	for _, scan := range directoryScanTypes {
+		if by, ok := directoryScanCovered(targets, index, scan, scansToPerform, configProfile, runnable); ok {
+			covered = append(covered, scan)
+			coveredBy[scan] = by
+		}
+	}
+	if len(covered) == 0 {
+		return nil, nil
+	}
+	return covered, coveredBy
+}
+
+// directoryScanCovered reports whether every directory this target scans is already walked by another target that will run scan.
+// One directory that cannot be compared, or that no other scan walks, keeps the scan.
+// The string is the path of a target that walks those directories.
+func directoryScanCovered(targets []*results.TargetResults, index int, scan utils.SubScanType, scansToPerform []utils.SubScanType, configProfile *services.ConfigProfile, runnable []bool) (string, bool) {
+	roots := comparableScanRoots(rootsForScan(targets[index].ScanTarget, scan))
+	if len(roots) == 0 {
+		return "", false
+	}
+	coveredBy := ""
+	for _, root := range roots {
+		by, ok := scanRootCovered(targets, index, root, scan, scansToPerform, configProfile, runnable)
+		if !ok {
+			return "", false
+		}
+		if coveredBy == "" {
+			coveredBy = by
+		}
+	}
+	return coveredBy, true
+}
+
+func comparableScanRoots(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	roots := make([]string, 0, len(raw))
+	for _, root := range raw {
+		abs, ok := absoluteScanDir(root)
+		if !ok {
+			return nil
+		}
+		roots = append(roots, abs)
+	}
+	return roots
+}
+
+// rootsForScan reports the directories the scanner will walk. A module working directory replaces the target path for that scan.
+func rootsForScan(target results.ScanTarget, scan utils.SubScanType) []string {
+	module := target.DeprecatedAppsConfigModule
+	if module == nil {
+		return jas.GetRootsFromTarget(target)
+	}
+	scanner := moduleScanner(module, scan)
+	if (scanner != nil && len(scanner.WorkingDirs) > 0) || strings.TrimSpace(module.SourceRoot) != "" {
+		roots, err := jas.GetSourceRoots(*module, scanner)
+		if err != nil {
+			return nil
+		}
+		return roots
+	}
+	return jas.GetRootsFromTarget(target)
+}
+
+func moduleScanner(module *jfrogappsconfig.Module, scan utils.SubScanType) *jfrogappsconfig.Scanner {
+	if module == nil {
+		return nil
+	}
+	switch scan {
+	case utils.SecretsScan:
+		return module.Scanners.Secrets
+	case utils.IacScan:
+		return module.Scanners.Iac
+	case utils.SastScan:
+		if module.Scanners.Sast != nil {
+			return &module.Scanners.Sast.Scanner
+		}
+	}
+	return nil
+}
+
+func excludesForScan(target results.ScanTarget, scan utils.SubScanType) []string {
+	if module := target.DeprecatedAppsConfigModule; module != nil {
+		return jas.GetJasExcludePatterns(*module, moduleScanner(module, scan), target.GetCentralConfigExclusions(scan))
+	}
+	return jas.GetJasExcludePatternsForTarget(target, target.GetCentralConfigExclusions(scan))
+}
+
+func absoluteScanDir(dir string) (string, bool) {
+	if strings.TrimSpace(dir) == "" {
+		return "", false
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	return filepath.Clean(abs), true
+}
+
+func scanRootCovered(targets []*results.TargetResults, index int, root string, scan utils.SubScanType, scansToPerform []utils.SubScanType, configProfile *services.ConfigProfile, runnable []bool) (string, bool) {
+	for otherIndex, other := range targets {
+		if otherIndex == index || other == nil || !targetWillRun(runnable, otherIndex) || !targetRunsDirectoryScan(other.ScanTarget, scansToPerform, configProfile, scan) {
+			continue
+		}
+		excludes := excludesForScan(other.ScanTarget, scan)
+		for _, otherRoot := range comparableScanRoots(rootsForScan(other.ScanTarget, scan)) {
+			_, inside := scanDirRelation(otherRoot, root)
+			if !inside || scanRootExcluded(otherRoot, root, excludes) {
+				continue
+			}
+			return other.Target, true
+		}
+	}
+	return "", false
+}
+
+// scanRootExcluded reports whether the covering scan's excludes skip this directory.
+// The check uses the path from the covering directory, so a repository path that happens to match a default exclude still covers its children.
+// Patterns such as **/subproject/** need a segment before the directory and a file under it before they match.
+func scanRootExcluded(parent, child string, excludes []string) bool {
+	if len(excludes) == 0 {
+		return false
+	}
+	rel, err := filepath.Rel(parent, child)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	for _, candidate := range []string{
+		rel,
+		filepath.Join(rel, "file"),
+		filepath.Join("dir", rel, "nested", "file"),
+	} {
+		if utils.IsPathExcludedFromRoot(parent, filepath.Join(parent, candidate), excludes) {
+			return true
+		}
+	}
+	return false
+}
+
+func scanDirRelation(parent, child string) (same, inside bool) {
+	if parent == child {
+		return true, false
+	}
+	rel, err := filepath.Rel(parent, child)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false, false
+	}
+	if rel == "." {
+		return true, false
+	}
+	return false, true
+}
+
+func targetWillRun(runnable []bool, index int) bool {
+	return runnable == nil || (index < len(runnable) && runnable[index])
+}
+
+func targetRunsDirectoryScan(target results.ScanTarget, scansToPerform []utils.SubScanType, configProfile *services.ConfigProfile, subScan utils.SubScanType) bool {
+	jasType := jasutils.SubScanTypeToJasScanType(subScan)
+	if jasType == "" {
+		return false
+	}
+	if len(scansToPerform) > 0 && !slices.Contains(scansToPerform, subScan) {
+		return false
+	}
+	if configProfile != nil {
+		return !jas.ShouldSkipScannerByConfigProfile(target, configProfile, subScan, jasType)
+	}
+	return !jas.ShouldSkipScannerByModule(target, jasType)
+}
+
 func addJasScanTaskIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
 	jasType := jasutils.SubScanTypeToJasScanType(subScan)
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
+	}
+	if subScan != utils.ContextualAnalysisScan && slices.Contains(params.CoveredDirectoryScans, subScan) {
+		coveredBy := "another target"
+		if params.CoveredBy != nil && params.CoveredBy[subScan] != "" {
+			coveredBy = params.CoveredBy[subScan]
+		}
+		log.Debug(fmt.Sprintf("Skipping %s scan because %s already scans this directory...", subScan, coveredBy))
+		return
 	}
 	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
