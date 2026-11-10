@@ -3,7 +3,8 @@ package output
 import (
 	"fmt"
 	"net/url"
-	"path/filepath"
+	"path"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -87,13 +88,13 @@ func uploadViaArtifactoryDirect(serverDetails *config.ServerDetails, rtResultRep
 		SetContentToUpload(cdxResults).
 		SetFilePrefix(string(cmdType)).
 		SetServerDetails(serverDetails).
-		SetUploadRepository(filepath.ToSlash(filepath.Join(rtResultRepository, artifactFinalRepoPath))).
+		SetUploadRepository(path.Join(rtResultRepository, artifactFinalRepoPath)).
 		SetProjectKey(projectKey)
 	artifactName, err := uploadCmd.Upload()
 	if err != nil {
 		return "", fmt.Errorf("failed uploading the scan results: %w", err)
 	}
-	return filepath.ToSlash(filepath.Join(artifactFinalRepoPath, artifactName)), nil
+	return path.Join(artifactFinalRepoPath, artifactName), nil
 }
 
 func GetCommandResultsPlatformUrlMessage(cmdResults *results.SecurityCommandResults, pretty bool) string {
@@ -140,11 +141,9 @@ func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, 
 		return "", err
 	}
 	if gitContext.PullRequest != nil && gitContext.Target != nil {
-		// pull request, return the path with source and target commit hashes
-		return filepath.ToSlash(filepath.Join(artifactPath, "PR")), nil
+		return path.Join(artifactPath, "PR"), nil
 	}
-	// not a pull request, just return the source commit path
-	return filepath.ToSlash(filepath.Join(artifactPath, "commits")), nil
+	return path.Join(artifactPath, "commits"), nil
 }
 
 func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
@@ -153,6 +152,5 @@ func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Extract the host and path, removing any .git suffix
-	return gitUrlParsed.Host + "/" + gitUrlParsed.Path[:len(gitUrlParsed.Path)-len(filepath.Ext(gitUrlParsed.Path))] + "/" + sourceBranchName, nil
+	return path.Join(gitUrlParsed.Host, strings.TrimSuffix(strings.TrimSuffix(gitUrlParsed.Path, "/"), ".git"), sourceBranchName), nil
 }
