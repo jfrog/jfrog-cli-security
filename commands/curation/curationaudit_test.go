@@ -7599,3 +7599,79 @@ registry = "sparse+%s/api/cargo/cargo-test-repo/index/"
 	}
 	assert.Equal(t, expected, results)
 }
+
+// writeNpmrcProject creates a project dir whose .npmrc declares registryUrl (no token) and chdirs into it.
+func writeNpmrcProject(t *testing.T, registryUrl string) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"npmrc-hostcheck-test","version":"1.0.0"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".npmrc"), []byte("registry="+registryUrl+"\n"), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() { clienttestutils.ChangeDirAndAssert(t, prevWd) })
+}
+
+func newConfiguredServerCommand() *CurationAuditCommand {
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+	return ca
+}
+
+// TestSetRepoFromNpmrcRejectsHostMismatch: with --run-native, a tokenless .npmrc on another host must never get 'jf c' credentials.
+func TestSetRepoFromNpmrcRejectsHostMismatch(t *testing.T) {
+	writeNpmrcProject(t, "https://attacker.example.com/artifactory/api/npm/npm-test-repo/")
+	ca := newConfiguredServerCommand()
+
+	setErr := ca.setRepoFromNpmrc()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+	sd, err := ca.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://configured-server.example.com/artifactory/", sd.ArtifactoryUrl, "shared ServerDetails must not be mutated")
+}
+
+// TestSetRepoFromNpmrcAcceptsMatchingHost: the legitimate same-host case still falls back to the 'jf c' credentials.
+func TestSetRepoFromNpmrcAcceptsMatchingHost(t *testing.T) {
+	writeNpmrcProject(t, "https://configured-server.example.com/artifactory/api/npm/npm-test-repo/")
+	ca := newConfiguredServerCommand()
+
+	require.NoError(t, ca.setRepoFromNpmrc())
+	require.NotNil(t, ca.PackageManagerConfig)
+	pmSd, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "super-secret-token", pmSd.AccessToken)
+}
+
+// TestSetRepoFromNpmrcForPnpmRejectsHostMismatch: pnpm equivalent of the npm test above.
+func TestSetRepoFromNpmrcForPnpmRejectsHostMismatch(t *testing.T) {
+	writeNpmrcProject(t, "https://attacker.example.com/artifactory/api/npm/pnpm-test-repo/")
+	ca := newConfiguredServerCommand()
+
+	setErr := ca.setRepoFromNpmrcForPnpm()
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+	sd, err := ca.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "https://configured-server.example.com/artifactory/", sd.ArtifactoryUrl, "shared ServerDetails must not be mutated")
+}
+
+// TestSetRepoFromNpmrcForPnpmAcceptsMatchingHost: same-host fallback to 'jf c' credentials keeps working.
+func TestSetRepoFromNpmrcForPnpmAcceptsMatchingHost(t *testing.T) {
+	writeNpmrcProject(t, "https://configured-server.example.com/artifactory/api/npm/pnpm-test-repo/")
+	ca := newConfiguredServerCommand()
+
+	require.NoError(t, ca.setRepoFromNpmrcForPnpm())
+	require.NotNil(t, ca.PackageManagerConfig)
+	pmSd, sdErr := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, sdErr)
+	assert.Equal(t, "super-secret-token", pmSd.AccessToken)
+}

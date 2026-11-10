@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -115,6 +117,7 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	if strings.Contains(resolveErr.Error(), pnpmCvsBlockedVersionMarker) && strings.Contains(resolveErr.Error(), pnpmCvsAffectedPackagesMarker) {
 		return resolveErr // already names the exact blocked package(s); the probe below would only add noise
 	}
+	skipProbe := false
 	// only populated for pnpm on the success path (setRepoFromNpmrcForPnpm runs after GetTechDependencyTree returns), so resolve it ourselves here on this failure path.
 	if params.DependenciesRepository == "" {
 		if registryConfig, regErr := GetNativePnpmRegistryConfig(); regErr == nil {
@@ -126,10 +129,16 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 					AccessToken:    registryConfig.AuthToken,
 				}
 			} else if params.ServerDetails != nil {
-				// copy before mutating: params.ServerDetails may be the shared struct ca.ServerDetails() returns, and overwriting its URL in place would leak to other techs in a multi-tech audit.
-				copied := *params.ServerDetails
-				copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
-				params.ServerDetails = &copied
+				if !sameRegistryHost(params.ServerDetails.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
+					// .npmrc is untrusted project content: never send the 'jf c' credentials to a different scheme/host.
+					log.Warn(fmt.Sprintf("pnpm curation probe: the registry declared in .npmrc (%s) does not match the configured 'jf c' server (%s) — skipping the probe to avoid sending its credentials to a different host.", redactedRegistryUrl(registryConfig.ArtifactoryUrl), redactedRegistryUrl(params.ServerDetails.ArtifactoryUrl)))
+					skipProbe = true
+				} else {
+					// copy before mutating: params.ServerDetails may be the shared struct ca.ServerDetails() returns, and overwriting its URL in place would leak to other techs in a multi-tech audit.
+					copied := *params.ServerDetails
+					copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+					params.ServerDetails = &copied
+				}
 			}
 		} else {
 			log.Debug(fmt.Sprintf("pnpm curation probe: failed to read Artifactory repository from .npmrc: %s", regErr.Error()))
@@ -138,6 +147,9 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	memberRel := importer
 	if memberRel == "." {
 		memberRel = ""
+	}
+	if skipProbe {
+		return errorutils.CheckErrorf("'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' failed, and the direct dependencies were not probed because the registry declared in .npmrc does not match the configured 'jf c' server. Align the two (or select the matching server with --server-id) and re-run 'jf ca'. Underlying pnpm error: %s", resolveErr.Error())
 	}
 	probed, totalProbed := probeBlockedPnpmDirectDeps(params, workspaceRoot, memberRel)
 	outputRef := string(outFormat.Table)
@@ -155,6 +167,43 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	return errorutils.CheckErrorf(
 		"'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' aborted before the lockfile was written (curation is blocking manifests, not just tarballs). The %d direct dependencies that the curation repo rejected with HTTP 403 are listed in the %s above. Without a 'pnpm-lock.yaml' the audit cannot enumerate transitives; only direct blockers are listed. Once enough directs pass curation that pnpm writes a lockfile, transitive blockers are audited automatically. Remove or replace the blocked direct dependencies in the %s above and re-run 'jf ca'; once they pass curation, resolve completes and the audit enumerates the full graph. Underlying pnpm error: %s",
 		len(probed), outputRef, outputRef, resolveErr.Error())
+}
+
+// sameRegistryHost reports whether both URLs share the same scheme and host:port (paths ignored, default ports normalized).
+func sameRegistryHost(configuredUrl, discoveredUrl string) bool {
+	configured, err := url.Parse(configuredUrl)
+	if err != nil || configured.Host == "" {
+		return false
+	}
+	discovered, err := url.Parse(discoveredUrl)
+	if err != nil || discovered.Host == "" {
+		return false
+	}
+	return strings.EqualFold(configured.Scheme, discovered.Scheme) && strings.EqualFold(effectiveHostPort(configured), effectiveHostPort(discovered))
+}
+
+// effectiveHostPort returns host:port with the scheme's default port (80/443) filled in when absent.
+func effectiveHostPort(u *url.URL) string {
+	port := u.Port()
+	if port == "" {
+		switch strings.ToLower(u.Scheme) {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		}
+	}
+	return net.JoinHostPort(strings.ToLower(u.Hostname()), port)
+}
+
+// redactedRegistryUrl drops any userinfo (including username-only tokens) so credentials are never logged.
+func redactedRegistryUrl(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "<unparsable url>"
+	}
+	u.User = nil
+	return u.String()
 }
 
 // probeBlockedPnpmDirectDeps delegates to the shared probe mechanism yarn's fallback also uses; workspaceMemberRel, when non-empty, scopes it to one workspace member.

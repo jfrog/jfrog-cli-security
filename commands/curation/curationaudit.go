@@ -1905,30 +1905,28 @@ func validateRunNativeForTech(tech techutils.Technology, runNative bool) error {
 		tech.String(), tech.String())
 }
 
-// setRepoFromNpmrc builds PackageManagerConfig by reading the npm registry URL from the
-// native npm configuration (respecting .npmrc and Volta), then parsing the Artifactory
-// base URL and repository name from it.
-// Authentication is taken from the jfrog-cli.conf server entry (via ca.ServerDetails()) —
-// the same credentials the user configured with 'jf c'. Only the Artifactory URL and
-// repository name are sourced from .npmrc, so 'jf npm-config' is not required.
+// setRepoFromNpmrc reads the registry URL from the native npm config (.npmrc/Volta); credentials come from the .npmrc token, else from 'jf c' only if the host matches.
 func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 	registryConfig, err := npmtech.GetNativeNpmRegistryConfig()
 	if err != nil {
 		return fmt.Errorf("--run-native: failed to read Artifactory details from .npmrc: %w", err)
 	}
 
-	// Use auth from the jfrog server config (jfrog-cli.conf) — it holds properly stored
-	// credentials. Only override the ArtifactoryUrl with what .npmrc reports so the
-	// Curation HEAD requests go to the right repository.
-	serverDetails, err := ca.ServerDetails()
-	if err != nil || serverDetails == nil {
-		// No server configured — fall back to whatever auth .npmrc provides.
+	// .npmrc is untrusted: use its own token, else reuse 'jf c' credentials only if the host matches (credentialFallbackServerDetails).
+	var serverDetails *config.ServerDetails
+	if registryConfig.AuthToken != "" {
 		serverDetails = &config.ServerDetails{
 			ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 			AccessToken:    registryConfig.AuthToken,
 		}
+	} else if base, sdErr := ca.ServerDetails(); sdErr != nil || base == nil {
+		// No server configured and no token in .npmrc.
+		serverDetails = &config.ServerDetails{ArtifactoryUrl: registryConfig.ArtifactoryUrl}
 	} else {
-		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+		serverDetails, err = ca.credentialFallbackServerDetails("npm", ".npmrc", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
+		}
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).
@@ -1994,14 +1992,7 @@ func (ca *CurationAuditCommand) setRepoFromNuGetSource() error {
 	return nil
 }
 
-// setRepoFromNpmrcForPnpm reads Artifactory connection details from the project's .npmrc
-// via the pnpm CLI. pnpm uses the same .npmrc format and registry protocol as npm, so the
-// URL parsing logic is identical. This is always called for pnpm — there is no 'jf pnpm-config'.
-//
-// Auth priority:
-//  1. Token from .npmrc — preferred, because it is scoped to the exact registry URL.
-//  2. Token from 'jf c' server config — used as fallback when .npmrc carries no token
-//     (e.g. user relies on a jf-managed credential store).
+// setRepoFromNpmrcForPnpm reads the registry URL from the project's .npmrc via pnpm (no 'jf pnpm-config' exists); credentials come from the .npmrc token, else from 'jf c' only if the host matches.
 func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 	registryConfig, err := pnpmtech.GetNativePnpmRegistryConfig()
 	if err != nil {
@@ -2021,11 +2012,11 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 		// No token in .npmrc — fall back to whatever 'jf c' has stored, overriding
 		// only the Artifactory URL so requests go to the correct registry.
 		log.Debug("pnpm: no token in .npmrc — using 'jf c' server credentials")
-		serverDetails, err = ca.ServerDetails()
-		if err != nil || serverDetails == nil {
-			return fmt.Errorf("pnpm: no auth token found in .npmrc and no 'jf c' server configured: %w", err)
+		// credentialFallbackServerDetails refuses a different scheme/host and copies instead of mutating the shared struct.
+		serverDetails, err = ca.credentialFallbackServerDetails("pnpm", ".npmrc", registryConfig.ArtifactoryUrl)
+		if err != nil {
+			return err
 		}
-		serverDetails.ArtifactoryUrl = registryConfig.ArtifactoryUrl
 	}
 
 	repoConfig := (&project.RepositoryConfig{}).
