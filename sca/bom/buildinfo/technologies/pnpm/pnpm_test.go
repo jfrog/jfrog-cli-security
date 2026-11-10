@@ -5,16 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -49,7 +53,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			name:      "With transitive dependencies",
 			treeDepth: "1",
 			expectedUniqueDeps: []string{
-				"npm://axios:1.21.0",
+				"npm://axios:1.21.1",
 				"npm://balaganjs:1.0.0",
 				"npm://yargs:13.3.0",
 				"npm://zen-website:1.0.0",
@@ -59,7 +63,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 				Nodes: []*xrayUtils.GraphNode{
 					{
 						Id:    "npm://balaganjs:1.0.0",
-						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.21.0"}, {Id: "npm://yargs:13.3.0"}},
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.21.1"}, {Id: "npm://yargs:13.3.0"}},
 					},
 				},
 			},
@@ -877,4 +881,47 @@ func TestIsCurationInstallFailure(t *testing.T) {
 		assert.False(t, ok, "setup errors must not be routed through curation framing")
 		assert.Nil(t, installErr)
 	})
+}
+
+// Pins the fix: when .npmrc names a different host than the configured 'jf c' server (and has no token), the failed-lockfile probe must not send any request there.
+func TestCurationNoLockfileErrorSkipsProbeOnHostMismatch(t *testing.T) {
+	if coreutils.IsWindows() {
+		t.Skip("pnpm config get registry delegates to npm via cmd.exe, which is not resolvable on the Windows runner")
+	}
+	if _, lookErr := exec.LookPath("pnpm"); lookErr != nil {
+		t.Skip("pnpm is not on PATH")
+	}
+	var requests int32
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer attacker.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	for _, envKey := range []string{"NPM_CONFIG_REGISTRY", "npm_config_registry"} {
+		t.Setenv(envKey, "")
+		require.NoError(t, os.Unsetenv(envKey))
+	}
+	workspaceRoot := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte(`{"name":"root","dependencies":{"lodash":"^4.0.0"}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, ".npmrc"), []byte("registry="+attacker.URL+"/artifactory/api/npm/npm-repo/\n"), 0o644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(workspaceRoot))
+	defer func() { require.NoError(t, os.Chdir(prevWd)) }()
+
+	configured := &config.ServerDetails{
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	}
+	params := technologies.BuildInfoBomGeneratorParams{ServerDetails: configured}
+	resolveErr := errors.New("pnpm install failed")
+
+	err = curationNoLockfileError(params, workspaceRoot, ".", resolveErr)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "were not probed because the registry declared in .npmrc does not match")
+	assert.Zero(t, atomic.LoadInt32(&requests), "no request (authenticated or not) may reach the host declared in .npmrc")
+	assert.Equal(t, "https://configured-server.example.com/artifactory/", configured.ArtifactoryUrl, "shared ServerDetails must not be mutated")
 }
