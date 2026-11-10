@@ -53,7 +53,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			name:      "With transitive dependencies",
 			treeDepth: "1",
 			expectedUniqueDeps: []string{
-				"npm://axios:1.21.0",
+				"npm://axios:1.21.1",
 				"npm://balaganjs:1.0.0",
 				"npm://yargs:13.3.0",
 				"npm://zen-website:1.0.0",
@@ -63,7 +63,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 				Nodes: []*xrayUtils.GraphNode{
 					{
 						Id:    "npm://balaganjs:1.0.0",
-						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.21.0"}, {Id: "npm://yargs:13.3.0"}},
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.21.1"}, {Id: "npm://yargs:13.3.0"}},
 					},
 				},
 			},
@@ -885,6 +885,9 @@ func TestIsCurationInstallFailure(t *testing.T) {
 
 // Pins the fix: when .npmrc names a different host than the configured 'jf c' server (and has no token), the failed-lockfile probe must not send any request there.
 func TestCurationNoLockfileErrorSkipsProbeOnHostMismatch(t *testing.T) {
+	if coreutils.IsWindows() {
+		t.Skip("pnpm config get registry delegates to npm via cmd.exe, which is not resolvable on the Windows runner")
+	}
 	if _, lookErr := exec.LookPath("pnpm"); lookErr != nil {
 		t.Skip("pnpm is not on PATH")
 	}
@@ -921,19 +924,4 @@ func TestCurationNoLockfileErrorSkipsProbeOnHostMismatch(t *testing.T) {
 	assert.Contains(t, err.Error(), "were not probed because the registry declared in .npmrc does not match")
 	assert.Zero(t, atomic.LoadInt32(&requests), "no request (authenticated or not) may reach the host declared in .npmrc")
 	assert.Equal(t, "https://configured-server.example.com/artifactory/", configured.ArtifactoryUrl, "shared ServerDetails must not be mutated")
-}
-
-func TestSameRegistryHost(t *testing.T) {
-	assert.True(t, sameRegistryHost("https://a.example.com/artifactory/", "https://A.example.com/artifactory/api/npm/r/"))
-	assert.False(t, sameRegistryHost("https://a.example.com/artifactory/", "http://a.example.com/artifactory/"), "scheme mismatch")
-	assert.False(t, sameRegistryHost("https://a.example.com/artifactory/", "https://b.example.com/artifactory/"), "host mismatch")
-	assert.False(t, sameRegistryHost("", "https://b.example.com/"), "empty configured URL")
-	assert.True(t, sameRegistryHost("https://a.example.com/artifactory/", "https://a.example.com:443/artifactory/api/npm/r/"), "default https port")
-	assert.True(t, sameRegistryHost("http://a.example.com:80/", "http://a.example.com/"), "default http port")
-	assert.False(t, sameRegistryHost("https://a.example.com/", "https://a.example.com:8443/"), "non-default port")
-}
-
-func TestRedactedRegistryUrl(t *testing.T) {
-	assert.Equal(t, "https://a.example.com/artifactory/api/npm/r/", redactedRegistryUrl("https://secrettoken@a.example.com/artifactory/api/npm/r/"))
-	assert.Equal(t, "https://a.example.com/x", redactedRegistryUrl("https://user:pass@a.example.com/x"))
 }

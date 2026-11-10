@@ -1933,7 +1933,7 @@ func (ca *CurationAuditCommand) setRepoFromNpmrc() error {
 		SetTargetRepo(registryConfig.RepoName).
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
-	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	log.Info(fmt.Sprintf("--run-native: using Artifactory URL %q and repository %q from .npmrc", utils.RedactUrlUserinfo(registryConfig.ArtifactoryUrl), registryConfig.RepoName))
 	return nil
 }
 
@@ -2023,7 +2023,7 @@ func (ca *CurationAuditCommand) setRepoFromNpmrcForPnpm() error {
 		SetTargetRepo(registryConfig.RepoName).
 		SetServerDetails(serverDetails)
 	ca.setPackageManagerConfig(repoConfig)
-	log.Info(fmt.Sprintf("pnpm: using Artifactory URL %q and repository %q from .npmrc", registryConfig.ArtifactoryUrl, registryConfig.RepoName))
+	log.Info(fmt.Sprintf("pnpm: using Artifactory URL %q and repository %q from .npmrc", utils.RedactUrlUserinfo(registryConfig.ArtifactoryUrl), registryConfig.RepoName))
 	return nil
 }
 
@@ -2199,31 +2199,16 @@ func (ca *CurationAuditCommand) credentialFallbackServerDetails(tech, sourceDesc
 	if sdErr != nil || base == nil {
 		return nil, errorutils.CheckErrorf("%s: no 'jf c' server configured to source credentials for %s", tech, sourceDescription)
 	}
-	if !sameArtifactoryHost(base.ArtifactoryUrl, discoveredArtifactoryUrl) {
+	if !utils.SameRegistryHost(base.ArtifactoryUrl, discoveredArtifactoryUrl) {
 		return nil, errorutils.CheckErrorf(
 			"%s: the Artifactory URL declared in %s (%s) does not match the configured 'jf c' "+
 				"server (%s) — refusing to send its credentials to a different host. "+
-				"Align the two, or select the matching server with --server-id.",
-			tech, sourceDescription, discoveredArtifactoryUrl, base.ArtifactoryUrl)
+				"Align the two, or select the matching server with 'jf c use <server-id>' or JFROG_CLI_SERVER_ID.",
+			tech, sourceDescription, utils.RedactUrlUserinfo(discoveredArtifactoryUrl), utils.RedactUrlUserinfo(base.ArtifactoryUrl))
 	}
 	copied := *base
 	copied.ArtifactoryUrl = discoveredArtifactoryUrl
 	return &copied, nil
-}
-
-// sameArtifactoryHost reports whether configuredUrl and discoveredUrl share the same
-// scheme and host[:port], ignoring path and trailing slashes.
-func sameArtifactoryHost(configuredUrl, discoveredUrl string) bool {
-	configured, err := url.Parse(configuredUrl)
-	if err != nil || configured.Host == "" {
-		return false
-	}
-	discovered, err := url.Parse(discoveredUrl)
-	if err != nil || discovered.Host == "" {
-		return false
-	}
-	return strings.EqualFold(configured.Host, discovered.Host) &&
-		strings.EqualFold(configured.Scheme, discovered.Scheme)
 }
 
 func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (*project.RepositoryConfig, error) {
