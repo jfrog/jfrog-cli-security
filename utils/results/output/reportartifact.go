@@ -141,10 +141,8 @@ func getGitContextArtifactPath(gitContext *services.XscGitInfoContext) (string, 
 		return "", err
 	}
 	if gitContext.PullRequest != nil && gitContext.Target != nil {
-		// pull request, return the path with source and target commit hashes
 		return path.Join(artifactPath, "PR"), nil
 	}
-	// not a pull request, just return the source commit path
 	return path.Join(artifactPath, "commits"), nil
 }
 
@@ -154,6 +152,5 @@ func extractBaseGitPath(gitCloneUrl, sourceBranchName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Extract the host and path, removing any .git suffix
-	return path.Join(gitUrlParsed.Host, strings.TrimSuffix(gitUrlParsed.Path, ".git"), sourceBranchName), nil
+	return path.Join(gitUrlParsed.Host, strings.TrimSuffix(strings.TrimSuffix(gitUrlParsed.Path, "/"), ".git"), sourceBranchName), nil
 }

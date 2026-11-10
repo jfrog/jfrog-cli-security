@@ -103,6 +103,13 @@ func TestGetGitContextArtifactPath(t *testing.T) {
 			expectedResult: "github.com/socketio/socket.io/main/commits",
 		},
 		{
+			name: "commit scan with a trailing slash after the .git suffix",
+			gitContext: &clientservices.XscGitInfoContext{
+				Source: clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://github.com/org/repo.git/", BranchName: "main"},
+			},
+			expectedResult: "github.com/org/repo/main/commits",
+		},
+		{
 			name: "commit scan with a port in the clone url",
 			gitContext: &clientservices.XscGitInfoContext{
 				Source: clientservices.CommitContext{GitRepoHttpsCloneUrl: "https://git.example.com:8443/collection/repo.git", BranchName: "main"},

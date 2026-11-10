@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -2006,4 +2007,29 @@ func TestInitAuditCmdResults_TransitiveContextualAnalysis_ErrorDoesNotFailAuditO
 	entitlementsJson, err := utils.GetAsJsonBytes(cmdResults.Entitlements, false, false)
 	require.NoError(t, err)
 	assert.NotContains(t, string(entitlementsJson), "transitive_contextual_analysis")
+}
+
+func TestProcessScanResultsSetsUploadedArtifactPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "scan-cdx/upload") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(services.UploadScanCdxResponse{Repository: "frogbot", Path: "git.example.com:8443/collection/repo/main/commits/source_code.cdx.json"})
+	}))
+	defer server.Close()
+	auditBasicParams := (&AuditBasicParams{}).
+		SetServerDetails(&config.ServerDetails{XrayUrl: server.URL + "/"}).
+		SetXrayVersion(utils.XrayCdxUploadMinVersion)
+	params := NewAuditParams().
+		SetGraphBasicParams(auditBasicParams).
+		SetUploadCdxResults(true).
+		SetRtResultRepository("frogbot")
+
+	cmdResults := processScanResults(params, results.NewCommandResults(utils.SourceCode))
+
+	require.NoError(t, cmdResults.GetErrors())
+	assert.Equal(t, "frogbot/git.example.com:8443/collection/repo/main/commits/source_code.cdx.json", cmdResults.UploadedArtifactPath)
 }
