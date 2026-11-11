@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"net/http"
 	"net/url"
@@ -31,6 +32,7 @@ import (
 
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -38,6 +40,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/subosito/gotenv"
@@ -868,6 +872,12 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 		if poetryMajor, err = validateMinimumPoetryVersion(CurationPoetryMinimumVersion); err != nil {
 			return false, restoreEnv, err
 		}
+		// Keep Poetry's cache writes out of the user's cache; fail closed if the isolated cache can't be set up.
+		restoreCache, isolateErr := isolatePoetryCache()
+		if isolateErr != nil {
+			return false, restoreEnv, errorutils.CheckErrorf("failed to create the isolated Poetry cache: %s", isolateErr.Error())
+		}
+		restoreEnv = restoreCache
 	}
 	// jf ca: check lock staleness BEFORE changing the source URL.
 	// Poetry 1.x stores the source URL in poetry.lock — swapping the URL first causes a
@@ -954,6 +964,246 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDet
 		_, err = executeCommand("poetry", "install")
 	}
 	return false, restoreEnv, err
+}
+
+const (
+	// poetryCacheDirEnv overrides Poetry's cache-dir setting.
+	poetryCacheDirEnv = "POETRY_CACHE_DIR"
+	// poetryVirtualenvsPathEnv overrides Poetry's virtualenvs.path, which may point outside the isolated cache.
+	poetryVirtualenvsPathEnv   = "POETRY_VIRTUALENVS_PATH"
+	isolatedPoetryCacheDirName = ".jf-poetry-cache"
+	poetryVirtualenvsDirName   = "virtualenvs"
+)
+
+var (
+	poetryCacheSeedSubDirs        = []string{filepath.Join("cache", "repositories")}
+	poetryCacheSeedMaxBytes int64 = 1 << 30
+	poetryCacheSeedMaxFiles       = 10000
+)
+
+// isolatePoetryCache points Poetry to a cache inside the temp working dir so `poetry lock` never writes to the user's cache.
+// The returned restore function resets the environment and deletes that cache.
+func isolatePoetryCache() (restore func() error, err error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	userCacheDir := getPoetryUserCacheDir()
+
+	isolatedCacheDir := filepath.Join(workingDir, isolatedPoetryCacheDirName)
+	if err = os.MkdirAll(isolatedCacheDir, 0o700); err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	seedPoetryCache(userCacheDir, isolatedCacheDir)
+
+	restoreEnv, err := setEnvWithRestore(map[string]string{
+		poetryCacheDirEnv:        isolatedCacheDir,
+		poetryVirtualenvsPathEnv: filepath.Join(isolatedCacheDir, poetryVirtualenvsDirName),
+	})
+	if err != nil {
+		return nil, errors.Join(err, os.RemoveAll(isolatedCacheDir))
+	}
+	log.Debug(fmt.Sprintf("Poetry: using an isolated cache at %s (user cache: %q)", isolatedCacheDir, userCacheDir))
+	stopInterruptCleanup := cleanupOnInterrupt(isolatedCacheDir)
+	return func() error {
+		stopInterruptCleanup()
+		return errors.Join(restoreEnv(), os.RemoveAll(isolatedCacheDir))
+	}, nil
+}
+
+// cleanupOnInterrupt removes dir on Ctrl+C or SIGTERM, then lets the process terminate as usual. The returned stop function unregisters it.
+func cleanupOnInterrupt(dir string) (stop func()) {
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	var stopOnce sync.Once
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go watchInterrupt(dir, signals, done, func() { signal.Stop(signals) }, terminateBySignal)
+	return func() {
+		stopOnce.Do(func() {
+			signal.Stop(signals)
+			close(done)
+		})
+	}
+}
+
+// watchInterrupt waits for a signal or done; on a signal it removes dir and calls terminate.
+func watchInterrupt(dir string, signals <-chan os.Signal, done <-chan struct{}, stopNotify func(), terminate func(os.Signal)) {
+	select {
+	case sig := <-signals:
+		log.Debug(fmt.Sprintf("Poetry: received %v, removing the isolated cache %s", sig, dir))
+		removeDirAfterInterrupt(dir)
+		stopNotify()
+		terminate(sig)
+	case <-done:
+	}
+}
+
+// removeDirAfterInterrupt removes dir with a few retries, as Poetry may still be writing to it while shutting down.
+func removeDirAfterInterrupt(dir string) {
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := os.RemoveAll(dir); err == nil {
+			if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// interruptExitCode is the conventional exit status for a signal.
+func interruptExitCode(sig os.Signal) int {
+	switch sig {
+	case os.Interrupt:
+		return 130
+	case syscall.SIGTERM:
+		return 143
+	}
+	return 1
+}
+
+// terminateBySignal ends the process as if the signal was not handled, or exits with the conventional status if that is not possible.
+func terminateBySignal(sig os.Signal) {
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
+	if process, err := os.FindProcess(os.Getpid()); err == nil {
+		if err = process.Signal(sig); err == nil {
+			time.Sleep(2 * time.Second)
+		}
+	}
+	os.Exit(interruptExitCode(sig))
+}
+
+// setEnvWithRestore sets the env vars and returns a function that restores their previous state; a failure midway rolls back.
+func setEnvWithRestore(vars map[string]string) (restore func() error, err error) {
+	type previousValue struct {
+		value string
+		found bool
+	}
+	previous := make(map[string]previousValue, len(vars))
+	restore = func() (restoreErr error) {
+		for name, prev := range previous {
+			if prev.found {
+				restoreErr = errors.Join(restoreErr, os.Setenv(name, prev.value))
+			} else {
+				restoreErr = errors.Join(restoreErr, os.Unsetenv(name))
+			}
+		}
+		return
+	}
+	for name, value := range vars {
+		prevValue, found := os.LookupEnv(name)
+		previous[name] = previousValue{value: prevValue, found: found}
+		if err = os.Setenv(name, value); err != nil {
+			return nil, errors.Join(errorutils.CheckError(err), restore())
+		}
+	}
+	return restore, nil
+}
+
+// getPoetryUserCacheDir returns Poetry's current cache dir (`poetry config cache-dir`), or empty if unknown.
+func getPoetryUserCacheDir() string {
+	output, err := executeCommand("poetry", "config", "cache-dir")
+	if err != nil {
+		log.Debug("Poetry: failed to get the cache directory, the isolated cache will start empty:", err.Error())
+		return ""
+	}
+	return parsePoetryCacheDir(output)
+}
+
+// parsePoetryCacheDir returns the last non-empty output line (older Poetry prints notices first) if it is an absolute path.
+func parsePoetryCacheDir(output string) string {
+	lines := strings.Split(output, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if filepath.IsAbs(line) {
+			return filepath.Clean(line)
+		}
+		return ""
+	}
+	return ""
+}
+
+// seedPoetryCache copies the reusable parts of the user's cache (read-only) into the isolated cache.
+// Best effort: failures are logged, a partial copy is removed, and the run continues.
+func seedPoetryCache(userCacheDir, isolatedCacheDir string) {
+	if userCacheDir == "" {
+		return
+	}
+	if isSubPath(userCacheDir, isolatedCacheDir) || isSubPath(isolatedCacheDir, userCacheDir) {
+		log.Debug("Poetry: skipping cache seeding, the user cache and the isolated cache overlap")
+		return
+	}
+	var sources []string
+	var totalSize int64
+	var totalFiles int
+	for _, subDir := range poetryCacheSeedSubDirs {
+		source := filepath.Join(userCacheDir, subDir)
+		info, err := os.Stat(source)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		size, files, err := dirStats(source)
+		if err != nil {
+			log.Debug(fmt.Sprintf("Poetry: skipping cache seeding, failed to inspect %s: %s", source, err.Error()))
+			return
+		}
+		sources = append(sources, subDir)
+		totalSize += size
+		totalFiles += files
+	}
+	if len(sources) == 0 {
+		return
+	}
+	if totalSize > poetryCacheSeedMaxBytes {
+		log.Debug(fmt.Sprintf("Poetry: skipping cache seeding, the user cache (%d bytes) is larger than the limit (%d bytes)", totalSize, poetryCacheSeedMaxBytes))
+		return
+	}
+	if totalFiles > poetryCacheSeedMaxFiles {
+		log.Debug(fmt.Sprintf("Poetry: skipping cache seeding, the user cache has %d files, more than the limit (%d files)", totalFiles, poetryCacheSeedMaxFiles))
+		return
+	}
+	for _, subDir := range sources {
+		destination := filepath.Join(isolatedCacheDir, subDir)
+		if err := biutils.CopyDir(filepath.Join(userCacheDir, subDir), destination, true, nil); err != nil {
+			log.Debug(fmt.Sprintf("Poetry: failed to copy %s into the isolated cache, continuing without it: %s", subDir, err.Error()))
+			if removeErr := os.RemoveAll(destination); removeErr != nil {
+				log.Debug("Poetry: failed to remove a partially copied cache directory:", removeErr.Error())
+			}
+			continue
+		}
+		log.Debug(fmt.Sprintf("Poetry: seeded the isolated cache with %s", subDir))
+	}
+}
+
+// dirStats returns the total size and the number of regular files under dir.
+func dirStats(dir string) (size int64, files int, err error) {
+	err = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		size += info.Size()
+		files++
+		return nil
+	})
+	return
+}
+
+// isSubPath reports whether child is parent or located under it.
+func isSubPath(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func wrapPoetryCurationErr(lockErr error) error {
