@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -115,21 +116,28 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	if strings.Contains(resolveErr.Error(), pnpmCvsBlockedVersionMarker) && strings.Contains(resolveErr.Error(), pnpmCvsAffectedPackagesMarker) {
 		return resolveErr // already names the exact blocked package(s); the probe below would only add noise
 	}
+	skipProbe := false
 	// only populated for pnpm on the success path (setRepoFromNpmrcForPnpm runs after GetTechDependencyTree returns), so resolve it ourselves here on this failure path.
 	if params.DependenciesRepository == "" {
 		if registryConfig, regErr := GetNativePnpmRegistryConfig(); regErr == nil {
 			params.DependenciesRepository = registryConfig.RepoName
-			// mirrors setRepoFromNpmrcForPnpm: .npmrc's URL always wins (so the probe hits the right instance in multi-server setups), only the token falls back to the existing ServerDetails.
+			// mirrors setRepoFromNpmrcForPnpm: .npmrc's URL is used only when its host matches the configured 'jf c' server, otherwise the probe is skipped.
 			if registryConfig.AuthToken != "" {
 				params.ServerDetails = &config.ServerDetails{
 					ArtifactoryUrl: registryConfig.ArtifactoryUrl,
 					AccessToken:    registryConfig.AuthToken,
 				}
 			} else if params.ServerDetails != nil {
-				// copy before mutating: params.ServerDetails may be the shared struct ca.ServerDetails() returns, and overwriting its URL in place would leak to other techs in a multi-tech audit.
-				copied := *params.ServerDetails
-				copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
-				params.ServerDetails = &copied
+				if !utils.SameRegistryHost(params.ServerDetails.ArtifactoryUrl, registryConfig.ArtifactoryUrl) {
+					// .npmrc is untrusted project content: never send the 'jf c' credentials to a different scheme/host.
+					log.Warn(fmt.Sprintf("pnpm curation probe: the registry declared in .npmrc (%s) does not match the configured 'jf c' server (%s) — skipping the probe to avoid sending its credentials to a different host.", utils.RedactUrlUserinfo(registryConfig.ArtifactoryUrl), utils.RedactUrlUserinfo(params.ServerDetails.ArtifactoryUrl)))
+					skipProbe = true
+				} else {
+					// copy before mutating: params.ServerDetails may be the shared struct ca.ServerDetails() returns, and overwriting its URL in place would leak to other techs in a multi-tech audit.
+					copied := *params.ServerDetails
+					copied.ArtifactoryUrl = registryConfig.ArtifactoryUrl
+					params.ServerDetails = &copied
+				}
 			}
 		} else {
 			log.Debug(fmt.Sprintf("pnpm curation probe: failed to read Artifactory repository from .npmrc: %s", regErr.Error()))
@@ -138,6 +146,9 @@ func curationNoLockfileError(params technologies.BuildInfoBomGeneratorParams, wo
 	memberRel := importer
 	if memberRel == "." {
 		memberRel = ""
+	}
+	if skipProbe {
+		return errorutils.CheckErrorf("'jf curation-audit' could not produce 'pnpm-lock.yaml' — 'pnpm install --lockfile-only' failed, and the direct dependencies were not probed because the registry declared in .npmrc does not match the configured 'jf c' server. Align the two (or select the matching server with 'jf c use <server-id>' or JFROG_CLI_SERVER_ID) and re-run 'jf ca'. Underlying pnpm error: %s", resolveErr.Error())
 	}
 	probed, totalProbed := probeBlockedPnpmDirectDeps(params, workspaceRoot, memberRel)
 	outputRef := string(outFormat.Table)

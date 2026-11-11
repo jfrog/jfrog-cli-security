@@ -301,25 +301,24 @@ func ToURI(path string) string {
 	return u.String()
 }
 
-func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, fullRemotePath string, err error) {
+// For a configured remote repository, the resource is expected under '<repo>/artifactory/' (a remote that proxies https://releases.jfrog.io).
+// fallbackRemotePath is '<repo>/' directly (a remote that proxies https://releases.jfrog.io/artifactory, or a repository holding the resources in its root). It is empty when there is no fallback.
+func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, remotePath, fallbackRemotePath string, err error) {
 	if remoteServerDetails != nil && remoteRepo != "" {
 		// Config profile server and repo details are provided
 		server = remoteServerDetails
-		fullRemotePath = path.Join(remoteRepo, downloadPath)
-		return
+	} else {
+		// Try to get releases remote details from environment variable
+		if server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv); err != nil {
+			return
+		}
 	}
-	// Try to get releases remote details from environment variable
-	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
-	if err != nil {
-		return
+	if remoteRepo == "" {
+		log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
+		// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
+		return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, "", nil
 	}
-	if remoteRepo != "" {
-		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
-		return
-	}
-	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
-	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
-	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
+	return server, path.Join(remoteRepo, "artifactory", downloadPath), path.Join(remoteRepo, downloadPath), nil
 }
 
 // RepositoryScansListLink is a deep link into Xray's Scans List for one artifact.

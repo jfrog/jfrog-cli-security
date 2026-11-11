@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -456,7 +457,7 @@ type RemoteResource struct {
 
 // Get the details of the resource from the JPD / Releases remote it is downloaded from.
 func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (*RemoteResource, error) {
-	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
+	rtDetails, remotePath, fallbackRemotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath, remoteRepo, remoteServerDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -466,10 +467,23 @@ func GetRemoteResource(resourceName, downloadPath, remoteRepo string, remoteServ
 	}
 	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
 	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
-	if err != nil {
+	if err != nil && fallbackRemotePath != "" && isLayoutMismatchError(err) {
+		fallbackUrl := rtDetails.ArtifactoryUrl + fallbackRemotePath
+		var fallbackErr error
+		if remoteFileDetails, _, fallbackErr = client.GetRemoteFileDetails(fallbackUrl, &httpClientDetails); fallbackErr != nil {
+			return nil, fmt.Errorf("couldn't get remote file details for %s: %w; and for %s: %w", downloadUrl, err, fallbackUrl, fallbackErr)
+		}
+		remotePath = fallbackRemotePath
+	} else if err != nil {
 		return nil, fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
 	}
 	return &RemoteResource{name: resourceName, serverDetails: rtDetails, path: remotePath, details: remoteFileDetails}, nil
+}
+
+// A wrong repository layout returns 404, or 403 when the user's permissions cover only specific folders of the repository.
+func isLayoutMismatchError(err error) bool {
+	var httpErr *errorutils.HttpResponseError
+	return errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusForbidden)
 }
 
 // Returns true when targetDir already holds the latest version of the resource.

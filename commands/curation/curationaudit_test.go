@@ -4976,6 +4976,67 @@ func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
 	}
 }
 
+// TestSendBoundedRequestFollowsCloudStorageRedirect covers XRAY-167698: a redirect to cloud
+// storage (e.g. S3) must be followed, without leaking credentials or custom headers to it.
+func TestSendBoundedRequestFollowsCloudStorageRedirect(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var storageAuth, storageWaiver string
+			var storageRequests atomic.Int32
+			storage := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				storageRequests.Add(1)
+				storageAuth = r.Header.Get("Authorization")
+				storageWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("binary-content"))
+			}))
+			defer storage.Close()
+
+			var artifactoryWaiver string
+			var requests atomic.Int32
+			artifactory := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				artifactoryWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				http.Redirect(w, r, storage.URL+"/presigned?sig=abc", http.StatusFound)
+			}))
+			defer artifactory.Close()
+
+			serverDetails := &config.ServerDetails{
+				Url:            artifactory.URL + "/",
+				ArtifactoryUrl: artifactory.URL + "/",
+				AccessToken:    "super-secret-token",
+				InsecureTls:    true,
+			}
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+			}
+			requestDetails := analyzer.httpClientDetails.Clone()
+			requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+			resp, body, err := analyzer.sendBoundedRequest(http.MethodGet,
+				strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+
+			require.NoError(t, err, "a redirect to Artifactory's own cloud storage backend must be followed, not rejected")
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "binary-content", string(body))
+			assert.Equal(t, int32(1), requests.Load())
+			assert.Equal(t, int32(1), storageRequests.Load())
+
+			assert.Equal(t, "syn", artifactoryWaiver, "the configured Artifactory server must still receive the waiver header")
+			assert.Empty(t, storageAuth, "credentials must never be forwarded to the cloud storage host")
+			assert.Empty(t, storageWaiver, "custom curation headers must never be forwarded to the cloud storage host")
+		})
+	}
+}
+
 func TestCvsMetadataRejectsRedirectOutsideRepository(t *testing.T) {
 	tests := []struct {
 		name string
@@ -7537,4 +7598,126 @@ registry = "sparse+%s/api/cargo/cargo-test-repo/index/"
 		},
 	}
 	assert.Equal(t, expected, results)
+}
+
+// skipIfPnpmUnusable skips on Windows (pnpm delegates 'config get registry' to npm via cmd.exe, unresolvable on the runner) or when pnpm is not on PATH.
+func skipIfPnpmUnusable(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("pnpm config get registry delegates to npm via cmd.exe, which is not resolvable on the Windows runner")
+	}
+	if _, err := exec.LookPath("pnpm"); err != nil {
+		t.Skip("pnpm is not on PATH")
+	}
+}
+
+// writeNpmrcProject creates a project dir whose .npmrc declares registryUrl (no token) and chdirs into it.
+func writeNpmrcProject(t *testing.T, registryUrl string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	for _, envKey := range []string{"NPM_CONFIG_REGISTRY", "npm_config_registry"} {
+		t.Setenv(envKey, "")
+		require.NoError(t, os.Unsetenv(envKey))
+	}
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"npmrc-hostcheck-test","version":"1.0.0"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".npmrc"), []byte("registry="+registryUrl+"\n"), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() { clienttestutils.ChangeDirAndAssert(t, prevWd) })
+}
+
+func newConfiguredServerCommand() *CurationAuditCommand {
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+	return ca
+}
+
+// TestSetRepoFromNpmrcHostCheck: a tokenless .npmrc registry must get the 'jf c' credentials only when its scheme/host match the configured server.
+func TestSetRepoFromNpmrcHostCheck(t *testing.T) {
+	const configuredArtifactoryUrl = "https://configured-server.example.com/artifactory/"
+	testCases := []struct {
+		name          string
+		tech          string
+		registryUrl   string
+		expectedError string
+	}{
+		{name: "npm: different host is rejected", tech: "npm", registryUrl: "https://attacker.example.com/artifactory/api/npm/npm-test-repo/", expectedError: "does not match"},
+		{name: "npm: different scheme is rejected", tech: "npm", registryUrl: "http://configured-server.example.com/artifactory/api/npm/npm-test-repo/", expectedError: "does not match"},
+		{name: "npm: matching host falls back to jf c credentials", tech: "npm", registryUrl: "https://configured-server.example.com/artifactory/api/npm/npm-test-repo/"},
+		{name: "npm: explicit default port is the same host", tech: "npm", registryUrl: "https://configured-server.example.com:443/artifactory/api/npm/npm-test-repo/"},
+		{name: "pnpm: different host is rejected", tech: "pnpm", registryUrl: "https://attacker.example.com/artifactory/api/npm/pnpm-test-repo/", expectedError: "does not match"},
+		{name: "pnpm: different scheme is rejected", tech: "pnpm", registryUrl: "http://configured-server.example.com/artifactory/api/npm/pnpm-test-repo/", expectedError: "does not match"},
+		{name: "pnpm: matching host falls back to jf c credentials", tech: "pnpm", registryUrl: "https://configured-server.example.com/artifactory/api/npm/pnpm-test-repo/"},
+		{name: "pnpm: explicit default port is the same host", tech: "pnpm", registryUrl: "https://configured-server.example.com:443/artifactory/api/npm/pnpm-test-repo/"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.tech == "pnpm" {
+				skipIfPnpmUnusable(t)
+			}
+			writeNpmrcProject(t, tc.registryUrl)
+			ca := newConfiguredServerCommand()
+
+			var setErr error
+			if tc.tech == "pnpm" {
+				setErr = ca.setRepoFromNpmrcForPnpm()
+			} else {
+				setErr = ca.setRepoFromNpmrc()
+			}
+
+			sd, err := ca.ServerDetails()
+			require.NoError(t, err)
+			assert.Equal(t, configuredArtifactoryUrl, sd.ArtifactoryUrl, "shared ServerDetails must not be mutated")
+			if tc.expectedError != "" {
+				require.Error(t, setErr)
+				assert.Contains(t, setErr.Error(), tc.expectedError)
+				assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+				return
+			}
+			require.NoError(t, setErr)
+			require.NotNil(t, ca.PackageManagerConfig)
+			pmSd, sdErr := ca.PackageManagerConfig.ServerDetails()
+			require.NoError(t, sdErr)
+			assert.Equal(t, "super-secret-token", pmSd.AccessToken)
+		})
+	}
+}
+
+// TestCredentialFallbackServerDetailsHostCheck covers the shared host guard's accept/reject decisions and that the mismatch error never leaks URL userinfo.
+func TestCredentialFallbackServerDetailsHostCheck(t *testing.T) {
+	testCases := []struct {
+		name           string
+		discoveredUrl  string
+		expectedError  bool
+		forbiddenInErr string
+	}{
+		{name: "same host is accepted", discoveredUrl: "https://configured-server.example.com/artifactory/"},
+		{name: "explicit default port is accepted", discoveredUrl: "https://configured-server.example.com:443/artifactory/"},
+		{name: "different host is rejected", discoveredUrl: "https://attacker.example.com/artifactory/", expectedError: true},
+		{name: "userinfo is redacted from the mismatch error", discoveredUrl: "https://s3cr3t-token@attacker.example.com/artifactory/", expectedError: true, forbiddenInErr: "s3cr3t-token"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ca := newConfiguredServerCommand()
+			serverDetails, err := ca.credentialFallbackServerDetails("npm", ".npmrc", tc.discoveredUrl)
+			if !tc.expectedError {
+				require.NoError(t, err)
+				assert.Equal(t, "super-secret-token", serverDetails.AccessToken)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "does not match")
+			if tc.forbiddenInErr != "" {
+				assert.NotContains(t, err.Error(), tc.forbiddenInErr)
+			}
+		})
+	}
 }

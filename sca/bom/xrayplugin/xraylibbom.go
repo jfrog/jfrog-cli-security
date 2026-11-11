@@ -3,6 +3,7 @@ package xrayplugin
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -130,17 +131,67 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 
 func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	scanConfig := plugin.Config{
-		BomRef:         cdxutils.GetFileRef(target.Target),
-		Type:           string(cyclonedx.ComponentTypeFile),
-		Name:           target.Target,
-		IgnorePatterns: target.GetCentralConfigExclusions(utils.ScaScan),
-		IncludeDirs:    target.Include,
-		Ecosystems:     sbg.specificTechs,
+		BomRef:              cdxutils.GetFileRef(target.Target),
+		Type:                string(cyclonedx.ComponentTypeFile),
+		Name:                target.Target,
+		IgnorePatterns:      ignorePatternsForTarget(target),
+		IncludeDirs:         target.Include,
+		Ecosystems:          sbg.specificTechs,
+		AllowBuildExecution: true,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
+}
+
+// ignorePatternsForTarget is the ignore list sent to the Xray-Lib plugin.
+// A config profile replaces the CLI flag. With no profile, the flag is used.
+// An omitted flag falls back to the default list. An explicit empty flag stays empty, so a scan can run without exclusions.
+func ignorePatternsForTarget(target results.ScanTarget) []string {
+	var patterns []string
+	switch {
+	case len(target.CentralConfigModules) > 0:
+		patterns = target.GetCentralConfigExclusions(utils.ScaScan)
+	case len(target.Exclude) > 0:
+		patterns = target.Exclude
+	default:
+		patterns = utils.DefaultScaExcludePatterns
+	}
+	return normalizeIgnorePatterns(patterns)
+}
+
+func normalizeIgnorePatterns(patterns []string) []string {
+	normalized := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern = normalizeIgnorePatternSeparators(pattern)
+		for strings.HasPrefix(pattern, "./") {
+			pattern = strings.TrimPrefix(pattern, "./")
+		}
+		if pattern != "" {
+			normalized = append(normalized, pattern)
+		}
+	}
+	return normalized
+}
+
+func normalizeIgnorePatternSeparators(pattern string) string {
+	var normalized strings.Builder
+	normalized.Grow(len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '\\' && i+1 < len(pattern) && (pattern[i+1] == '*' || pattern[i+1] == '?') {
+			normalized.WriteByte('\\')
+			i++
+			normalized.WriteByte(pattern[i])
+			continue
+		}
+		if pattern[i] == '\\' {
+			normalized.WriteByte('/')
+			continue
+		}
+		normalized.WriteByte(pattern[i])
+	}
+	return normalized.String()
 }
 
 func (sbg *XrayLibBomGenerator) getPluginEnvVars() utils.EnvironmentVariables {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -637,6 +638,9 @@ func createScanTargetsFromConfigs(cmdResults *results.SecurityCommandResults, pa
 		return
 	}
 	log.Debug("Creating scan targets from config profile:", configProfile.ProfileName)
+	if cliExclusions := params.Exclusions(); len(cliExclusions) > 0 && !utils.ElementsEqual(cliExclusions, utils.DefaultScaExcludePatterns) {
+		log.Debug(fmt.Sprintf("Config profile exclusions replace --exclusions; discarding CLI patterns: %s", strings.Join(cliExclusions, ";")))
+	}
 	for _, module := range configProfile.Modules {
 		moduleRoot := rootDir
 		if module.PathFromRoot != "" && module.PathFromRoot != "." {
@@ -1097,7 +1101,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
 		}
-		cmdResults.SetUploadedArtifactPath(filepath.Join(params.GetRtResultRepositoryWithProjectKey(), uploadPath))
+		cmdResults.SetUploadedArtifactPath(path.Join(params.GetRtResultRepositoryWithProjectKey(), uploadPath))
 		if uiRoute, err := getScanResultsUiRoute(params, uploadPath); err != nil {
 			log.Warn(fmt.Sprintf("failed to get scan results UI route: %s", err.Error()))
 		} else if uiRoute != "" {

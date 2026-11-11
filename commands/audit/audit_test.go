@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -38,6 +40,7 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	xrayServices "github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -580,6 +583,55 @@ func TestDetectScanTargetsNewFlowKeepsProjectUnderMatchingAncestor(t *testing.T)
 	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
 	require.NoError(t, err)
 	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
+}
+
+func TestNewFlowProfileDiscardsCliExclusions(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	projectDir := filepath.Join(baseDir, "project")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	profile := &services.ConfigProfile{
+		ProfileName: "profile",
+		Modules: []services.Module{{
+			PathFromRoot:    ".",
+			ExcludePatterns: []string{"vendor"},
+		}},
+	}
+	tests := []struct {
+		name       string
+		exclusions []string
+		wantLog    bool
+	}{
+		{name: "custom flag is logged as discarded", exclusions: []string{"tools/teleport/examples/*"}, wantLog: true},
+		{name: "default flag is not logged", exclusions: utils.DefaultScaExcludePatterns, wantLog: false},
+		{name: "empty flag is not logged", exclusions: nil, wantLog: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			origLogger := log.Logger
+			log.SetLogger(log.NewLogger(log.DEBUG, &buf))
+			defer log.SetLogger(origLogger)
+
+			cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+			params := NewAuditParams()
+			params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+			params.SetConfigProfile(profile)
+			params.SetExclusions(tt.exclusions)
+			detectScanTargets(cmdRes, params)
+
+			require.Len(t, cmdRes.Targets, 1)
+			assert.Equal(t, []string{"vendor"}, cmdRes.Targets[0].Exclude)
+			if tt.wantLog {
+				assert.Contains(t, buf.String(), "tools/teleport/examples/*")
+				assert.Contains(t, buf.String(), "discard")
+			} else {
+				assert.NotContains(t, buf.String(), "discard")
+			}
+		})
+	}
 }
 
 func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
@@ -1955,4 +2007,29 @@ func TestInitAuditCmdResults_TransitiveContextualAnalysis_ErrorDoesNotFailAuditO
 	entitlementsJson, err := utils.GetAsJsonBytes(cmdResults.Entitlements, false, false)
 	require.NoError(t, err)
 	assert.NotContains(t, string(entitlementsJson), "transitive_contextual_analysis")
+}
+
+func TestProcessScanResultsSetsUploadedArtifactPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "scan-cdx/upload") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(services.UploadScanCdxResponse{Repository: "frogbot", Path: "git.example.com:8443/collection/repo/main/commits/source_code.cdx.json"})
+	}))
+	defer server.Close()
+	auditBasicParams := (&AuditBasicParams{}).
+		SetServerDetails(&config.ServerDetails{XrayUrl: server.URL + "/"}).
+		SetXrayVersion(utils.XrayCdxUploadMinVersion)
+	params := NewAuditParams().
+		SetGraphBasicParams(auditBasicParams).
+		SetUploadCdxResults(true).
+		SetRtResultRepository("frogbot")
+
+	cmdResults := processScanResults(params, results.NewCommandResults(utils.SourceCode))
+
+	require.NoError(t, cmdResults.GetErrors())
+	assert.Equal(t, "frogbot/git.example.com:8443/collection/repo/main/commits/source_code.cdx.json", cmdResults.UploadedArtifactPath)
 }
