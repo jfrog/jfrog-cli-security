@@ -3,13 +3,17 @@ package python
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -955,9 +959,12 @@ exit /b 1
 	require.NoError(t, os.WriteFile(filepath.Join(dir, pyprojectToml), []byte("[tool.poetry]\nname=\"x\"\n"), 0600))
 	t.Chdir(dir)
 
-	_, _, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
 		IsCurationCmd: true,
 	})
+	if restoreEnv != nil {
+		t.Cleanup(func() { _ = restoreEnv() })
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "SyntaxError",
 		"original check error must appear in the returned error chain")
@@ -2602,4 +2609,1132 @@ func TestParsePipfileArtifactorySourceEnvVarExpansion(t *testing.T) {
 	require.NotNil(t, sd)
 	assert.Equal(t, "myuser", sd.User)
 	assert.Equal(t, "mytoken", sd.Password)
+}
+
+// snapshotDir returns relative path -> content for every file under dir ("" content for directories),
+// used to prove a directory was not modified.
+func snapshotDir(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	require.NoError(t, filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		rel, relErr := filepath.Rel(dir, path)
+		require.NoError(t, relErr)
+		if entry.IsDir() {
+			snapshot[rel+"/"] = ""
+			return nil
+		}
+		content, readErr := os.ReadFile(path) // #nosec G122 -- test helper walking a t.TempDir() it created, no attacker-controlled paths
+		require.NoError(t, readErr)
+		snapshot[rel] = string(content)
+		return nil
+	}))
+	return snapshot
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+// createFakeUserPoetryCache builds a user cache with every directory a real Poetry cache has.
+func createFakeUserPoetryCache(t *testing.T) string {
+	t.Helper()
+	userCache := t.TempDir()
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "release-info"), "release-info-content")
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "release-info-2"), "release-info-content-2")
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "_http", "a", "b", "wheel"), "wheel-bytes")
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "_http_", "c", "d", "wheel"), "wheel-bytes")
+	writeTestFile(t, filepath.Join(userCache, "artifacts", "05", "59", "setuptools.whl"), "artifact-bytes")
+	writeTestFile(t, filepath.Join(userCache, "virtualenvs", "proj-py3.12", "pyvenv.cfg"), "venv")
+	return userCache
+}
+
+func TestParsePoetryCacheDir(t *testing.T) {
+	absolute := filepath.Join(string(filepath.Separator), "Users", "me", "Library", "Caches", "pypoetry")
+	if runtime.GOOS == "windows" {
+		absolute = `C:\Users\me\AppData\Local\pypoetry\Cache`
+	}
+	testCases := []struct {
+		name     string
+		output   string
+		expected string
+	}{
+		{name: "plain path", output: absolute + "\n", expected: absolute},
+		{name: "no trailing newline", output: absolute, expected: absolute},
+		{name: "surrounding whitespace", output: "  " + absolute + "  \r\n", expected: absolute},
+		{
+			name: "deprecation notices before the value (Poetry 1.2.x)",
+			output: "Configuration file exists at /Users/me/Library/Application Support/pypoetry, reusing this directory.\n\n" +
+				"Consider moving configuration to /Users/me/Library/Preferences/pypoetry, as support for the legacy directory will be removed.\n" +
+				absolute + "\n",
+			expected: absolute,
+		},
+		{name: "empty output", output: "", expected: ""},
+		{name: "blank lines only", output: "\n  \n", expected: ""},
+		{name: "relative path is rejected", output: "relative/cache\n", expected: ""},
+		{name: "value must be the last line", output: absolute + "\nsome trailing text\n", expected: ""},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.expected, parsePoetryCacheDir(testCase.output))
+		})
+	}
+}
+
+func TestParsePoetryCacheDirExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	assert.Equal(t, filepath.Join(home, ".cache", "poetry"), parsePoetryCacheDir("~/.cache/poetry\n"))
+	assert.Equal(t, home, parsePoetryCacheDir("~\n"))
+	if runtime.GOOS == "windows" {
+		assert.Equal(t, filepath.Join(home, "cache"), parsePoetryCacheDir(`~\cache`+"\n"))
+	}
+	assert.Equal(t, "", parsePoetryCacheDir("~other/cache\n"), "only the current user's ~ is expanded")
+}
+
+func TestPoetryHttpBasicEnv(t *testing.T) {
+	assert.Equal(t,
+		map[string]string{"POETRY_HTTP_BASIC_PYPI_CURATION_USERNAME": "user", "POETRY_HTTP_BASIC_PYPI_CURATION_PASSWORD": "p@ss=word"},
+		poetryHttpBasicEnv("pypi-curation", "user", "p@ss=word"))
+	assert.Equal(t,
+		map[string]string{"POETRY_HTTP_BASIC_MY.REPO_1_USERNAME": "u", "POETRY_HTTP_BASIC_MY.REPO_1_PASSWORD": "p"},
+		poetryHttpBasicEnv("my.repo-1", "u", "p"), "only dashes are replaced, as Poetry does")
+}
+
+func TestIsSubPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	parent := sep + filepath.Join("a", "b")
+	assert.True(t, isSubPath(parent, parent))
+	assert.True(t, isSubPath(parent, filepath.Join(parent, "c", "d")))
+	assert.False(t, isSubPath(parent, sep+filepath.Join("a", "bc")), "a sibling sharing the name prefix is not a sub path")
+	assert.False(t, isSubPath(parent, sep+"a"))
+	assert.False(t, isSubPath(parent, sep+filepath.Join("x", "y")))
+}
+
+func TestSetEnvWithRestore(t *testing.T) {
+	const existing, missing = "JF_TEST_EXISTING_ENV", "JF_TEST_MISSING_ENV"
+	t.Setenv(existing, "original")
+	unsetEnvForTest(t, missing)
+
+	restore, err := setEnvWithRestore(map[string]string{existing: "changed", missing: "added"})
+	require.NoError(t, err)
+	assert.Equal(t, "changed", os.Getenv(existing))
+	assert.Equal(t, "added", os.Getenv(missing))
+
+	require.NoError(t, restore())
+	assert.Equal(t, "original", os.Getenv(existing), "an existing variable must get its original value back")
+	_, found := os.LookupEnv(missing)
+	assert.False(t, found, "a variable that did not exist must be removed again")
+}
+
+func TestSeedPoetryCacheCopiesReusableDirsOnly(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	before := snapshotDir(t, userCache)
+	isolated := t.TempDir()
+
+	seedPoetryCache(userCache, isolated)
+
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info"))
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info-2"))
+	assert.NoDirExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "_http"), "the HTTP cache is keyed by URL and never matches")
+	assert.NoDirExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "_http_"), "the Poetry 2.4 HTTP cache is skipped too")
+	assert.NoDirExists(t, filepath.Join(isolated, "artifacts"), "artifacts is keyed by URL and never matches, so it is not copied")
+	content, err := os.ReadFile(filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info"))
+	require.NoError(t, err)
+	assert.Equal(t, "release-info-content", string(content))
+	assert.NoDirExists(t, filepath.Join(isolated, "virtualenvs"), "virtualenvs must never be copied")
+
+	assert.Equal(t, before, snapshotDir(t, userCache), "the user's cache must not be modified by seeding")
+}
+
+func TestSeedPoetryCacheMissingSubDirs(t *testing.T) {
+	// A user cache without an 'artifacts' directory (Poetry 1.2 and 1.4 never create it).
+	userCache := t.TempDir()
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "release-info"), "x")
+	isolated := t.TempDir()
+
+	seedPoetryCache(userCache, isolated)
+
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info"))
+	assert.NoDirExists(t, filepath.Join(isolated, "artifacts"))
+}
+
+func TestSeedPoetryCacheNoUserCache(t *testing.T) {
+	isolated := t.TempDir()
+	seedPoetryCache("", isolated)
+	seedPoetryCache(filepath.Join(t.TempDir(), "does-not-exist"), isolated)
+	entries, err := os.ReadDir(isolated)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "nothing is copied when the user has no cache")
+}
+
+func TestSeedPoetryCacheSkippedWhenTooLarge(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	isolated := t.TempDir()
+	previousLimit := poetryCacheSeedMaxBytes
+	poetryCacheSeedMaxBytes = 5
+	t.Cleanup(func() { poetryCacheSeedMaxBytes = previousLimit })
+
+	seedPoetryCache(userCache, isolated)
+
+	entries, err := os.ReadDir(isolated)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a cache above the size limit must not be copied")
+}
+
+func TestSeedPoetryCacheSkippedWhenTooManyFiles(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t) // 2 files that are copied (the HTTP caches are not counted)
+	isolated := t.TempDir()
+	previousLimit := poetryCacheSeedMaxFiles
+	poetryCacheSeedMaxFiles = 1
+	t.Cleanup(func() { poetryCacheSeedMaxFiles = previousLimit })
+
+	seedPoetryCache(userCache, isolated)
+
+	entries, err := os.ReadDir(isolated)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a cache with more files than the limit must not be copied")
+}
+
+func TestSeedPoetryCacheCopiesWhenFileCountIsExactlyTheLimit(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t) // 2 files that are copied (the HTTP caches are not counted)
+	isolated := t.TempDir()
+	previousLimit := poetryCacheSeedMaxFiles
+	poetryCacheSeedMaxFiles = 2
+	t.Cleanup(func() { poetryCacheSeedMaxFiles = previousLimit })
+
+	seedPoetryCache(userCache, isolated)
+
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info"))
+}
+
+func TestSeedPoetryCacheDoesNotCountArtifactsTowardTheLimits(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t) // 2 files in cache/repositories
+	for i := 0; i < 5; i++ {                  // many large-ish files in artifacts, which is never copied
+		writeTestFile(t, filepath.Join(userCache, "artifacts", "x", fmt.Sprintf("wheel-%d.whl", i)), strings.Repeat("a", 1000))
+	}
+	isolated := t.TempDir()
+	previousFiles, previousBytes := poetryCacheSeedMaxFiles, poetryCacheSeedMaxBytes
+	poetryCacheSeedMaxFiles, poetryCacheSeedMaxBytes = 2, 1000
+	t.Cleanup(func() { poetryCacheSeedMaxFiles, poetryCacheSeedMaxBytes = previousFiles, previousBytes })
+
+	seedPoetryCache(userCache, isolated)
+
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info"), "artifacts must not push the cache over the limits")
+	assert.NoDirExists(t, filepath.Join(isolated, "artifacts"))
+}
+
+func TestSeedPoetryCacheOverlappingDirs(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	before := snapshotDir(t, userCache)
+
+	seedPoetryCache(userCache, userCache)
+	seedPoetryCache(userCache, filepath.Join(userCache, "nested-isolated"))
+
+	assert.Equal(t, before, snapshotDir(t, userCache), "overlapping source and destination must be a no-op")
+}
+
+func TestDirStatsSkipsHttpCacheDirs(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "src", "release-info"), "123")
+	writeTestFile(t, filepath.Join(dir, "src", "_http", "a", "big"), strings.Repeat("x", 1000))
+	writeTestFile(t, filepath.Join(dir, "src", "_http_", "a", "big"), strings.Repeat("x", 1000))
+	size, files, err := dirStats(dir)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), size, "the HTTP caches are not copied, so they must not count toward the limits")
+	assert.Equal(t, 1, files)
+}
+
+func TestDirStats(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "a"), "12345")
+	writeTestFile(t, filepath.Join(dir, "sub", "b"), "678")
+	size, files, err := dirStats(dir)
+	require.NoError(t, err)
+	assert.Equal(t, int64(8), size)
+	assert.Equal(t, 2, files)
+}
+
+// fakePoetryForCache writes a fake `poetry` that reports userCacheDir for `config cache-dir`, and on `lock` writes a
+// file into the cache directory Poetry was told to use and records the cache related environment it ran with.
+func fakePoetryForCache(t *testing.T, userCacheDir, recordFile string, failCacheDirQuery bool) {
+	t.Helper()
+	configBranch := `echo "` + userCacheDir + `"`
+	configBranchBat := `echo ` + userCacheDir
+	if failCacheDirQuery {
+		configBranch = `echo "boom" >&2; exit 2`
+		configBranchBat = "echo boom 1>&2\nexit /b 2"
+	}
+	writeFakeExecutable(t, t.TempDir(), "poetry",
+		`#!/bin/sh
+case "$1" in
+  --version) echo "Poetry (version 1.8.0)" ;;
+  config) `+configBranch+` ;;
+  lock)
+    mkdir -p "$POETRY_CACHE_DIR/cache/repositories" || exit 3
+    echo "written-by-lock" > "$POETRY_CACHE_DIR/cache/repositories/written.txt" || exit 3
+    echo "$POETRY_CACHE_DIR" > "`+recordFile+`"
+    echo "$POETRY_VIRTUALENVS_PATH" >> "`+recordFile+`"
+    echo "$VIRTUALENV_OVERRIDE_APP_DATA" >> "`+recordFile+`"
+    if [ -f "$POETRY_CACHE_DIR/cache/repositories/pypi-test/release-info" ]; then echo "seeded" >> "`+recordFile+`"; fi
+    ;;
+  install) ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`,
+		`@echo off
+if "%1"=="--version" goto :ver
+if "%1"=="config" goto :cfg
+if "%1"=="lock" goto :lck
+if "%1"=="install" exit /b 0
+echo unexpected call: %* 1>&2
+exit /b 2
+:ver
+echo Poetry (version 1.8.0)
+exit /b 0
+:cfg
+`+configBranchBat+`
+exit /b 0
+:lck
+mkdir "%POETRY_CACHE_DIR%\cache\repositories" 2>nul
+echo written-by-lock> "%POETRY_CACHE_DIR%\cache\repositories\written.txt"
+echo %POETRY_CACHE_DIR%> "`+recordFile+`"
+echo %POETRY_VIRTUALENVS_PATH%>> "`+recordFile+`"
+echo %VIRTUALENV_OVERRIDE_APP_DATA%>> "`+recordFile+`"
+if exist "%POETRY_CACHE_DIR%\cache\repositories\pypi-test\release-info" echo seeded>> "`+recordFile+`"
+exit /b 0
+`,
+	)
+}
+
+func TestInstallPoetryDepsIsolatesPoetryCache(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	userCacheBefore := snapshotDir(t, userCache)
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryForCache(t, userCache, recordFile, false)
+
+	t.Setenv(poetryCacheDirEnv, "user-cache-from-env")
+	t.Setenv(poetryVirtualenvsPathEnv, "user-venvs-from-env")
+
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+	require.NotNil(t, restoreEnv)
+
+	recorded, readErr := os.ReadFile(recordFile)
+	require.NoError(t, readErr)
+	lines := strings.Fields(string(recorded))
+	require.GreaterOrEqual(t, len(lines), 2, "the fake lock must record its environment")
+	isolatedCache := lines[0]
+	expectedIsolated, evalErr := filepath.EvalSymlinks(filepath.Join(workingDir, isolatedPoetryCacheDirName))
+	require.NoError(t, evalErr)
+	resolvedIsolated, evalErr := filepath.EvalSymlinks(isolatedCache)
+	require.NoError(t, evalErr)
+	assert.Equal(t, expectedIsolated, resolvedIsolated, "poetry lock must run with the isolated cache inside the working directory")
+	assert.Equal(t, filepath.Join(isolatedCache, "virtualenvs"), lines[1], "virtualenvs must be isolated as well")
+	assert.Equal(t, filepath.Join(isolatedCache, virtualenvAppDataDirName), lines[2], "virtualenv's own cache must be isolated as well")
+	assert.Contains(t, lines, "seeded", "the isolated cache must be seeded from the user's cache")
+
+	assert.FileExists(t, filepath.Join(isolatedCache, "cache", "repositories", "written.txt"))
+	assert.Equal(t, userCacheBefore, snapshotDir(t, userCache), "the user's Poetry cache must not be modified")
+
+	require.NoError(t, restoreEnv())
+	_, appDataSet := os.LookupEnv(virtualenvAppDataEnv)
+	assert.False(t, appDataSet, "the virtualenv app-data variable must be removed again")
+	assert.Equal(t, "user-cache-from-env", os.Getenv(poetryCacheDirEnv))
+	assert.Equal(t, "user-venvs-from-env", os.Getenv(poetryVirtualenvsPathEnv))
+	assert.NoDirExists(t, isolatedCache)
+	assert.Equal(t, userCacheBefore, snapshotDir(t, userCache))
+}
+
+func TestInstallPoetryDepsIsolatesPoetryCacheWhenUserCacheUnknown(t *testing.T) {
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryForCache(t, "", recordFile, true)
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	unsetEnvForTest(t, poetryVirtualenvsPathEnv)
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+
+	recorded, readErr := os.ReadFile(recordFile)
+	require.NoError(t, readErr)
+	assert.NotContains(t, string(recorded), "seeded")
+	assert.Contains(t, string(recorded), isolatedPoetryCacheDirName, "lock must still run with the isolated cache")
+
+	require.NoError(t, restoreEnv())
+	_, found := os.LookupEnv(poetryCacheDirEnv)
+	assert.False(t, found, "POETRY_CACHE_DIR must be removed again when it was not set before")
+	_, found = os.LookupEnv(poetryVirtualenvsPathEnv)
+	assert.False(t, found)
+	assert.NoDirExists(t, filepath.Join(workingDir, isolatedPoetryCacheDirName))
+}
+
+func TestInstallPoetryDepsNonCurationDoesNotIsolateCache(t *testing.T) {
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryForCache(t, t.TempDir(), recordFile, false)
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	t.Chdir(t.TempDir())
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: false})
+	require.NoError(t, err)
+	require.NotNil(t, restoreEnv)
+	_, found := os.LookupEnv(poetryCacheDirEnv)
+	assert.False(t, found, "the non-curation flow must keep using the user's regular Poetry cache")
+	assert.NoDirExists(t, filepath.Join(".", isolatedPoetryCacheDirName))
+}
+
+// unsetEnvForTest removes an environment variable for the duration of the test. The original value (or its absence)
+// is restored automatically when the test ends, so tests never leak environment changes into each other.
+func unsetEnvForTest(t *testing.T, name string) {
+	t.Helper()
+	t.Setenv(name, "") // registers the cleanup that restores the original state
+	require.NoError(t, os.Unsetenv(name))
+}
+
+// fakePoetryWithLock installs a fake `poetry` that reports userCacheDir for `config cache-dir` and runs the given
+// snippets for `lock` (one for sh, one for the Windows batch variant).
+func fakePoetryWithLock(t *testing.T, userCacheDir, lockSh, lockBat string) {
+	t.Helper()
+	writeFakeExecutable(t, t.TempDir(), "poetry",
+		"#!/bin/sh\ncase \"$1\" in\n  --version) echo \"Poetry (version 1.8.0)\" ;;\n  config) echo \""+userCacheDir+"\" ;;\n  lock) "+lockSh+" ;;\n  *) echo \"unexpected call: $*\" >&2; exit 2 ;;\nesac\n",
+		"@echo off\nif \"%1\"==\"--version\" goto :ver\nif \"%1\"==\"config\" goto :cfg\nif \"%1\"==\"lock\" goto :lck\necho unexpected call: %* 1>&2\nexit /b 2\n:ver\necho Poetry (version 1.8.0)\nexit /b 0\n:cfg\necho "+userCacheDir+"\nexit /b 0\n:lck\n"+lockBat+"\nexit /b 0\n",
+	)
+}
+
+// fakePoetryRecordingEnv is a fake `poetry` whose `lock` succeeds and records the cache related environment it ran with.
+func fakePoetryRecordingEnv(t *testing.T, userCacheDir, recordFile string) {
+	t.Helper()
+	fakePoetryWithLock(t, userCacheDir,
+		`echo "cache=$POETRY_CACHE_DIR" > "`+recordFile+`"; echo "venvs=$POETRY_VIRTUALENVS_PATH" >> "`+recordFile+`"`,
+		"echo cache=%POETRY_CACHE_DIR%> \""+recordFile+"\"\necho venvs=%POETRY_VIRTUALENVS_PATH%>> \""+recordFile+"\"",
+	)
+}
+
+// recordedCacheEnv reads the "cache=" and "venvs=" values written by fakePoetryRecordingEnv.
+func recordedCacheEnv(t *testing.T, recordFile string) (cache, venvs string) {
+	t.Helper()
+	content, err := os.ReadFile(recordFile)
+	require.NoError(t, err)
+	for _, line := range strings.Split(strings.ReplaceAll(string(content), "\r", ""), "\n") {
+		switch {
+		case strings.HasPrefix(line, "cache="):
+			cache = strings.TrimSpace(strings.TrimPrefix(line, "cache="))
+		case strings.HasPrefix(line, "venvs="):
+			venvs = strings.TrimSpace(strings.TrimPrefix(line, "venvs="))
+		}
+	}
+	return
+}
+
+// listNoFollow lists every path under dir without following symlinks (safe for symlink loops).
+func listNoFollow(t *testing.T, dir string) []string {
+	t.Helper()
+	var paths []string
+	require.NoError(t, filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		rel, relErr := filepath.Rel(dir, path)
+		require.NoError(t, relErr)
+		paths = append(paths, rel)
+		return nil
+	}))
+	return paths
+}
+
+func TestInstallPoetryDepsLockFailureRestoresEnvironmentAndRemovesCache(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	userCacheBefore := snapshotDir(t, userCache)
+	fakePoetryWithLock(t, userCache, `echo "Error: cannot resolve dependencies" >&2; exit 1`, "echo Error: cannot resolve dependencies 1>&2\nexit /b 1")
+	t.Setenv(poetryCacheDirEnv, "user-cache-from-env")
+	t.Setenv(poetryVirtualenvsPathEnv, "user-venvs-from-env")
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.Error(t, err, "a failing poetry lock must be reported")
+	require.NotNil(t, restoreEnv, "the restore function must be returned even when the lock fails")
+	isolated := filepath.Join(workingDir, isolatedPoetryCacheDirName)
+	assert.DirExists(t, isolated, "the isolated cache exists while the run is in progress")
+	assert.NotEqual(t, "user-cache-from-env", os.Getenv(poetryCacheDirEnv))
+
+	require.NoError(t, restoreEnv())
+	assert.Equal(t, "user-cache-from-env", os.Getenv(poetryCacheDirEnv))
+	assert.Equal(t, "user-venvs-from-env", os.Getenv(poetryVirtualenvsPathEnv))
+	assert.NoDirExists(t, isolated, "the isolated cache must be removed even after a failure")
+	assert.Equal(t, userCacheBefore, snapshotDir(t, userCache), "the user's cache must not change on a failed run either")
+}
+
+func TestInstallPoetryDepsCvsErrorIsPreservedWithIsolatedCache(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	fakePoetryWithLock(t, userCache,
+		`echo "Because sample-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed." >&2; exit 1`,
+		"echo Because sample-project depends on telnyx (4.87.1) which doesn't match any versions, version solving failed. 1>&2\nexit /b 1",
+	)
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	unsetEnvForTest(t, poetryVirtualenvsPathEnv)
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	var cvsErr *CvsBlockedError
+	require.ErrorAs(t, err, &cvsErr, "isolating the cache must not change the error type the CVS fallback relies on")
+	require.Len(t, cvsErr.Packages, 1)
+	assert.Equal(t, "telnyx", cvsErr.Packages[0].Name)
+	require.NotNil(t, restoreEnv)
+	require.NoError(t, restoreEnv())
+	assert.NoDirExists(t, filepath.Join(workingDir, isolatedPoetryCacheDirName))
+	_, found := os.LookupEnv(poetryCacheDirEnv)
+	assert.False(t, found)
+}
+
+func TestInstallPoetryDepsFailsClosedWhenIsolatedCacheCannotBeCreated(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	userCacheBefore := snapshotDir(t, userCache)
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryRecordingEnv(t, userCache, recordFile)
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	unsetEnvForTest(t, poetryVirtualenvsPathEnv)
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+	require.NoError(t, os.WriteFile(filepath.Join(workingDir, isolatedPoetryCacheDirName), []byte("in the way"), 0o600))
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.Error(t, err, "without an isolated cache the audit must stop, not fall back to the user's own Poetry cache")
+	assert.Contains(t, err.Error(), "failed to create the isolated Poetry cache:")
+	assert.Contains(t, err.Error(), isolatedPoetryCacheDirName, "the OS error names the folder that could not be created")
+	require.NotNil(t, restoreEnv, "a restore function is always returned")
+	assert.NoFileExists(t, recordFile, "poetry lock must not run when the cache could not be isolated")
+	_, found := os.LookupEnv(poetryCacheDirEnv)
+	assert.False(t, found, "no environment variable may be set")
+	require.NoError(t, restoreEnv())
+	assert.Equal(t, userCacheBefore, snapshotDir(t, userCache), "the user's cache is untouched")
+}
+
+func TestSeedPoetryCacheUnreadableFileSkipsSeeding(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file permissions can't make a file unreadable on Windows or when running as root")
+	}
+	userCache := createFakeUserPoetryCache(t)
+	locked := filepath.Join(userCache, "cache", "repositories", "pypi-test", "locked")
+	writeTestFile(t, locked, "secret")
+	require.NoError(t, os.Chmod(locked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o600) })
+	isolated := t.TempDir()
+
+	seedPoetryCache(userCache, isolated)
+
+	assert.NoDirExists(t, filepath.Join(isolated, "cache", "repositories"), "a half-copied directory must be removed")
+	var leftFiles []string
+	require.NoError(t, filepath.WalkDir(isolated, func(path string, entry fs.DirEntry, walkErr error) error {
+		require.NoError(t, walkErr)
+		if !entry.IsDir() {
+			leftFiles = append(leftFiles, path)
+		}
+		return nil
+	}))
+	assert.Empty(t, leftFiles, "no copied file is left behind and the run continues with an empty isolated cache")
+}
+
+func TestSeedPoetryCacheSymlinkLoopDoesNotHangOrCorrupt(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	source := filepath.Join(userCache, "cache", "repositories", "pypi-test")
+	if err := os.Symlink(filepath.Join(userCache, "cache"), filepath.Join(source, "loop")); err != nil {
+		t.Skipf("symlinks are not available here: %v", err)
+	}
+	userCacheBefore := listNoFollow(t, userCache)
+	isolated := t.TempDir()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		seedPoetryCache(userCache, isolated)
+	}()
+	select {
+	case <-done:
+	case <-time.After(60 * time.Second):
+		t.Fatal("seeding must not hang on a symlink loop")
+	}
+
+	copied := filepath.Join(isolated, "cache", "repositories", "pypi-test", "release-info")
+	if _, err := os.Stat(filepath.Join(isolated, "cache", "repositories")); err == nil {
+		assert.FileExists(t, copied, "a directory that exists in the isolated cache must be complete")
+	}
+	assert.Equal(t, userCacheBefore, listNoFollow(t, userCache), "the user's cache must not change")
+}
+
+func TestInstallPoetryDepsConsecutiveRunsDoNotLeakEnvironment(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	t.Setenv(poetryCacheDirEnv, "original-cache")
+	t.Setenv(poetryVirtualenvsPathEnv, "original-venvs")
+	var previousCache string
+	for run := 1; run <= 3; run++ {
+		recordFile := filepath.Join(t.TempDir(), "record.txt")
+		fakePoetryRecordingEnv(t, userCache, recordFile)
+		workingDir := t.TempDir()
+		t.Chdir(workingDir)
+
+		_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+		require.NoError(t, err, "run %d", run)
+		cache, _ := recordedCacheEnv(t, recordFile)
+		assert.Contains(t, cache, isolatedPoetryCacheDirName, "run %d uses its own isolated cache", run)
+		assert.NotEqual(t, previousCache, cache, "run %d must not reuse the previous run's cache folder", run)
+		previousCache = cache
+
+		require.NoError(t, restoreEnv())
+		assert.Equal(t, "original-cache", os.Getenv(poetryCacheDirEnv), "run %d must restore the environment", run)
+		assert.Equal(t, "original-venvs", os.Getenv(poetryVirtualenvsPathEnv))
+		assert.NoDirExists(t, filepath.Join(workingDir, isolatedPoetryCacheDirName))
+	}
+}
+
+// TestPoetryRedirectedToIsolatedCacheWithRealPoetry runs a real `poetry lock` (skipped if Poetry is missing) and checks
+// that it uses the isolated cache, the user's cache stays unchanged, and the isolated cache is removed afterwards.
+func skipUnlessCI(t *testing.T, reason string) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf("%s (this test must run on CI)", reason)
+	}
+	t.Skip(reason)
+}
+
+func TestPoetryRedirectedToIsolatedCacheWithRealPoetry(t *testing.T) {
+	if _, err := exec.LookPath("poetry"); err != nil {
+		skipUnlessCI(t, "poetry is not installed")
+	}
+	if _, err := validateMinimumPoetryVersion(CurationPoetryMinimumVersion); err != nil {
+		skipUnlessCI(t, fmt.Sprintf("the installed poetry is not supported for curation: %v", err))
+	}
+	unsetEnvForTest(t, poetryVirtualenvsPathEnv)
+	unsetEnvForTest(t, "VIRTUAL_ENV")
+	t.Setenv("POETRY_VIRTUALENVS_IN_PROJECT", "false")
+	unsetEnvForTest(t, poetryVirtualenvsCreateEnv)
+	pyproject := "[tool.poetry]\nname = \"jf-cache-test\"\nversion = \"0.1.0\"\ndescription = \"\"\nauthors = [\"test <test@example.com>\"]\n\n[tool.poetry.dependencies]\npython = \">=3.8\"\n"
+
+	baselineDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(baselineDir, pyprojectToml), []byte(pyproject), 0o600))
+	baseline := exec.Command("poetry", "lock", PoetryNoInteractionFlag)
+	baseline.Dir = baselineDir
+	baseline.Env = append(os.Environ(), poetryCacheDirEnv+"="+t.TempDir())
+	if output, err := baseline.CombinedOutput(); err != nil {
+		t.Skipf("poetry can't lock a dependency-free project in this environment: %v\n%s", err, output)
+	}
+
+	userCache := t.TempDir()
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", "known-entry"), "cached")
+	writeTestFile(t, filepath.Join(userCache, "virtualenvs", "old-venv", "pyvenv.cfg"), "old")
+	userCacheBefore := snapshotDir(t, userCache)
+	t.Setenv(poetryCacheDirEnv, userCache)
+	workingDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workingDir, pyprojectToml), []byte(pyproject), 0o600))
+	t.Chdir(workingDir)
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("USERPROFILE", fakeHome)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(fakeHome, ".cache"))
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+	require.NotNil(t, restoreEnv)
+	isolated := filepath.Join(workingDir, isolatedPoetryCacheDirName)
+	require.NoError(t, filepath.WalkDir(fakeHome, func(path string, entry fs.DirEntry, walkErr error) error {
+		require.NoError(t, walkErr)
+		assert.NotContains(t, path, "virtualenv", "virtualenv must not write its own cache under the user's home")
+		return nil
+	}))
+
+	assert.FileExists(t, filepath.Join(workingDir, poetryLockFile), "the real poetry created the lock file in the temp project")
+	assert.FileExists(t, filepath.Join(isolated, "cache", "repositories", "pypi-test", "known-entry"), "the user's cache entry was seeded")
+	assert.NoDirExists(t, filepath.Join(isolated, "virtualenvs", "old-venv"), "virtualenvs are never seeded")
+	cacheOutput, err := executeCommand("poetry", "config", "cache-dir")
+	require.NoError(t, err)
+	assert.Equal(t, resolveSymlinks(t, isolated), resolveSymlinks(t, parsePoetryCacheDir(cacheOutput)))
+	venvsOutput, err := executeCommand("poetry", "config", "virtualenvs.path")
+	require.NoError(t, err)
+	venvsPath := parsePoetryCacheDir(venvsOutput)
+	assert.Equal(t, poetryVirtualenvsDirName, filepath.Base(venvsPath))
+	assert.Equal(t, resolveSymlinks(t, isolated), resolveSymlinks(t, filepath.Dir(venvsPath)))
+
+	require.NoError(t, restoreEnv())
+	assert.NoDirExists(t, isolated, "the isolated cache is removed")
+	assert.Equal(t, userCache, os.Getenv(poetryCacheDirEnv), "the user's own POETRY_CACHE_DIR is restored")
+	assert.Equal(t, userCacheBefore, snapshotDir(t, userCache), "the user's cache is byte-for-byte unchanged")
+}
+
+// resolveSymlinks makes paths comparable on systems where the temp dir is a symlink (for example /var on macOS).
+func resolveSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	require.NoError(t, err)
+	return resolved
+}
+
+func TestSetEnvWithRestoreRollsBackWhenSettingFails(t *testing.T) {
+	const valid = "JF_TEST_ROLLBACK_VALID_ENV"
+	t.Setenv(valid, "original")
+
+	restore, err := setEnvWithRestore(map[string]string{valid: "changed", "JF_TEST_BAD=NAME": "x"})
+	require.Error(t, err)
+	assert.Nil(t, restore)
+	assert.Equal(t, "original", os.Getenv(valid), "variables set before the failure must be rolled back")
+}
+
+func TestSeedPoetryCacheSkipsWhenCacheSizeCannotBeDetermined(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("directory permissions can't block reading on Windows or when running as root")
+	}
+	userCache := createFakeUserPoetryCache(t)
+	blocked := filepath.Join(userCache, "cache", "repositories", "pypi-test", "blocked-dir")
+	require.NoError(t, os.MkdirAll(blocked, 0o755))
+	require.NoError(t, os.Chmod(blocked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	isolated := t.TempDir()
+
+	seedPoetryCache(userCache, isolated)
+
+	entries, err := os.ReadDir(isolated)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "when the cache can't be inspected nothing is copied")
+}
+
+func TestSeedPoetryCacheSkipsASourceThatIsNotADirectory(t *testing.T) {
+	userCache := t.TempDir()
+	writeTestFile(t, filepath.Join(userCache, "cache", "repositories"), "a regular file where a directory is expected")
+	isolated := t.TempDir()
+
+	seedPoetryCache(userCache, isolated)
+
+	entries, err := os.ReadDir(isolated)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a source that is not a directory is skipped")
+}
+
+func TestWatchInterruptRemovesDirectoryThenTerminates(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "isolated")
+	writeTestFile(t, filepath.Join(dir, "cache", "repositories", "pypi-test", "entry"), "x")
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	defer close(done)
+	notifyStopped := make(chan struct{})
+	terminated := make(chan os.Signal, 1)
+	go watchInterrupt(dir, signals, done, func() { close(notifyStopped) }, func(sig os.Signal) { terminated <- sig })
+
+	signals <- os.Interrupt // a fake signal: no real signal is ever sent to the test process
+
+	select {
+	case sig := <-terminated:
+		assert.Equal(t, os.Interrupt, sig)
+	case <-time.After(15 * time.Second):
+		t.Fatal("the interrupt handler did not run")
+	}
+	assert.NoDirExists(t, dir, "the isolated cache must be removed when the run is interrupted")
+	select {
+	case <-notifyStopped:
+	default:
+		t.Error("the signal notification must be stopped before terminating")
+	}
+}
+
+func TestWatchInterruptDoesNothingWhenStopped(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "isolated")
+	writeTestFile(t, filepath.Join(dir, "entry"), "x")
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		watchInterrupt(dir, signals, done, func() {}, func(os.Signal) { t.Error("must not terminate after being stopped") })
+		close(finished)
+	}()
+	close(done)
+	select {
+	case <-finished:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the watcher must return once it is stopped")
+	}
+	assert.FileExists(t, filepath.Join(dir, "entry"))
+}
+
+// TestIsolatePoetryCacheInterruptedDuringSeedingIsRemoved sends a real SIGTERM to a child process while it is still seeding.
+func TestIsolatePoetryCacheInterruptedDuringSeedingIsRemoved(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGTERM can't be sent to a process on Windows")
+	}
+	userCache := t.TempDir()
+	for i := 0; i < 9000; i++ { // just under the file limit, so seeding takes a few seconds
+		writeTestFile(t, filepath.Join(userCache, "cache", "repositories", "pypi-test", fmt.Sprintf("f%d", i)), "x")
+	}
+	fakePoetryForCache(t, userCache, filepath.Join(t.TempDir(), "record.txt"), false)
+	workingDir := t.TempDir()
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperIsolatePoetryCacheUntilKilled$") // #nosec G204 G702 -- re-runs this test binary
+	cmd.Env = append(os.Environ(), "JF_TEST_ISOLATE_HELPER_DIR="+workingDir)
+	require.NoError(t, cmd.Start())
+	isolated := filepath.Join(workingDir, isolatedPoetryCacheDirName)
+	require.Eventually(t, func() bool { _, statErr := os.Stat(isolated); return statErr == nil }, 20*time.Second, time.Millisecond)
+	require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, cmd.Wait(), &exitErr, "the process must end because of the signal")
+	assert.NoDirExists(t, isolated, "the isolated cache must be removed even when interrupted while seeding")
+	assert.NoDirExists(t, workingDir, "the temp project copy must be removed too")
+}
+
+// TestHelperIsolatePoetryCacheUntilKilled is the child process of the test above. It does nothing in a normal run.
+func TestHelperIsolatePoetryCacheUntilKilled(t *testing.T) {
+	dir := os.Getenv("JF_TEST_ISOLATE_HELPER_DIR")
+	if dir == "" {
+		t.Skip("helper process of TestIsolatePoetryCacheInterruptedDuringSeedingIsRemoved")
+	}
+	t.Chdir(dir)
+	cleanupOnInterrupt(dir) // as getDependencies does for the temp project copy
+	_, seed, err := isolatePoetryCache(true)
+	require.NoError(t, err)
+	seed()
+	time.Sleep(30 * time.Second) // waits to be interrupted
+}
+
+func TestCleanupOnInterruptStopLeavesDirectoryAlone(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "isolated")
+	writeTestFile(t, filepath.Join(dir, "entry"), "x")
+	stop := cleanupOnInterrupt(dir)
+	stop()
+	stop()
+	assert.FileExists(t, filepath.Join(dir, "entry"), "stopping the handler must not remove anything")
+}
+
+func TestRemoveDirAfterInterruptHandlesMissingDirectory(t *testing.T) {
+	removeDirAfterInterrupt(filepath.Join(t.TempDir(), "does-not-exist")) // must return without error or delay
+}
+
+func TestInterruptExitCode(t *testing.T) {
+	assert.Equal(t, 130, interruptExitCode(os.Interrupt))
+	assert.Equal(t, 143, interruptExitCode(syscall.SIGTERM))
+	assert.Equal(t, 1, interruptExitCode(syscall.SIGHUP))
+}
+
+func TestExecuteCommandDoesNotRunAfterInterrupt(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	interruptReceived.Store(true)
+	defer interruptReceived.Store(false)
+
+	_, err := executeCommand("touch", marker)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "interrupted")
+	assert.NoFileExists(t, marker)
+}
+
+func TestIsolatePoetryCacheDoesNotSeedAfterInterrupt(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	userCache := createFakeUserPoetryCache(t)
+	fakePoetryForCache(t, userCache, filepath.Join(t.TempDir(), "record.txt"), false)
+	restore, seed, err := isolatePoetryCache(true)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, restore()) }()
+	interruptReceived.Store(true)
+	defer interruptReceived.Store(false)
+
+	seed()
+
+	assert.NoDirExists(t, filepath.Join(isolatedPoetryCacheDirName, "cache"), "nothing is copied once the run is interrupted")
+}
+
+// TestGetDependenciesRemovesTempProjectCopyOnSigterm sends a real SIGTERM to a child process while a (fake) `poetry lock` is running.
+// The signal goes to that process only, so the running poetry must be stopped by it, or it would recreate the removed folder.
+func TestGetDependenciesRemovesTempProjectCopyOnSigterm(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGTERM can't be sent to a process on Windows")
+	}
+	userCache := t.TempDir()
+	tempBase := t.TempDir() // the child creates its jfrog.cli.temp.* folder here
+	lockStarted := filepath.Join(t.TempDir(), "lock-started")
+	fakeBin := t.TempDir()
+	writeFakeExecutable(t, fakeBin, "poetry",
+		`#!/bin/sh
+case "$1" in
+  --version) echo "Poetry (version 1.8.0)" ;;
+  config) echo "`+userCache+`" ;;
+  lock) touch "`+lockStarted+`"; sleep 1; mkdir -p "$POETRY_CACHE_DIR/late" ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`, "")
+	project := t.TempDir()
+	writeTestFile(t, filepath.Join(project, "pyproject.toml"), "[tool.poetry]\nname = \"sample\"\n")
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperGetDependenciesUntilKilled$") // #nosec G204 G702 -- re-runs this test binary
+	cmd.Env = append(os.Environ(), "JF_TEST_GETDEPS_PROJECT="+project, "TMPDIR="+tempBase)
+	require.NoError(t, cmd.Start())
+	require.Eventually(t, func() bool { _, statErr := os.Stat(lockStarted); return statErr == nil }, 30*time.Second, 10*time.Millisecond)
+	entries, err := os.ReadDir(tempBase)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries, "the temp project copy must exist while poetry lock runs")
+	require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, cmd.Wait(), &exitErr, "the process must end because of the signal")
+	time.Sleep(2 * time.Second) // a poetry that kept running would recreate the folder by now
+	entries, err = os.ReadDir(tempBase)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "the temp project copy, with the isolated cache inside it, must be removed and stay removed")
+}
+
+// TestHelperGetDependenciesUntilKilled is the child process of the test above. It does nothing in a normal run.
+func TestHelperGetDependenciesUntilKilled(t *testing.T) {
+	project := os.Getenv("JF_TEST_GETDEPS_PROJECT")
+	if project == "" {
+		t.Skip("helper process of TestGetDependenciesRemovesTempProjectCopyOnSigterm")
+	}
+	t.Chdir(project)
+	_, _, _, _, _ = getDependencies(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true}, techutils.Poetry) //nolint:dogsled // only the interruption matters here
+}
+
+func TestWatchInterruptStopsListeningBeforeRemovingTheDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "isolated")
+	writeTestFile(t, filepath.Join(dir, "entry"), "x")
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	defer close(done)
+	existedWhenStopped := make(chan bool, 1)
+	terminated := make(chan struct{})
+	go watchInterrupt(dir, signals, done, func() { _, statErr := os.Stat(dir); existedWhenStopped <- statErr == nil }, func(os.Signal) { close(terminated) })
+
+	signals <- os.Interrupt
+	<-terminated
+
+	assert.True(t, <-existedWhenStopped, "a second Ctrl+C must already end the process while the folder is being removed")
+}
+
+func TestRemoveDirAfterInterruptLeavesTheWorkingDirectoryFirst(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "isolated")
+	writeTestFile(t, filepath.Join(dir, "entry"), "x")
+	t.Chdir(dir)
+
+	removeDirAfterInterrupt(dir)
+
+	assert.NoDirExists(t, dir)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	assert.False(t, isSubPath(dir, wd), "the process must not stay inside the removed folder")
+}
+
+func TestTrackRunningCommandStopsCommandStartedAfterInterrupt(t *testing.T) {
+	interruptReceived.Store(true)
+	defer interruptReceived.Store(false)
+	cmd := exec.Command("sleep", "30")
+	require.NoError(t, cmd.Start())
+	untrack := trackRunningCommand(cmd.Process)
+	defer untrack()
+
+	var exitErr *exec.ExitError
+	assert.ErrorAs(t, cmd.Wait(), &exitErr, "a command started after the interrupt must be stopped at once")
+}
+
+func TestKillRunningCommandsStopsATrackedCommand(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	require.NoError(t, cmd.Start())
+	untrack := trackRunningCommand(cmd.Process)
+	defer untrack()
+
+	killRunningCommands()
+
+	var exitErr *exec.ExitError
+	assert.ErrorAs(t, cmd.Wait(), &exitErr)
+}
+
+func TestDirStatsRejectsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "a"), "x")
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, "link")); err != nil {
+		t.Skipf("symlinks are not available here: %v", err)
+	}
+	_, _, err := dirStats(dir)
+	assert.ErrorContains(t, err, "symlink")
+}
+
+func TestSeedPoetryCacheSkipsSymlinks(t *testing.T) {
+	outside := t.TempDir()
+	writeTestFile(t, filepath.Join(outside, "big"), "must-not-be-copied")
+
+	t.Run("symlinked cache/repositories", func(t *testing.T) {
+		userCache := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(userCache, "cache"), 0o700))
+		if err := os.Symlink(outside, filepath.Join(userCache, "cache", "repositories")); err != nil {
+			t.Skipf("symlinks are not available here: %v", err)
+		}
+		isolated := t.TempDir()
+		seedPoetryCache(userCache, isolated)
+		assert.NoDirExists(t, filepath.Join(isolated, "cache", "repositories"))
+	})
+	t.Run("symlink inside cache/repositories", func(t *testing.T) {
+		userCache := createFakeUserPoetryCache(t)
+		if err := os.Symlink(outside, filepath.Join(userCache, "cache", "repositories", "pypi-test", "link")); err != nil {
+			t.Skipf("symlinks are not available here: %v", err)
+		}
+		isolated := t.TempDir()
+		seedPoetryCache(userCache, isolated)
+		assert.NoDirExists(t, filepath.Join(isolated, "cache", "repositories"), "nothing is copied when a symlink could bypass the limits")
+	})
+}
+
+func TestIsolatedCacheRemovalFailureDoesNotFailTheAudit(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a folder that can't be emptied, which Windows and root can always do")
+	}
+	t.Chdir(t.TempDir())
+	t.Setenv(poetryCacheDirEnv, "")
+	restore, _, err := isolatePoetryCache(true)
+	require.NoError(t, err)
+	locked := filepath.Join(isolatedPoetryCacheDirName, "locked")
+	writeTestFile(t, filepath.Join(locked, "file"), "x")
+	require.NoError(t, os.Chmod(locked, 0o500))
+	defer func() { assert.NoError(t, os.Chmod(locked, 0o700)) }()
+
+	assert.NoError(t, restore(), "a leftover cache is logged, it must not fail the audit")
+}
+
+// fakePoetryHonoringCacheEnv is a fake `poetry` that, like the real one, reports POETRY_CACHE_DIR for `config cache-dir`
+// (or defaultCache when it is unset), treats a poetry.lock file as up to date, and records what `lock` ran with.
+func fakePoetryHonoringCacheEnv(t *testing.T, defaultCache, recordFile, poetryVersion string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake poetry is a shell script")
+	}
+	writeFakeExecutable(t, t.TempDir(), "poetry",
+		`#!/bin/sh
+case "$1" in
+  --version) echo "Poetry (version `+poetryVersion+`)" ;;
+  config) echo "${POETRY_CACHE_DIR:-`+defaultCache+`}" ;;
+  check) exit 0 ;;
+  lock)
+    echo "create=$POETRY_VIRTUALENVS_CREATE" >> "`+recordFile+`"
+    if [ -f "$POETRY_CACHE_DIR/cache/repositories/pypi-test/release-info" ]; then echo "seeded" >> "`+recordFile+`"; fi
+    ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`, "")
+}
+
+func TestInstallPoetryDepsSeedsFromUserCacheSetByEnvironment(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryHonoringCacheEnv(t, filepath.Join(t.TempDir(), "unused-default"), recordFile, "2.4.1")
+	t.Setenv(poetryCacheDirEnv, userCache) // a user-set POETRY_CACHE_DIR must still be found, not replaced by the isolated one
+	t.Chdir(t.TempDir())
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+
+	recorded, readErr := os.ReadFile(recordFile)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(recorded), "seeded")
+	assert.Contains(t, string(recorded), "create=false", "lock must not create a virtualenv")
+	require.NoError(t, restoreEnv())
+	assert.Equal(t, userCache, os.Getenv(poetryCacheDirEnv))
+}
+
+func TestInstallPoetryDepsDoesNotSeedWhenLockIsUpToDate(t *testing.T) {
+	userCache := createFakeUserPoetryCache(t)
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryHonoringCacheEnv(t, userCache, recordFile, "2.4.1")
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	workingDir := t.TempDir()
+	writeTestFile(t, filepath.Join(workingDir, poetryLockFile), "# fresh lock")
+	t.Chdir(workingDir)
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+
+	assert.NoDirExists(t, filepath.Join(workingDir, isolatedPoetryCacheDirName, "cache"), "a lock that is not regenerated must not pay for seeding")
+	assert.NoFileExists(t, recordFile, "poetry lock must not run")
+	require.NoError(t, restoreEnv())
+}
+
+func TestInstallPoetryDepsKeepsVirtualenvCreationOnPoetry1(t *testing.T) {
+	recordFile := filepath.Join(t.TempDir(), "record.txt")
+	fakePoetryHonoringCacheEnv(t, t.TempDir(), recordFile, "1.8.0")
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	unsetEnvForTest(t, poetryVirtualenvsCreateEnv)
+	t.Chdir(t.TempDir())
+
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+
+	recorded, readErr := os.ReadFile(recordFile)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(recorded), "create=\n", "Poetry 1.x is left to create its virtualenv: without one it needs distutils, which Python 3.12+ lacks")
+	require.NoError(t, restoreEnv())
+}
+
+// The source credentials must reach `poetry lock` through the environment only: never on a command line, and removed afterwards.
+func TestInstallPoetryDepsPassesCredentialsThroughEnvironmentOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake poetry is a shell script")
+	}
+	record := filepath.Join(t.TempDir(), "record.txt")
+	writeFakeExecutable(t, t.TempDir(), "poetry", `#!/bin/sh
+echo "args: $*" >> "`+record+`"
+case "$1" in
+  --version) echo "Poetry (version 2.4.1)" ;;
+  config) ;;
+  lock) echo "lock-env: user=$POETRY_HTTP_BASIC_JF_SRC_USERNAME password=$POETRY_HTTP_BASIC_JF_SRC_PASSWORD" >> "`+record+`" ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`, "")
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	unsetEnvForTest(t, "POETRY_HTTP_BASIC_JF_SRC_USERNAME")
+	unsetEnvForTest(t, "POETRY_HTTP_BASIC_JF_SRC_PASSWORD")
+	workingDir := t.TempDir()
+	writeTestFile(t, filepath.Join(workingDir, pyprojectToml), "[tool.poetry]\nname=\"x\"\nversion=\"0.1.0\"\n\n[[tool.poetry.source]]\nname=\"jf-src\"\nurl=\"http://127.0.0.1:9/artifactory/api/pypi/jf-src/simple\"\n")
+	t.Chdir(workingDir)
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{
+		IsCurationCmd: true, DependenciesRepository: "jf-src",
+		ServerDetails: &config.ServerDetails{ArtifactoryUrl: "http://127.0.0.1:9/artifactory/", User: "curuser", Password: "SECRET-PW"}, // #nosec G101 -- test fixture
+	})
+	require.NoError(t, err)
+	recorded, readErr := os.ReadFile(record)
+	require.NoError(t, readErr)
+	for _, line := range strings.Split(string(recorded), "\n") {
+		if strings.HasPrefix(line, "args:") {
+			assert.NotContains(t, line, "SECRET-PW", "the password must never be on a command line")
+			assert.NotContains(t, line, "http-basic", "credentials must not be saved through `poetry config http-basic`")
+		}
+	}
+	assert.Contains(t, string(recorded), "lock-env: user=curuser password=SECRET-PW")
+	require.NoError(t, restoreEnv())
+	_, found := os.LookupEnv("POETRY_HTTP_BASIC_JF_SRC_PASSWORD")
+	assert.False(t, found, "the credential variables are removed when the run ends")
+}
+
+func TestInstallPoetryDepsSeedsBeforeLockWhenLockIsStale(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake poetry is a shell script")
+	}
+	userCache := createFakeUserPoetryCache(t)
+	record := filepath.Join(t.TempDir(), "record.txt")
+	writeFakeExecutable(t, t.TempDir(), "poetry", `#!/bin/sh
+case "$1" in
+  --version) echo "Poetry (version 2.4.1)" ;;
+  config) echo "`+userCache+`" ;;
+  check) exit 1 ;;
+  lock)
+    if [ -f "$POETRY_CACHE_DIR/cache/repositories/pypi-test/release-info" ]; then echo "seeded" > "`+record+`"; else echo "not-seeded" > "`+record+`"; fi ;;
+  *) echo "unexpected call: $*" >&2; exit 2 ;;
+esac
+`, "")
+	unsetEnvForTest(t, poetryCacheDirEnv)
+	workingDir := t.TempDir()
+	writeTestFile(t, filepath.Join(workingDir, poetryLockFile), "# stale lock")
+	t.Chdir(workingDir)
+	_, restoreEnv, err := installPoetryDeps(technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true})
+	require.NoError(t, err)
+	require.NoError(t, restoreEnv())
+	recorded, readErr := os.ReadFile(record)
+	require.NoError(t, readErr)
+	assert.Equal(t, "seeded\n", string(recorded), "a stale lock is re-resolved, so the release-info cache must be seeded before poetry lock")
 }
