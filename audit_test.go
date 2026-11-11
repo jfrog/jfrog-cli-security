@@ -670,15 +670,21 @@ func TestXrayAuditPoetry(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validations.ValidateCommandOutput(t, testXrayAuditPoetry(t, tc.format), tc.format, validations.ValidationParams{
+			validations.ValidateCommandOutput(t, testXrayAuditPoetry(t, "poetry-project", tc.format), tc.format, validations.ValidationParams{
+				Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
+			})
+		})
+		// Same dependencies as "poetry-project", declared in the PEP 621 [project] table (Poetry 2.0+ default layout).
+		t.Run(tc.name+" PEP 621", func(t *testing.T) {
+			validations.ValidateCommandOutput(t, testXrayAuditPoetry(t, "poetry-pep621-project", tc.format), tc.format, validations.ValidationParams{
 				Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 			})
 		})
 	}
 }
 
-func testXrayAuditPoetry(t *testing.T, format format.OutputFormat) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project"))
+func testXrayAuditPoetry(t *testing.T, projectName string, format format.OutputFormat) string {
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", projectName))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)

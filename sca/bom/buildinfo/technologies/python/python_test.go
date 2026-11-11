@@ -211,6 +211,28 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	}
 }
 
+// Poetry 2.0+ declares dependencies in the PEP 621 [project] table by default, instead of [tool.poetry.dependencies].
+func TestBuildPoetryDependencyListPep621(t *testing.T) {
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "poetry", "poetry-pep621-project"))
+	defer cleanUp()
+	expectedPoetryUniqueDeps := []string{
+		PythonPackageTypeIdentifier + "django:1.11.15",
+		PythonPackageTypeIdentifier + "pytz:2026.6",
+		PythonPackageTypeIdentifier + "urllib3:1.22",
+		PythonPackageTypeIdentifier + "werkzeug:0.9.6",
+	}
+	// SkipAutoInstall relies on build-info-go's direct pyproject.toml and poetry.lock parsing, without running `poetry install`.
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}, techutils.Poetry)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, uniqueDeps, expectedPoetryUniqueDeps, "First is actual, Second is Expected")
+	require.Len(t, rootNode, 1)
+	assert.Len(t, rootNode[0].Nodes, 3)
+	djangoNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "django:1.11.15")
+	if assert.NotNil(t, djangoNode) {
+		tests.GetAndAssertNode(t, djangoNode.Nodes, "pytz:2026.6")
+	}
+}
+
 func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 	// This feature is currently supported and tested for Pip and Poetry only
 	testcases := []struct {
