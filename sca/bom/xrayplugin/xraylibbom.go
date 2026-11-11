@@ -131,12 +131,13 @@ func (sbg *XrayLibBomGenerator) getXrayLibExecutablePath() (xrayLibPath string, 
 
 func (sbg *XrayLibBomGenerator) executeScanner(scanner plugin.Scanner, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	scanConfig := plugin.Config{
-		BomRef:         cdxutils.GetFileRef(target.Target),
-		Type:           string(cyclonedx.ComponentTypeFile),
-		Name:           target.Target,
-		IgnorePatterns: ignorePatternsForTarget(target),
-		IncludeDirs:    target.Include,
-		Ecosystems:     sbg.specificTechs,
+		BomRef:              cdxutils.GetFileRef(target.Target),
+		Type:                string(cyclonedx.ComponentTypeFile),
+		Name:                target.Target,
+		IgnorePatterns:      ignorePatternsForTarget(target),
+		IncludeDirs:         target.Include,
+		Ecosystems:          sbg.specificTechs,
+		AllowBuildExecution: true,
 	}
 	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
 		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
