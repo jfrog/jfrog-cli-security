@@ -479,7 +479,7 @@ func TestCleanSubDirectories(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cleaned := cleanSubDirectories(test.workingDirectoryToFiles)
+			cleaned := CleanSubDirectories(test.workingDirectoryToFiles)
 			cleanedKeys := maps.Keys(cleaned)
 			expectedKeys := maps.Keys(test.expected)
 			assert.ElementsMatch(t, expectedKeys, cleanedKeys, "expected: %s, actual: %s", expectedKeys, cleanedKeys)
@@ -1497,4 +1497,83 @@ func TestPromotePipToUv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPromotePipToUvWorkspaceSubdirectory(t *testing.T) {
+	t.Run("declared workspace member is promoted to uv", func(t *testing.T) {
+		root := t.TempDir()
+		rootPyproject := `[project]
+name = "workspace-root"
+version = "0.1.0"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["packages/excluded"]
+`
+		require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(rootPyproject), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0o644))
+
+		// Declared member
+		memberDir := filepath.Join(root, "packages", "member1")
+		require.NoError(t, os.MkdirAll(memberDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(memberDir, "pyproject.toml"), []byte("[project]\nname = \"member1\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		techs := PromotePipToUv([]Technology{Pip}, memberDir)
+		assert.Contains(t, techs, Uv)
+		assert.NotContains(t, techs, Pip)
+
+		// Excluded member stays Pip
+		excludedDir := filepath.Join(root, "packages", "excluded")
+		require.NoError(t, os.MkdirAll(excludedDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(excludedDir, "pyproject.toml"), []byte("[project]\nname = \"excluded\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		techsExcluded := PromotePipToUv([]Technology{Pip}, excludedDir)
+		assert.Contains(t, techsExcluded, Pip)
+		assert.NotContains(t, techsExcluded, Uv)
+
+		// Unrelated directory not matching members pattern stays Pip
+		unrelatedDir := filepath.Join(root, "other", "subproject")
+		require.NoError(t, os.MkdirAll(unrelatedDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(unrelatedDir, "pyproject.toml"), []byte("[project]\nname = \"subproject\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		techsUnrelated := PromotePipToUv([]Technology{Pip}, unrelatedDir)
+		assert.Contains(t, techsUnrelated, Pip)
+		assert.NotContains(t, techsUnrelated, Uv)
+	})
+
+	t.Run("nested pyproject under parent uv.lock stays Pip unless declared as member", func(t *testing.T) {
+		root := t.TempDir()
+		// Parent has uv.lock but no [tool.uv.workspace] table
+		require.NoError(t, os.WriteFile(filepath.Join(root, "uv.lock"), []byte("version = 1\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"root\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		nestedDir := filepath.Join(root, "packages", "member1")
+		require.NoError(t, os.MkdirAll(nestedDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(nestedDir, "pyproject.toml"), []byte("[project]\nname = \"member1\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		techs := PromotePipToUv([]Technology{Pip}, nestedDir)
+		assert.Contains(t, techs, Pip)
+		assert.NotContains(t, techs, Uv)
+	})
+
+	t.Run("stops at first workspace-aware ancestor", func(t *testing.T) {
+		outer := t.TempDir()
+		// Outer workspace has a broad glob that would match nested/pkg if walked past inner
+		outerPyproject := "[tool.uv.workspace]\nmembers = [\"inner/*\"]\n"
+		require.NoError(t, os.WriteFile(filepath.Join(outer, "pyproject.toml"), []byte(outerPyproject), 0o644))
+
+		inner := filepath.Join(outer, "inner")
+		require.NoError(t, os.MkdirAll(inner, 0o755))
+		// Inner workspace does NOT claim pkg
+		innerPyproject := "[tool.uv.workspace]\nmembers = [\"other/*\"]\n"
+		require.NoError(t, os.WriteFile(filepath.Join(inner, "pyproject.toml"), []byte(innerPyproject), 0o644))
+
+		pkgDir := filepath.Join(inner, "pkg")
+		require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "pyproject.toml"), []byte("[project]\nname = \"pkg\"\nversion = \"0.1.0\"\n"), 0o644))
+
+		techs := PromotePipToUv([]Technology{Pip}, pkgDir)
+		assert.Contains(t, techs, Pip)
+		assert.NotContains(t, techs, Uv)
+	})
 }
