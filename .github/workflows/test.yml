@@ -3,6 +3,7 @@ name: JFrog CLI Security Tests
 permissions:
   actions: read
   contents: read
+  id-token: write
   pull-requests: write
 
 on:

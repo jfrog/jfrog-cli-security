@@ -132,3 +132,19 @@ runs:
       run: |
         echo "JAVA_HOME=$env:JAVA_HOME_11_X64" >> $env:GITHUB_ENV
         echo "$env:JAVA_HOME_11_X64\bin" >> $env:GITHUB_PATH
+
+    - name: Setup JFrog CLI for Maven and Gradle resolution
+      if: github.repository_owner == 'jfrog' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      uses: jfrog/setup-jfrog-cli@v5
+      env:
+        JF_URL: https://xray-dev.jfrogdev.org
+      with:
+        oidc-provider-name: github-oss-ci
+        disable-auto-build-publish: true
+        disable-job-summary: true
+    - name: Resolve Maven and Gradle dependencies through JFrog
+      if: github.repository_owner == 'jfrog' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      shell: bash
+      run: |
+        jf setup maven --repo oss-maven-virtual
+        jf setup gradle --repo oss-maven-virtual
