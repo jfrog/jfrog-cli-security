@@ -81,7 +81,7 @@ func TestShouldSkipScannerByModule(t *testing.T) {
 		Target:                     filepath.Join(string(filepath.Separator), "ci", "attestation", "myproject"),
 		DeprecatedAppsConfigModule: &module,
 	}, jasutils.IaC))
-	assert.True(t, ShouldSkipScannerByModule(results.ScanTarget{
+	assert.False(t, ShouldSkipScannerByModule(results.ScanTarget{
 		Target:                     filepath.Join(string(filepath.Separator), "ci", "my-test-project"),
 		DeprecatedAppsConfigModule: &module,
 	}, jasutils.IaC))

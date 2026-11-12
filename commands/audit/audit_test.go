@@ -585,6 +585,27 @@ func TestDetectScanTargetsNewFlowKeepsProjectUnderMatchingAncestor(t *testing.T)
 	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
 }
 
+func TestDetectScanTargetsNewFlowKeepsProjectNamedLikeExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+
+	projectDir := filepath.Join(baseDir, "my-test-project")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetExclusions([]string{"*test*"})
+
+	detectScanTargets(cmdRes, params)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
+}
+
 func TestNewFlowProfileDiscardsCliExclusions(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
@@ -634,40 +655,335 @@ func TestNewFlowProfileDiscardsCliExclusions(t *testing.T) {
 	}
 }
 
-func TestDetectScanTargetsSkipsCliExcludedCwdSingleTarget(t *testing.T) {
+func TestDetectScanTargetsKeepsProjectNamedLikeExclusion(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
 
-	excludedCwd := filepath.Join(baseDir, "parent_only_excluded_cli_audit")
-	assert.NoError(t, os.MkdirAll(excludedCwd, 0o755))
-	defer securityTestUtils.ChangeWDWithCallback(t, excludedCwd)()
+	projectDir := filepath.Join(baseDir, "my-test-project")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
-	params.SetExclusions([]string{"*parent_only_excluded_cli_audit*"})
+	params.SetExclusions([]string{"*test*"})
 
 	detectScanTargets(cmdRes, params)
-	assert.Empty(t, cmdRes.Targets)
+	require.NotEmpty(t, cmdRes.Targets)
+	resolvedProjectDir, err := filepath.EvalSymlinks(projectDir)
+	require.NoError(t, err)
+	assert.Equal(t, resolvedProjectDir, cmdRes.Targets[0].Target)
 }
 
-func TestDetectScanTargetsSkipsCliExcludedExplicitWorkingDir(t *testing.T) {
+func TestDetectScanTargetsKeepsExplicitWorkingDirNamedLikeExclusion(t *testing.T) {
 	baseDir, cleanUp := createTestDir(t)
 	defer cleanUp()
 
-	excludedOnly := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
-	assert.NoError(t, os.MkdirAll(excludedOnly, 0o755))
-	createEmptyFile(t, filepath.Join(excludedOnly, "package.json"))
+	projectDir := filepath.Join(baseDir, "cli_exclude_workdir_only_audit")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
 
 	defer securityTestUtils.ChangeWDWithCallback(t, baseDir)()
 
 	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 	params := NewAuditParams()
-	params.SetWorkingDirs([]string{excludedOnly})
+	params.SetWorkingDirs([]string{projectDir})
 	params.SetIsRecursiveScan(false)
 	params.SetExclusions([]string{"*cli_exclude_workdir_only_audit*"})
 
 	detectScanTargets(cmdRes, params)
+	require.NotEmpty(t, cmdRes.Targets)
+	assert.Equal(t, projectDir, cmdRes.Targets[0].Target)
+}
+
+func TestDetectScanTargetsNewFlowKeepsWorkingDirNamedLikeExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	projectDir := filepath.Join(resolvedBase, "my-test-proj")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{projectDir})
+	params.SetExclusions([]string{"*test*"})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, projectDir)
+	assert.Equal(t, []string{"*test*"}, cmdRes.Targets[0].Exclude)
+}
+
+func TestDetectScanTargetsDoesNotWarnWhenRootNameMatchesExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	projectDir := filepath.Join(resolvedBase, "my-test-proj")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	createEmptyFile(t, filepath.Join(projectDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	for _, newFlow := range []bool{false, true} {
+		buf.Reset()
+		cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+		params := NewAuditParams()
+		if newFlow {
+			params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+		}
+		params.SetExclusions([]string{"*test*"})
+		detectScanTargets(cmdRes, params)
+		require.NotEmpty(t, cmdRes.Targets)
+		assert.NotContains(t, buf.String(), "matches exclusion patterns")
+	}
+}
+
+func TestDetectScanTargetsNewFlowSkipsProfileIncludeNamedLikeExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	projectDir := filepath.Join(resolvedBase, "project")
+	testDir := filepath.Join(projectDir, "test")
+	assert.NoError(t, os.MkdirAll(testDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	profile := &services.ConfigProfile{
+		ProfileName: "profile",
+		Modules: []services.Module{{
+			PathFromRoot:    ".",
+			ExcludePatterns: []string{"*test*"},
+			IncludePatterns: []string{testDir},
+		}},
+	}
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetConfigProfile(profile)
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.NotContains(t, cmdRes.Targets[0].Include, testDir)
+}
+
+func TestDetectScanTargetsNewFlowSkipsProfileModuleRootNamedLikeExclusion(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	projectDir := filepath.Join(resolvedBase, "project")
+	testDir := filepath.Join(projectDir, "test")
+	assert.NoError(t, os.MkdirAll(testDir, 0o755))
+	createEmptyFile(t, filepath.Join(testDir, "package.json"))
+	defer securityTestUtils.ChangeWDWithCallback(t, projectDir)()
+
+	profile := &services.ConfigProfile{
+		ProfileName: "profile",
+		Modules: []services.Module{{
+			PathFromRoot:    "test",
+			ExcludePatterns: []string{"*test*"},
+		}},
+	}
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetConfigProfile(profile)
+
+	detectScanTargets(cmdRes, params)
+
 	assert.Empty(t, cmdRes.Targets)
+}
+
+func TestDetectScanTargetsNewFlowWarnsWhenWorkingDirIsMissing(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	projectDir := filepath.Join(resolvedBase, "proj")
+	assert.NoError(t, os.MkdirAll(projectDir, 0o755))
+	missingDir := filepath.Join(resolvedBase, "missing-proj")
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{projectDir, missingDir})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, projectDir)
+	assert.NotContains(t, cmdRes.Targets[0].Include, missingDir)
+	assert.Contains(t, buf.String(), "missing-proj")
+}
+
+func TestDetectScanTargetsNewFlowExpandsWildcardWorkingDir(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	apiDir := filepath.Join(resolvedBase, "src", "api")
+	webDir := filepath.Join(resolvedBase, "src", "web")
+	assert.NoError(t, os.MkdirAll(apiDir, 0o755))
+	assert.NoError(t, os.MkdirAll(webDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{filepath.Join("src", "*")})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, apiDir)
+	assert.Contains(t, cmdRes.Targets[0].Include, webDir)
+	assert.NotContains(t, buf.String(), "doesn't exist")
+}
+
+func TestGetTargetsInfoResolvesRelativeWorkingDirAgainstRoot(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	appDir := filepath.Join(root, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	defer securityTestUtils.ChangeWDWithCallback(t, otherDir)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{"app"}, xrayplugin.NewXrayLibBomGenerator(), nil, false, root)
+	require.NoError(t, err)
+	require.Len(t, includeDirs, 1)
+	got, err := filepath.EvalSymlinks(includeDirs[0])
+	require.NoError(t, err)
+	want, err := filepath.EvalSymlinks(appDir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestGetTargetsInfoKeepsAbsoluteWorkingDir(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	appDir := filepath.Join(otherDir, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, root)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{appDir}, xrayplugin.NewXrayLibBomGenerator(), nil, false, root)
+	require.NoError(t, err)
+	require.Len(t, includeDirs, 1)
+	got, err := filepath.EvalSymlinks(includeDirs[0])
+	require.NoError(t, err)
+	want, err := filepath.EvalSymlinks(appDir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestDetectScanTargetsNewFlowResolvesRelativeWorkingDirAgainstRoot(t *testing.T) {
+	root, cleanRoot := createTestDir(t)
+	defer cleanRoot()
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	appDir := filepath.Join(resolvedRoot, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0o755))
+
+	otherDir, cleanOther := createTestDir(t)
+	defer cleanOther()
+	defer securityTestUtils.ChangeWDWithCallback(t, otherDir)()
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetRootDir(resolvedRoot)
+	params.SetWorkingDirs([]string{"app"})
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, appDir)
+}
+
+func TestDetectScanTargetsNewFlowExpandsWildcardAfterWorkingDirNormalization(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+
+	apiDir := filepath.Join(resolvedBase, "src", "api")
+	webDir := filepath.Join(resolvedBase, "src", "web")
+	assert.NoError(t, os.MkdirAll(apiDir, 0o755))
+	assert.NoError(t, os.MkdirAll(webDir, 0o755))
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	_, includeDirs, _, err := GetTargetsInfo([]string{filepath.Join("src", "*")}, xrayplugin.NewXrayLibBomGenerator(), nil, false, "")
+	require.NoError(t, err)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs(includeDirs)
+
+	detectScanTargets(cmdRes, params)
+
+	require.Len(t, cmdRes.Targets, 1)
+	assert.Contains(t, cmdRes.Targets[0].Include, apiDir)
+	assert.Contains(t, cmdRes.Targets[0].Include, webDir)
+}
+
+func TestDetectScanTargetsNewFlowOmitsTargetWhenAllWorkingDirsMissing(t *testing.T) {
+	baseDir, cleanUp := createTestDir(t)
+	defer cleanUp()
+	resolvedBase, err := filepath.EvalSymlinks(baseDir)
+	require.NoError(t, err)
+	defer securityTestUtils.ChangeWDWithCallback(t, resolvedBase)()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.SetLogger(log.NewLogger(log.WARN, &buf))
+	defer log.SetLogger(origLogger)
+
+	cmdRes := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	params := NewAuditParams()
+	params.SetBomGenerator(xrayplugin.NewXrayLibBomGenerator())
+	params.SetWorkingDirs([]string{
+		filepath.Join(resolvedBase, "missing-a"),
+		filepath.Join(resolvedBase, "missing-b"),
+	})
+
+	detectScanTargets(cmdRes, params)
+
+	assert.Empty(t, cmdRes.Targets)
+	assert.Contains(t, buf.String(), "missing-a")
+	assert.Contains(t, buf.String(), "missing-b")
 }
 
 func TestDetectScanTargetsNewFlowCliExcludedCwdWithNonExcludedInclude(t *testing.T) {
