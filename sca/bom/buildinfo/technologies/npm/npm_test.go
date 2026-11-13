@@ -6,12 +6,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -905,4 +907,27 @@ func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
 				"BlockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
 		}
 	}
+}
+
+func TestReplaceProdFlag(t *testing.T) {
+	tests := []struct {
+		name       string
+		npmVersion string
+		args       []string
+		want       []string
+	}{
+		{"npm 12 prodOnly", "12.2.2", []string{"--prod", "--ignore-scripts"}, []string{"--omit=dev", "--ignore-scripts"}},
+		{"npm 7 prodOnly", "7.0.0", []string{"--prod"}, []string{"--omit=dev"}},
+		{"npm 6 keeps --prod", "6.14.18", []string{"--prod"}, []string{"--prod"}},
+		{"devOnly unchanged", "12.2.2", []string{"--dev"}, []string{"--dev"}},
+		{"no scope", "12.2.2", []string{"--ignore-scripts"}, []string{"--ignore-scripts"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := slices.Clone(tt.args)
+			assert.Equal(t, tt.want, replaceProdFlag(args, version.NewVersion(tt.npmVersion)))
+			assert.Equal(t, tt.args, args, "input slice must not be modified")
+		})
+	}
+	assert.Equal(t, []string{"--prod"}, replaceProdFlag([]string{"--prod"}, nil))
 }
