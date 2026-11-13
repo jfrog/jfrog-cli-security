@@ -27,6 +27,7 @@ Gotchas:
 - --months must be a positive integer; defaults to a built-in window if omitted.
 - When --input-file is used, the other mandatory flags are ignored.
 - --repo-name is a semicolon-separated list, not comma-separated.
+- On GitLab, projects in subgroups of the owner group are scanned too. They are reported, and passed to --repo-name, as their path relative to the owner group, for example "team-a/repo" for the project "my-group/team-a/repo".
 - The command is currently hidden from top-level help.
 
 Related: jf git audit`
