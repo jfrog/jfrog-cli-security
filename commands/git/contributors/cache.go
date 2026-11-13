@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unicode/utf8"
 
 	secutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -57,7 +58,7 @@ func readRepoCache(cacheDir, repo string, maxAge time.Duration) *repoScanResult 
 	if maxAge <= 0 {
 		return nil
 	}
-	path := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
+	path := repoCacheFilePath(cacheDir, repo)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// File simply doesn't exist yet — not an error worth logging.
@@ -66,6 +67,10 @@ func readRepoCache(cacheDir, repo string, maxAge time.Duration) *repoScanResult 
 	var entry repoCacheFile
 	if err = json.Unmarshal(data, &entry); err != nil {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to parse cache file %s: %v", path, err))
+		return nil
+	}
+	if entry.Repo != repo {
+		log.Debug(fmt.Sprintf("Contributors cache: file %s belongs to repo %q, not %q. Ignoring it.", path, entry.Repo, repo))
 		return nil
 	}
 	scannedAt, err := time.Parse(time.RFC3339, entry.ScannedAt)
@@ -113,7 +118,7 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to marshal cache for repo %q: %v", repo, err))
 		return
 	}
-	finalPath := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
+	finalPath := repoCacheFilePath(cacheDir, repo)
 	tmpPath := finalPath + ".tmp"
 	if err = os.WriteFile(tmpPath, data, 0600); err != nil {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to write tmp file %s: %v", tmpPath, err))
@@ -123,6 +128,28 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to rename %s → %s: %v", tmpPath, finalPath, err))
 		_ = os.Remove(tmpPath)
 	}
+}
+
+// maxCacheFileNamePrefixLength bounds the readable part of a cache file name. Together with the digest, ".json" and
+// the ".tmp" suffix of the temporary file, the resulting names stay well below the 255 byte limit of common file systems,
+// whatever the length of the repository path (GitLab allows deeply nested subgroups).
+const maxCacheFileNamePrefixLength = 100
+
+// repoCacheFilePath returns the cache file for a repository. The name keeps a (sanitized, bounded) prefix of the
+// repository path for readability and ends with a digest of the exact path, so that repositories whose sanitized
+// names are identical (for example the GitLab subgroup project "team-a/repo" and the project "team-a_repo") or
+// whose names only differ beyond the bounded prefix never share a file.
+func repoCacheFilePath(cacheDir, repo string) string {
+	prefix := sanitizeFilename(repo)
+	if len(prefix) > maxCacheFileNamePrefixLength {
+		prefix = prefix[:maxCacheFileNamePrefixLength]
+		// Do not cut a multi-byte character in half.
+		for !utf8.ValidString(prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	digest := sha256.Sum256([]byte(repo))
+	return filepath.Join(cacheDir, fmt.Sprintf("%s-%x.json", prefix, digest[:8]))
 }
 
 // sanitizeFilename replaces characters that are unsafe in file names (e.g. '/' in repo paths).
