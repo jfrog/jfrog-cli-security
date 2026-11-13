@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unicode/utf8"
 
 	secutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -129,12 +130,26 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 	}
 }
 
-// repoCacheFilePath returns the cache file for a repository. The name keeps the (sanitized) repository path for
-// readability and ends with a hash of the exact path, so that repositories whose sanitized names are identical
-// (for example the GitLab subgroup project "team-a/repo" and the project "team-a_repo") never share a file.
+// maxCacheFileNamePrefixLength bounds the readable part of a cache file name. Together with the digest, ".json" and
+// the ".tmp" suffix of the temporary file, the resulting names stay well below the 255 byte limit of common file systems,
+// whatever the length of the repository path (GitLab allows deeply nested subgroups).
+const maxCacheFileNamePrefixLength = 100
+
+// repoCacheFilePath returns the cache file for a repository. The name keeps a (sanitized, bounded) prefix of the
+// repository path for readability and ends with a digest of the exact path, so that repositories whose sanitized
+// names are identical (for example the GitLab subgroup project "team-a/repo" and the project "team-a_repo") or
+// whose names only differ beyond the bounded prefix never share a file.
 func repoCacheFilePath(cacheDir, repo string) string {
-	hash := sha256.Sum256([]byte(repo))
-	return filepath.Join(cacheDir, fmt.Sprintf("%s-%x.json", sanitizeFilename(repo), hash[:4]))
+	prefix := sanitizeFilename(repo)
+	if len(prefix) > maxCacheFileNamePrefixLength {
+		prefix = prefix[:maxCacheFileNamePrefixLength]
+		// Do not cut a multi-byte character in half.
+		for !utf8.ValidString(prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	digest := sha256.Sum256([]byte(repo))
+	return filepath.Join(cacheDir, fmt.Sprintf("%s-%x.json", prefix, digest[:8]))
 }
 
 // sanitizeFilename replaces characters that are unsafe in file names (e.g. '/' in repo paths).

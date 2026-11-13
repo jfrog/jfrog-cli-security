@@ -2,9 +2,11 @@ package contributors
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,4 +115,38 @@ func TestReadRepoCache_IgnoresFileOfOtherRepo(t *testing.T) {
 	require.NoError(t, os.WriteFile(repoCacheFilePath(dir, "my-repo"), data, 0600))
 
 	assert.Nil(t, readRepoCache(dir, "my-repo", 24*time.Hour))
+}
+
+func TestRepoCacheFilePath_BoundedLength(t *testing.T) {
+	dir := t.TempDir()
+	// GitLab allows up to 20 nested subgroups of up to 255 characters each, so the repository path can be far longer
+	// than a file name may be. The readable prefix is bounded, and the digest keeps long paths distinct.
+	longPrefix := strings.Repeat("sub-group-with-a-long-name/", 20)
+	repoA := longPrefix + "repo-a"
+	repoB := longPrefix + "repo-b"
+
+	pathA := repoCacheFilePath(dir, repoA)
+	pathB := repoCacheFilePath(dir, repoB)
+	assert.NotEqual(t, pathA, pathB)
+	for _, path := range []string{pathA, pathB} {
+		name := filepath.Base(path)
+		assert.LessOrEqual(t, len(name+".tmp"), 255, name)
+		assert.True(t, strings.HasSuffix(name, ".json"), name)
+	}
+
+	writeRepoCache(dir, repoA, repoScanResult{repo: repoA, totalCommits: 1}, 1)
+	writeRepoCache(dir, repoB, repoScanResult{repo: repoB, totalCommits: 2}, 1)
+	got := readRepoCache(dir, repoA, 24*time.Hour)
+	require.NotNil(t, got)
+	assert.Equal(t, 1, got.totalCommits)
+	got = readRepoCache(dir, repoB, 24*time.Hour)
+	require.NotNil(t, got)
+	assert.Equal(t, 2, got.totalCommits)
+}
+
+func TestRepoCacheFilePath_DoesNotSplitMultiByteCharacter(t *testing.T) {
+	repo := strings.Repeat("a", maxCacheFileNamePrefixLength-1) + "é" + "/repo"
+	name := filepath.Base(repoCacheFilePath(t.TempDir(), repo))
+	assert.True(t, utf8.ValidString(name), name)
+	assert.True(t, strings.HasPrefix(name, strings.Repeat("a", maxCacheFileNamePrefixLength-1)+"-"), name)
 }
