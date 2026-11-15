@@ -89,6 +89,8 @@ func TestReadRepoCache_SanitizedNameCollision(t *testing.T) {
 	dir := t.TempDir()
 	// "team-a/repo" and "team-a_repo" have the same sanitized name. Each must get its own cache file,
 	// and the cache of one must never be served for the other.
+	assert.NotEqual(t, repoCacheFilePath(dir, "team-a/repo"), repoCacheFilePath(dir, "team-a_repo"))
+
 	writeRepoCache(dir, "team-a/repo", repoScanResult{repo: "team-a/repo", totalCommits: 3}, 1)
 	assert.Nil(t, readRepoCache(dir, "team-a_repo", 24*time.Hour))
 
@@ -149,4 +151,59 @@ func TestRepoCacheFilePath_DoesNotSplitMultiByteCharacter(t *testing.T) {
 	name := filepath.Base(repoCacheFilePath(t.TempDir(), repo))
 	assert.True(t, utf8.ValidString(name), name)
 	assert.True(t, strings.HasPrefix(name, strings.Repeat("a", maxCacheFileNamePrefixLength-1)+"-"), name)
+}
+
+func TestRepoCacheFilePath_BoundedLengthWithMultiByteCharacters(t *testing.T) {
+	// Multi-byte characters are the worst case for the byte budget: 2 bytes per visible character.
+	repo := strings.Repeat("é/", 200) + "repo"
+	name := filepath.Base(repoCacheFilePath(t.TempDir(), repo))
+	assert.LessOrEqual(t, len(name+".tmp"), 255, name)
+	assert.True(t, utf8.ValidString(name), name)
+	assert.True(t, strings.HasPrefix(name, "é_é_"), name)
+}
+
+func TestRepoCacheFilePath_InvalidUTF8KeepsReadablePrefix(t *testing.T) {
+	// An invalid byte early in the path must not erase the readable prefix that follows it.
+	repo := "team-\xff/" + strings.Repeat("a", maxCacheFileNamePrefixLength) + "/repo"
+	name := filepath.Base(repoCacheFilePath(t.TempDir(), repo))
+	assert.True(t, utf8.ValidString(name), name)
+	assert.True(t, strings.HasPrefix(name, "team-__"+strings.Repeat("a", 20)), name)
+	assert.LessOrEqual(t, len(name+".tmp"), 255, name)
+}
+
+func TestWriteRepoCache_RemovesLegacyFile(t *testing.T) {
+	dir := t.TempDir()
+	const repo = "team-a/repo"
+	// Older versions named the file after the sanitized repository path only.
+	legacyPath := filepath.Join(dir, "team-a_repo.json")
+	require.NoError(t, os.WriteFile(legacyPath, []byte("{}"), 0600))
+
+	writeRepoCache(dir, repo, repoScanResult{repo: repo, totalCommits: 1}, 1)
+
+	_, err := os.Stat(legacyPath)
+	assert.True(t, os.IsNotExist(err), "legacy cache file must be removed")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+	require.NotNil(t, readRepoCache(dir, repo, 24*time.Hour))
+}
+
+func TestWriteRepoCache_StoresRequestedRepo(t *testing.T) {
+	dir := t.TempDir()
+	// The stored repository is the one the file name is derived from, even if the result carries another value,
+	// otherwise readRepoCache would reject the file forever.
+	writeRepoCache(dir, "team-a/repo", repoScanResult{repo: "", totalCommits: 4}, 1)
+	got := readRepoCache(dir, "team-a/repo", 24*time.Hour)
+	require.NotNil(t, got)
+	assert.Equal(t, "team-a/repo", got.repo)
+	assert.Equal(t, 4, got.totalCommits)
+}
+
+func TestSanitizeFilename(t *testing.T) {
+	assert.Equal(t, "a_b_c_d", sanitizeFilename("a/b\\c:d"))
+	assert.Equal(t, "repo__name_", sanitizeFilename("repo\x00\nname\t"))
+	assert.Equal(t, "plain-repo.v2", sanitizeFilename("plain-repo.v2"))
+	// Multi-byte characters are kept intact, invalid UTF-8 is replaced.
+	assert.Equal(t, "équipe_dépôt", sanitizeFilename("équipe/dépôt"))
+	assert.Equal(t, "team-__repo", sanitizeFilename("team-\xff/repo"))
 }
