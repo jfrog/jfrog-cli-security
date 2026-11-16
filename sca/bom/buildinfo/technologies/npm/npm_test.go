@@ -931,3 +931,25 @@ func TestReplaceProdFlag(t *testing.T) {
 	}
 	assert.Equal(t, []string{"--prod"}, replaceProdFlag([]string{"--prod"}, nil))
 }
+
+func TestBuildTreeDepsParamDepType(t *testing.T) {
+	tests := []struct {
+		name       string
+		depType    string
+		npmVersion string
+		want       []string
+	}{
+		{"prodOnly on npm 12", "prodOnly", "12.2.2", []string{"--omit=dev", IgnoreScriptsFlag}},
+		{"prodOnly on npm 7", "prodOnly", "7.0.0", []string{"--omit=dev", IgnoreScriptsFlag}},
+		{"prodOnly on npm 6", "prodOnly", "6.14.18", []string{"--prod", IgnoreScriptsFlag}},
+		{"devOnly on npm 12", "devOnly", "12.2.2", []string{"--dev", IgnoreScriptsFlag}},
+		{"all on npm 12", "", "12.2.2", []string{IgnoreScriptsFlag}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := (&technologies.BuildInfoBomGeneratorParams{}).SetNpmScope(tt.depType)
+			got := buildTreeDepsParam(params, version.NewVersion(tt.npmVersion))
+			assert.Equal(t, tt.want, got.Args)
+		})
+	}
+}

@@ -67,8 +67,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
-	treeDepsParam := createTreeDepsParam(&params)
-	treeDepsParam.Args = replaceProdFlag(treeDepsParam.Args, npmVersion)
+	treeDepsParam := buildTreeDepsParam(&params, npmVersion)
 
 	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(&params)
 	if err != nil {
@@ -316,6 +315,14 @@ func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biuti
 		OverwritePackageLock: params.NpmOverwritePackageLock,
 	}
 	return npmTreeDepParam
+}
+
+// buildTreeDepsParam builds the npm tree params for BuildDependencyTree and adapts
+// them to the installed npm version.
+func buildTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams, npmVersion *version.Version) biutils.NpmTreeDepListParam {
+	treeDepsParam := createTreeDepsParam(params)
+	treeDepsParam.Args = replaceProdFlag(treeDepsParam.Args, npmVersion)
+	return treeDepsParam
 }
 
 // replaceProdFlag replaces the abbreviated --prod flag (set for --dep-type prodOnly)
