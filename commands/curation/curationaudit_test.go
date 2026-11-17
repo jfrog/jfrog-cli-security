@@ -2650,6 +2650,11 @@ func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testin
 			wantWaiver:  true,
 			wantCatalog: "http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true",
 		},
+		{
+			name:       "all-versions message with a reworded tail",
+			message:    "All versions of '@milkio/stargate-worker' (npm-remote) are blocked from download by JFrog Curation.\nBlocked by these policies:\n1. P (C)",
+			wantReason: BlockingReasonUnknown,
+		},
 	}
 
 	for _, tt := range tests {
@@ -6134,14 +6139,15 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *
 		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
 	)
 	// Step 0's aggregate probe: confirmed whole-package block under policy openssf-jfca-test/openssf.
-	wholePackageBlockResponse := fmt.Sprintf(
-		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
-		policyName, condName,
+	wholePackageBlockMsg := fmt.Sprintf(
+		"All versions of '%s' (%s) are blocked from download by JFrog Curation.\nBlocked by one or more of these policies:\n1. %s (%s)\nDetails: https://x/pkg",
+		blockedPkg, repo, policyName, condName,
 	)
+	wholePackageBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, wholePackageBlockMsg)
 	// Steps 1-3's per-version probe: the SAME policy+condition, but with the raw,
 	// inconsistently-worded backend message (as opposed to Step 0's generic phrasing).
 	blockMsg := fmt.Sprintf(
-		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}. For details and alternatives, visit: https://x/version",
 		blockedPkg, blockedVer, policyName, condName, rawExpl, rawRec,
 	)
 	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
@@ -6196,6 +6202,7 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *
 		"same policy as aggregate must be normalized to the generic text, not leak the raw inconsistent backend message")
 	assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation,
 		"direct pinned dependency, same policy as aggregate, must get the generic npm-parity recommendation")
+	assert.Equal(t, "https://x/pkg", s.CatalogURL)
 }
 
 // TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch verifies that

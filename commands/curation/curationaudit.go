@@ -94,8 +94,9 @@ const (
 
 	// allVersionsOfPattern matches Xray's whole-package-block message with its lines joined by spaces:
 	// "All versions of 'X' (repo) are blocked from download by JFrog Curation. Blocked by one or more of
-	// these policies: 1. P (C) 2. ... Note: ... Action: ... Details: ...".
-	allVersionsOfPattern = `All versions of '[^']+' \([^)]*\) are blocked from download by JFrog Curation\.(?: Blocked by one or more of these policies: (.*?))?(?: Note: ([^.]*\.))?(?: Action: (.*?))?(?: Details: (\S+))?$`
+	// these policies: 1. P (C) 2. ... Note: ... Action: ... Details: ...". Any other text after the
+	// first sentence matches with empty groups.
+	allVersionsOfPattern = `All versions of '[^']+' \([^)]*\) are blocked from download by JFrog Curation\.(?:(?: Blocked by one or more of these policies: (.*?))?(?: Note: ([^.]*\.))?(?: Action: (.*?))?(?: Details: (\S+))?$|.*)`
 
 	errorTemplateHeadRequest = "failed sending HEAD request to %s for package '%s:%s'. Status-code: %v. Cause: %v"
 
@@ -3062,6 +3063,9 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		if wholePackageBlocked && wholePackageFallback != nil && len(wholePackageFallback.Policy) > 0 {
 			normalizeMatchingWholePackagePolicies(pkStatus, wholePackageFallback.Policy)
 		}
+		if wholePackageBlocked && wholePackageFallback != nil && wholePackageFallback.CatalogURL != "" {
+			pkStatus.CatalogURL = wholePackageFallback.CatalogURL
+		}
 		statuses = append(statuses, pkStatus)
 	}
 
@@ -3187,12 +3191,17 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 		}
 		if m := allVersionsOfMsgRegex.FindStringSubmatch(strings.ReplaceAll(respError.Errors[0].Message, "\n", " ")); m != nil {
 			policies := allVersionsOfPolicies(m)
+			blockingReason := BlockingReasonPolicy
+			if m[1] == "" && m[3] == "" {
+				log.Debug(fmt.Sprintf("curation: could not parse the policies of the all-versions block message for %s: %s", name, respError.Errors[0].Message))
+				policies, blockingReason = nil, BlockingReasonUnknown
+			}
 			return &PackageStatus{
 				PackageName:       name,
 				PackageVersion:    version,
 				BlockedPackageUrl: packageUrl,
 				Action:            blocked,
-				BlockingReason:    BlockingReasonPolicy,
+				BlockingReason:    blockingReason,
 				Policy:            policies,
 				PkgType:           string(nc.tech),
 				CatalogURL:        m[4],

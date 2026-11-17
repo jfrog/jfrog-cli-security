@@ -260,6 +260,12 @@ func TestParseNpmBlockedNotice(t *testing.T) {
 			wantOk: true,
 		},
 		{
+			name:   "reworded tail",
+			line:   header + " Blocked by these policies: 1. P (C)",
+			want:   npmBlockedInfo{Policies: []Policy{{Explanation: allVersionsBlockedText}}},
+			wantOk: true,
+		},
+		{
 			name:   "old format",
 			line:   "42 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}",
 			want:   npmBlockedInfo{Policies: []Policy{{Policy: "blocks open ssf", Condition: "open ssf"}}},
