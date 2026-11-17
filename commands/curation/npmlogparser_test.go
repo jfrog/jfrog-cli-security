@@ -21,8 +21,8 @@ func TestParseNpmDebugLog(t *testing.T) {
 
 	// Whole-package block: notice immediately followed by the matching 403 fetch line.
 	require.Contains(t, blockedPackages, "depd")
-	assert.Equal(t, "blocks open ssf", blockedPackages["depd"].Policy)
-	assert.Equal(t, "open ssf", blockedPackages["depd"].Condition)
+	assert.Equal(t, "blocks open ssf", blockedPackages["depd"].Policies[0].Policy)
+	assert.Equal(t, "open ssf", blockedPackages["depd"].Policies[0].Condition)
 
 	byName := map[string]npmLogEntry{}
 	for _, e := range entries {
@@ -162,8 +162,8 @@ func TestParseNpmDebugLog_OverlappingPendingNoticesDegradeToUnknownPolicy(t *tes
 	require.NoError(t, err)
 	require.Contains(t, blockedPackages, "pkg-a", "still reported as blocked — just with unknown policy, not dropped entirely")
 	require.Contains(t, blockedPackages, "pkg-b")
-	assert.Equal(t, "unknown", blockedPackages["pkg-a"].Policy)
-	assert.Equal(t, "unknown", blockedPackages["pkg-b"].Policy)
+	assert.Equal(t, "unknown", blockedPackages["pkg-a"].Policies[0].Policy)
+	assert.Equal(t, "unknown", blockedPackages["pkg-b"].Policies[0].Policy)
 }
 
 // A single notice resolved before the next one ever queues is unambiguous — FIFO order is
@@ -183,8 +183,8 @@ func TestParseNpmDebugLog_SequentialNonOverlappingNoticesKeepRealPolicy(t *testi
 	require.NoError(t, err)
 	require.Contains(t, blockedPackages, "pkg-a")
 	require.Contains(t, blockedPackages, "pkg-b")
-	assert.Equal(t, "blocks-cve", blockedPackages["pkg-a"].Policy)
-	assert.Equal(t, "blocks-license", blockedPackages["pkg-b"].Policy)
+	assert.Equal(t, "blocks-cve", blockedPackages["pkg-a"].Policies[0].Policy)
+	assert.Equal(t, "blocks-license", blockedPackages["pkg-b"].Policies[0].Policy)
 }
 
 // npm splits one run's debug log into multiple numbered chunk files past 50,000 log lines,
@@ -221,7 +221,7 @@ func TestParseNpmDebugLog_MultipleChunksOfSameRunAreAllRead(t *testing.T) {
 
 	require.Contains(t, blockedPackages, "depd",
 		"the notice from chunk 0 must still pair with its matching 403 in chunk 1")
-	assert.Equal(t, "blocks open ssf", blockedPackages["depd"].Policy)
+	assert.Equal(t, "blocks open ssf", blockedPackages["depd"].Policies[0].Policy)
 }
 
 func TestParseNpmDebugLog_NoLogsDir(t *testing.T) {
@@ -230,6 +230,63 @@ func TestParseNpmDebugLog_NoLogsDir(t *testing.T) {
 	assert.Nil(t, entries)
 	assert.Nil(t, blockedPackages)
 	assert.Empty(t, logFilePaths)
+}
+
+func TestParseNpmBlockedNotice(t *testing.T) {
+	const header = "42 notice All versions of '@hono/node-server' (npm-remote) are blocked from download by JFrog Curation."
+	const waiverAction = "Please use a different package or request a waiver to use this one."
+	const withNote = "Some versions are pending JFrog Catalog analysis."
+	tests := []struct {
+		name   string
+		line   string
+		want   npmBlockedInfo
+		wantOk bool
+	}{
+		{
+			name: "every listed policy, conditions with parentheses",
+			line: header + " Blocked by one or more of these policies: 1. BlockHighCVEs (CVE with CVSS score between 7.0 and 8.9 (fix version available)) " +
+				"2. Block Immature (package pending JFrog Catalog analysis) Note: Some versions are pending JFrog Catalog analysis. " +
+				"Action: " + waiverAction + " Details: https://example.jfrog.io/ui/catalog",
+			want: npmBlockedInfo{CatalogURL: "https://example.jfrog.io/ui/catalog", Policies: []Policy{
+				{Policy: "BlockHighCVEs", Condition: "CVE with CVSS score between 7.0 and 8.9 (fix version available)", Explanation: withNote, Recommendation: waiverAction},
+				{Policy: "Block Immature", Condition: "package pending JFrog Catalog analysis", Explanation: withNote, Recommendation: waiverAction},
+			}},
+			wantOk: true,
+		},
+		{
+			name:   "no policy list",
+			line:   header + " Action: " + waiverAction,
+			want:   npmBlockedInfo{Policies: []Policy{{Explanation: allVersionsBlockedText, Recommendation: waiverAction}}},
+			wantOk: true,
+		},
+		{
+			name:   "old format",
+			line:   "42 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}",
+			want:   npmBlockedInfo{Policies: []Policy{{Policy: "blocks open ssf", Condition: "open ssf"}}},
+			wantOk: true,
+		},
+		{
+			name: "unrelated notice",
+			line: "42 notice New major version of npm available!",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseNpmBlockedNotice(tt.line)
+			assert.Equal(t, tt.wantOk, ok)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestWholePackageBlockedStatusKeepsEveryPolicy(t *testing.T) {
+	info := npmBlockedInfo{CatalogURL: "u", Policies: []Policy{{Policy: "p1", Condition: "c1", Explanation: "e", Recommendation: "a"}, {Policy: "p2", Condition: "c2", Recommendation: "a"}}}
+	got := wholePackageBlockedStatus(npmLogEntry{Name: "axios"}, info, techutils.Npm)
+	assert.Equal(t, []Policy{
+		{Policy: "p1", Condition: "c1", Explanation: "e", Recommendation: "a"},
+		{Policy: "p2", Condition: "c2", Explanation: allVersionsBlockedText, Recommendation: "a"},
+	}, got.Policy)
+	assert.Equal(t, "u", got.CatalogURL)
 }
 
 // Git host shorthand (github:/gitlab:/bitbucket:/gist:) must not regress — real evidence
@@ -276,7 +333,7 @@ func TestClassifyNpmSpecifier(t *testing.T) {
 }
 
 func TestClassifyBlankVersionEntry(t *testing.T) {
-	blockedPackages := map[string]npmBlockedInfo{"depd": {Policy: "blocks open ssf", Condition: "open ssf"}}
+	blockedPackages := map[string]npmBlockedInfo{"depd": {Policies: []Policy{{Policy: "blocks open ssf", Condition: "open ssf"}}}}
 
 	assert.Equal(t, npmEntryResolved, classifyBlankVersionEntry(
 		npmLogEntry{Name: "accepts", Version: "2.0.0"}, blockedPackages))
@@ -369,7 +426,7 @@ func TestResolveNpmAliasEntriesLeavesMalformedAliasUntouched(t *testing.T) {
 // of npmEntryNonRegistrySpecifier — the exact misclassification reported live against a
 // "blocks open ssf" policy (RTECO-1882 / XRAY-157605).
 func TestClassifyBlankVersionEntryAfterAliasResolution(t *testing.T) {
-	blockedPackages := map[string]npmBlockedInfo{"strip-ansi": {Policy: "blocks open ssf", Condition: "open ssf"}}
+	blockedPackages := map[string]npmBlockedInfo{"strip-ansi": {Policies: []Policy{{Policy: "blocks open ssf", Condition: "open ssf"}}}}
 	entries := resolveNpmAliasEntries([]npmLogEntry{
 		{Name: "strip-ansi-cjs", Version: "", ParentName: "myproj", ParentVersion: "1.0.0", Specifier: "npm:strip-ansi@6.0.1"},
 	})
