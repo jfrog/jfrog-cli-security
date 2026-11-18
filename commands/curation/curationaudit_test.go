@@ -7856,15 +7856,8 @@ func TestCatalogLinks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, catalogLinks(tt.statuses, false))
+			assert.Equal(t, tt.want, catalogLinks(tt.statuses))
 		})
-	}
-}
-
-func TestCatalogLinksWithLinks(t *testing.T) {
-	got := catalogLinks([]*PackageStatus{{PackageName: "axios", CatalogURL: "https://a"}}, true)
-	if want := text.Hyperlink("https://a", "axios"); !strings.Contains(got, want) {
-		t.Errorf("catalogLinks(axios, true) = %q, want it to contain %q", got, want)
 	}
 }
 
@@ -7879,7 +7872,7 @@ func TestPackageStatusTableMergesSharedText(t *testing.T) {
 	}
 }
 
-func TestConvertToPackageStatusTableLinksPackageName(t *testing.T) {
+func TestConvertToPackageStatusTableLinkColumn(t *testing.T) {
 	statuses := []*PackageStatus{
 		{PackageName: "axios", CatalogURL: "https://a"},
 		{PackageName: "left-pad"},
@@ -7889,16 +7882,27 @@ func TestConvertToPackageStatusTableLinksPackageName(t *testing.T) {
 		withLinks bool
 		want      []string
 	}{
-		{name: "terminal", withLinks: true, want: []string{"\x1b]8;;https://a\x1b\\axios\x1b]8;;\x1b\\ ", "left-pad"}},
-		{name: "not a terminal", withLinks: false, want: []string{"axios ", "left-pad"}},
+		{name: "terminal", withLinks: true, want: []string{text.Hyperlink("https://a", "Open ↗") + " ", ""}},
+		{name: "not a terminal", withLinks: false, want: []string{"", ""}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
 			for _, row := range convertToPackageStatusTable(statuses, tt.withLinks) {
-				got = append(got, row.PackageName)
+				got = append(got, row.Link)
+				if row.PackageName != "axios " && row.PackageName != "left-pad" {
+					t.Errorf("PackageName = %q, want the plain name", row.PackageName)
+				}
 			}
 			assert.Equal(t, tt.want, got)
 		})
+	}
+}
+
+func TestPackageStatusTableOmitsEmptyLinkColumn(t *testing.T) {
+	tw, err := coreutils.PrepareTable(convertToPackageStatusTable([]*PackageStatus{{PackageName: "axios", CatalogURL: "https://a"}}, false), "", false)
+	require.NoError(t, err)
+	if got := tw.Render(); strings.Contains(got, "LINK") {
+		t.Errorf("PrepareTable(rows without links) has a link column:\n%s", got)
 	}
 }

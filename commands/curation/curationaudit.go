@@ -293,6 +293,7 @@ type PackageStatusTable struct {
 	Condition      string `col-name:"Violated Condition\nName"`
 	Explanation    string `col-name:"Explanation" auto-merge:"true"`
 	Recommendation string `col-name:"Recommendation" auto-merge:"true"`
+	Link           string `col-name:"Blocked\nPackage\nLink" auto-merge:"true" omitempty:"true"`
 }
 
 type treeAnalyzer struct {
@@ -1585,9 +1586,8 @@ func (ca *CurationAuditCommand) requestWaiver(blockedPackages []*PackageStatus) 
 // catalogLinkStyle is the style of a package name that is a terminal hyperlink to its Catalog page.
 var catalogLinkStyle = color.New(color.FgBlue, color.OpUnderscore)
 
-// catalogLinks lists one JFrog Catalog page per blocked package name, the first one found. With withLinks,
-// the heading is bold and each package name is a styled terminal hyperlink to its page.
-func catalogLinks(packagesStatus []*PackageStatus, withLinks bool) string {
+// catalogLinks lists one JFrog Catalog page per blocked package name, the first one found.
+func catalogLinks(packagesStatus []*PackageStatus) string {
 	var names, urls []string
 	seen := map[string]bool{}
 	width := 0
@@ -1602,18 +1602,10 @@ func catalogLinks(packagesStatus []*PackageStatus, withLinks bool) string {
 	if len(urls) == 0 {
 		return ""
 	}
-	heading := "For more details, visit:"
-	if withLinks {
-		heading = color.OpBold.Render(heading)
-	}
 	var sb strings.Builder
-	sb.WriteString("\n" + heading)
+	sb.WriteString("\nFor more details, visit:")
 	for i := range urls {
-		name := names[i]
-		if withLinks {
-			name = catalogLinkStyle.Render(text.Hyperlink(urls[i], name))
-		}
-		fmt.Fprintf(&sb, "\n  %s%s  %s", name, strings.Repeat(" ", width-len(names[i])), urls[i])
+		fmt.Fprintf(&sb, "\n  %-*s  %s", width, names[i], urls[i])
 	}
 	return sb.String()
 }
@@ -1638,7 +1630,7 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 		if err != nil {
 			return err
 		}
-		if links := catalogLinks(packagesStatus, withLinks); links != "" {
+		if links := catalogLinks(packagesStatus); !withLinks && links != "" {
 			log.Output(links)
 		}
 	}
@@ -1646,8 +1638,8 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 	return nil
 }
 
-// convertToPackageStatusTable builds the table rows. With withLinks, a package name with a Catalog
-// link becomes a styled terminal hyperlink to it.
+// convertToPackageStatusTable builds the table rows. With withLinks, a package with a Catalog link gets a
+// styled "Open ↗" terminal hyperlink to it in the Link column; the column is omitted when no row has one.
 func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool) []PackageStatusTable {
 	var pkgStatusTable []PackageStatusTable
 	for index, pkgStatus := range packagesStatus {
@@ -1657,17 +1649,18 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool
 		if index%2 == 0 {
 			uniqLineSep = " "
 		}
-		packageName := pkgStatus.PackageName
+		var link string
 		if withLinks && pkgStatus.CatalogURL != "" {
-			packageName = catalogLinkStyle.Render(text.Hyperlink(pkgStatus.CatalogURL, packageName))
+			link = catalogLinkStyle.Render(text.Hyperlink(pkgStatus.CatalogURL, "Open ↗")) + uniqLineSep
 		}
 		pkgTable := PackageStatusTable{
 			ID:             fmt.Sprintf("%d%s", index+1, uniqLineSep),
 			ParentName:     pkgStatus.ParentName + uniqLineSep,
 			ParentVersion:  pkgStatus.ParentVersion + uniqLineSep,
-			PackageName:    packageName + uniqLineSep,
+			PackageName:    pkgStatus.PackageName + uniqLineSep,
 			PackageVersion: pkgStatus.PackageVersion + uniqLineSep,
 			PkgType:        pkgStatus.PkgType + uniqLineSep,
+			Link:           link,
 		}
 		if len(pkgStatus.Policy) == 0 {
 			pkgStatusTable = append(pkgStatusTable, pkgTable)
