@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
 	"github.com/google/uuid"
+	"github.com/jedib0t/go-pretty/v6/text"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -3740,8 +3741,8 @@ func TestRunNpmLogFallback_AllVersionsOfNotice(t *testing.T) {
 		assert.Equal(t, allVersionsBlockedText, got.PackageVersion)
 		assert.Equal(t, "https://example.jfrog.io/ui/catalog/blockedpkg", got.CatalogURL)
 		assert.Equal(t, []Policy{
-			{Policy: "Block Immature Packages", Condition: "immature-7", Explanation: "Some versions are pending JFrog Catalog analysis.", Recommendation: action},
-			{Policy: "Block Malicious Packages", Condition: "Malicious package", Explanation: "Some versions are pending JFrog Catalog analysis.", Recommendation: action},
+			{Policy: "Block Immature Packages", Condition: "immature-7", Explanation: allVersionsBlockedText, Recommendation: "Some versions are pending JFrog Catalog analysis. " + action},
+			{Policy: "Block Malicious Packages", Condition: "Malicious package", Explanation: allVersionsBlockedText, Recommendation: "Some versions are pending JFrog Catalog analysis. " + action},
 		}, got.Policy)
 	}
 }
@@ -6015,9 +6016,9 @@ func TestFetchCvsBlockedStatusRangedWholePackageBlockedAllVersionsOfMessage(t *t
 		parent             string
 		wantRecommendation string
 	}{
-		{name: "direct", parent: "urllib3", wantRecommendation: action},
+		{name: "direct", parent: "urllib3", wantRecommendation: "Some versions are pending JFrog Catalog analysis. " + action},
 		{name: "transitive", parent: "requests",
-			wantRecommendation: "urllib3 is a transitive dependency of requests and cannot be removed directly. " + action},
+			wantRecommendation: "urllib3 is a transitive dependency of requests and cannot be removed directly. Some versions are pending JFrog Catalog analysis. " + action},
 	}
 	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
 		for _, tt := range tests {
@@ -6037,8 +6038,8 @@ func TestFetchCvsBlockedStatusRangedWholePackageBlockedAllVersionsOfMessage(t *t
 				assert.Equal(t, allVersionsBlockedText, statuses[0].PackageVersion)
 				assert.Equal(t, BlockingReasonPolicy, statuses[0].BlockingReason)
 				assert.Equal(t, []Policy{
-					{Policy: "p1", Condition: "c1 (fix version available)", Explanation: "Some versions are pending JFrog Catalog analysis.", Recommendation: tt.wantRecommendation},
-					{Policy: "p2", Condition: "package pending JFrog Catalog analysis", Explanation: "Some versions are pending JFrog Catalog analysis.", Recommendation: tt.wantRecommendation},
+					{Policy: "p1", Condition: "c1 (fix version available)", Explanation: allVersionsBlockedText, Recommendation: tt.wantRecommendation},
+					{Policy: "p2", Condition: "package pending JFrog Catalog analysis", Explanation: allVersionsBlockedText, Recommendation: tt.wantRecommendation},
 				}, statuses[0].Policy)
 				assert.Equal(t, "https://example.jfrog.io/ui/catalog", statuses[0].CatalogURL)
 			})
@@ -7834,6 +7835,15 @@ func TestCatalogLinks(t *testing.T) {
 	}{
 		{name: "no links", statuses: []*PackageStatus{{PackageName: "axios"}}},
 		{
+			name: "versions of one package",
+			statuses: []*PackageStatus{
+				{PackageName: "vm2", PackageVersion: "3.9.18", CatalogURL: "https://v18"},
+				{PackageName: "vm2", PackageVersion: "3.9.19", CatalogURL: "https://v19"},
+				{PackageName: "axios", PackageVersion: allVersionsBlockedText, CatalogURL: "https://a"},
+			},
+			want: "\nFor more details, visit:\n  vm2    https://v18\n  axios  https://a",
+		},
+		{
 			name: "one line per link, names aligned",
 			statuses: []*PackageStatus{
 				{PackageName: "axios", CatalogURL: "https://a"},
@@ -7846,8 +7856,26 @@ func TestCatalogLinks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, catalogLinks(tt.statuses))
+			assert.Equal(t, tt.want, catalogLinks(tt.statuses, false))
 		})
+	}
+}
+
+func TestCatalogLinksWithLinks(t *testing.T) {
+	got := catalogLinks([]*PackageStatus{{PackageName: "axios", CatalogURL: "https://a"}}, true)
+	if want := text.Hyperlink("https://a", "axios"); !strings.Contains(got, want) {
+		t.Errorf("catalogLinks(axios, true) = %q, want it to contain %q", got, want)
+	}
+}
+
+func TestPackageStatusTableMergesSharedText(t *testing.T) {
+	policies := []Policy{{Policy: "p1", Explanation: "expl", Recommendation: "rec"}, {Policy: "p2", Explanation: "expl", Recommendation: "rec"}}
+	statuses := []*PackageStatus{{PackageName: "a", Policy: policies}, {PackageName: "b", Policy: policies}}
+	tw, err := coreutils.PrepareTable(convertToPackageStatusTable(statuses, false), "", false)
+	require.NoError(t, err)
+	got := tw.Render()
+	if n := strings.Count(got, "rec"); n != 2 {
+		t.Errorf("PrepareTable(two packages with two policies each) shows the recommendation %d times, want 2:\n%s", n, got)
 	}
 }
 

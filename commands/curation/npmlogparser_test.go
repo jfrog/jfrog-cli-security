@@ -248,21 +248,27 @@ func TestParseNpmBlockedNotice(t *testing.T) {
 				"2. Block Immature (package pending JFrog Catalog analysis) Note: Some versions are pending JFrog Catalog analysis. " +
 				"Action: " + waiverAction + " Details: https://example.jfrog.io/ui/catalog",
 			want: npmBlockedInfo{CatalogURL: "https://example.jfrog.io/ui/catalog", Policies: []Policy{
-				{Policy: "BlockHighCVEs", Condition: "CVE with CVSS score between 7.0 and 8.9 (fix version available)", Explanation: withNote, Recommendation: waiverAction},
-				{Policy: "Block Immature", Condition: "package pending JFrog Catalog analysis", Explanation: withNote, Recommendation: waiverAction},
+				{Policy: "BlockHighCVEs", Condition: "CVE with CVSS score between 7.0 and 8.9 (fix version available)", Recommendation: withNote + " " + waiverAction},
+				{Policy: "Block Immature", Condition: "package pending JFrog Catalog analysis", Recommendation: withNote + " " + waiverAction},
 			}},
 			wantOk: true,
 		},
 		{
 			name:   "no policy list",
 			line:   header + " Action: " + waiverAction,
-			want:   npmBlockedInfo{Policies: []Policy{{Explanation: allVersionsBlockedText, Recommendation: waiverAction}}},
+			want:   npmBlockedInfo{Policies: []Policy{{Recommendation: waiverAction}}},
+			wantOk: true,
+		},
+		{
+			name:   "different capitalization",
+			line:   "42 notice ALL VERSIONS OF 'x' (r) ARE BLOCKED FROM DOWNLOAD BY JFROG CURATION. Action: " + waiverAction,
+			want:   npmBlockedInfo{Policies: []Policy{{Recommendation: waiverAction}}},
 			wantOk: true,
 		},
 		{
 			name:   "reworded tail",
 			line:   header + " Blocked by these policies: 1. P (C)",
-			want:   npmBlockedInfo{Policies: []Policy{{Explanation: allVersionsBlockedText}}},
+			want:   npmBlockedInfo{Policies: []Policy{{}}},
 			wantOk: true,
 		},
 		{
@@ -290,7 +296,7 @@ func TestWholePackageBlockedStatusKeepsEveryPolicy(t *testing.T) {
 	got := wholePackageBlockedStatus(npmLogEntry{Name: "axios"}, info, techutils.Npm)
 	assert.Equal(t, []Policy{
 		{Policy: "p1", Condition: "c1", Explanation: "e", Recommendation: "a"},
-		{Policy: "p2", Condition: "c2", Explanation: allVersionsBlockedText, Recommendation: "a"},
+		{Policy: "p2", Condition: "c2", Recommendation: "a"},
 	}, got.Policy)
 	assert.Equal(t, "u", got.CatalogURL)
 }

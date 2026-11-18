@@ -1,7 +1,6 @@
 package curation
 
 import (
-	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/gookit/color"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -96,7 +96,7 @@ const (
 	// "All versions of 'X' (repo) are blocked from download by JFrog Curation. Blocked by one or more of
 	// these policies: 1. P (C) 2. ... Note: ... Action: ... Details: ...". Any other text after the
 	// first sentence matches with empty groups.
-	allVersionsOfPattern = `All versions of '[^']+' \([^)]*\) are blocked from download by JFrog Curation\.(?:(?: Blocked by one or more of these policies: (.*?))?(?: Note: ([^.]*\.))?(?: Action: (.*?))?(?: Details: (\S+))?$|.*)`
+	allVersionsOfPattern = `(?i)All versions of '[^']+' \([^)]*\) are blocked from download by JFrog Curation\.(?:(?: Blocked by one or more of these policies: (.*?))?(?: Note: ([^.]*\.))?(?: Action: (.*?))?(?: Details: (\S+))?$|.*)`
 
 	errorTemplateHeadRequest = "failed sending HEAD request to %s for package '%s:%s'. Status-code: %v. Cause: %v"
 
@@ -291,8 +291,8 @@ type PackageStatusTable struct {
 	PkgType        string `col-name:"Package\nType" auto-merge:"true"`
 	Policy         string `col-name:"Violated\nPolicy\nName"`
 	Condition      string `col-name:"Violated Condition\nName"`
-	Explanation    string `col-name:"Explanation"`
-	Recommendation string `col-name:"Recommendation"`
+	Explanation    string `col-name:"Explanation" auto-merge:"true"`
+	Recommendation string `col-name:"Recommendation" auto-merge:"true"`
 }
 
 type treeAnalyzer struct {
@@ -1582,26 +1582,38 @@ func (ca *CurationAuditCommand) requestWaiver(blockedPackages []*PackageStatus) 
 	return coreutils.PrintTable(pkgStatusTable, "Waiver request submitted!", "Requested 0 waivers", true)
 }
 
-// catalogLinks lists the JFrog Catalog page of each blocked package that has one, once per page.
-func catalogLinks(packagesStatus []*PackageStatus) string {
+// catalogLinkStyle is the style of a package name that is a terminal hyperlink to its Catalog page.
+var catalogLinkStyle = color.New(color.FgBlue, color.OpUnderscore)
+
+// catalogLinks lists one JFrog Catalog page per blocked package name, the first one found. With withLinks,
+// the heading is bold and each package name is a styled terminal hyperlink to its page.
+func catalogLinks(packagesStatus []*PackageStatus, withLinks bool) string {
 	var names, urls []string
 	seen := map[string]bool{}
 	width := 0
 	for _, ps := range packagesStatus {
-		if ps.CatalogURL == "" || seen[ps.CatalogURL] {
+		if ps.CatalogURL == "" || seen[ps.PackageName] {
 			continue
 		}
-		seen[ps.CatalogURL] = true
+		seen[ps.PackageName] = true
 		names, urls = append(names, ps.PackageName), append(urls, ps.CatalogURL)
 		width = max(width, len(ps.PackageName))
 	}
 	if len(urls) == 0 {
 		return ""
 	}
+	heading := "For more details, visit:"
+	if withLinks {
+		heading = color.OpBold.Render(heading)
+	}
 	var sb strings.Builder
-	sb.WriteString("\nFor more details, visit:")
+	sb.WriteString("\n" + heading)
 	for i := range urls {
-		fmt.Fprintf(&sb, "\n  %-*s  %s", width, names[i], urls[i])
+		name := names[i]
+		if withLinks {
+			name = catalogLinkStyle.Render(text.Hyperlink(urls[i], name))
+		}
+		fmt.Fprintf(&sb, "\n  %s%s  %s", name, strings.Repeat(" ", width-len(names[i])), urls[i])
 	}
 	return sb.String()
 }
@@ -1620,12 +1632,13 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 			}
 		}
 	case outFormat.Table:
-		pkgStatusTable := convertToPackageStatusTable(packagesStatus, output.TerminalSupportsHyperlinks())
+		withLinks := output.TerminalSupportsHyperlinks()
+		pkgStatusTable := convertToPackageStatusTable(packagesStatus, withLinks)
 		err := coreutils.PrintTable(pkgStatusTable, "Curation", "Found 0 blocked packages", true)
 		if err != nil {
 			return err
 		}
-		if links := catalogLinks(packagesStatus); links != "" {
+		if links := catalogLinks(packagesStatus, withLinks); links != "" {
 			log.Output(links)
 		}
 	}
@@ -1634,7 +1647,7 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 }
 
 // convertToPackageStatusTable builds the table rows. With withLinks, a package name with a Catalog
-// link becomes a terminal hyperlink to it.
+// link becomes a styled terminal hyperlink to it.
 func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool) []PackageStatusTable {
 	var pkgStatusTable []PackageStatusTable
 	for index, pkgStatus := range packagesStatus {
@@ -1645,8 +1658,8 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool
 			uniqLineSep = " "
 		}
 		packageName := pkgStatus.PackageName
-		if withLinks {
-			packageName = text.Hyperlink(pkgStatus.CatalogURL, packageName)
+		if withLinks && pkgStatus.CatalogURL != "" {
+			packageName = catalogLinkStyle.Render(text.Hyperlink(pkgStatus.CatalogURL, packageName))
 		}
 		pkgTable := PackageStatusTable{
 			ID:             fmt.Sprintf("%d%s", index+1, uniqLineSep),
@@ -1662,8 +1675,8 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool
 		}
 		for _, policyCond := range pkgStatus.Policy {
 			pkgTable.Policy = policyCond.Policy
-			pkgTable.Explanation = policyCond.Explanation
-			pkgTable.Recommendation = policyCond.Recommendation
+			pkgTable.Explanation = policyCond.Explanation + uniqLineSep
+			pkgTable.Recommendation = policyCond.Recommendation + uniqLineSep
 			pkgTable.Condition = policyCond.Condition
 			pkgStatusTable = append(pkgStatusTable, pkgTable)
 		}
@@ -2701,28 +2714,23 @@ func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils
 const allVersionsBlockedText = "All versions blocked"
 
 // wholePackageBlockedStatus synthesizes a *PackageStatus straight from the log's notice+403
-// evidence — no HEAD-check needed. Recommendation is finished later by
+// evidence — no HEAD-check needed. Explanation and Recommendation are finished later by
 // applyTransitiveAwareRecommendation, once the graph walk knows the parent.
 func wholePackageBlockedStatus(entry npmLogEntry, info npmBlockedInfo, tech techutils.Technology) *PackageStatus {
-	policies := make([]Policy, len(info.Policies))
-	for i, p := range info.Policies {
-		policies[i] = Policy{Policy: p.Policy, Condition: p.Condition, Explanation: cmp.Or(p.Explanation, allVersionsBlockedText), Recommendation: p.Recommendation}
-	}
 	return &PackageStatus{
 		PackageName:    entry.Name,
 		PackageVersion: allVersionsBlockedText,
 		Action:         blocked,
 		BlockingReason: BlockingReasonPolicy,
 		PkgType:        string(tech),
-		Policy:         policies,
+		Policy:         slices.Clone(info.Policies),
 		CatalogURL:     info.CatalogURL,
 	}
 }
 
-// applyTransitiveAwareRecommendation normalizes every ps.Policy entry to generic,
-// direct/transitive-aware text for a whole-package block (matches npm). Only safe when
-// all entries are already whole-package (e.g. Step 0). For a per-version probe result,
-// use normalizeMatchingWholePackagePolicies instead.
+// applyTransitiveAwareRecommendation applies normalizeWholePackagePolicy to every ps.Policy entry of a
+// whole-package block. Only safe when all entries are already whole-package (e.g. Step 0). For a
+// per-version probe result, use normalizeMatchingWholePackagePolicies instead.
 func applyTransitiveAwareRecommendation(ps *PackageStatus, isDirectDependency bool) {
 	policies := make([]Policy, len(ps.Policy))
 	copy(policies, ps.Policy)
@@ -2756,15 +2764,16 @@ func matchingPolicy(p Policy, candidates []Policy) (Policy, bool) {
 	return Policy{}, false
 }
 
-// normalizeWholePackagePolicy rewrites a single Policy entry's Explanation/Recommendation
-// to the generic, direct/transitive-aware text for a whole-package block. An Explanation already on
-// p is kept. A Recommendation already on p is the Action line of Xray's message and is kept; for a
-// transitive dependency it follows the sentence naming the parent.
+// normalizeWholePackagePolicy sets the Explanation of a whole-package Policy entry to allVersionsBlockedText.
+// A Recommendation already on p holds the Note and Action lines of Xray's message and is kept; for a
+// transitive dependency it follows a sentence naming the parent. Without one, a generic
+// direct/transitive-aware text is used.
 func normalizeWholePackagePolicy(p *Policy, ps *PackageStatus, isDirectDependency bool) {
-	p.Explanation = cmp.Or(p.Explanation, allVersionsBlockedText)
+	p.Explanation = allVersionsBlockedText
 	action := p.Recommendation
 	switch {
 	case isDirectDependency && action != "":
+		// Xray's Note and Action lines are used as is.
 	case isDirectDependency:
 		p.Recommendation = "Remove this package from your project and replace with an alternate package"
 	case action != "":

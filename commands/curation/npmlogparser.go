@@ -2,7 +2,6 @@ package curation
 
 import (
 	"bufio"
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -112,19 +111,21 @@ func parseNpmBlockedNotice(line string) (npmBlockedInfo, bool) {
 	return npmBlockedInfo{}, false
 }
 
-// allVersionsOfPolicies returns the policies of a match of allVersionsOfPattern. The Note line, or
-// allVersionsBlockedText without one, becomes the Explanation, and the Action line the Recommendation,
-// of every policy.
+// allVersionsOfPolicies returns the policies of a match of allVersionsOfPattern. Every policy gets the
+// Action line, preceded by the Note line, as its Recommendation.
 func allVersionsOfPolicies(m []string) []Policy {
-	explanation := cmp.Or(m[2], allVersionsBlockedText)
+	recommendation := m[3]
+	if recommendation != "" && m[2] != "" {
+		recommendation = m[2] + " " + recommendation
+	}
 	var policies []Policy
 	for _, item := range allVersionsOfPolicyNumberRegex.Split(m[1], -1) {
 		if p := allVersionsOfPolicyItemRegex.FindStringSubmatch(item); p != nil {
-			policies = append(policies, Policy{Policy: p[1], Condition: p[2], Explanation: explanation, Recommendation: m[3]})
+			policies = append(policies, Policy{Policy: p[1], Condition: p[2], Recommendation: recommendation})
 		}
 	}
 	if len(policies) == 0 {
-		return []Policy{{Explanation: explanation, Recommendation: m[3]}}
+		return []Policy{{Recommendation: recommendation}}
 	}
 	return policies
 }
