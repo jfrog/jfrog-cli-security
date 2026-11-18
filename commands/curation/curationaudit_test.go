@@ -4428,6 +4428,225 @@ func TestSetRepoFromYarnrcAcceptsMatchingHost(t *testing.T) {
 	require.NotNil(t, ca.PackageManagerConfig)
 }
 
+// fakeYarnRegistryExecutableForTest returns a "yarn" script whose 'config get' prints yarnGuardConfiguredRegistry, so the
+// guard tests don't need a real Yarn Berry.
+func fakeYarnRegistryExecutableForTest(t *testing.T) string {
+	return writeYarnWrapperScript(t, t.TempDir(), "echo '"+yarnGuardConfiguredRegistry+"'\n", "echo "+yarnGuardConfiguredRegistry+"\r\n")
+}
+
+const (
+	yarnGuardConfiguredRegistry = "https://configured-server.example.com/artifactory/api/npm/yarn-test-repo/"
+	yarnGuardAttackerRegistry   = "https://attacker.example.com/"
+)
+
+func yarnGuardCommandForTest() *CurationAuditCommand {
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+	return ca
+}
+
+// TestSetRepoFromYarnrcRejectsAdditionalRegistryHostMismatch: the 'jf c' credential fallback is refused when a
+// scope or publish registry is on another host, even though npmRegistryServer matches.
+func TestSetRepoFromYarnrcRejectsAdditionalRegistryHostMismatch(t *testing.T) {
+	defaultRegistry := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n"
+	testCases := []struct {
+		name            string
+		yarnrc          string
+		expectedSetting string
+	}{
+		{
+			name:            "scope npmRegistryServer",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+		{
+			name:            "scope npmPublishRegistry",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmPublishRegistry: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmPublishRegistry",
+		},
+		{
+			name:            "top-level npmPublishRegistry",
+			yarnrc:          defaultRegistry + "npmPublishRegistry: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmPublishRegistry",
+		},
+		{
+			name: "one bad scope among good ones",
+			yarnrc: defaultRegistry + "npmScopes:\n  good:\n    npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+				"  evil:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+		{
+			name:            "different scheme on the same host",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmRegistryServer: \"http://configured-server.example.com/\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(testCase.yarnrc), 0644))
+			ca := yarnGuardCommandForTest()
+
+			setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+			require.Error(t, setErr)
+			assert.Contains(t, setErr.Error(), "does not match")
+			assert.Contains(t, setErr.Error(), testCase.expectedSetting)
+			assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when a registry is on another host")
+			assert.False(t, ca.yarnCredentialsFromFallback)
+		})
+	}
+}
+
+// TestSetRepoFromYarnrcRejectsWorkspaceRootScopedRegistry: a workspace member inherits the .yarnrc.yml of the
+// workspace root, so a scoped registry declared there must be caught when auditing the member directory.
+func TestSetRepoFromYarnrcRejectsWorkspaceRootScopedRegistry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	memberDir := filepath.Join(rootDir, "packages", "app")
+	require.NoError(t, os.MkdirAll(memberDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\nnpmScopes:\n  evil:\n    npmRegistryServer: \""+yarnGuardAttackerRegistry+"\"\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), memberDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "npmScopes.evil.npmRegistryServer")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromYarnrcAcceptsAdditionalRegistriesOnSameHost: scoped registries on the configured host (any
+// repo path) and scopes that set no registry of their own must not block the legitimate fallback.
+func TestSetRepoFromYarnrcAcceptsAdditionalRegistriesOnSameHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(
+		"npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\n"+
+			"npmPublishRegistry: \"https://configured-server.example.com/artifactory/api/npm/yarn-publish/\"\n"+
+			"npmScopes:\n"+
+			"  company:\n    npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarn-company/\"\n"+
+			"  plain:\n    npmAlwaysAuth: true\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.True(t, ca.yarnCredentialsFromFallback)
+}
+
+// TestSetRepoFromYarnrcOwnTokenSkipsAdditionalRegistryCheck: when .yarnrc.yml carries its own token the 'jf c'
+// credentials are never used, so a scoped registry on another host is the project's own business.
+func TestSetRepoFromYarnrcOwnTokenSkipsAdditionalRegistryCheck(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(
+		"npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\nnpmAuthToken: \"project-own-token\"\n"+
+			"npmScopes:\n  other:\n    npmRegistryServer: \""+yarnGuardAttackerRegistry+"\"\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.False(t, ca.yarnCredentialsFromFallback)
+}
+
+// TestSetRepoFromYarnrcRefusesUnparsableYarnrc: Yarn can accept files yaml rejects (e.g. a duplicate key, where the last one
+// wins), so the registries they declare can't be verified and the 'jf c' fallback is refused, whichever file is unparsable.
+func TestSetRepoFromYarnrcRefusesUnparsableYarnrc(t *testing.T) {
+	defaultRegistry := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n"
+	duplicateScopes := "npmScopes:\n  a:\n    npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  b:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n"
+	testCases := []struct {
+		name        string
+		projectFile string
+		homeFile    string
+	}{
+		{name: "project file", projectFile: defaultRegistry + duplicateScopes},
+		{name: "home file", projectFile: defaultRegistry, homeFile: duplicateScopes},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			homeDir := t.TempDir()
+			t.Setenv("HOME", homeDir)
+			t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(testCase.projectFile), 0644))
+			if testCase.homeFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".yarnrc.yml"), []byte(testCase.homeFile), 0644))
+			}
+			ca := yarnGuardCommandForTest()
+
+			setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+			require.Error(t, setErr)
+			assert.Contains(t, setErr.Error(), "could not parse")
+			assert.Contains(t, setErr.Error(), "refusing to use the 'jf c' credentials")
+			assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when the registries can't be verified")
+			assert.False(t, ca.yarnCredentialsFromFallback)
+		})
+	}
+}
+
+// TestSetRepoFromYarnrcQuotesScopeNameInError: the scope name comes from the project, so it is shown escaped and a
+// control character in it never reaches the terminal raw.
+func TestSetRepoFromYarnrcQuotesScopeNameInError(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  \"evil\\u001b[31m\":\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+	require.Error(t, setErr)
+	assert.False(t, strings.Contains(setErr.Error(), "\x1b"), "a raw escape character must not appear in the error")
+	assert.Contains(t, setErr.Error(), `\x1b[31m`, "the escape character is shown escaped")
+}
+
+// TestSetRepoFromYarnrcRefusesEnvReferenceRegistry: a registry given as a ${ENV} reference is not expanded, so it can't be
+// matched to the configured host and the 'jf c' fallback is refused; the reference stays visible in the error.
+func TestSetRepoFromYarnrcRefusesEnvReferenceRegistry(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  a:\n    npmRegistryServer: \"${INTERNAL_REGISTRY}\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Contains(t, setErr.Error(), "INTERNAL_REGISTRY")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromYarnrcIgnoresAuditRegistry: jf ca never runs yarn's audit, so an audit registry on another host (top-level or
+// per scope) is not a credential risk and must not block the fallback.
+func TestSetRepoFromYarnrcIgnoresAuditRegistry(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmAuditRegistry: \"" + yarnGuardAttackerRegistry + "\"\n" +
+		"npmScopes:\n  a:\n    npmAuditRegistry: \"" + yarnGuardAttackerRegistry + "\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
 // fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
 // so tests don't need a real Yarn V1 install.
 func fakeYarnV1ExecutableForTest(t *testing.T) string {
