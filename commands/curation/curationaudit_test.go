@@ -7882,7 +7882,7 @@ func TestConvertToPackageStatusTableLinkColumn(t *testing.T) {
 		withLinks bool
 		want      []string
 	}{
-		{name: "terminal", withLinks: true, want: []string{text.Hyperlink("https://a", "Open ↗") + " ", ""}},
+		{name: "terminal", withLinks: true, want: []string{catalogLinkStyle.Render(text.Hyperlink("https://a", "Open ↗")) + " ", ""}},
 		{name: "not a terminal", withLinks: false, want: []string{"", ""}},
 	}
 	for _, tt := range tests {
