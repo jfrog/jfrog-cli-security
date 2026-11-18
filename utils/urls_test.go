@@ -22,6 +22,12 @@ func TestSameRegistryHost(t *testing.T) {
 		{name: "host mismatch", configured: "https://a.example.com/artifactory/", discovered: "https://b.example.com/artifactory/", expected: false},
 		{name: "non-default port mismatch", configured: "https://a.example.com/", discovered: "https://a.example.com:8443/", expected: false},
 		{name: "empty configured url", configured: "", discovered: "https://b.example.com/", expected: false},
+		{name: "dotted capital I look-alike", configured: "https://internal.example.com/", discovered: "https://\u0130nternal.example.com/", expected: false},
+		{name: "dotted capital I look-alike on the configured side", configured: "https://\u0130nternal.example.com/", discovered: "https://internal.example.com/", expected: false},
+		{name: "kelvin sign look-alike", configured: "https://keep.example.com/", discovered: "https://\u212aeep.example.com/", expected: false},
+		{name: "long s look-alike", configured: "https://secure.example.com/", discovered: "https://\u017fecure.example.com/", expected: false},
+		{name: "identical non-ASCII host still matches itself", configured: "https://b\u00fccher.example.com/", discovered: "https://b\u00fccher.example.com/x", expected: true},
+		{name: "ASCII upper case host and scheme", configured: "https://a.example.com/", discovered: "HTTPS://A.EXAMPLE.COM:443/x", expected: true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
