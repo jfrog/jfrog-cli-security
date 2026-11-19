@@ -1839,6 +1839,35 @@ func Test_doCurateAudit_ExplicitHuggingFaceRequiresHFEndpoint(t *testing.T) {
 	assert.Contains(t, err.Error(), "HF_ENDPOINT")
 }
 
+// Test_doCurateAudit_FailureDoesNotCarryRepoToNextWorkingDir: Run goes on to the next working dir after a failed audit, so the failed
+// dir's repo, server details and 'jf c' credential flag must not be left behind for the next Yarn dir to pick up.
+func Test_doCurateAudit_FailureDoesNotCarryRepoToNextWorkingDir(t *testing.T) {
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+	mockServer, serverConfig := hfMockServer(t, map[string]bool{}, map[string]bool{}, "hf-repo")
+	defer mockServer.Close()
+	tempHomeDir, cleanUpHome := createHFTestHome(t, serverConfig)
+	defer cleanUpHome()
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDir)
+	defer callbackHomeDir()
+	t.Setenv("HF_ENDPOINT", "")
+
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(serverConfig)
+	ca.SetIsCurationCmd(true)
+	ca.SetInsecureTls(true)
+	ca.SetHuggingFaceModel("org/model:main")
+	// State a previous Yarn dir would have left behind.
+	ca.yarnCredentialsFromFallback = true
+	ca.AuditParamsInterface = ca.SetDepsRepo("previous-dirs-repo")
+
+	require.Error(t, ca.doCurateAudit(map[string]*CurationReport{}))
+
+	assert.Nil(t, ca.PackageManagerConfig, "the failed dir's package manager config must be dropped")
+	assert.Empty(t, ca.DepsRepo(), "the failed dir's repo must be dropped")
+	assert.False(t, ca.yarnCredentialsFromFallback, "the 'jf c' credential flag must be dropped")
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -4645,6 +4674,27 @@ func TestSetRepoFromYarnrcIgnoresAuditRegistry(t *testing.T) {
 
 	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
 	require.NotNil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromYarnrcOwnTokenInHomeFileSkipsFallback: a token in ~/.yarnrc.yml is the project's own token, so the 'jf c' credentials
+// are not used.
+func TestSetRepoFromYarnrcOwnTokenInHomeFileSkipsFallback(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".yarnrc.yml"), []byte("npmAuthToken: \"home-own-token\"\n"), 0644))
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.False(t, ca.yarnCredentialsFromFallback, "the 'jf c' credentials must not be used when the project has its own token")
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "home-own-token", serverDetails.AccessToken, "the project's own token is used, not the 'jf c' one")
 }
 
 // fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
