@@ -4428,6 +4428,225 @@ func TestSetRepoFromYarnrcAcceptsMatchingHost(t *testing.T) {
 	require.NotNil(t, ca.PackageManagerConfig)
 }
 
+// fakeYarnRegistryExecutableForTest returns a "yarn" script whose 'config get' prints yarnGuardConfiguredRegistry, so the
+// guard tests don't need a real Yarn Berry.
+func fakeYarnRegistryExecutableForTest(t *testing.T) string {
+	return writeYarnWrapperScript(t, t.TempDir(), "echo '"+yarnGuardConfiguredRegistry+"'\n", "echo "+yarnGuardConfiguredRegistry+"\r\n")
+}
+
+const (
+	yarnGuardConfiguredRegistry = "https://configured-server.example.com/artifactory/api/npm/yarn-test-repo/"
+	yarnGuardAttackerRegistry   = "https://attacker.example.com/"
+)
+
+func yarnGuardCommandForTest() *CurationAuditCommand {
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+	return ca
+}
+
+// TestSetRepoFromYarnrcRejectsAdditionalRegistryHostMismatch: the 'jf c' credential fallback is refused when a
+// scope or publish registry is on another host, even though npmRegistryServer matches.
+func TestSetRepoFromYarnrcRejectsAdditionalRegistryHostMismatch(t *testing.T) {
+	defaultRegistry := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n"
+	testCases := []struct {
+		name            string
+		yarnrc          string
+		expectedSetting string
+	}{
+		{
+			name:            "scope npmRegistryServer",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+		{
+			name:            "scope npmPublishRegistry",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmPublishRegistry: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmPublishRegistry",
+		},
+		{
+			name:            "top-level npmPublishRegistry",
+			yarnrc:          defaultRegistry + "npmPublishRegistry: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmPublishRegistry",
+		},
+		{
+			name: "one bad scope among good ones",
+			yarnrc: defaultRegistry + "npmScopes:\n  good:\n    npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+				"  evil:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+		{
+			name:            "different scheme on the same host",
+			yarnrc:          defaultRegistry + "npmScopes:\n  evil:\n    npmRegistryServer: \"http://configured-server.example.com/\"\n",
+			expectedSetting: "npmScopes.evil.npmRegistryServer",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(testCase.yarnrc), 0644))
+			ca := yarnGuardCommandForTest()
+
+			setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+			require.Error(t, setErr)
+			assert.Contains(t, setErr.Error(), "does not match")
+			assert.Contains(t, setErr.Error(), testCase.expectedSetting)
+			assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when a registry is on another host")
+			assert.False(t, ca.yarnCredentialsFromFallback)
+		})
+	}
+}
+
+// TestSetRepoFromYarnrcRejectsWorkspaceRootScopedRegistry: a workspace member inherits the .yarnrc.yml of the
+// workspace root, so a scoped registry declared there must be caught when auditing the member directory.
+func TestSetRepoFromYarnrcRejectsWorkspaceRootScopedRegistry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	memberDir := filepath.Join(rootDir, "packages", "app")
+	require.NoError(t, os.MkdirAll(memberDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, ".yarnrc.yml"),
+		[]byte("npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\nnpmScopes:\n  evil:\n    npmRegistryServer: \""+yarnGuardAttackerRegistry+"\"\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), memberDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "npmScopes.evil.npmRegistryServer")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromYarnrcAcceptsAdditionalRegistriesOnSameHost: scoped registries on the configured host (any
+// repo path) and scopes that set no registry of their own must not block the legitimate fallback.
+func TestSetRepoFromYarnrcAcceptsAdditionalRegistriesOnSameHost(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(
+		"npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\n"+
+			"npmPublishRegistry: \"https://configured-server.example.com/artifactory/api/npm/yarn-publish/\"\n"+
+			"npmScopes:\n"+
+			"  company:\n    npmRegistryServer: \"https://configured-server.example.com/artifactory/api/npm/yarn-company/\"\n"+
+			"  plain:\n    npmAlwaysAuth: true\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.True(t, ca.yarnCredentialsFromFallback)
+}
+
+// TestSetRepoFromYarnrcOwnTokenSkipsAdditionalRegistryCheck: when .yarnrc.yml carries its own token the 'jf c'
+// credentials are never used, so a scoped registry on another host is the project's own business.
+func TestSetRepoFromYarnrcOwnTokenSkipsAdditionalRegistryCheck(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(
+		"npmRegistryServer: \""+yarnGuardConfiguredRegistry+"\"\nnpmAuthToken: \"project-own-token\"\n"+
+			"npmScopes:\n  other:\n    npmRegistryServer: \""+yarnGuardAttackerRegistry+"\"\n"), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.False(t, ca.yarnCredentialsFromFallback)
+}
+
+// TestSetRepoFromYarnrcRefusesUnparsableYarnrc: Yarn can accept files yaml rejects (e.g. a duplicate key, where the last one
+// wins), so the registries they declare can't be verified and the 'jf c' fallback is refused, whichever file is unparsable.
+func TestSetRepoFromYarnrcRefusesUnparsableYarnrc(t *testing.T) {
+	defaultRegistry := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n"
+	duplicateScopes := "npmScopes:\n  a:\n    npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  b:\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n"
+	testCases := []struct {
+		name        string
+		projectFile string
+		homeFile    string
+	}{
+		{name: "project file", projectFile: defaultRegistry + duplicateScopes},
+		{name: "home file", projectFile: defaultRegistry, homeFile: duplicateScopes},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			homeDir := t.TempDir()
+			t.Setenv("HOME", homeDir)
+			t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(testCase.projectFile), 0644))
+			if testCase.homeFile != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".yarnrc.yml"), []byte(testCase.homeFile), 0644))
+			}
+			ca := yarnGuardCommandForTest()
+
+			setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+			require.Error(t, setErr)
+			assert.Contains(t, setErr.Error(), "could not parse")
+			assert.Contains(t, setErr.Error(), "refusing to use the 'jf c' credentials")
+			assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached when the registries can't be verified")
+			assert.False(t, ca.yarnCredentialsFromFallback)
+		})
+	}
+}
+
+// TestSetRepoFromYarnrcQuotesScopeNameInError: the scope name comes from the project, so it is shown escaped and a
+// control character in it never reaches the terminal raw.
+func TestSetRepoFromYarnrcQuotesScopeNameInError(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  \"evil\\u001b[31m\":\n    npmRegistryServer: \"" + yarnGuardAttackerRegistry + "\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+	require.Error(t, setErr)
+	assert.False(t, strings.Contains(setErr.Error(), "\x1b"), "a raw escape character must not appear in the error")
+	assert.Contains(t, setErr.Error(), `\x1b[31m`, "the escape character is shown escaped")
+}
+
+// TestSetRepoFromYarnrcRefusesEnvReferenceRegistry: a registry given as a ${ENV} reference is not expanded, so it can't be
+// matched to the configured host and the 'jf c' fallback is refused; the reference stays visible in the error.
+func TestSetRepoFromYarnrcRefusesEnvReferenceRegistry(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir) // os.UserHomeDir reads USERPROFILE on Windows
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmScopes:\n  a:\n    npmRegistryServer: \"${INTERNAL_REGISTRY}\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	setErr := ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir)
+
+	require.Error(t, setErr)
+	assert.Contains(t, setErr.Error(), "does not match")
+	assert.Contains(t, setErr.Error(), "INTERNAL_REGISTRY")
+	assert.Nil(t, ca.PackageManagerConfig)
+}
+
+// TestSetRepoFromYarnrcIgnoresAuditRegistry: jf ca never runs yarn's audit, so an audit registry on another host (top-level or
+// per scope) is not a credential risk and must not block the fallback.
+func TestSetRepoFromYarnrcIgnoresAuditRegistry(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\n" +
+		"npmAuditRegistry: \"" + yarnGuardAttackerRegistry + "\"\n" +
+		"npmScopes:\n  a:\n    npmAuditRegistry: \"" + yarnGuardAttackerRegistry + "\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+}
+
 // fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
 // so tests don't need a real Yarn V1 install.
 func fakeYarnV1ExecutableForTest(t *testing.T) string {
@@ -4972,6 +5191,67 @@ func TestSendBoundedRequestRejectsRedirectOutsideRepository(t *testing.T) {
 			assert.Contains(t, err.Error(), "unsafe redirect")
 			assert.False(t, outsideRequested.Load())
 			assert.Equal(t, int32(1), requests.Load())
+		})
+	}
+}
+
+// TestSendBoundedRequestFollowsCloudStorageRedirect covers XRAY-167698: a redirect to cloud
+// storage (e.g. S3) must be followed, without leaking credentials or custom headers to it.
+func TestSendBoundedRequestFollowsCloudStorageRedirect(t *testing.T) {
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		t.Run(tech.String(), func(t *testing.T) {
+			var storageAuth, storageWaiver string
+			var storageRequests atomic.Int32
+			storage := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				storageRequests.Add(1)
+				storageAuth = r.Header.Get("Authorization")
+				storageWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("binary-content"))
+			}))
+			defer storage.Close()
+
+			var artifactoryWaiver string
+			var requests atomic.Int32
+			artifactory := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				artifactoryWaiver = r.Header.Get("X-Artifactory-Curation-Request-Waiver")
+				http.Redirect(w, r, storage.URL+"/presigned?sig=abc", http.StatusFound)
+			}))
+			defer artifactory.Close()
+
+			serverDetails := &config.ServerDetails{
+				Url:            artifactory.URL + "/",
+				ArtifactoryUrl: artifactory.URL + "/",
+				AccessToken:    "super-secret-token",
+				InsecureTls:    true,
+			}
+			rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+			require.NoError(t, err)
+			rtAuth := rtManager.GetConfig().GetServiceDetails()
+			analyzer := treeAnalyzer{
+				rtManager:         rtManager,
+				httpClientDetails: rtAuth.CreateHttpClientDetails(),
+				url:               rtAuth.GetUrl(),
+				repo:              "repo",
+				tech:              tech,
+			}
+			requestDetails := analyzer.httpClientDetails.Clone()
+			requestDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+
+			resp, body, err := analyzer.sendBoundedRequest(http.MethodGet,
+				strings.TrimSuffix(analyzer.url, "/")+"/api/pypi/repo/packages/pkg.whl", requestDetails)
+
+			require.NoError(t, err, "a redirect to Artifactory's own cloud storage backend must be followed, not rejected")
+			require.NotNil(t, resp)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "binary-content", string(body))
+			assert.Equal(t, int32(1), requests.Load())
+			assert.Equal(t, int32(1), storageRequests.Load())
+
+			assert.Equal(t, "syn", artifactoryWaiver, "the configured Artifactory server must still receive the waiver header")
+			assert.Empty(t, storageAuth, "credentials must never be forwarded to the cloud storage host")
+			assert.Empty(t, storageWaiver, "custom curation headers must never be forwarded to the cloud storage host")
 		})
 	}
 }
@@ -7537,4 +7817,126 @@ registry = "sparse+%s/api/cargo/cargo-test-repo/index/"
 		},
 	}
 	assert.Equal(t, expected, results)
+}
+
+// skipIfPnpmUnusable skips on Windows (pnpm delegates 'config get registry' to npm via cmd.exe, unresolvable on the runner) or when pnpm is not on PATH.
+func skipIfPnpmUnusable(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("pnpm config get registry delegates to npm via cmd.exe, which is not resolvable on the Windows runner")
+	}
+	if _, err := exec.LookPath("pnpm"); err != nil {
+		t.Skip("pnpm is not on PATH")
+	}
+}
+
+// writeNpmrcProject creates a project dir whose .npmrc declares registryUrl (no token) and chdirs into it.
+func writeNpmrcProject(t *testing.T, registryUrl string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	for _, envKey := range []string{"NPM_CONFIG_REGISTRY", "npm_config_registry"} {
+		t.Setenv(envKey, "")
+		require.NoError(t, os.Unsetenv(envKey))
+	}
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"npmrc-hostcheck-test","version":"1.0.0"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".npmrc"), []byte("registry="+registryUrl+"\n"), 0644))
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	t.Cleanup(func() { clienttestutils.ChangeDirAndAssert(t, prevWd) })
+}
+
+func newConfiguredServerCommand() *CurationAuditCommand {
+	ca := NewCurationAuditCommand()
+	ca.SetServerDetails(&config.ServerDetails{
+		Url:            "https://configured-server.example.com/",
+		ArtifactoryUrl: "https://configured-server.example.com/artifactory/",
+		AccessToken:    "super-secret-token",
+	})
+	return ca
+}
+
+// TestSetRepoFromNpmrcHostCheck: a tokenless .npmrc registry must get the 'jf c' credentials only when its scheme/host match the configured server.
+func TestSetRepoFromNpmrcHostCheck(t *testing.T) {
+	const configuredArtifactoryUrl = "https://configured-server.example.com/artifactory/"
+	testCases := []struct {
+		name          string
+		tech          string
+		registryUrl   string
+		expectedError string
+	}{
+		{name: "npm: different host is rejected", tech: "npm", registryUrl: "https://attacker.example.com/artifactory/api/npm/npm-test-repo/", expectedError: "does not match"},
+		{name: "npm: different scheme is rejected", tech: "npm", registryUrl: "http://configured-server.example.com/artifactory/api/npm/npm-test-repo/", expectedError: "does not match"},
+		{name: "npm: matching host falls back to jf c credentials", tech: "npm", registryUrl: "https://configured-server.example.com/artifactory/api/npm/npm-test-repo/"},
+		{name: "npm: explicit default port is the same host", tech: "npm", registryUrl: "https://configured-server.example.com:443/artifactory/api/npm/npm-test-repo/"},
+		{name: "pnpm: different host is rejected", tech: "pnpm", registryUrl: "https://attacker.example.com/artifactory/api/npm/pnpm-test-repo/", expectedError: "does not match"},
+		{name: "pnpm: different scheme is rejected", tech: "pnpm", registryUrl: "http://configured-server.example.com/artifactory/api/npm/pnpm-test-repo/", expectedError: "does not match"},
+		{name: "pnpm: matching host falls back to jf c credentials", tech: "pnpm", registryUrl: "https://configured-server.example.com/artifactory/api/npm/pnpm-test-repo/"},
+		{name: "pnpm: explicit default port is the same host", tech: "pnpm", registryUrl: "https://configured-server.example.com:443/artifactory/api/npm/pnpm-test-repo/"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.tech == "pnpm" {
+				skipIfPnpmUnusable(t)
+			}
+			writeNpmrcProject(t, tc.registryUrl)
+			ca := newConfiguredServerCommand()
+
+			var setErr error
+			if tc.tech == "pnpm" {
+				setErr = ca.setRepoFromNpmrcForPnpm()
+			} else {
+				setErr = ca.setRepoFromNpmrc()
+			}
+
+			sd, err := ca.ServerDetails()
+			require.NoError(t, err)
+			assert.Equal(t, configuredArtifactoryUrl, sd.ArtifactoryUrl, "shared ServerDetails must not be mutated")
+			if tc.expectedError != "" {
+				require.Error(t, setErr)
+				assert.Contains(t, setErr.Error(), tc.expectedError)
+				assert.Nil(t, ca.PackageManagerConfig, "credentials must not be attached to the mismatched host")
+				return
+			}
+			require.NoError(t, setErr)
+			require.NotNil(t, ca.PackageManagerConfig)
+			pmSd, sdErr := ca.PackageManagerConfig.ServerDetails()
+			require.NoError(t, sdErr)
+			assert.Equal(t, "super-secret-token", pmSd.AccessToken)
+		})
+	}
+}
+
+// TestCredentialFallbackServerDetailsHostCheck covers the shared host guard's accept/reject decisions and that the mismatch error never leaks URL userinfo.
+func TestCredentialFallbackServerDetailsHostCheck(t *testing.T) {
+	testCases := []struct {
+		name           string
+		discoveredUrl  string
+		expectedError  bool
+		forbiddenInErr string
+	}{
+		{name: "same host is accepted", discoveredUrl: "https://configured-server.example.com/artifactory/"},
+		{name: "explicit default port is accepted", discoveredUrl: "https://configured-server.example.com:443/artifactory/"},
+		{name: "different host is rejected", discoveredUrl: "https://attacker.example.com/artifactory/", expectedError: true},
+		{name: "userinfo is redacted from the mismatch error", discoveredUrl: "https://s3cr3t-token@attacker.example.com/artifactory/", expectedError: true, forbiddenInErr: "s3cr3t-token"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ca := newConfiguredServerCommand()
+			serverDetails, err := ca.credentialFallbackServerDetails("npm", ".npmrc", tc.discoveredUrl)
+			if !tc.expectedError {
+				require.NoError(t, err)
+				assert.Equal(t, "super-secret-token", serverDetails.AccessToken)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "does not match")
+			if tc.forbiddenInErr != "" {
+				assert.NotContains(t, err.Error(), tc.forbiddenInErr)
+			}
+		})
+	}
 }

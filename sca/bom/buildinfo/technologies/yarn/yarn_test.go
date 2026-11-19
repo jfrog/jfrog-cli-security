@@ -25,32 +25,43 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
-// TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess runs
-// configureYarnResolutionServerAndRunInstall end-to-end against a fake yarn executable, using
-// a curation fallback credential (no token in .yarnrc.yml, only params.ServerDetails). It
-// asserts the subprocess actually receives YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH, and that
-// YARN_NPM_REGISTRY_SERVER is never set (registry must keep coming from .yarnrc.yml).
-func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubprocess(t *testing.T) {
+// fakeYarnCapturingInstallForTest returns a POSIX "yarn" script that reports 4.5.0 for --version and, for any
+// other call (the install), records the environment and the .yarnrc.yml it sees in the working directory.
+func fakeYarnCapturingInstallForTest(t *testing.T) (yarnPath, envFile, yarnrcFile string) {
+	captureDir := t.TempDir()
+	envFile = filepath.Join(captureDir, "captured-env.txt")
+	yarnrcFile = filepath.Join(captureDir, "captured-yarnrc.yml")
+	yarnPath = filepath.Join(t.TempDir(), "yarn")
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
+		"env > " + envFile + "\n" +
+		"cat .yarnrc.yml > " + yarnrcFile + " 2>/dev/null\n" +
+		"exit 0\n"
+	require.NoError(t, os.WriteFile(yarnPath, []byte(script), 0o755))
+	return
+}
+
+func mockArtifactoryForYarnTest(t *testing.T) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// TestConfigureYarnResolutionServerAndRunInstallBindsFallbackAuthToVerifiedRegistry: the credential is bound to the verified
+// registry via a ${ENV} reference in the temp .yarnrc.yml (secret only in its own env var, not global YARN_NPM_AUTH_* or on disk).
+func TestConfigureYarnResolutionServerAndRunInstallBindsFallbackAuthToVerifiedRegistry(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake yarn executable is a POSIX shell script")
 	}
-	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockArtifactory.Close()
-
+	mockArtifactory := mockArtifactoryForYarnTest(t)
 	curWd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
-
-	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
-	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
-	fakeYarnScript := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
-		"env > " + envCaptureFile + "\n" +
-		"exit 0\n"
-	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+	fakeYarnPath, envCaptureFile, yarnrcCaptureFile := fakeYarnCapturingInstallForTest(t)
 
 	//#nosec G101 -- test fixture, not a real secret
 	const fallbackToken = "fallback-jf-c-token-xyz"
@@ -69,22 +80,34 @@ func TestConfigureYarnResolutionServerAndRunInstallInjectsFallbackAuthIntoSubpro
 	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
 	require.NoError(t, readErr, "the install subprocess (not just the --version probe) must have run")
 	capturedEnv := string(capturedEnvBytes)
-
-	assert.Contains(t, capturedEnv, "YARN_NPM_AUTH_TOKEN="+fallbackToken,
-		"the fallback credential resolved from params.ServerDetails must reach the yarn subprocess's env")
-	assert.Contains(t, capturedEnv, "YARN_NPM_ALWAYS_AUTH=true")
-	assert.NotContains(t, capturedEnv, "YARN_NPM_REGISTRY_SERVER=",
-		"registry must keep coming from .yarnrc.yml — this injection must never set it")
-
-	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
-		_, exists := os.LookupEnv(key)
-		assert.False(t, exists, "%s must be restored (unset) after the subprocess exits", key)
+	assert.True(t, strings.Contains(capturedEnv, yarnFallbackAuthEnv+"="+fallbackToken), "the secret must reach Yarn only through its dedicated env var")
+	for _, globalAuthEnv := range []string{"YARN_NPM_AUTH_TOKEN=", "YARN_NPM_AUTH_IDENT=", "YARN_NPM_ALWAYS_AUTH=", "YARN_NPM_REGISTRY_SERVER="} {
+		assert.False(t, strings.Contains(capturedEnv, globalAuthEnv), "%s must not be set", globalAuthEnv)
 	}
+
+	yarnrcSeenByInstall, readErr := os.ReadFile(yarnrcCaptureFile)
+	require.NoError(t, readErr)
+	boundRegistry := mockArtifactory.URL + "/artifactory/api/npm/tst-yarn-repo"
+	var seenRc struct {
+		NpmRegistries map[string]map[string]interface{} `yaml:"npmRegistries"`
+	}
+	require.NoError(t, yaml.Unmarshal(yarnrcSeenByInstall, &seenRc))
+	require.Contains(t, seenRc.NpmRegistries, boundRegistry, "the credential must be bound to the verified registry")
+	assert.Equal(t, "${"+yarnFallbackAuthEnv+"}", seenRc.NpmRegistries[boundRegistry]["npmAuthToken"])
+	assert.NotContains(t, string(yarnrcSeenByInstall), fallbackToken, "the secret must never be written to .yarnrc.yml")
+	assert.Equal(t, true, seenRc.NpmRegistries[boundRegistry]["npmAlwaysAuth"])
+	assert.Len(t, seenRc.NpmRegistries, 1, "nothing but the verified registry may carry the credential")
+
+	yarnrcAfter, readErr := os.ReadFile(filepath.Join(curWd, ".yarnrc.yml"))
+	require.NoError(t, readErr, "the resolution plugin registration made during the install must survive")
+	assert.NotContains(t, string(yarnrcAfter), fallbackToken, "the credential must be stripped once the install is done")
+	_, envLeft := os.LookupEnv(yarnFallbackAuthEnv)
+	assert.False(t, envLeft, "the env var must be unset again once the install is done")
 }
 
 // TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback verifies that
 // when .yarnrc.yml already has its own token (YarnCredentialsFromFallback is false),
-// injectCurationFallbackAuthEnv is skipped — no GetYarnAuthDetails call is made. Proven by
+// the fallback binding is skipped — no GetYarnAuthDetails call is made. Proven by
 // pointing ServerDetails at a server that always 500s: if the gate ever fires unconditionally
 // again, that call would fail and the install would error.
 func TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFallback(t *testing.T) {
@@ -100,14 +123,7 @@ func TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFall
 
 	curWd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(curWd, "package.json"), []byte(`{"name":"root"}`), 0644))
-
-	envCaptureFile := filepath.Join(t.TempDir(), "captured-env.txt")
-	fakeYarnPath := filepath.Join(t.TempDir(), "yarn")
-	fakeYarnScript := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 4.5.0; exit 0; fi\n" +
-		"env > " + envCaptureFile + "\n" +
-		"exit 0\n"
-	require.NoError(t, os.WriteFile(fakeYarnPath, []byte(fakeYarnScript), 0o755))
+	fakeYarnPath, envCaptureFile, yarnrcCaptureFile := fakeYarnCapturingInstallForTest(t)
 
 	//#nosec G101 -- test fixture, not a real secret
 	const yarnrcToken = "yarnrc-own-token-abc"
@@ -128,40 +144,265 @@ func TestConfigureYarnResolutionServerAndRunInstallSkipsAuthInjectionWhenNotFall
 
 	capturedEnvBytes, readErr := os.ReadFile(envCaptureFile)
 	require.NoError(t, readErr, "the install subprocess must have run")
-	assert.NotContains(t, string(capturedEnvBytes), "YARN_NPM_AUTH_TOKEN="+yarnrcToken,
-		"the token already lives in .yarnrc.yml; env injection is redundant when not falling back")
+	assert.False(t, strings.Contains(string(capturedEnvBytes), yarnrcToken), "the token already lives in .yarnrc.yml and must not be injected")
+	yarnrcSeenByInstall, readErr := os.ReadFile(yarnrcCaptureFile)
+	require.NoError(t, readErr)
+	assert.NotContains(t, string(yarnrcSeenByInstall), yarnrcToken)
+	assert.NotContains(t, string(yarnrcSeenByInstall), "npmRegistries", "no credential binding is written when not falling back")
 }
 
-// TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials verifies that with no usable
-// credentials, injectCurationFallbackAuthEnv sets no env vars and its restore is a no-op —
-// the anonymous-resolution case is unchanged.
-func TestInjectCurationFallbackAuthEnvNoOpWithoutCredentials(t *testing.T) {
-	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
-		require.NoError(t, os.Unsetenv(key))
-	}
+// TestBindCurationFallbackAuthNoOpWithoutCredentials verifies that with no usable credentials nothing is
+// written and the restore is a no-op — the anonymous-resolution case is unchanged.
+func TestBindCurationFallbackAuthNoOpWithoutCredentials(t *testing.T) {
+	curWd := t.TempDir()
 
-	restore, err := injectCurationFallbackAuthEnv(nil, "some-repo")
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, nil, "some-repo")
 	require.NoError(t, err)
 	require.NotNil(t, restore)
 	require.NoError(t, restore())
 
-	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
-		_, exists := os.LookupEnv(key)
-		assert.False(t, exists, "%s must not be set when serverDetails has no credentials", key)
-	}
+	restore, err = bindCurationFallbackAuthInYarnrc(curWd, &config.ServerDetails{ArtifactoryUrl: "http://127.0.0.1:1/artifactory/"}, "some-repo")
+	require.NoError(t, err)
+	require.NoError(t, restore())
+
+	assert.NoFileExists(t, filepath.Join(curWd, ".yarnrc.yml"))
 }
 
 // A Password-only server must not be treated as anonymous (it used to be, since the old predicate
 // ignored Password entirely); this proves it now attempts real auth instead of a silent no-op.
-func TestInjectCurationFallbackAuthEnvAttemptsAuthWithPasswordOnlyServer(t *testing.T) {
-	for _, key := range []string{yarnNpmAuthIdentEnv, yarnNpmAuthTokenEnv, yarnNpmAlwaysAuthEnv} {
-		require.NoError(t, os.Unsetenv(key))
-	}
+func TestBindCurationFallbackAuthAttemptsAuthWithPasswordOnlyServer(t *testing.T) {
+	curWd := t.TempDir()
 	server := &config.ServerDetails{ArtifactoryUrl: "http://127.0.0.1:1/artifactory/", Password: "some-password"}
 
-	_, err := injectCurationFallbackAuthEnv(server, "some-repo")
+	_, err := bindCurationFallbackAuthInYarnrc(curWd, server, "some-repo")
 
 	assert.Error(t, err, "a Password-only server must not be silently treated as anonymous")
+	assert.NoFileExists(t, filepath.Join(curWd, ".yarnrc.yml"))
+}
+
+// TestBindCurationFallbackAuthBindsUserPasswordAsAuthIdent: with a user:password credential (no access token) the binding
+// references the npmAuthIdent Artifactory returns for the verified registry, and sets no npmAuthToken.
+func TestBindCurationFallbackAuthBindsUserPasswordAsAuthIdent(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	const authIdent = "ZmFrZS1pZGVudA==" // fake base64 ident, as returned by Artifactory's npm auth API
+	npmAuthCalls := make(chan string, 4)
+	mockArtifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/api/system/version"):
+			_, _ = w.Write([]byte(`{"version":"7.90.0"}`))
+		case strings.HasSuffix(r.URL.Path, "/api/npm/auth"):
+			user, password, _ := r.BasicAuth()
+			npmAuthCalls <- user + ":" + password
+			_, _ = w.Write([]byte("_auth = " + authIdent + "\nalways-auth = true\nemail = jf-user@example.com\n"))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(mockArtifactory.Close)
+	curWd := t.TempDir()
+	//#nosec G101 -- test fixture, not a real secret
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", User: "jf-user", Password: "jf-pass"}
+
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+	require.NoError(t, err)
+
+	select {
+	case basicAuth := <-npmAuthCalls:
+		assert.Equal(t, "jf-user:jf-pass", basicAuth, "the ident must be requested with the user:password credential")
+	default:
+		t.Fatal("Artifactory's npm auth API was never called")
+	}
+	registries := requireMap(t, readYarnrcForTest(t, curWd)["npmRegistries"])
+	require.Len(t, registries, 1)
+	entry := requireMap(t, registries[mockArtifactory.URL+"/artifactory/api/npm/tst-yarn-repo"])
+	assert.Equal(t, "${"+yarnFallbackAuthEnv+"}", entry["npmAuthIdent"])
+	assert.Equal(t, authIdent, os.Getenv(yarnFallbackAuthEnv), "the ident is carried by the env var, not the file")
+	assert.NotContains(t, entry, "npmAuthToken")
+	assert.Equal(t, true, entry["npmAlwaysAuth"])
+
+	require.NoError(t, restore())
+	assert.NoFileExists(t, filepath.Join(curWd, ".yarnrc.yml"), "the credential must be removed after the install")
+}
+
+// TestBindCurationFallbackAuthKeepsSecretOffDiskAndRestoresEnv: the temp copy never contains the secret, and an env var
+// that was already set is put back after restore.
+func TestBindCurationFallbackAuthKeepsSecretOffDiskAndRestoresEnv(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(yarnFallbackAuthEnv, "previous-value")
+	mockArtifactory := mockArtifactoryForYarnTest(t)
+	curWd := t.TempDir()
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", AccessToken: "tok-secret-789"}
+
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+	require.NoError(t, err)
+	assert.Equal(t, "tok-secret-789", os.Getenv(yarnFallbackAuthEnv))
+	entries, err := os.ReadDir(curWd)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries, "the binding must have been written")
+	for _, entry := range entries {
+		content, readErr := os.ReadFile(filepath.Join(curWd, entry.Name()))
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(content), "tok-secret-789", "the secret must not be on disk: %s", entry.Name())
+	}
+
+	require.NoError(t, restore())
+	assert.Equal(t, "previous-value", os.Getenv(yarnFallbackAuthEnv), "a pre-existing value must be restored, not unset")
+}
+
+// requireMap returns value as a map, failing the test (instead of panicking) when it is not one.
+func requireMap(t *testing.T, value interface{}) map[string]interface{} {
+	t.Helper()
+	m, ok := value.(map[string]interface{})
+	require.True(t, ok, "expected a map, got %T", value)
+	return m
+}
+
+func readYarnrcForTest(t *testing.T, dir string) map[string]interface{} {
+	data, err := os.ReadFile(filepath.Join(dir, ".yarnrc.yml"))
+	require.NoError(t, err)
+	rc := map[string]interface{}{}
+	require.NoError(t, yaml.Unmarshal(data, &rc))
+	return rc
+}
+
+// TestBindCurationFallbackAuthBindsVerifiedAndSameHostScopesOnly: the credential goes to the verified registry and
+// same-host scope registries, never to another host.
+func TestBindCurationFallbackAuthBindsVerifiedAndSameHostScopesOnly(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	mockArtifactory := mockArtifactoryForYarnTest(t)
+	curWd := t.TempDir()
+	sameHostScope := mockArtifactory.URL + "/artifactory/api/npm/company-repo/"
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, ".yarnrc.yml"), []byte(
+		"npmRegistryServer: \""+mockArtifactory.URL+"/artifactory/api/npm/tst-yarn-repo/\"\n"+
+			"npmScopes:\n"+
+			"  company:\n    npmRegistryServer: \""+sameHostScope+"\"\n"+
+			"  evil:\n    npmRegistryServer: \"https://attacker.example.com/\"\n"+
+			"  publishonly:\n    npmPublishRegistry: \""+mockArtifactory.URL+"/artifactory/api/npm/pub/\"\n"), 0o600))
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", AccessToken: "tok-123"}
+
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+	require.NoError(t, err)
+
+	registries := requireMap(t, readYarnrcForTest(t, curWd)["npmRegistries"])
+	assert.Len(t, registries, 2)
+	for _, key := range []string{
+		mockArtifactory.URL + "/artifactory/api/npm/tst-yarn-repo",
+		mockArtifactory.URL + "/artifactory/api/npm/company-repo",
+	} {
+		require.Contains(t, registries, key)
+		assert.Equal(t, "${"+yarnFallbackAuthEnv+"}", requireMap(t, registries[key])["npmAuthToken"])
+	}
+	assert.Equal(t, "tok-123", os.Getenv(yarnFallbackAuthEnv), "the secret is carried by the env var while bound")
+	onDisk, readErr := os.ReadFile(filepath.Join(curWd, ".yarnrc.yml"))
+	require.NoError(t, readErr)
+	assert.NotContains(t, string(onDisk), "tok-123", "the secret must never be written to .yarnrc.yml")
+	for key := range registries {
+		assert.NotContains(t, key, "attacker.example.com", "a registry on another host must never get the credential")
+	}
+
+	require.NoError(t, restore())
+	_, envLeft := os.LookupEnv(yarnFallbackAuthEnv)
+	assert.False(t, envLeft, "the env var must be unset again after restore")
+	after := readYarnrcForTest(t, curWd)
+	assert.NotContains(t, after, "npmRegistries", "the binding must be removed once the install is done")
+	assert.Contains(t, after, "npmScopes", "the project's own settings must be left as they were")
+}
+
+// TestBindCurationFallbackAuthPreservesAndRestoresExistingRegistries: existing npmRegistries entries are kept while
+// bound and restored afterwards; the plugin registration made in between survives.
+func TestBindCurationFallbackAuthPreservesAndRestoresExistingRegistries(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	mockArtifactory := mockArtifactoryForYarnTest(t)
+	curWd := t.TempDir()
+	boundKey := mockArtifactory.URL + "/artifactory/api/npm/tst-yarn-repo"
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, ".yarnrc.yml"), []byte(
+		"npmRegistries:\n"+
+			"  \""+boundKey+"\":\n    npmAlwaysAuth: false\n    npmAuthIdent: stale-ident\n"+
+			"  \"//other.example.com\":\n    npmAuthToken: other-token\n"), 0o600))
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", AccessToken: "tok-123"}
+
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+	require.NoError(t, err)
+	bound := requireMap(t, readYarnrcForTest(t, curWd)["npmRegistries"])
+	boundEntry := requireMap(t, bound[boundKey])
+	assert.Equal(t, "${"+yarnFallbackAuthEnv+"}", boundEntry["npmAuthToken"])
+	assert.Equal(t, true, boundEntry["npmAlwaysAuth"])
+	assert.NotContains(t, boundEntry, "npmAuthIdent", "a stale ident must not shadow the bound token")
+	assert.Equal(t, map[string]interface{}{"npmAuthToken": "other-token"}, bound["//other.example.com"])
+
+	require.NoError(t, registerYarnPluginInYarnrc(curWd))
+	require.NoError(t, restore())
+
+	after := readYarnrcForTest(t, curWd)
+	assert.Contains(t, after, "plugins", "the plugin registration made during the install must survive the restore")
+	restored := requireMap(t, after["npmRegistries"])
+	assert.Equal(t, map[string]interface{}{"npmAlwaysAuth": false, "npmAuthIdent": "stale-ident"}, restored[boundKey])
+	assert.Equal(t, map[string]interface{}{"npmAuthToken": "other-token"}, restored["//other.example.com"])
+}
+
+// TestBindCurationFallbackAuthCreatesAndRemovesYarnrc: when the project has no .yarnrc.yml of its own the
+// binding is written to a new one and the file is removed again afterwards.
+func TestBindCurationFallbackAuthCreatesAndRemovesYarnrc(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	mockArtifactory := mockArtifactoryForYarnTest(t)
+	curWd := t.TempDir()
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", AccessToken: "tok-123"}
+
+	restore, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+	require.NoError(t, err)
+	assert.Contains(t, readYarnrcForTest(t, curWd), "npmRegistries")
+	assert.FileExists(t, filepath.Join(curWd, ".yarnrc.yml"))
+
+	require.NoError(t, restore())
+	assert.NoFileExists(t, filepath.Join(curWd, ".yarnrc.yml"))
+}
+
+// TestBindCurationFallbackAuthRefusesUnparsableYarnrc: the credential is never written into a file we cannot
+// merge into safely.
+func TestBindCurationFallbackAuthRefusesUnparsableYarnrc(t *testing.T) {
+	mockArtifactory := mockArtifactoryForYarnTest(t)
+	curWd := t.TempDir()
+	const broken = "npmRegistries: [unclosed\n"
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, ".yarnrc.yml"), []byte(broken), 0o600))
+	server := &config.ServerDetails{ArtifactoryUrl: mockArtifactory.URL + "/artifactory/", AccessToken: "tok-123"}
+
+	_, err := bindCurationFallbackAuthInYarnrc(curWd, server, "tst-yarn-repo")
+
+	require.Error(t, err)
+	data, readErr := os.ReadFile(filepath.Join(curWd, ".yarnrc.yml"))
+	require.NoError(t, readErr)
+	assert.Equal(t, broken, string(data))
+}
+
+func TestCurationAuthRegistryTargets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, ".yarnrc.yml"), []byte(
+		"npmScopes:\n"+
+			"  a:\n    npmRegistryServer: https://host.example/artifactory/api/npm/a-repo/\n"+
+			"  dup:\n    npmRegistryServer: https://host.example/artifactory/api/npm/tst/\n"+
+			"  evil:\n    npmRegistryServer: https://attacker.example/\n"+
+			"  otherscheme:\n    npmRegistryServer: http://host.example/artifactory/api/npm/x/\n"+
+			"  pub:\n    npmPublishRegistry: https://host.example/artifactory/api/npm/pub/\n"), 0o600))
+
+	targets, err := curationAuthRegistryTargets(curWd, "https://host.example/artifactory/api/npm/tst/", "https://host.example/artifactory/")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"https://host.example/artifactory/api/npm/tst",
+		"https://host.example/artifactory/api/npm/a-repo",
+	}, targets)
+}
+
+func TestCurationAuthRegistryTargetsFailsOnUnparsableYarnrc(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	curWd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(curWd, ".yarnrc.yml"), []byte("npmScopes: [unclosed\n"), 0o600))
+
+	targets, err := curationAuthRegistryTargets(curWd, "https://host.example/artifactory/api/npm/tst/", "https://host.example/artifactory/")
+
+	require.Error(t, err)
+	assert.Nil(t, targets)
 }
 
 func TestParseYarnDependenciesMap(t *testing.T) {
@@ -1856,5 +2097,119 @@ func TestReadNpmAuthTokenFromYarnrcFiles(t *testing.T) {
 		yarnrc := "npmRegistries:\n  \"" + registryURL + "\":\n    npmAuthToken: scoped-token\n"
 		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
 		assert.Equal(t, "scoped-token", readNpmAuthTokenFromYarnrcFiles(strings.TrimSuffix(registryURL, "/"), wd))
+	})
+}
+
+func TestGetYarnrcAdditionalRegistries(t *testing.T) {
+	getRefs := func(t *testing.T, dir string) []YarnrcRegistryRef {
+		refs, err := GetYarnrcAdditionalRegistries(dir)
+		require.NoError(t, err)
+		return refs
+	}
+	setHome := func(t *testing.T, home string) {
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home) // os.UserHomeDir reads USERPROFILE on Windows
+	}
+
+	t.Run("no yarnrc", func(t *testing.T) {
+		setHome(t, t.TempDir())
+		assert.Empty(t, getRefs(t, t.TempDir()))
+	})
+
+	t.Run("only the default registry and registries auth", func(t *testing.T) {
+		setHome(t, t.TempDir())
+		wd := t.TempDir()
+		yarnrc := "npmRegistryServer: https://host.example/artifactory/api/npm/repo/\n" +
+			"npmRegistries:\n  \"//other.example/\":\n    npmAuthToken: t\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Empty(t, getRefs(t, wd))
+	})
+
+	t.Run("audit registries are ignored", func(t *testing.T) {
+		setHome(t, t.TempDir())
+		wd := t.TempDir()
+		yarnrc := "npmAuditRegistry: https://audit.example/\nnpmScopes:\n  a:\n    npmAuditRegistry: https://scope-audit.example/\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Empty(t, getRefs(t, wd))
+	})
+
+	t.Run("scope without a registry of its own is not reported", func(t *testing.T) {
+		// Yarn reports a default registry for such a scope; it was not declared by the project.
+		setHome(t, t.TempDir())
+		wd := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte("npmScopes:\n  plain:\n    npmAlwaysAuth: true\n"), 0o600))
+		assert.Empty(t, getRefs(t, wd))
+	})
+
+	t.Run("all declaring settings, deterministic order", func(t *testing.T) {
+		setHome(t, t.TempDir())
+		wd := t.TempDir()
+		yarnrc := "npmPublishRegistry: https://pub.example/\n" +
+			"npmScopes:\n" +
+			"  zeta:\n    npmRegistryServer: https://zeta.example/\n" +
+			"  alpha:\n    npmRegistryServer: https://alpha.example/\n    npmPublishRegistry: https://alpha-pub.example/\n"
+		require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(yarnrc), 0o600))
+		assert.Equal(t, []YarnrcRegistryRef{
+			{Setting: "npmPublishRegistry", URL: "https://pub.example/"},
+			{Setting: "npmScopes.alpha.npmRegistryServer", URL: "https://alpha.example/", RoutesPackages: true},
+			{Setting: "npmScopes.alpha.npmPublishRegistry", URL: "https://alpha-pub.example/"},
+			{Setting: "npmScopes.zeta.npmRegistryServer", URL: "https://zeta.example/", RoutesPackages: true},
+		}, getRefs(t, wd))
+	})
+
+	t.Run("workspace root and home files are merged", func(t *testing.T) {
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"),
+			[]byte("npmScopes:\n  fromhome:\n    npmRegistryServer: https://home.example/\n"), 0o600))
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, ".yarnrc.yml"),
+			[]byte("npmScopes:\n  fromroot:\n    npmRegistryServer: https://root.example/\n"), 0o600))
+		member := filepath.Join(root, "packages", "app")
+		require.NoError(t, os.MkdirAll(member, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(member, ".yarnrc.yml"),
+			[]byte("npmScopes:\n  frommember:\n    npmRegistryServer: https://member.example/\n"), 0o600))
+
+		assert.Equal(t, []YarnrcRegistryRef{
+			{Setting: "npmScopes.frommember.npmRegistryServer", URL: "https://member.example/", RoutesPackages: true},
+			{Setting: "npmScopes.fromroot.npmRegistryServer", URL: "https://root.example/", RoutesPackages: true},
+			{Setting: "npmScopes.fromhome.npmRegistryServer", URL: "https://home.example/", RoutesPackages: true},
+		}, getRefs(t, member))
+	})
+
+	const duplicateScopes = "npmScopes:\n  a:\n    npmRegistryServer: https://a.example/\nnpmScopes:\n  b:\n    npmRegistryServer: https://attacker.example/\n"
+	for name, content := range map[string]string{
+		"unclosed flow sequence":  "npmScopes: [unclosed\n",
+		"duplicate npmScopes key": duplicateScopes,
+	} {
+		t.Run("unparsable project file is an error: "+name, func(t *testing.T) {
+			setHome(t, t.TempDir())
+			wd := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(wd, ".yarnrc.yml"), []byte(content), 0o600))
+			refs, err := GetYarnrcAdditionalRegistries(wd)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "could not parse")
+			assert.Nil(t, refs)
+		})
+	}
+
+	t.Run("unparsable home file is an error", func(t *testing.T) {
+		home := t.TempDir()
+		setHome(t, home)
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".yarnrc.yml"), []byte(duplicateScopes), 0o600))
+		_, err := GetYarnrcAdditionalRegistries(t.TempDir())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "could not parse")
+	})
+
+	t.Run("unparsable parent directory file is an error", func(t *testing.T) {
+		setHome(t, t.TempDir())
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, ".yarnrc.yml"), []byte(duplicateScopes), 0o600))
+		member := filepath.Join(root, "packages", "app")
+		require.NoError(t, os.MkdirAll(member, 0o755))
+		_, err := GetYarnrcAdditionalRegistries(member)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "could not parse")
 	})
 }

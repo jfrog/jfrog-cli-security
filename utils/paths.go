@@ -117,12 +117,16 @@ func GetFullPathsWorkingDirs(workingDirs []string) ([]string, error) {
 }
 
 // IsPathExcludedFromRoot reports whether path matches exclusions relative to root.
-// The scan root, and any path outside it, is compared by its own name, so a parent directory outside the project cannot exclude it.
-// A path inside root is compared by its path from root. A path that cannot be made relative is not excluded.
+// Only a path inside root is compared, by its path from root.
+// The scan root itself, and any path outside it, is not excluded, so the project's own name and a parent folder cannot exclude it.
+// A path that cannot be made relative is not excluded.
 func IsPathExcludedFromRoot(root, path string, exclusions []string) bool {
 	matchPath, err := exclusionMatchPath(root, path)
 	if err != nil {
 		log.Warn("Failed to compare path for exclusions:", err.Error())
+		return false
+	}
+	if matchPath == "" {
 		return false
 	}
 	return IsPathExcluded(matchPath, exclusions)
@@ -130,14 +134,14 @@ func IsPathExcludedFromRoot(root, path string, exclusions []string) bool {
 
 func exclusionMatchPath(root, path string) (string, error) {
 	if root == "" {
-		return filepath.Base(path), nil
+		return "", nil
 	}
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
 		return "", err
 	}
 	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return filepath.Base(path), nil
+		return "", nil
 	}
 	return rel, nil
 }
@@ -301,25 +305,24 @@ func ToURI(path string) string {
 	return u.String()
 }
 
-func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, fullRemotePath string, err error) {
+// For a configured remote repository, the resource is expected under '<repo>/artifactory/' (a remote that proxies https://releases.jfrog.io).
+// fallbackRemotePath is '<repo>/' directly (a remote that proxies https://releases.jfrog.io/artifactory, or a repository holding the resources in its root). It is empty when there is no fallback.
+func GetReleasesRemoteDetails(artifact, downloadPath, remoteRepo string, remoteServerDetails *config.ServerDetails) (server *config.ServerDetails, remotePath, fallbackRemotePath string, err error) {
 	if remoteServerDetails != nil && remoteRepo != "" {
 		// Config profile server and repo details are provided
 		server = remoteServerDetails
-		fullRemotePath = path.Join(remoteRepo, downloadPath)
-		return
+	} else {
+		// Try to get releases remote details from environment variable
+		if server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv); err != nil {
+			return
+		}
 	}
-	// Try to get releases remote details from environment variable
-	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
-	if err != nil {
-		return
+	if remoteRepo == "" {
+		log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
+		// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
+		return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, "", nil
 	}
-	if remoteRepo != "" {
-		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
-		return
-	}
-	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The '%s' will be downloaded directly from releases.jfrog.io if needed.", artifact))
-	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
-	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
+	return server, path.Join(remoteRepo, "artifactory", downloadPath), path.Join(remoteRepo, downloadPath), nil
 }
 
 // RepositoryScansListLink is a deep link into Xray's Scans List for one artifact.

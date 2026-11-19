@@ -22,4 +22,6 @@ type Config struct {
 	Ecosystems []techutils.Technology `json:"ecosystems,omitempty" yaml:"ecosystems,omitempty"`
 	// [Optional] Specific directories to scan.
 	IncludeDirs []string `json:"includeDirs,omitempty"`
+	// [Optional] Allow running build tools (e.g. the target's gradlew) to resolve dependencies.
+	AllowBuildExecution bool `json:"allowBuildExecution,omitempty" yaml:"allowBuildExecution,omitempty"`
 }
