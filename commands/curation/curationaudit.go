@@ -94,6 +94,8 @@ const (
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
 		"This package manager however isn't supported by this command."
+	errorNothingAudited = "no supported package manager was recognised in any working directory, so nothing was audited. " +
+		"Check the working directories, or pass --requirements-file for a custom pip file name."
 
 	WaiverRequestForbidden = "One or more policies blocking this package do not allow waiver requests."
 	WaiverRequestApproved  = "The waiver request was automatically granted; you can use this package.\nNOTE: The policy owner may review this waiver more thoroughly and contact you if issues are found."
@@ -311,7 +313,9 @@ type CurationAuditCommand struct {
 	dockerImageName      string
 	huggingFaceModel     string
 	// hfProjectNameHint is the collision-free HF root-node name for the current working dir.
-	hfProjectNameHint     string
+	hfProjectNameHint string
+	// detectedTechCount counts technologies detected across all working dirs; zero fails the run.
+	detectedTechCount     int
 	includeCachedPackages bool
 	mvnIncludePluginDeps  bool
 	scriptPath            string
@@ -494,6 +498,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	}
 	if ca.Progress() != nil {
 		err = errors.Join(err, ca.Progress().Quit())
+	}
+	if err == nil && ca.detectedTechCount == 0 {
+		err = errorutils.CheckErrorf(errorNothingAudited)
 	}
 	// Print after the spinner has stopped so messages are not overwritten by ANSI clear codes.
 	for _, w := range ca.pendingWarnings {
@@ -780,7 +787,7 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		return []string{techutils.Docker.String()}
 	default:
-		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
+		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAuditWithRequirementsFile(ca.PipRequirementsFile()))
 		techs = promoteYarnWorkspaceMember(techs)
 		techs = promotePipToUvIn(techs, ca.OriginPath)
 		techs = dedupeDotnetFromNuget(techs)
@@ -830,6 +837,7 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		return err
 	}
 	techs := ca.techsToAudit()
+	ca.detectedTechCount += len(techs)
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {

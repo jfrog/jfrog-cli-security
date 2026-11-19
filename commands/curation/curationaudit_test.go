@@ -2266,7 +2266,8 @@ func TestRunGeneratesAuditIdForHttpDetails(t *testing.T) {
 	defer func() { require.NoError(t, os.Chdir(origWd)) }()
 
 	ca := NewCurationAuditCommand().SetWorkingDirs([]string{curWd})
-	require.NoError(t, ca.Run())
+	// An empty directory audits nothing, so Run fails; the audit ID is still generated.
+	require.ErrorContains(t, ca.Run(), "nothing was audited")
 
 	require.NotEmpty(t, ca.auditId)
 	_, parseErr := uuid.Parse(ca.auditId)
@@ -4757,6 +4758,74 @@ func TestPureUvProjectNotReportedAsPip(t *testing.T) {
 
 	assert.Contains(t, techs, techutils.Uv.String(), "uv.lock present, no pip-exclusive files — must report uv")
 	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
+}
+
+// TestTechsToAuditRecognisesCustomRequirementsFile: jf ca must detect pip from the file
+// named by --requirements-file, the same way jf audit does.
+func TestTechsToAuditRecognisesCustomRequirementsFile(t *testing.T) {
+	// Isolate the home dir so a machine-global ~/.config/uv/uv.toml cannot promote pip to uv.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetPipRequirementsFile("constraints.txt")
+	ca.OriginPath = projectDir
+
+	assert.Contains(t, ca.techsToAudit(), techutils.Pip.String(), "the file named by --requirements-file must be audited as pip")
+}
+
+// TestCurationAuditFailsWhenNothingIsAudited: a run that recognises no package manager
+// must fail, so a CI gate cannot pass with nothing checked.
+func TestCurationAuditFailsWhenNothingIsAudited(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetWorkingDirs([]string{projectDir})
+
+	err := ca.Run()
+
+	require.Error(t, err, "a run that audits nothing must not succeed")
+	assert.Contains(t, err.Error(), "nothing was audited")
+}
+
+// TestRunSucceedsWhenOneWorkingDirIsAudited: a run with one audited directory and one empty
+// directory must still succeed; only a run that audits nothing fails.
+func TestRunSucceedsWhenOneWorkingDirIsAudited(t *testing.T) {
+	var tt testCase
+	for _, candidate := range getTestCasesForDoCurationAudit() {
+		if candidate.name == "python tree - one blocked package" {
+			tt = candidate
+		}
+	}
+	require.NotEmpty(t, tt.name, "the pip curation case must exist")
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+	mockServer, serverDetails := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
+	defer mockServer.Close()
+	cleanUp := createCurationTestEnv(t, basePathToTests, tt, serverDetails)
+	defer cleanUp()
+	require.NoError(t, os.Mkdir("empty-dir", 0755))
+
+	ca := NewCurationAuditCommand()
+	ca.SetIsCurationCmd(true)
+	ca.parallelRequests = 3
+	ca.SetInsecureTls(tt.allowInsecureTls)
+	ca.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	ca.SetWorkingDirs([]string{".", "empty-dir"})
+	if defaultServer, confErr := config.GetDefaultServerConf(); confErr == nil {
+		ca.SetServerDetails(defaultServer)
+	}
+
+	assert.NoError(t, ca.Run(), "a run where one directory is audited must succeed")
 }
 
 // TestTechsToAuditQueuesPep723HintForDeferredLogging: the PEP 723 hint must be queued in pendingWarnings.
