@@ -36,6 +36,16 @@ func TestParseCvsFailedPackages(t *testing.T) {
 			},
 		},
 		{
+			name:   "no version specifier",
+			output: "ERROR: Could not find a version that satisfies the requirement sccp (from versions: none)\nERROR: No matching distribution found for sccp\n",
+			want:   []PinnedRequirement{{Name: "sccp", ParentName: "sccp", ConfirmedDirect: true}},
+		},
+		{
+			name:   "no version specifier, transitive",
+			output: "ERROR: Could not find a version that satisfies the requirement sccp (from parentpkg==1.0) (from versions: none)\nERROR: No matching distribution found for sccp\n",
+			want:   []PinnedRequirement{{Name: "sccp", ParentName: "parentpkg", ParentVersion: "1.0"}},
+		},
+		{
 			name:   "range spec without parent",
 			output: "ERROR: No matching distribution found for langchain-core>=1.4.0,<2.0.0",
 			want: []PinnedRequirement{

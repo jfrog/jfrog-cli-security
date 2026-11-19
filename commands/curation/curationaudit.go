@@ -18,6 +18,8 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/gookit/color"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -90,6 +92,12 @@ const (
 	// "All versions blocked - {policy:openssf-jfca,condition:openssf}".
 	allVersionsBlockedMsgPattern = `(?i)all versions blocked\s*-\s*\{\s*policy:([^,}]+),condition:([^}]+)\}`
 
+	// allVersionsOfPattern matches Xray's whole-package-block message with its lines joined by spaces:
+	// "All versions of 'X' (repo) are blocked from download by JFrog Curation. Blocked by one or more of
+	// these policies: 1. P (C) 2. ... Note: ... Action: ... Details: ...". Any other text after the
+	// first sentence matches with empty groups.
+	allVersionsOfPattern = `(?i)All versions of '[^']+' \([^)]*\) are blocked from download by JFrog Curation\.(?:(?: Blocked by one or more of these policies: (.*?))?(?: Note: ([^.]*\.))?(?: Action: (.*?))?(?: Details: (\S+))?$|.*)`
+
 	errorTemplateHeadRequest = "failed sending HEAD request to %s for package '%s:%s'. Status-code: %v. Cause: %v"
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
@@ -130,7 +138,16 @@ const (
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 var osGetwd = os.Getwd
 var npmGetConfigValue = npmtech.GetNpmConfigValue
-var allVersionsBlockedMsgRegex = regexp.MustCompile(allVersionsBlockedMsgPattern)
+var (
+	allVersionsBlockedMsgRegex = regexp.MustCompile(allVersionsBlockedMsgPattern)
+	allVersionsOfMsgRegex      = regexp.MustCompile(allVersionsOfPattern)
+	// catalogLinkRegex matches the Catalog link of a single-version block message.
+	catalogLinkRegex = regexp.MustCompile(`For details and alternatives, visit: (\S+)`)
+	// allVersionsOfPolicyNumberRegex matches the "1. " / " 2. " numbering between the items of the policy list.
+	allVersionsOfPolicyNumberRegex = regexp.MustCompile(`(?:^| )\d+\. `)
+	// allVersionsOfPolicyItemRegex matches one policy list item: P (C), where C may itself contain parentheses.
+	allVersionsOfPolicyItemRegex = regexp.MustCompile(`^(.+?) \((.*)\)$`)
+)
 
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm:  func(ca *CurationAuditCommand) (bool, error) { return true, nil },
@@ -248,6 +265,7 @@ type PackageStatus struct {
 	ParentName        string   `json:"direct_dependency_package_name"`
 	ParentVersion     string   `json:"direct_dependency_package_version"`
 	BlockedPackageUrl string   `json:"blocked_package_url,omitempty"`
+	CatalogURL        string   `json:"catalog_url,omitempty"`
 	PackageName       string   `json:"blocked_package_name"`
 	PackageVersion    string   `json:"blocked_package_version"`
 	BlockingReason    string   `json:"blocking_reason"`
@@ -273,8 +291,9 @@ type PackageStatusTable struct {
 	PkgType        string `col-name:"Package\nType" auto-merge:"true"`
 	Policy         string `col-name:"Violated\nPolicy\nName"`
 	Condition      string `col-name:"Violated Condition\nName"`
-	Explanation    string `col-name:"Explanation"`
-	Recommendation string `col-name:"Recommendation"`
+	Explanation    string `col-name:"Explanation" auto-merge:"true"`
+	Recommendation string `col-name:"Recommendation" auto-merge:"true"`
+	Link           string `col-name:"Blocked\nPackage\nLink" auto-merge:"true" omitempty:"true"`
 }
 
 type treeAnalyzer struct {
@@ -1564,6 +1583,33 @@ func (ca *CurationAuditCommand) requestWaiver(blockedPackages []*PackageStatus) 
 	return coreutils.PrintTable(pkgStatusTable, "Waiver request submitted!", "Requested 0 waivers", true)
 }
 
+// catalogLinkStyle is the style of a package name that is a terminal hyperlink to its Catalog page.
+var catalogLinkStyle = color.New(color.FgBlue, color.OpUnderscore)
+
+// catalogLinks lists one JFrog Catalog page per blocked package name, the first one found.
+func catalogLinks(packagesStatus []*PackageStatus) string {
+	var names, urls []string
+	seen := map[string]bool{}
+	width := 0
+	for _, ps := range packagesStatus {
+		if ps.CatalogURL == "" || seen[ps.PackageName] {
+			continue
+		}
+		seen[ps.PackageName] = true
+		names, urls = append(names, ps.PackageName), append(urls, ps.CatalogURL)
+		width = max(width, len(ps.PackageName))
+	}
+	if len(urls) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\nFor more details, visit:")
+	for i := range urls {
+		fmt.Fprintf(&sb, "\n  %-*s  %s", width, names[i], urls[i])
+	}
+	return sb.String()
+}
+
 func printResult(format outFormat.OutputFormat, projectPath string, packagesStatus []*PackageStatus) error {
 	if format == "" {
 		format = outFormat.Table
@@ -1578,17 +1624,23 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 			}
 		}
 	case outFormat.Table:
-		pkgStatusTable := convertToPackageStatusTable(packagesStatus)
+		withLinks := output.TerminalSupportsHyperlinks()
+		pkgStatusTable := convertToPackageStatusTable(packagesStatus, withLinks)
 		err := coreutils.PrintTable(pkgStatusTable, "Curation", "Found 0 blocked packages", true)
 		if err != nil {
 			return err
+		}
+		if links := catalogLinks(packagesStatus); !withLinks && links != "" {
+			log.Output(links)
 		}
 	}
 	log.Output("\n")
 	return nil
 }
 
-func convertToPackageStatusTable(packagesStatus []*PackageStatus) []PackageStatusTable {
+// convertToPackageStatusTable builds the table rows. With withLinks, a package with a Catalog link gets a
+// styled "Open ↗" terminal hyperlink to it in the Link column; the column is omitted when no row has one.
+func convertToPackageStatusTable(packagesStatus []*PackageStatus, withLinks bool) []PackageStatusTable {
 	var pkgStatusTable []PackageStatusTable
 	for index, pkgStatus := range packagesStatus {
 		// We use auto-merge supported by the 'go-pretty' library. It doesn't have an option to merge lines by a group of unique fields.
@@ -1597,6 +1649,10 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus) []PackageStatu
 		if index%2 == 0 {
 			uniqLineSep = " "
 		}
+		var link string
+		if withLinks && pkgStatus.CatalogURL != "" {
+			link = catalogLinkStyle.Render(text.Hyperlink(pkgStatus.CatalogURL, "Open ↗")) + uniqLineSep
+		}
 		pkgTable := PackageStatusTable{
 			ID:             fmt.Sprintf("%d%s", index+1, uniqLineSep),
 			ParentName:     pkgStatus.ParentName + uniqLineSep,
@@ -1604,6 +1660,7 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus) []PackageStatu
 			PackageName:    pkgStatus.PackageName + uniqLineSep,
 			PackageVersion: pkgStatus.PackageVersion + uniqLineSep,
 			PkgType:        pkgStatus.PkgType + uniqLineSep,
+			Link:           link,
 		}
 		if len(pkgStatus.Policy) == 0 {
 			pkgStatusTable = append(pkgStatusTable, pkgTable)
@@ -1611,8 +1668,8 @@ func convertToPackageStatusTable(packagesStatus []*PackageStatus) []PackageStatu
 		}
 		for _, policyCond := range pkgStatus.Policy {
 			pkgTable.Policy = policyCond.Policy
-			pkgTable.Explanation = policyCond.Explanation
-			pkgTable.Recommendation = policyCond.Recommendation
+			pkgTable.Explanation = policyCond.Explanation + uniqLineSep
+			pkgTable.Recommendation = policyCond.Recommendation + uniqLineSep
 			pkgTable.Condition = policyCond.Condition
 			pkgStatusTable = append(pkgStatusTable, pkgTable)
 		}
@@ -2660,7 +2717,7 @@ func (ca *CurationAuditCommand) runNpmLogFallback(logsDir string, tech techutils
 const allVersionsBlockedText = "All versions blocked"
 
 // wholePackageBlockedStatus synthesizes a *PackageStatus straight from the log's notice+403
-// evidence — no HEAD-check needed. Recommendation is filled in later by
+// evidence — no HEAD-check needed. Explanation and Recommendation are finished later by
 // applyTransitiveAwareRecommendation, once the graph walk knows the parent.
 func wholePackageBlockedStatus(entry npmLogEntry, info npmBlockedInfo, tech techutils.Technology) *PackageStatus {
 	return &PackageStatus{
@@ -2669,19 +2726,14 @@ func wholePackageBlockedStatus(entry npmLogEntry, info npmBlockedInfo, tech tech
 		Action:         blocked,
 		BlockingReason: BlockingReasonPolicy,
 		PkgType:        string(tech),
-		Policy: []Policy{{
-			Policy:      info.Policy,
-			Condition:   info.Condition,
-			Explanation: allVersionsBlockedText,
-			// Recommendation is filled in by applyTransitiveAwareRecommendation.
-		}},
+		Policy:         slices.Clone(info.Policies),
+		CatalogURL:     info.CatalogURL,
 	}
 }
 
-// applyTransitiveAwareRecommendation normalizes every ps.Policy entry to generic,
-// direct/transitive-aware text for a whole-package block (matches npm). Only safe when
-// all entries are already whole-package (e.g. Step 0). For a per-version probe result,
-// use normalizeMatchingWholePackagePolicies instead.
+// applyTransitiveAwareRecommendation applies normalizeWholePackagePolicy to every ps.Policy entry of a
+// whole-package block. Only safe when all entries are already whole-package (e.g. Step 0). For a
+// per-version probe result, use normalizeMatchingWholePackagePolicies instead.
 func applyTransitiveAwareRecommendation(ps *PackageStatus, isDirectDependency bool) {
 	policies := make([]Policy, len(ps.Policy))
 	copy(policies, ps.Policy)
@@ -2691,38 +2743,46 @@ func applyTransitiveAwareRecommendation(ps *PackageStatus, isDirectDependency bo
 	ps.Policy = policies
 }
 
-// normalizeMatchingWholePackagePolicies normalizes only entries in ps.Policy matching
-// aggregatePolicies by Policy+Condition — the same block Step 0 confirmed. A genuinely
-// different per-version policy is left untouched.
-func normalizeMatchingWholePackagePolicies(ps *PackageStatus, aggregatePolicies []Policy, isDirectDependency bool) {
+// normalizeMatchingWholePackagePolicies copies the Explanation/Recommendation of the already
+// normalized aggregatePolicies onto the entries in ps.Policy matching them by Policy+Condition —
+// the same block Step 0 confirmed. A genuinely different per-version policy is left untouched.
+func normalizeMatchingWholePackagePolicies(ps *PackageStatus, aggregatePolicies []Policy) {
 	policies := make([]Policy, len(ps.Policy))
 	copy(policies, ps.Policy)
 	for i := range policies {
-		if !matchesAnyPolicy(policies[i], aggregatePolicies) {
-			continue
+		if c, ok := matchingPolicy(policies[i], aggregatePolicies); ok {
+			policies[i].Explanation, policies[i].Recommendation = c.Explanation, c.Recommendation
 		}
-		normalizeWholePackagePolicy(&policies[i], ps, isDirectDependency)
 	}
 	ps.Policy = policies
 }
 
-// matchesAnyPolicy reports whether p shares the same Policy+Condition as any of candidates.
-func matchesAnyPolicy(p Policy, candidates []Policy) bool {
+// matchingPolicy returns the first of candidates sharing the same Policy+Condition as p.
+func matchingPolicy(p Policy, candidates []Policy) (Policy, bool) {
 	for _, c := range candidates {
 		if p.Policy == c.Policy && p.Condition == c.Condition {
-			return true
+			return c, true
 		}
 	}
-	return false
+	return Policy{}, false
 }
 
-// normalizeWholePackagePolicy rewrites a single Policy entry's Explanation/Recommendation
-// to the generic, direct/transitive-aware text for a whole-package block.
+// normalizeWholePackagePolicy sets the Explanation of a whole-package Policy entry to allVersionsBlockedText.
+// A Recommendation already on p holds the Note and Action lines of Xray's message and is kept; for a
+// transitive dependency it follows a sentence naming the parent. Without one, a generic
+// direct/transitive-aware text is used.
 func normalizeWholePackagePolicy(p *Policy, ps *PackageStatus, isDirectDependency bool) {
 	p.Explanation = allVersionsBlockedText
-	if isDirectDependency {
+	action := p.Recommendation
+	switch {
+	case isDirectDependency && action != "":
+		// Xray's Note and Action lines are used as is.
+	case isDirectDependency:
 		p.Recommendation = "Remove this package from your project and replace with an alternate package"
-	} else {
+	case action != "":
+		p.Recommendation = fmt.Sprintf("%s is a transitive dependency of %s and cannot be removed directly. %s",
+			ps.PackageName, ps.ParentName, action)
+	default:
 		p.Recommendation = fmt.Sprintf(
 			"%s is a transitive dependency of %s and cannot be removed directly. Apply a waiver if acceptable, or replace %s with an alternative that doesn't depend on %s.",
 			ps.PackageName, ps.ParentName, ps.ParentName, ps.PackageName)
@@ -3013,7 +3073,10 @@ func (nc *treeAnalyzer) fetchCvsBlockedStatus(pins []python.PinnedRequirement) [
 		// Normalize only the entries that match the aggregate's policy+condition — a
 		// second, genuinely different real policy in the same probe must be preserved.
 		if wholePackageBlocked && wholePackageFallback != nil && len(wholePackageFallback.Policy) > 0 {
-			normalizeMatchingWholePackagePolicies(pkStatus, wholePackageFallback.Policy, depRelation == directRelation)
+			normalizeMatchingWholePackagePolicies(pkStatus, wholePackageFallback.Policy)
+		}
+		if wholePackageBlocked && wholePackageFallback != nil && wholePackageFallback.CatalogURL != "" {
+			pkStatus.CatalogURL = wholePackageFallback.CatalogURL
 		}
 		statuses = append(statuses, pkStatus)
 	}
@@ -3108,6 +3171,10 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 		if strings.Contains(strings.ToLower(respError.Errors[0].Message), BlockMessageKey) {
 			blockingReason := BlockingReasonPolicy
 			policies := nc.extractPoliciesFromMsg(respError)
+			var catalogURL string
+			if m := catalogLinkRegex.FindStringSubmatch(respError.Errors[0].Message); m != nil {
+				catalogURL = m[1]
+			}
 			if len(policies) == 0 {
 				// a server predating per-policy pending behavior sends no {policy,...} groups, only these substrings
 				lowerMsg := strings.ToLower(respError.Errors[0].Message)
@@ -3131,6 +3198,25 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				BlockingReason:    blockingReason,
 				WaiverAllowed:     strings.Contains(respError.Errors[0].Message, "[waivers allowed]"),
 				PkgType:           string(nc.tech),
+				CatalogURL:        catalogURL,
+			}, nil
+		}
+		if m := allVersionsOfMsgRegex.FindStringSubmatch(strings.ReplaceAll(respError.Errors[0].Message, "\n", " ")); m != nil {
+			policies := allVersionsOfPolicies(m)
+			blockingReason := BlockingReasonPolicy
+			if m[1] == "" && m[3] == "" {
+				log.Debug(fmt.Sprintf("curation: could not parse the policies of the all-versions block message for %s: %s", name, respError.Errors[0].Message))
+				policies, blockingReason = nil, BlockingReasonUnknown
+			}
+			return &PackageStatus{
+				PackageName:       name,
+				PackageVersion:    version,
+				BlockedPackageUrl: packageUrl,
+				Action:            blocked,
+				BlockingReason:    blockingReason,
+				Policy:            policies,
+				PkgType:           string(nc.tech),
+				CatalogURL:        m[4],
 			}, nil
 		}
 		if m := allVersionsBlockedMsgRegex.FindStringSubmatch(respError.Errors[0].Message); m != nil {
