@@ -918,7 +918,10 @@ func TestReplaceProdFlag(t *testing.T) {
 	}{
 		{"npm 12 prodOnly", "12.2.2", []string{"--prod", "--ignore-scripts"}, []string{"--omit=dev", "--ignore-scripts"}},
 		{"npm 7 prodOnly", "7.0.0", []string{"--prod"}, []string{"--omit=dev"}},
+		{"npm 12 prerelease prodOnly", "12.0.0-pre.0", []string{"--prod"}, []string{"--omit=dev"}},
 		{"npm 6 keeps --prod", "6.14.18", []string{"--prod"}, []string{"--prod"}},
+		// --dev is left as-is here. On npm 7 and later it aliases --include=dev, so
+		// --dep-type devOnly still returns production dependencies; see #949.
 		{"devOnly unchanged", "12.2.2", []string{"--dev"}, []string{"--dev"}},
 		{"no scope", "12.2.2", []string{"--ignore-scripts"}, []string{"--ignore-scripts"}},
 	}

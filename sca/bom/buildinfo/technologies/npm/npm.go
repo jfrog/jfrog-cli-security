@@ -328,6 +328,8 @@ func buildTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams, npmVer
 // replaceProdFlag replaces the abbreviated --prod flag (set for --dep-type prodOnly)
 // with --omit=dev. npm 12 rejects --prod with 'Invalid abbreviated flag "--prod"';
 // --omit=dev has the same meaning and is supported since npm 7.
+// Only the exact --prod flag that SetNpmScope writes is rewritten; --production
+// and an existing --omit=dev are left unchanged.
 func replaceProdFlag(npmArgs []string, npmVersion *version.Version) []string {
 	if npmVersion == nil || !npmVersion.AtLeast("7.0.0") || !slices.Contains(npmArgs, prodFlag) {
 		return npmArgs
