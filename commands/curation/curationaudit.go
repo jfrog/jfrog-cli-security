@@ -94,7 +94,6 @@ const (
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
 		"This package manager however isn't supported by this command."
-
 	WaiverRequestForbidden = "One or more policies blocking this package do not allow waiver requests."
 	WaiverRequestApproved  = "The waiver request was automatically granted; you can use this package.\nNOTE: The policy owner may review this waiver more thoroughly and contact you if issues are found."
 	WaiverRequestPending   = "A waiver request was opened for review, and the owner was notified.\nYou will receive an email with an update once the status changes."
@@ -749,6 +748,32 @@ func promotePipToUvIn(techs []string, dir string) []string {
 	return result
 }
 
+// promotePipToUvForRequest keeps the pip signal from --requirements-file. When that file exists in
+// the working dir, only project-local uv signals apply, as in 'jf audit'; a machine-global uv config
+// must not override it. Otherwise it behaves as promotePipToUvIn.
+func (ca *CurationAuditCommand) promotePipToUvForRequest(techs []string) []string {
+	if !ca.pipRequirementsFileExists() {
+		return promotePipToUvIn(techs, ca.OriginPath)
+	}
+	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), ca.OriginPath)
+	result := make([]string, 0, len(promoted))
+	for _, t := range promoted {
+		result = append(result, t.String())
+	}
+	return result
+}
+
+// pipRequirementsFileExists reports whether --requirements-file names an existing file in the
+// working dir. Absolute paths are not checked.
+func (ca *CurationAuditCommand) pipRequirementsFileExists() bool {
+	file := ca.PipRequirementsFile()
+	if file == "" || ca.OriginPath == "" || filepath.IsAbs(file) {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(ca.OriginPath, file))
+	return err == nil && !info.IsDir()
+}
+
 // dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.
 func dedupeDotnetFromNuget(techs []string) []string {
 	return removeTech(techs, techutils.Dotnet.String())
@@ -780,9 +805,9 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		return []string{techutils.Docker.String()}
 	default:
-		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
+		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAuditWithRequirementsFile(ca.PipRequirementsFile()))
 		techs = promoteYarnWorkspaceMember(techs)
-		techs = promotePipToUvIn(techs, ca.OriginPath)
+		techs = ca.promotePipToUvForRequest(techs)
 		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
