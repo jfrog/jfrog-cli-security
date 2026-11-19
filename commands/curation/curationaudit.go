@@ -2071,6 +2071,7 @@ func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir strin
 				return err
 			}
 		}
+		// Proxy/TLS settings are checked later, once the temp copy Yarn runs in exists and the credential is actually bound.
 		ca.yarnCredentialsFromFallback = true
 	}
 

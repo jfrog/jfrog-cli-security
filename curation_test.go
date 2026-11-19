@@ -102,26 +102,22 @@ func TestYarnCurationAudit(t *testing.T) {
 			name:    "Yarn V3 (registry from .yarnrc.yml)",
 			project: "yarn-v3",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// Native mode: the registry lives in .yarnrc.yml. jf ca injects this
-				// http mock registry directly; Yarn Berry only accepts a plain-http
-				// registry when its host is whitelisted.
-				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf(
-					"\nnpmRegistryServer: \"%sapi/npm/npms/\"\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n",
-					config.ArtifactoryUrl))
+				// Native mode: the registry lives in .yarnrc.yml.
+				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
 			},
 		},
 		{
 			name:    "Yarn V4 (registry from .yarnrc.yml)",
 			project: "yarn-v4",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// Native mode: the registry lives in .yarnrc.yml (the http whitelist is
-				// already committed in the yarn-v4 fixture).
+				// Native mode: the registry lives in .yarnrc.yml.
 				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
 			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("YARN_UNSAFE_HTTP_WHITELIST", "127.0.0.1,localhost")
 			tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "yarn", tc.project))
 			defer cleanUp()
 			// Drop any committed lockfile so 'jf ca' must run the resolution-only plugin
@@ -192,10 +188,10 @@ func TestYarnV2CurationAudit(t *testing.T) {
 	assert.NoError(t, configCmd.Run())
 
 	// V2 resolves the registry natively from .yarnrc.yml, like V3/V4 — no 'jf yarn-config' required.
-	// Yarn Berry only accepts a plain-http registry when its host is whitelisted.
-	appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf(
-		"\nnpmRegistryServer: \"%sapi/npm/npms/\"\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n",
-		config.ArtifactoryUrl))
+	// Yarn Berry only accepts a plain-http registry when its host is whitelisted; set it through the
+	// environment, since 'jf ca' refuses the 'jf c' credentials if .yarnrc.yml sets unsafeHttpWhitelist.
+	t.Setenv("YARN_UNSAFE_HTTP_WHITELIST", "127.0.0.1,localhost")
+	appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
 
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
