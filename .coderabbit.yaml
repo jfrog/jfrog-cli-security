@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Auto-review also runs on pull requests targeting dev.
+# The repository default branch stays included.
+# Patterns are unanchored regexes, so anchor dev to avoid matching names like dev-foo.
+# path_filters is a blacklist: every entry must start with !.
+# https://docs.coderabbit.ai/configuration/auto-review
+reviews:
+  path_filters:
+    - "!.coderabbit.yaml"
+    - "!tests/testdata/**"
+
+  auto_review:
+    enabled: true
+    base_branches:
+      - "^dev$"
+
+  path_instructions:
+    - path: "commands/**/*.go"
+      instructions: |
+        These are the scan and audit commands. Review for behavior callers can rely on:
+        - Flag meaning, default values, and exit behavior stay compatible.
+        - A named working directory or include path is kept, expanded, or skipped with a warning. A wildcard is expanded. When every explicitly requested directory is missing, produce no scan target. An empty include list scans the project root.
+        - An exclusion matches only a path inside the project. The project root and paths outside it are not excluded by their own name. Nested directories such as test/ and node_modules still match.
+        - SCA, secrets, SAST, and IaC apply the same target and exclusion rules.
+        - Skip test-scaffolding rewrites unless they fix correctness or flakiness.
+    - path: "utils/paths.go"
+      instructions: |
+        Shared path matching for scan exclusions. An exclusion matches only a path inside the project. The project root and paths outside it are not excluded by their own name. Nested directories such as test/ and node_modules still match.
+    - path: "cli/**/*.go"
+      instructions: |
+        Command registration, flags, and help text. Help text and flag definitions must describe the same behavior the command implements. A new flag or a changed default needs a matching help update.
+    - path: "sca/**/*.go"
+      instructions: |
+        SCA build-info and dependency detection. Keep each package manager's detection, lockfile, and manifest rules to itself. A change for npm, pnpm, yarn, Python, Go, Maven, Gradle, NuGet, or another ecosystem must not change another's results. Preserve dependency scope, direct versus transitive, and version information that reports and remediation use.
+    - path: "jas/**/*.go"
+      instructions: |
+        JAS scanners: secrets, SAST, IaC, applicability, malicious code, and services, plus the analyzer-manager runner. A scanner skips only when its own config or exclude-scanners setting says so. Skipping one scanner must not drop the others. Keep the analyzer-manager request and result contract stable.
+    - path: "remediation/**/*.go"
+      instructions: |
+        Suggested dependency fixes. A remediation applies only to its own ecosystem and must produce a change that ecosystem's manifest or lockfile can accept. Do not suggest a fix that drops unrelated dependencies or changes versions the scan did not flag.
+    - path: "policy/**/*.go"
+      instructions: |
+        Policy and violation handling. Converting Xray violations must keep the fields reports, watches, and ignore rules use. A failed policy fetch or an empty violation list must not be reported as a successful clean scan.
+    - path: "utils/results/**/*.go"
+      instructions: |
+        Scan result models and conversions to SARIF, CycloneDX, tables, and summaries. Output fields that callers parse stay stable. A vulnerability, violation, or license finding present in the scan result stays present in each output format.
+    - path: "utils/formats/**/*.go"
+      instructions: |
+        User-facing summaries and simple JSON. Wording can change. Counts, severity, and which findings are included must match the scan result.
+
+knowledge_base:
+  linked_repositories:
+    - repository: "jfrog/jfrog-client-go"
+      instructions: "Xray, XSC, and Artifactory client. Flag assumed response fields and API changes."
+    - repository: "jfrog/jfrog-cli-core"
+      instructions: "Shared CLI core. Flag breaking changes to command, config, or scan APIs this repo calls."
+    - repository: "jfrog/build-info-go"
+      instructions: "Build-info and BOM models this repo produces. Flag changes to dependency or module fields."
+    - repository: "jfrog/jfrog-cli-artifactory"
+      instructions: "Artifactory command helpers this repo calls. Flag breaking changes to those helpers."
+    - repository: "jfrog/froggit-go"
+      instructions: "Git-provider client used by git audit. Flag changes to provider APIs or returned repository data."
