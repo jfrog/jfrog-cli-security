@@ -4647,6 +4647,43 @@ func TestSetRepoFromYarnrcIgnoresAuditRegistry(t *testing.T) {
 	require.NotNil(t, ca.PackageManagerConfig)
 }
 
+// TestSetRepoFromYarnrcOwnTokenIgnoresNetworkSettings: with a token of its own in .yarnrc.yml the 'jf c' credentials are never used, so
+// the project's proxy settings are its own business.
+func TestSetRepoFromYarnrcOwnTokenIgnoresNetworkSettings(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectDir := t.TempDir()
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\nnpmAuthToken: \"project-own-token\"\nhttpsProxy: \"http://proxy.example:3128\"\nunsafeHttpWhitelist:\n  - \"registry.example\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.False(t, ca.yarnCredentialsFromFallback)
+}
+
+// TestSetRepoFromYarnrcOwnTokenInHomeFileSkipsFallback: a token in ~/.yarnrc.yml is the project's own token, so the 'jf c' credentials
+// are not lent and a proxy in the project is Yarn's own business, not a refusal.
+func TestSetRepoFromYarnrcOwnTokenInHomeFileSkipsFallback(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".yarnrc.yml"), []byte("npmAuthToken: \"home-own-token\"\n"), 0644))
+	yarnrc := "npmRegistryServer: \"" + yarnGuardConfiguredRegistry + "\"\nhttpsProxy: \"http://proxy.example:3128\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, ".yarnrc.yml"), []byte(yarnrc), 0644))
+	ca := yarnGuardCommandForTest()
+
+	require.NoError(t, ca.setRepoFromYarnrc(fakeYarnRegistryExecutableForTest(t), projectDir))
+
+	require.NotNil(t, ca.PackageManagerConfig)
+	assert.False(t, ca.yarnCredentialsFromFallback, "the 'jf c' credentials must not be lent when the project has its own token")
+	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
+	require.NoError(t, err)
+	assert.Equal(t, "home-own-token", serverDetails.AccessToken, "the project's own token is used, not the 'jf c' one")
+}
+
 // fakeYarnV1ExecutableForTest returns a "yarn" script that always prints a V1 version,
 // so tests don't need a real Yarn V1 install.
 func fakeYarnV1ExecutableForTest(t *testing.T) string {

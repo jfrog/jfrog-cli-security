@@ -2,7 +2,9 @@ package yarn
 
 import (
 	"bytes"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,11 +58,12 @@ const (
 	//#nosec G101
 	yarnrcNpmAuthIdentKey  = "npmAuthIdent"
 	yarnrcNpmAlwaysAuthKey = "npmAlwaysAuth"
-	// Env var carrying the fallback credential; .yarnrc.yml only references it as ${...}, so the secret never touches disk.
+	// Prefix of the per-run env var that carries the fallback token (only referenced as ${...} in the rc, never written to disk).
+	// The random suffix stops a project from guessing the name and reading the token back, e.g. via a proxy URL.
 	//#nosec G101
-	yarnFallbackAuthEnv = "JFROG_CLI_CURATION_YARN_FALLBACK_AUTH"
-	yarnV2Version       = "2.0.0"
-	yarnV3Version       = "3.0.0"
+	yarnFallbackAuthEnvPrefix = "JFROG_CLI_CURATION_YARN_AUTH_"
+	yarnV2Version             = "2.0.0"
+	yarnV3Version             = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -552,6 +555,12 @@ func resolveCurationLockfileDir(
 		return "", cleanup, nil, fmt.Errorf("failed copying project to temp dir: %w", err)
 	}
 
+	if curationFallbackAuthBinds(params) {
+		if err = refuseNetworkSettingsForFallbackAuth(tmpDir, currentDir); err != nil {
+			return "", cleanup, nil, err
+		}
+	}
+
 	preInstallLockMtime := lockfileMtime(filepath.Join(tmpDir, yarn.YarnLockFileName))
 	installErr := configureYarnResolutionServerAndRunInstall(params, tmpDir, yarnExecPath)
 	if installErr != nil {
@@ -588,7 +597,7 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		useNativeInstall = version.NewVersion(executableYarnVersion).Compare(YarnV4Version) <= 0
 	}
 	if useNativeInstall {
-		if params.IsCurationCmd && depsRepo != "" && params.YarnCredentialsFromFallback {
+		if curationFallbackAuthBinds(params) {
 			// No token in .yarnrc.yml: bind the fallback credential to the verified registries in the temp .yarnrc.yml,
 			// never as Yarn's global auth. Skipped when .yarnrc.yml has its own token.
 			restoreAuth, authErr := bindCurationFallbackAuthInYarnrc(curWd, params.ServerDetails, depsRepo)
@@ -636,11 +645,21 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	return err
 }
 
+// hasFallbackCredentials reports whether the 'jf c' server has a credential to lend; an anonymous server has none.
+func hasFallbackCredentials(serverDetails *config.ServerDetails) bool {
+	return serverDetails != nil && (serverDetails.AccessToken != "" || serverDetails.User != "" || serverDetails.Password != "")
+}
+
+// curationFallbackAuthBinds reports whether the install will receive the 'jf c' credential (see bindCurationFallbackAuthInYarnrc).
+func curationFallbackAuthBinds(params technologies.BuildInfoBomGeneratorParams) bool {
+	return params.IsCurationCmd && params.DependenciesRepository != "" && params.YarnCredentialsFromFallback && hasFallbackCredentials(params.ServerDetails)
+}
+
 // bindCurationFallbackAuthInYarnrc binds the fallback credential to the verified registry and same-host scopes in the temp copy curWd.
 // The .yarnrc.yml holds only a ${ENV} reference; the secret lives in an env var until restore runs, so it never touches disk.
 func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
 	noOpRestore := func() error { return nil }
-	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "" && serverDetails.Password == "") {
+	if !hasFallbackCredentials(serverDetails) {
 		return noOpRestore, nil
 	}
 	verifiedRegistry, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
@@ -665,6 +684,10 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 	if authValue == "" {
 		authKey, authValue = yarnrcNpmAuthIdentKey, npmAuthIdent
 	}
+	authEnv, nameErr := newFallbackAuthEnvName()
+	if nameErr != nil {
+		return noOpRestore, nameErr
+	}
 	targets, targetsErr := curationAuthRegistryTargets(curWd, verifiedRegistry, serverDetails.ArtifactoryUrl)
 	if targetsErr != nil {
 		return noOpRestore, targetsErr
@@ -680,20 +703,14 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 		}
 		delete(entry, yarnrcNpmAuthTokenKey)
 		delete(entry, yarnrcNpmAuthIdentKey)
-		entry[authKey] = "${" + yarnFallbackAuthEnv + "}"
+		entry[authKey] = "${" + authEnv + "}"
 		entry[yarnrcNpmAlwaysAuthKey] = true
 		registries[target] = entry
 	}
 	rc[yarnrcNpmRegistriesKey] = registries
 
-	previousEnv, hadEnv := os.LookupEnv(yarnFallbackAuthEnv)
-	restoreEnv := func() error {
-		if hadEnv {
-			return os.Setenv(yarnFallbackAuthEnv, previousEnv)
-		}
-		return os.Unsetenv(yarnFallbackAuthEnv)
-	}
-	if err = os.Setenv(yarnFallbackAuthEnv, authValue); err != nil {
+	restoreEnv := func() error { return os.Unsetenv(authEnv) }
+	if err = os.Setenv(authEnv, authValue); err != nil {
 		return noOpRestore, err
 	}
 	if err = writeYarnrcFromMap(yarnrcPath, rc); err != nil {
@@ -729,6 +746,15 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 		return writeYarnrcFromMap(yarnrcPath, current)
 	}
 	return func() error { return errors.Join(stripBinding(), restoreEnv()) }, nil
+}
+
+// newFallbackAuthEnvName returns a fresh, unguessable env var name for this run's credential.
+func newFallbackAuthEnvName() (string, error) {
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", fmt.Errorf("could not generate the credential env var name: %w", err)
+	}
+	return yarnFallbackAuthEnvPrefix + strings.ToUpper(hex.EncodeToString(suffix)), nil
 }
 
 // curationAuthRegistryTargets returns the registries to bind the credential to: the verified one plus same-host scope registries.
@@ -1357,16 +1383,13 @@ type YarnrcRegistryRef struct {
 // GetYarnrcAdditionalRegistries returns the scope and publish registries set in the .yarnrc.yml files Yarn merges
 // (an unparsable file is an error). Values are literal: a ${ENV} reference counts as another host. Audit registries are ignored.
 func GetYarnrcAdditionalRegistries(workingDir string) ([]YarnrcRegistryRef, error) {
+	files, err := loadYarnrcFiles(workingDir)
+	if err != nil {
+		return nil, err
+	}
 	var refs []YarnrcRegistryRef
-	for _, path := range yarnrcCandidatePaths(workingDir) {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var rc yarnrcFile
-		if err := yaml.Unmarshal(data, &rc); err != nil {
-			return nil, fmt.Errorf("could not parse %s: %w", path, err)
-		}
+	for _, file := range files {
+		rc := file.rc
 		add := func(setting, registryURL string, routesPackages bool) {
 			if registryURL = strings.TrimSpace(registryURL); registryURL != "" {
 				refs = append(refs, YarnrcRegistryRef{Setting: setting, URL: registryURL, RoutesPackages: routesPackages})
@@ -1382,8 +1405,150 @@ func GetYarnrcAdditionalRegistries(workingDir string) ([]YarnrcRegistryRef, erro
 	return refs, nil
 }
 
-// yarnrcCandidatePaths lists the .yarnrc.yml files Yarn merges for workingDir: each parent dir (nearest first), then home.
+// loadedYarnrc is one .yarnrc.yml file Yarn merges: where it is, its raw content and the settings parsed from it.
+type loadedYarnrc struct {
+	path string
+	data []byte
+	rc   yarnrcFile
+}
+
+// loadYarnrcFiles parses the existing .yarnrc.yml files Yarn merges for workingDir, nearest first.
+func loadYarnrcFiles(workingDir string) ([]loadedYarnrc, error) {
+	var files []loadedYarnrc
+	for _, path := range yarnrcCandidatePaths(workingDir) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var rc yarnrcFile
+		if err := yaml.Unmarshal(data, &rc); err != nil {
+			// Yarn may still accept a file yaml rejects (e.g. a duplicate key, where the last one wins), so its settings can't be
+			// verified: fail instead of skipping it.
+			return nil, fmt.Errorf("could not parse %s: %w", path, err)
+		}
+		files = append(files, loadedYarnrc{path: path, data: data, rc: rc})
+	}
+	return files, nil
+}
+
+// YarnrcNetworkSetting is a .yarnrc.yml setting that can send registry traffic (and the token in it) elsewhere or weaken its TLS,
+// together with the file that sets it. The value is deliberately not kept: it is project content and may hold secrets.
+type YarnrcNetworkSetting struct {
+	Setting string
+	File    string
+}
+
+// GetYarnrcNetworkSettings returns the proxy and TLS settings set in the .yarnrc.yml files Yarn merges: httpProxy, httpsProxy,
+// networkSettings, enableStrictSsl: false and unsafeHttpWhitelist. An unparsable file is an error.
+func GetYarnrcNetworkSettings(workingDir string) ([]YarnrcNetworkSetting, error) {
+	files, err := loadYarnrcFiles(workingDir)
+	if err != nil {
+		return nil, err
+	}
+	var found []YarnrcNetworkSetting
+	for _, file := range files {
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal(file.data, &raw); err != nil {
+			return nil, fmt.Errorf("could not parse %s: %w", file.path, err)
+		}
+		add := func(setting string) { found = append(found, YarnrcNetworkSetting{Setting: setting, File: file.path}) }
+		if yarnrcValueIsSet(raw["httpProxy"]) {
+			add("httpProxy")
+		}
+		if yarnrcValueIsSet(raw["httpsProxy"]) {
+			add("httpsProxy")
+		}
+		if yarnrcValueIsFalse(raw["enableStrictSsl"]) {
+			add("enableStrictSsl")
+		}
+		if yarnrcValueIsSet(raw["unsafeHttpWhitelist"]) {
+			add("unsafeHttpWhitelist")
+		}
+		if hosts, ok := raw["networkSettings"].(map[string]interface{}); ok {
+			for _, host := range slices.Sorted(maps.Keys(hosts)) {
+				add("networkSettings." + host)
+			}
+		} else if yarnrcValueIsSet(raw["networkSettings"]) {
+			add("networkSettings")
+		}
+	}
+	return found, nil
+}
+
+// refuseNetworkSettingsForFallbackAuth refuses the 'jf c' fallback when a .yarnrc.yml Yarn reads from copyDir sets a proxy or weakens TLS,
+// since the token could then reach another host. Files in the copy are reported by their path in projectDir.
+func refuseNetworkSettingsForFallbackAuth(copyDir, projectDir string) error {
+	settings, err := GetYarnrcNetworkSettings(copyDir)
+	if err != nil {
+		return fmt.Errorf("yarn: %w; refusing to use the 'jf c' credentials because its network settings can't be verified", err)
+	}
+	if len(settings) == 0 {
+		return nil
+	}
+	copyPrefix := copyDir
+	if abs, absErr := filepath.Abs(copyDir); absErr == nil {
+		copyPrefix = abs
+	}
+	found := make([]string, len(settings))
+	for i, setting := range settings {
+		file := setting.File
+		if rel, relErr := filepath.Rel(copyPrefix, file); relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			file = filepath.Join(projectDir, rel)
+		}
+		found[i] = fmt.Sprintf("%q in %q", setting.Setting, file)
+	}
+	return fmt.Errorf("yarn: %s can send Yarn's registry traffic through another host or weaken its TLS — refusing to use the 'jf c' credentials. "+
+		"Remove the setting (for a plain-http 'jf c' server, set YARN_UNSAFE_HTTP_WHITELIST in the environment instead of unsafeHttpWhitelist), "+
+		"or give .yarnrc.yml its own npm token so the 'jf c' credentials aren't needed", strings.Join(found, ", "))
+}
+
+// yarnrcValueIsSet reports whether a parsed setting has a value: not missing, null, an empty string, list or map.
+func yarnrcValueIsSet(value interface{}) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case []interface{}:
+		return len(typed) > 0
+	case map[string]interface{}:
+		return len(typed) > 0
+	}
+	return true
+}
+
+// yarnrcValueIsFalse reports whether a parsed boolean setting is off: false, 0 (quoted or not) or "false". A value built from an env
+// reference such as "${X:-false}" counts too, since Yarn expands it and the result can't be known here.
+func yarnrcValueIsFalse(value interface{}) bool {
+	switch typed := value.(type) {
+	case bool:
+		return !typed
+	case int:
+		return typed == 0
+	case int64:
+		return typed == 0
+	case uint64:
+		return typed == 0
+	case float64:
+		return typed == 0
+	case string:
+		lowered := strings.ToLower(strings.TrimSpace(typed))
+		return lowered == "false" || lowered == "0" || strings.Contains(typed, "${")
+	}
+	return false
+}
+
+// yarnrcFileName is the rc file name Yarn reads: YARN_RC_FILENAME when set, else .yarnrc.yml.
+func yarnrcFileName() string {
+	if name := strings.TrimSpace(os.Getenv("YARN_RC_FILENAME")); name != "" {
+		return name
+	}
+	return ".yarnrc.yml"
+}
+
+// yarnrcCandidatePaths lists the rc files Yarn merges for workingDir: each parent dir (nearest first), then home.
 func yarnrcCandidatePaths(workingDir string) []string {
+	rcName := yarnrcFileName()
 	var paths []string
 	seen := map[string]bool{}
 	addPath := func(path string) {
@@ -1394,7 +1559,7 @@ func yarnrcCandidatePaths(workingDir string) []string {
 	}
 	if dir, err := filepath.Abs(workingDir); err == nil {
 		for {
-			addPath(filepath.Join(dir, ".yarnrc.yml"))
+			addPath(filepath.Join(dir, rcName))
 			parent := filepath.Dir(dir)
 			if parent == dir {
 				break
@@ -1403,7 +1568,7 @@ func yarnrcCandidatePaths(workingDir string) []string {
 		}
 	}
 	if homeDir, err := os.UserHomeDir(); err == nil {
-		addPath(filepath.Join(homeDir, ".yarnrc.yml"))
+		addPath(filepath.Join(homeDir, rcName))
 	}
 	return paths
 }
