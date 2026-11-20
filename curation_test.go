@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -501,9 +502,16 @@ func TestPoetryCurationAudit(t *testing.T) {
 	appendToFile(t, filepath.Join(tempDirPath, "pyproject.toml"),
 		fmt.Sprintf("\n[[tool.poetry.source]]\nname = \"pypi-curation\"\nurl = \"%sapi/pypi/%s/simple\"\n", config.ArtifactoryUrl, repo))
 
+	// The user's Poetry cache must be left exactly as it was: nothing is added, changed or removed.
+	userPoetryCache := t.TempDir()
+	writeFileForTest(t, filepath.Join(userPoetryCache, "cache", "repositories", "pypi-curation", "release-info"), "user data")
+	t.Setenv("POETRY_CACHE_DIR", userPoetryCache)
+	userCacheBefore := snapshotTree(t, userPoetryCache)
+
 	localXrayCli := securityTests.PlatformCli.WithoutCredentials()
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s", tempDirPath)
 	output := localXrayCli.RunCliCmdWithOutput(t, "curation-audit", "--format="+string(format.Json), workingDirsFlag)
+	assert.Equal(t, userCacheBefore, snapshotTree(t, userPoetryCache), "jf ca must not touch the user's Poetry cache")
 
 	expectedResp := getPoetryCurationExpectedResponse(config, repo)
 	var got []curation.PackageStatus
@@ -515,6 +523,30 @@ func TestPoetryCurationAudit(t *testing.T) {
 	for k, v := range expectedRequest {
 		assert.Truef(t, v, "didn't receive expected HEAD request for package url %s", k)
 	}
+}
+
+// snapshotTree returns every folder and file under dir with its content, to compare a folder before and after a run.
+func snapshotTree(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	require.NoError(t, filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		if entry.IsDir() {
+			snapshot[path+"/"] = ""
+			return nil
+		}
+		content, readErr := os.ReadFile(path) // #nosec G122 -- test helper walking a t.TempDir() it created, no attacker-controlled paths
+		require.NoError(t, readErr)
+		snapshot[path] = string(content)
+		return nil
+	}))
+	return snapshot
+}
+
+func writeFileForTest(t *testing.T, path, content string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 }
 
 func getPoetryCurationExpectedResponse(config *config.ServerDetails, repo string) []curation.PackageStatus {
