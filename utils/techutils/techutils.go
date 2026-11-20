@@ -14,6 +14,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -824,9 +825,9 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || shouldCleanSubModulesInUnsupportedTechs() {
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || tech == Uv || shouldCleanSubModulesInUnsupportedTechs() {
 		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
-		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+		techWorkingDirs = CleanSubDirectories(techWorkingDirs)
 	}
 	return
 }
@@ -898,8 +899,9 @@ func promoteYarnWorkspaceMembers(technologiesDetected map[Technology]map[string]
 // Rule, in order:
 //  1. Pip-exclusive file present (requirements.txt, setup.py, setup.cfg, Pipfile,
 //     poetry.lock) → Pip wins, Uv is dropped.
-//  2. Otherwise, a project-local uv signal (uv.lock or a pyproject.toml [tool.uv] /
-//     [[tool.uv.*]] table) → Uv wins, Pip is dropped.
+//  2. Otherwise, a project-local uv signal (uv.lock, a pyproject.toml [tool.uv] /
+//     [[tool.uv.*]] table, or membership in an ancestor [tool.uv.workspace]) → Uv wins,
+//     Pip is dropped.
 //
 // ~/.config/uv/uv.toml (machine-global) is not checked here; 'jf curation-audit' uses
 // PromotePipToUvForCurationAudit instead, which also honors it.
@@ -933,6 +935,8 @@ func promotePipToUv(techs []Technology, dir string, considerGlobalUvConfig bool)
 	} else if data, readErr := os.ReadFile(filepath.Join(dir, "pyproject.toml")); readErr == nil &&
 		(pyProjectTomlUvTableRegex.Match(data) || pyProjectTomlUvArrayTableRegex.Match(data)) {
 		uvSignal = "pyproject.toml has uv configuration ([tool.uv] or [[tool.uv.*]])"
+	} else if isMember, root := IsUvWorkspaceMemberDir(dir); isMember {
+		uvSignal = fmt.Sprintf("ancestor uv workspace root at '%s' claims this directory", root)
 	} else if considerGlobalUvConfig {
 		if home, homeErr := os.UserHomeDir(); homeErr == nil {
 			if _, statErr := os.Stat(filepath.Join(home, ".config", "uv", "uv.toml")); statErr == nil {
@@ -1019,12 +1023,56 @@ func DirectoryHasYarnIndicator(dir string) bool {
 	return false
 }
 
-// ancestorClaims reports whether ancestor's "workspaces" patterns expand
-// to a directory equal to absTarget. We resolve patterns relative to
-// ancestor with filepath.Glob (the same expansion yarn V2+ performs) and
-// compare absolute paths, so symlinked or '.'-prefixed paths still match.
-func ancestorClaims(ancestor, absTarget string, workspacesField json.RawMessage) bool {
-	patterns := DecodeYarnWorkspacesField(workspacesField)
+// IsUvWorkspaceMemberDir reports whether dir is a uv workspace member —
+// a child directory whose ownership is declared by an ancestor's pyproject.toml
+// [tool.uv.workspace] "members" field (and not in "exclude").
+//
+// Walking stops at the first workspace-aware ancestor (an ancestor pyproject.toml
+// with a [tool.uv.workspace] table): uv's own resolver does not look beyond the
+// first workspace declaration, so neither should we.
+func IsUvWorkspaceMemberDir(dir string) (bool, string) {
+	absTarget, err := filepath.Abs(dir)
+	if err != nil {
+		return false, ""
+	}
+	cur := filepath.Dir(absTarget)
+	for {
+		pyprojectPath := filepath.Join(cur, "pyproject.toml")
+		if data, readErr := os.ReadFile(pyprojectPath); readErr == nil {
+			var manifest struct {
+				Tool struct {
+					Uv struct {
+						Workspace *struct {
+							Members []string `toml:"members"`
+							Exclude []string `toml:"exclude"`
+						} `toml:"workspace"`
+					} `toml:"uv"`
+				} `toml:"tool"`
+			}
+			if _, decErr := toml.Decode(string(data), &manifest); decErr == nil && manifest.Tool.Uv.Workspace != nil {
+				if uvAncestorClaims(cur, absTarget, manifest.Tool.Uv.Workspace.Members, manifest.Tool.Uv.Workspace.Exclude) {
+					return true, cur
+				}
+				// Stop at the first workspace-aware ancestor.
+				return false, ""
+			}
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return false, ""
+		}
+		cur = parent
+	}
+}
+
+func uvAncestorClaims(ancestor, absTarget string, members, exclude []string) bool {
+	if matchesGlobPatterns(ancestor, absTarget, exclude) {
+		return false
+	}
+	return matchesGlobPatterns(ancestor, absTarget, members)
+}
+
+func matchesGlobPatterns(ancestor, absTarget string, patterns []string) bool {
 	for _, pattern := range patterns {
 		matches, globErr := filepath.Glob(filepath.Join(ancestor, pattern))
 		if globErr != nil {
@@ -1041,6 +1089,14 @@ func ancestorClaims(ancestor, absTarget string, workspacesField json.RawMessage)
 		}
 	}
 	return false
+}
+
+// ancestorClaims reports whether ancestor's "workspaces" patterns expand
+// to a directory equal to absTarget. We resolve patterns relative to
+// ancestor with filepath.Glob (the same expansion yarn V2+ performs) and
+// compare absolute paths, so symlinked or '.'-prefixed paths still match.
+func ancestorClaims(ancestor, absTarget string, workspacesField json.RawMessage) bool {
+	return matchesGlobPatterns(ancestor, absTarget, DecodeYarnWorkspacesField(workspacesField))
 }
 
 // DecodeYarnWorkspacesField accepts either form yarn V2+ allows in
@@ -1069,7 +1125,7 @@ func DecodeYarnWorkspacesField(raw json.RawMessage) []string {
 // Keys: [dir, directory] -> [dir, directory]
 // Keys: [dir/dir2, dir/dir2/dir3, dir/dir2/dir3/dir4] -> [dir/dir2]
 // Values of removed sub directories will be added to the root directory.
-func cleanSubDirectories(workingDirectoryToFiles map[string][]string) (result map[string][]string) {
+func CleanSubDirectories(workingDirectoryToFiles map[string][]string) (result map[string][]string) {
 	result = make(map[string][]string)
 	for wd, files := range workingDirectoryToFiles {
 		root := getExistingRootDir(wd, workingDirectoryToFiles)
