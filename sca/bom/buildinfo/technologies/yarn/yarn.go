@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -48,15 +49,18 @@ const (
 	v3UpdateLockfileFlag = "--mode=update-lockfile"
 	// Ignores any build scripts
 	v3SkipBuildFlag = "--mode=skip-build"
-	// Env vars yarn reads for npm auth, used to inject curation's fallback credential
-	// (see injectCurationFallbackAuthEnv) without touching YARN_NPM_REGISTRY_SERVER.
+	// .yarnrc.yml keys for binding the fallback credential (see bindCurationFallbackAuthInYarnrc).
+	yarnrcNpmRegistriesKey = "npmRegistries"
 	//#nosec G101
-	yarnNpmAuthIdentEnv = "YARN_NPM_AUTH_IDENT"
+	yarnrcNpmAuthTokenKey = "npmAuthToken"
 	//#nosec G101
-	yarnNpmAuthTokenEnv  = "YARN_NPM_AUTH_TOKEN"
-	yarnNpmAlwaysAuthEnv = "YARN_NPM_ALWAYS_AUTH"
-	yarnV2Version        = "2.0.0"
-	yarnV3Version        = "3.0.0"
+	yarnrcNpmAuthIdentKey  = "npmAuthIdent"
+	yarnrcNpmAlwaysAuthKey = "npmAlwaysAuth"
+	// Env var carrying the fallback credential; .yarnrc.yml only references it as ${...}, so the secret never touches disk.
+	//#nosec G101
+	yarnFallbackAuthEnv = "JFROG_CLI_CURATION_YARN_FALLBACK_AUTH"
+	yarnV2Version       = "2.0.0"
+	yarnV3Version       = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -585,18 +589,14 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	}
 	if useNativeInstall {
 		if params.IsCurationCmd && depsRepo != "" && params.YarnCredentialsFromFallback {
-			// .yarnrc.yml had no token, so curation resolved a fallback credential into
-			// params.ServerDetails. Inject it into the subprocess env — the native install
-			// path above skips the GetYarnAuthDetails+ModifyYarnConfigurations injection
-			// below (which also sets YARN_NPM_REGISTRY_SERVER, unwanted here). Gated on
-			// YarnCredentialsFromFallback to avoid a redundant call when .yarnrc.yml
-			// already has its own token.
-			restoreAuthEnv, authErr := injectCurationFallbackAuthEnv(params.ServerDetails, depsRepo)
+			// No token in .yarnrc.yml: bind the fallback credential to the verified registries in the temp .yarnrc.yml,
+			// never as Yarn's global auth. Skipped when .yarnrc.yml has its own token.
+			restoreAuth, authErr := bindCurationFallbackAuthInYarnrc(curWd, params.ServerDetails, depsRepo)
 			if authErr != nil {
 				return authErr
 			}
 			defer func() {
-				err = errors.Join(err, restoreAuthEnv())
+				err = errors.Join(err, restoreAuth())
 			}()
 		}
 		err = runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs, params.IsCurationCmd)
@@ -636,16 +636,14 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	return err
 }
 
-// injectCurationFallbackAuthEnv sets YARN_NPM_AUTH_IDENT/YARN_NPM_AUTH_TOKEN/YARN_NPM_ALWAYS_AUTH
-// from serverDetails for the yarn subprocess, without setting YARN_NPM_REGISTRY_SERVER — the
-// registry must keep coming from .yarnrc.yml. No-op (returns a no-op restore) when serverDetails
-// has no usable credentials, so the anonymous case is unchanged.
-func injectCurationFallbackAuthEnv(serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
+// bindCurationFallbackAuthInYarnrc binds the fallback credential to the verified registry and same-host scopes in the temp copy curWd.
+// The .yarnrc.yml holds only a ${ENV} reference; the secret lives in an env var until restore runs, so it never touches disk.
+func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.ServerDetails, depsRepo string) (restore func() error, err error) {
 	noOpRestore := func() error { return nil }
 	if serverDetails == nil || (serverDetails.AccessToken == "" && serverDetails.User == "" && serverDetails.Password == "") {
 		return noOpRestore, nil
 	}
-	_, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
+	verifiedRegistry, npmAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
 	if err != nil {
 		return noOpRestore, err
 	}
@@ -653,33 +651,153 @@ func injectCurationFallbackAuthEnv(serverDetails *config.ServerDetails, depsRepo
 		return noOpRestore, nil
 	}
 
-	envUpdates := map[string]string{
-		yarnNpmAuthIdentEnv:  npmAuthIdent,
-		yarnNpmAuthTokenEnv:  npmAuthToken,
-		yarnNpmAlwaysAuthEnv: "true",
+	yarnrcPath := filepath.Join(curWd, yarn.YarnrcFileName)
+	rc, yarnrcExisted, err := readYarnrcAsMap(yarnrcPath)
+	if err != nil {
+		return noOpRestore, err
 	}
-	backup := make(map[string]*string, len(envUpdates))
-	for key, value := range envUpdates {
-		if oldVal, existed := os.LookupEnv(key); existed {
-			backup[key] = &oldVal
-		} else {
-			backup[key] = nil
-		}
-		if setErr := os.Setenv(key, value); setErr != nil {
-			return noOpRestore, setErr
-		}
+	registries, registriesExisted, err := yarnrcRegistriesMap(rc)
+	if err != nil {
+		return noOpRestore, err
 	}
-	return func() error {
-		var restoreErrs []error
-		for key, oldVal := range backup {
-			if oldVal == nil {
-				restoreErrs = append(restoreErrs, os.Unsetenv(key))
-				continue
+
+	authKey, authValue := yarnrcNpmAuthTokenKey, npmAuthToken
+	if authValue == "" {
+		authKey, authValue = yarnrcNpmAuthIdentKey, npmAuthIdent
+	}
+	targets, targetsErr := curationAuthRegistryTargets(curWd, verifiedRegistry, serverDetails.ArtifactoryUrl)
+	if targetsErr != nil {
+		return noOpRestore, targetsErr
+	}
+	previous := make(map[string]interface{}, len(targets))
+	for _, target := range targets {
+		entry := map[string]interface{}{}
+		if existing, ok := registries[target]; ok {
+			previous[target] = existing
+			if existingEntry, isMap := existing.(map[string]interface{}); isMap {
+				maps.Copy(entry, existingEntry)
 			}
-			restoreErrs = append(restoreErrs, os.Setenv(key, *oldVal))
 		}
-		return errors.Join(restoreErrs...)
-	}, nil
+		delete(entry, yarnrcNpmAuthTokenKey)
+		delete(entry, yarnrcNpmAuthIdentKey)
+		entry[authKey] = "${" + yarnFallbackAuthEnv + "}"
+		entry[yarnrcNpmAlwaysAuthKey] = true
+		registries[target] = entry
+	}
+	rc[yarnrcNpmRegistriesKey] = registries
+
+	previousEnv, hadEnv := os.LookupEnv(yarnFallbackAuthEnv)
+	restoreEnv := func() error {
+		if hadEnv {
+			return os.Setenv(yarnFallbackAuthEnv, previousEnv)
+		}
+		return os.Unsetenv(yarnFallbackAuthEnv)
+	}
+	if err = os.Setenv(yarnFallbackAuthEnv, authValue); err != nil {
+		return noOpRestore, err
+	}
+	if err = writeYarnrcFromMap(yarnrcPath, rc); err != nil {
+		return noOpRestore, errors.Join(err, restoreEnv())
+	}
+	log.Debug(fmt.Sprintf("yarn curation: bound the fallback credential to the verified registries (%d) in the temp .yarnrc.yml", len(targets)))
+
+	stripBinding := func() error {
+		current, _, readErr := readYarnrcAsMap(yarnrcPath)
+		if readErr != nil {
+			// Drop the whole file rather than keep an unreadable copy of the binding.
+			return errors.Join(readErr, os.Remove(yarnrcPath))
+		}
+		currentRegistries, _, mapErr := yarnrcRegistriesMap(current)
+		if mapErr != nil {
+			return errors.Join(mapErr, os.Remove(yarnrcPath))
+		}
+		for _, target := range targets {
+			if prev, ok := previous[target]; ok {
+				currentRegistries[target] = prev
+			} else {
+				delete(currentRegistries, target)
+			}
+		}
+		if len(currentRegistries) == 0 && !registriesExisted {
+			delete(current, yarnrcNpmRegistriesKey)
+		} else {
+			current[yarnrcNpmRegistriesKey] = currentRegistries
+		}
+		if len(current) == 0 && !yarnrcExisted {
+			return os.Remove(yarnrcPath)
+		}
+		return writeYarnrcFromMap(yarnrcPath, current)
+	}
+	return func() error { return errors.Join(stripBinding(), restoreEnv()) }, nil
+}
+
+// curationAuthRegistryTargets returns the registries to bind the credential to: the verified one plus same-host scope registries.
+func curationAuthRegistryTargets(curWd, verifiedRegistry, artifactoryUrl string) ([]string, error) {
+	var targets []string
+	add := func(registryURL string) {
+		key := yarnRegistryKey(registryURL)
+		if key != "" && !slices.Contains(targets, key) {
+			targets = append(targets, key)
+		}
+	}
+	add(verifiedRegistry)
+	extraRegistries, err := GetYarnrcAdditionalRegistries(curWd)
+	if err != nil {
+		return nil, err
+	}
+	for _, ref := range extraRegistries {
+		if ref.RoutesPackages && utils.SameRegistryHost(artifactoryUrl, ref.URL) {
+			add(ref.URL)
+		}
+	}
+	return targets, nil
+}
+
+// yarnRegistryKey normalizes a registry URL to the form Yarn looks npmRegistries entries up by
+// (no trailing slash).
+func yarnRegistryKey(registryURL string) string {
+	return strings.TrimSuffix(strings.TrimSpace(registryURL), "/")
+}
+
+// readYarnrcAsMap parses a .yarnrc.yml (missing file = empty map). A parse error fails, so the credential is never
+// written into a file we can't merge into.
+func readYarnrcAsMap(path string) (rc map[string]interface{}, existed bool, err error) {
+	data, readErr := os.ReadFile(path)
+	if readErr != nil {
+		if errors.Is(readErr, os.ErrNotExist) {
+			return map[string]interface{}{}, false, nil
+		}
+		return nil, false, readErr
+	}
+	rc = map[string]interface{}{}
+	if unmarshalErr := yaml.Unmarshal(data, &rc); unmarshalErr != nil {
+		return nil, true, fmt.Errorf("parsing %s: %w", path, unmarshalErr)
+	}
+	if rc == nil {
+		rc = map[string]interface{}{}
+	}
+	return rc, true, nil
+}
+
+// yarnrcRegistriesMap returns rc's npmRegistries map (empty, existed=false when absent).
+func yarnrcRegistriesMap(rc map[string]interface{}) (registries map[string]interface{}, existed bool, err error) {
+	raw, ok := rc[yarnrcNpmRegistriesKey]
+	if !ok || raw == nil {
+		return map[string]interface{}{}, false, nil
+	}
+	registries, isMap := raw.(map[string]interface{})
+	if !isMap {
+		return nil, true, fmt.Errorf("unexpected %s value of type %T in %s", yarnrcNpmRegistriesKey, raw, yarn.YarnrcFileName)
+	}
+	return registries, true, nil
+}
+
+func writeYarnrcFromMap(path string, rc map[string]interface{}) error {
+	updated, err := yaml.Marshal(rc)
+	if err != nil {
+		return fmt.Errorf("marshalling %s: %w", yarn.YarnrcFileName, err)
+	}
+	return os.WriteFile(path, updated, 0600)
 }
 
 // isInstallRequired reports whether 'yarn install' must run before enumerating
@@ -1178,8 +1296,16 @@ func runYarnConfigGet(yarnExecPath, workingDir, key string) (string, error) {
 
 // yarnrcFile is the subset of .yarnrc.yml fields we need for curation.
 type yarnrcFile struct {
-	NpmAuthToken  string                         `yaml:"npmAuthToken"`
-	NpmRegistries map[string]yarnrcRegistryEntry `yaml:"npmRegistries"`
+	NpmAuthToken       string                         `yaml:"npmAuthToken"`
+	NpmRegistries      map[string]yarnrcRegistryEntry `yaml:"npmRegistries"`
+	NpmPublishRegistry string                         `yaml:"npmPublishRegistry"`
+	NpmScopes          map[string]yarnrcScopeEntry    `yaml:"npmScopes"`
+}
+
+// yarnrcScopeEntry is a per-scope registry override (npmScopes.<scope>).
+type yarnrcScopeEntry struct {
+	NpmRegistryServer  string `yaml:"npmRegistryServer"`
+	NpmPublishRegistry string `yaml:"npmPublishRegistry"`
 }
 
 type yarnrcRegistryEntry struct {
@@ -1218,6 +1344,68 @@ func readNpmAuthTokenFromYarnrcFiles(registryURL, workingDir string) string {
 		}
 	}
 	return ""
+}
+
+// YarnrcRegistryRef is an extra registry URL declared in .yarnrc.yml, with the setting that declared it.
+// RoutesPackages marks npmScopes.<scope>.npmRegistryServer, the only kind Yarn resolves packages through.
+type YarnrcRegistryRef struct {
+	Setting        string
+	URL            string
+	RoutesPackages bool
+}
+
+// GetYarnrcAdditionalRegistries returns the scope and publish registries set in the .yarnrc.yml files Yarn merges
+// (an unparsable file is an error). Values are literal: a ${ENV} reference counts as another host. Audit registries are ignored.
+func GetYarnrcAdditionalRegistries(workingDir string) ([]YarnrcRegistryRef, error) {
+	var refs []YarnrcRegistryRef
+	for _, path := range yarnrcCandidatePaths(workingDir) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var rc yarnrcFile
+		if err := yaml.Unmarshal(data, &rc); err != nil {
+			return nil, fmt.Errorf("could not parse %s: %w", path, err)
+		}
+		add := func(setting, registryURL string, routesPackages bool) {
+			if registryURL = strings.TrimSpace(registryURL); registryURL != "" {
+				refs = append(refs, YarnrcRegistryRef{Setting: setting, URL: registryURL, RoutesPackages: routesPackages})
+			}
+		}
+		add("npmPublishRegistry", rc.NpmPublishRegistry, false)
+		for _, scope := range slices.Sorted(maps.Keys(rc.NpmScopes)) {
+			entry := rc.NpmScopes[scope]
+			add(fmt.Sprintf("npmScopes.%s.npmRegistryServer", scope), entry.NpmRegistryServer, true)
+			add(fmt.Sprintf("npmScopes.%s.npmPublishRegistry", scope), entry.NpmPublishRegistry, false)
+		}
+	}
+	return refs, nil
+}
+
+// yarnrcCandidatePaths lists the .yarnrc.yml files Yarn merges for workingDir: each parent dir (nearest first), then home.
+func yarnrcCandidatePaths(workingDir string) []string {
+	var paths []string
+	seen := map[string]bool{}
+	addPath := func(path string) {
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	if dir, err := filepath.Abs(workingDir); err == nil {
+		for {
+			addPath(filepath.Join(dir, ".yarnrc.yml"))
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		addPath(filepath.Join(homeDir, ".yarnrc.yml"))
+	}
+	return paths
 }
 
 // lookupNpmRegistryEntry resolves a npmRegistries entry for registryURL,

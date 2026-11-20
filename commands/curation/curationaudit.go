@@ -2061,6 +2061,16 @@ func (ca *CurationAuditCommand) setRepoFromYarnrc(yarnExecPath, workingDir strin
 		if err != nil {
 			return err
 		}
+		extraRegistries, extraErr := yarntech.GetYarnrcAdditionalRegistries(workingDir)
+		if extraErr != nil {
+			return fmt.Errorf("yarn: %w; refusing to use the 'jf c' credentials because the registries it declares can't be verified", extraErr)
+		}
+		for _, extra := range extraRegistries {
+			// %q: the scope name comes from the project and must not reach the terminal as raw control characters.
+			if _, err = ca.credentialFallbackServerDetails("yarn", fmt.Sprintf(".yarnrc.yml %q", extra.Setting), extra.URL); err != nil {
+				return err
+			}
+		}
 		ca.yarnCredentialsFromFallback = true
 	}
 
