@@ -1,6 +1,7 @@
 package python
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
@@ -49,6 +50,14 @@ var pipFailedRangeReqRegex = regexp.MustCompile(
 	`(?:No matching distribution found for|satisfies the requirement)\s+` +
 		`([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?((?:(?:~=|!=|>=|<=|>|<)[^\s,(]+(?:,(?:~=|!=|>=|<=|>|<)[^\s,(]+)*))` +
 		`(?:\s+\(from\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:==([^\s)]+))?\))?`)
+
+// pipFailedBareReqRegex matches a failed requirement with no version specifier in pip's error output.
+// Groups: (1) name, (2) the first "(from ...)" clause: "versions: ..." for a direct requirement, else the parent.
+var pipFailedBareReqRegex = regexp.MustCompile(
+	`satisfies the requirement\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s+\(from\s+([^)]*)\)`)
+
+// pipFromParentRegex matches the parent in a "(from ...)" clause. Groups: (1) name, (2) version (optional).
+var pipFromParentRegex = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*)(?:==(\S+))?$`)
 
 // pipCollectingRegex matches packages pip collected before failing; used to recover parent version omitted in "(from <parent>)".
 // Groups: (1) name, (2) version.
@@ -181,6 +190,19 @@ func parseCvsFailedPackages(pipOutput string) []PinnedRequirement {
 		} else {
 			// No "(from X)" captured — treat as direct dep; parent resolved later.
 			pr.ParentName = name
+		}
+		failed = append(failed, pr)
+	}
+
+	for _, m := range pipFailedBareReqRegex.FindAllStringSubmatch(pipOutput, -1) {
+		name := normalizePyPIName(m[1])
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		pr := PinnedRequirement{Name: name, ParentName: name, ConfirmedDirect: true}
+		if p := pipFromParentRegex.FindStringSubmatch(m[2]); p != nil {
+			pr.ParentName, pr.ParentVersion, pr.ConfirmedDirect = normalizePyPIName(p[1]), cmp.Or(p[2], collected[normalizePyPIName(p[1])]), false
 		}
 		failed = append(failed, pr)
 	}
