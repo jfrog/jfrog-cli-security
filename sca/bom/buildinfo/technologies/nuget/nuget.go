@@ -52,28 +52,32 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	if p := params.SolutionFilePath; p != "" {
-		if info, statErr := os.Stat(filepath.Join(wd, filepath.Base(p))); statErr != nil || info.IsDir() {
-			err = fmt.Errorf("--solution-path %q: no solution file named %q in %s "+
-				"(the flag is resolved relative to the scanned directory)", p, filepath.Base(p), wd)
+	// Load and restore from the solution file's own directory (may be a parent of the scanned one), or the scanned directory if none was given.
+	solutionDir := wd
+	if params.SolutionFilePath != "" {
+		var solutionFile string
+		if solutionFile, err = ResolveSolutionFilePath(params.SolutionFilePath, wd, params.SolutionPathBaseDir); err != nil {
 			return
 		}
+		solutionDir = filepath.Dir(solutionFile)
+		// Use the resolved path below, so a path written with '\' on Linux/macOS yields the right file name.
+		params.SolutionFilePath = solutionFile
 	}
-	sol, err := solution.Load(wd, solutionFileName(params.SolutionFilePath), params.ExclusionPattern, log.Logger)
+	sol, err := solution.Load(solutionDir, solutionFileName(params.SolutionFilePath), params.ExclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
 		// This issue is resolved by executing the 'nuget restore' command followed by running solution.Load again. Therefore, in this scenario, we need to proceed with this process.
 		return
 	}
 
-	installRequired, err := isInstallRequired(params, sol, params.SkipAutoInstall, wd)
+	installRequired, err := isInstallRequired(params, sol, params.SkipAutoInstall, solutionDir)
 	if err != nil {
 		return
 	}
 
 	var buildInfo *entities.BuildInfo
 	if installRequired {
-		buildInfo, err = restoreInTempDirAndGetBuildInfo(params, wd, params.ExclusionPattern)
+		buildInfo, err = restoreInTempDirAndGetBuildInfo(params, solutionDir, params.ExclusionPattern, scannedSubDirOf(solutionDir, wd))
 	} else {
 		buildInfo, err = sol.BuildInfo("", log.Logger)
 	}
@@ -85,7 +89,81 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	return
 }
 
-func restoreInTempDirAndGetBuildInfo(params technologies.BuildInfoBomGeneratorParams, wd string, exclusionPattern string) (buildInfo *entities.BuildInfo, err error) {
+// ResolveSolutionFilePath returns the absolute path of the '--solution-path' file: used as is if absolute,
+// otherwise the first existing match against searchDirs in order (scanned directory, then the directory the command was run from).
+func ResolveSolutionFilePath(solutionPath string, searchDirs ...string) (string, error) {
+	if filepath.Separator == '/' {
+		solutionPath = strings.ReplaceAll(solutionPath, `\`, "/")
+	}
+	var candidates, searched []string
+	isAbs := filepath.IsAbs(solutionPath)
+	if isAbs {
+		candidates = append(candidates, filepath.Clean(solutionPath))
+	} else {
+		seen := datastructures.MakeSet[string]()
+		for _, dir := range searchDirs {
+			if dir == "" || seen.Exists(dir) {
+				continue
+			}
+			seen.Add(dir)
+			searched = append(searched, dir)
+			candidates = append(candidates, filepath.Join(dir, solutionPath))
+		}
+	}
+	var invalidCandidate string
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err != nil {
+			continue
+		}
+		if !info.IsDir() && isSolutionFile(candidate) {
+			return filepath.Abs(candidate)
+		}
+		if invalidCandidate == "" {
+			invalidCandidate = candidate
+		}
+	}
+	if invalidCandidate != "" {
+		if absPath, err := filepath.Abs(invalidCandidate); err == nil {
+			invalidCandidate = absPath
+		}
+		if info, err := os.Stat(invalidCandidate); err == nil && info.IsDir() {
+			return "", fmt.Errorf("--solution-path '%s': '%s' is a directory, not a solution file (.sln or .slnx)", solutionPath, invalidCandidate)
+		}
+		return "", fmt.Errorf("--solution-path '%s': '%s' is not a solution file (.sln or .slnx)", solutionPath, invalidCandidate)
+	}
+	if isAbs {
+		return "", fmt.Errorf("--solution-path '%s': the file does not exist", solutionPath)
+	}
+	return "", fmt.Errorf("--solution-path '%s': no solution file named '%s' found. The path is resolved against the scanned directory first, "+
+		"then the directory the command was run from (searched: %s)", solutionPath, filepath.Base(solutionPath), strings.Join(searched, ", "))
+}
+
+// scannedSubDirOf returns the location of the scanned directory inside solutionDir, or "" if it is the same or not inside it.
+// Real paths are compared, so a solution path that goes through a symlink still locates the scanned directory.
+func scannedSubDirOf(solutionDir, scannedDir string) string {
+	rel, err := filepath.Rel(realPath(solutionDir), realPath(scannedDir))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return rel
+}
+
+func isSolutionFile(path string) bool {
+	ext := filepath.Ext(path)
+	return strings.EqualFold(ext, ".sln") || strings.EqualFold(ext, ".slnx")
+}
+
+// realPath resolves symlinks, falling back to the path as is if that fails.
+func realPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
+// Restores a temporary copy of dir (the scanned or the solution's directory); scannedSubDir is the scanned directory's location inside dir, if any.
+func restoreInTempDirAndGetBuildInfo(params technologies.BuildInfoBomGeneratorParams, dir string, exclusionPattern string, scannedSubDir string) (buildInfo *entities.BuildInfo, err error) {
 	var tmpWd string
 	tmpWd, err = fileutils.CreateTempDir()
 	if err != nil {
@@ -96,15 +174,16 @@ func restoreInTempDirAndGetBuildInfo(params technologies.BuildInfoBomGeneratorPa
 		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
 	}()
 
+	log.Debug(fmt.Sprintf("Copying '%s' to a temporary directory to run the restore", dir))
 	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-	err = biutils.CopyDir(wd, tmpWd, true, []string{technologies.DotVsRepoSuffix})
+	err = biutils.CopyDir(dir, tmpWd, true, []string{technologies.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
 	}
 
 	log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern, params.InsecureTls)
+	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, scannedSubDir, exclusionPattern, params.InsecureTls)
 	if err != nil {
 		return
 	}
@@ -127,13 +206,17 @@ func isInstallRequired(params technologies.BuildInfoBomGeneratorParams, sol solu
 	return installRequired, nil
 }
 
-func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorParams, tmpWd, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
+func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorParams, tmpWd, scannedSubDir, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
 	toolName := params.InstallCommandName
 	if toolName == "" {
 		// Determine if the project is a NuGet or .NET project
-		toolName, err = getProjectToolName(tmpWd)
+		toolName, err = detectProjectToolName(tmpWd, scannedSubDir)
 		if err != nil {
 			err = fmt.Errorf("failed while checking for the project's tool type: %s", err.Error())
+			if params.SolutionFilePath != "" {
+				err = fmt.Errorf("%w (solution file '%s': the tool is detected only from .csproj files that contain '%s' and from %s files under its directory)",
+					err, solutionFileName(params.SolutionFilePath), packageReferenceSyntax, packagesConfigFileName)
+			}
 			return
 		}
 	}
@@ -178,6 +261,21 @@ func solutionFileName(solutionFilePath string) string {
 		return ""
 	}
 	return filepath.Base(solutionFilePath)
+}
+
+// detectProjectToolName detects the tool from the scanned directory (root/scannedSubDir) first, so unrelated projects
+// elsewhere under root can't change it, and falls back to the whole root if nothing is found there.
+func detectProjectToolName(root, scannedSubDir string) (string, error) {
+	if scannedDir := filepath.Join(root, scannedSubDir); scannedSubDir != "" {
+		// Only look in the scanned directory if it exists in the copy.
+		if info, statErr := os.Stat(scannedDir); statErr == nil && info.IsDir() {
+			if toolName, detectErr := getProjectToolName(scannedDir); detectErr == nil {
+				return toolName, nil
+			}
+		}
+		log.Debug(fmt.Sprintf("The tool type was not detected in the scanned directory '%s', looking in the entire solution directory", scannedSubDir))
+	}
+	return getProjectToolName(root)
 }
 
 // Detects if the project is utilizing either .NET CLI or NuGet CLI, prioritizing .NET CLI.
@@ -288,7 +386,7 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	// Check for solution file path from JF CA arguments for specific solution when we have more than one solution file
 	if slnFile := solutionFileName(params.SolutionFilePath); slnFile != "" {
 		completeCommandArgs = append(completeCommandArgs, slnFile)
-		log.Info(fmt.Sprintf("Using solution file: %s", slnFile))
+		log.Info(fmt.Sprintf("Using solution file: %s", params.SolutionFilePath))
 	}
 
 	// We include the flag that allows resolution from an Artifactory server, if it exists.
