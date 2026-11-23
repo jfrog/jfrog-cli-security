@@ -1,9 +1,11 @@
 package results
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -3277,6 +3279,87 @@ func TestEnrichSbomWithApplicability_AddsFileComponentAndAffect(t *testing.T) {
 	assert.NotNil(t, cdxutils.SearchComponentByRef(bom.Components, fileRef))
 	vuln := &(*bom.Vulnerabilities)[0]
 	assert.True(t, cdxutils.HasImpactedAffects(*vuln, cyclonedx.Component{BOMRef: fileRef}))
+}
+
+const testTransitivePaths = `{"version": 1, "transitive_paths": [{"detected_vulnerable_call": {"package_type": "npm", "package_name": "anilibria-api-wrapper", "package_version": "1.1.0", "function": "getAnilibriaChanges"}, "transitive_path_to_vulnerable_function": [{"package_type": "npm", "package_name": "anilibria-api-wrapper", "package_version": "1.1.0", "function": "getAnilibriaChanges"}, {"package_type": "npm", "package_name": "axios", "package_version": "1.7.3", "function": "get"}]}]}`
+
+func createDirectAndTransitiveApplicabilityRun(ruleId string) *sarif.Run {
+	return sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithLocations("The vulnerable function axios.get() is called", ruleId, "warning",
+			sarifutils.CreateLocation("direct.js", 3, 11, 3, 25, "axios.get(url)"),
+		),
+		sarifutils.CreateResultWithProperties("A call to anilibria-api-wrapper.getAnilibriaChanges() transitively leads to the vulnerable function axios.get()", ruleId, "warning",
+			map[string]string{sarifutils.TransitivePathsSarifPropertyKey: testTransitivePaths},
+			sarifutils.CreateLocation("index.js", 8, 9, 8, 30, "getAnilibriaChanges()"),
+		),
+	)
+}
+
+func TestGetCveApplicabilityField_TransitivePaths(t *testing.T) {
+	applicability := GetCveApplicabilityField("CVE-2024-39338", []*sarif.Run{createDirectAndTransitiveApplicabilityRun("applic_CVE-2024-39338")})
+	require.NotNil(t, applicability)
+	require.Len(t, applicability.Evidence, 2)
+	assert.Equal(t, "direct.js", applicability.Evidence[0].File)
+	assert.Empty(t, applicability.Evidence[0].TransitivePaths)
+	assert.Equal(t, "index.js", applicability.Evidence[1].File)
+	assert.Equal(t, testTransitivePaths, applicability.Evidence[1].TransitivePaths)
+}
+
+func caEvidenceProperties(vulnerability cyclonedx.Vulnerability) map[string]string {
+	properties := map[string]string{}
+	if vulnerability.Properties == nil {
+		return properties
+	}
+	for _, property := range *vulnerability.Properties {
+		if strings.HasPrefix(property.Name, "jfrog:contextual-analysis:evidence:") {
+			properties[property.Name] = property.Value
+		}
+	}
+	return properties
+}
+
+func createBomWithVulnerableLibrary(cve string) *cyclonedx.BOM {
+	libRef := "pkg:npm/axios@1.7.3"
+	return &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{{
+			BOMRef: libRef, Type: cyclonedx.ComponentTypeLibrary, Name: "axios", Version: "1.7.3",
+		}},
+		Vulnerabilities: &[]cyclonedx.Vulnerability{{
+			BOMRef: cve, ID: cve,
+			Affects: &[]cyclonedx.Affects{{Ref: libRef}},
+		}},
+	}
+}
+
+func TestEnrichSbomWithApplicability_TransitivePathsProperty(t *testing.T) {
+	bom := createBomWithVulnerableLibrary("CVE-2024-39338")
+	require.NoError(t, EnrichSbomWithApplicability(bom, true, []*sarif.Run{createDirectAndTransitiveApplicabilityRun("applic_CVE-2024-39338")}))
+
+	directRef := cdxutils.GetFileRef("direct.js")
+	transitiveRef := cdxutils.GetFileRef("index.js")
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf(ApplicabilityEvidencePropertyTemplate, directRef, 3, 11, 3, 25):                   "axios.get(url)",
+		fmt.Sprintf(ApplicabilityEvidenceReasonPropertyTemplate, directRef, 3, 11, 3, 25):             "The vulnerable function axios.get() is called",
+		fmt.Sprintf(ApplicabilityEvidencePropertyTemplate, transitiveRef, 8, 9, 8, 30):                "getAnilibriaChanges()",
+		fmt.Sprintf(ApplicabilityEvidenceReasonPropertyTemplate, transitiveRef, 8, 9, 8, 30):          "A call to anilibria-api-wrapper.getAnilibriaChanges() transitively leads to the vulnerable function axios.get()",
+		fmt.Sprintf(ApplicabilityEvidenceTransitivePathsPropertyTemplate, transitiveRef, 8, 9, 8, 30): testTransitivePaths,
+	}, caEvidenceProperties((*bom.Vulnerabilities)[0]))
+}
+
+func TestEnrichSbomWithApplicability_DirectEvidenceHasNoTransitivePathsProperty(t *testing.T) {
+	bom := createBomWithVulnerableLibrary("CVE-2024-39338")
+	applicRun := sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithLocations("The vulnerable function axios.get() is called", "applic_CVE-2024-39338", "warning",
+			sarifutils.CreateLocation("direct.js", 3, 11, 3, 25, "axios.get(url)"),
+		),
+	)
+	require.NoError(t, EnrichSbomWithApplicability(bom, true, []*sarif.Run{applicRun}))
+
+	directRef := cdxutils.GetFileRef("direct.js")
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf(ApplicabilityEvidencePropertyTemplate, directRef, 3, 11, 3, 25):       "axios.get(url)",
+		fmt.Sprintf(ApplicabilityEvidenceReasonPropertyTemplate, directRef, 3, 11, 3, 25): "The vulnerable function axios.get() is called",
+	}, caEvidenceProperties((*bom.Vulnerabilities)[0]))
 }
 
 func TestForEachScaBomVulnerability(t *testing.T) {

@@ -1,0 +1,105 @@
+{
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "JFrog Applicability Scanner",
+                    "rules": [
+                        {
+                            "id": "applic_CVE-2024-39338",
+                            "fullDescription": {
+                                "text": "The scanner checks whether the vulnerable function `axios.get` is called.",
+                                "markdown": "The scanner checks whether the vulnerable function `axios.get` is called."
+                            },
+                            "name": "CVE-2024-39338",
+                            "shortDescription": {
+                                "text": "Scanner for CVE-2024-39338"
+                            },
+                            "properties": {
+                                "applicability": "applicable",
+                                "conclusion": "negative"
+                            }
+                        }
+                    ],
+                    "version": "1.0"
+                }
+            },
+            "invocations": [
+                {
+                    "executionSuccessful": true,
+                    "arguments": [
+                        "ca_scanner/applicability_scanner",
+                        "scan",
+                        "ca_config_example.yaml"
+                    ],
+                    "workingDirectory": {
+                        "uri": "file:///Users/user/tca-indirect-only"
+                    }
+                }
+            ],
+            "results": [
+                {
+                    "message": {
+                        "text": "The vulnerable function axios.get() is called"
+                    },
+                    "level": "warning",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///Users/user/tca-indirect-only/direct.js"
+                                },
+                                "region": {
+                                    "endColumn": 25,
+                                    "endLine": 3,
+                                    "snippet": {
+                                        "text": "axios.get(url)"
+                                    },
+                                    "startColumn": 11,
+                                    "startLine": 3
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "applic_CVE-2024-39338",
+                    "properties": {
+                        "tokenValidation": "",
+                        "metadata": ""
+                    }
+                },
+                {
+                    "message": {
+                        "text": "A call to anilibria-api-wrapper.getAnilibriaChanges() transitively leads to the vulnerable function axios.get()"
+                    },
+                    "level": "warning",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "file:///Users/user/tca-indirect-only/index.js"
+                                },
+                                "region": {
+                                    "endColumn": 30,
+                                    "endLine": 8,
+                                    "snippet": {
+                                        "text": "getAnilibriaChanges()"
+                                    },
+                                    "startColumn": 9,
+                                    "startLine": 8
+                                }
+                            }
+                        }
+                    ],
+                    "ruleId": "applic_CVE-2024-39338",
+                    "properties": {
+                        "tokenValidation": "",
+                        "metadata": "",
+                        "transitivePaths": "{\"version\": 1, \"transitive_paths\": [{\"detected_vulnerable_call\": {\"package_type\": \"npm\", \"package_name\": \"anilibria-api-wrapper\", \"package_version\": \"1.1.0\", \"function\": \"getAnilibriaChanges\"}, \"transitive_path_to_vulnerable_function\": [{\"package_type\": \"npm\", \"package_name\": \"anilibria-api-wrapper\", \"package_version\": \"1.1.0\", \"function\": \"getAnilibriaChanges\"}, {\"package_type\": \"npm\", \"package_name\": \"axios\", \"package_version\": \"1.7.3\", \"function\": \"get\"}]}]}"
+                    }
+                }
+            ]
+        }
+    ],
+    "version": "2.1.0",
+    "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+}

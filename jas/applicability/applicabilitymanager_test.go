@@ -469,3 +469,29 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 		})
 	}
 }
+
+func TestParseResults_TransitivePaths(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	require.NoError(t, err)
+
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(filepath.Join(jas.GetTestDataPath(), "applicability-scan", "transitive-applicable-results.sarif"), applicabilityDocsUrlSuffix, scanner.MinSeverity, jfrogAppsConfigForTest.Modules[0].SourceRoot)
+	require.NoError(t, err)
+
+	applicability := results.GetCveApplicabilityField("CVE-2024-39338", vulnerabilitiesResults)
+	require.NotNil(t, applicability)
+	assert.Equal(t, jasutils.Applicable.String(), applicability.Status)
+	transitivePathsByFile := map[string]string{}
+	for _, evidence := range applicability.Evidence {
+		transitivePathsByFile[filepath.Base(evidence.File)] = evidence.TransitivePaths
+	}
+	require.Len(t, transitivePathsByFile, 2)
+	assert.Empty(t, transitivePathsByFile["direct.js"])
+	assert.JSONEq(t, `{"version": 1, "transitive_paths": [{
+		"detected_vulnerable_call": {"package_type": "npm", "package_name": "anilibria-api-wrapper", "package_version": "1.1.0", "function": "getAnilibriaChanges"},
+		"transitive_path_to_vulnerable_function": [
+			{"package_type": "npm", "package_name": "anilibria-api-wrapper", "package_version": "1.1.0", "function": "getAnilibriaChanges"},
+			{"package_type": "npm", "package_name": "axios", "package_version": "1.7.3", "function": "get"}
+		]}]}`, transitivePathsByFile["index.js"])
+}

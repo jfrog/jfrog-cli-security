@@ -27,6 +27,7 @@ const (
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
 	TokenValidationMetadataSarifPropertyKey = "metadata"
 	CAUndeterminedReasonSarifPropertyKey    = "undetermined_reason"
+	TransitivePathsSarifPropertyKey         = "transitivePaths"
 )
 
 // Specific JFrog Sarif Utils
@@ -60,6 +61,10 @@ func GetResultPropertyTokenValidation(result *sarif.Result) string {
 
 func GetResultPropertyMetadata(result *sarif.Result) string {
 	return GetResultProperty(TokenValidationMetadataSarifPropertyKey, result)
+}
+
+func GetResultPropertyTransitivePaths(result *sarif.Result) string {
+	return GetResultProperty(TransitivePathsSarifPropertyKey, result)
 }
 
 func GetResultWatches(result *sarif.Result) (watches string) {
