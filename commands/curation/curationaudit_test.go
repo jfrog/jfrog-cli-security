@@ -8125,3 +8125,163 @@ func TestPackageStatusTableOmitsEmptyLinkColumn(t *testing.T) {
 		t.Errorf("PrepareTable(rows without links) has a link column:\n%s", got)
 	}
 }
+
+// Waiver offer for the npm debug-log report: only rows with a version-scoped tarball URL and the waiver marker are offered.
+func TestRunNpmLogFallback_WaiverEligibility(t *testing.T) {
+	blockJSON := func(pkg, version string, waiversAllowed bool) string {
+		msg := fmt.Sprintf("Package %s:%s download was blocked by jfrog packages curation service due to the following policies violated "+
+			"{cve-high, CVE with CVSS score of 9 or above, Package version contains a vulnerability, Upgrade to a fixed version}.", pkg, version)
+		if waiversAllowed {
+			msg += " [waivers allowed]"
+		}
+		return fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, msg)
+	}
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/curl-0.1.2.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("curl", "0.1.2", true)))
+		case strings.Contains(r.URL.Path, "/vitest-5.1.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("vitest", "5.1.0", true)))
+		case strings.Contains(r.URL.Path, "/plain-1.0.0.tgz"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON("plain", "1.0.0", false)))
+		default:
+			t.Errorf("unexpected HEAD-check: %s", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+	defer serverMock.Close()
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logsDir := filepath.Join(t.TempDir(), "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"43 notice All versions blocked - {policy:blocks open ssf,condition:open ssf}\n" +
+		"44 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/allblocked 100ms (cache skip)\n" +
+		"45 silly placeDep ROOT curl@0.1.2 OK for: myproj@1.0.0 want: 0.1.2\n" +
+		"46 silly placeDep ROOT vitest@ OK for: myproj@1.0.0 want: 5.1.0\n" +
+		"47 silly placeDep ROOT plain@1.0.0 OK for: myproj@1.0.0 want: 1.0.0\n" +
+		"48 silly placeDep ROOT allblocked@ OK for: myproj@1.0.0 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(`{"name":"myproj","version":"1.0.0"}`), 0644))
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+
+	results := map[string]*CurationReport{}
+	require.NoError(t, ca.runNpmLogFallback(logsDir, techutils.Npm, results, errors.New("error while running 'npm install': exit status 1"), false, 0))
+	require.Len(t, results, 1)
+	var report *CurationReport
+	for _, r := range results {
+		report = r
+	}
+	require.Len(t, report.packagesStatus, 4)
+
+	byName := map[string]*PackageStatus{}
+	for _, ps := range report.packagesStatus {
+		byName[ps.PackageName] = ps
+	}
+	for _, name := range []string{"curl", "vitest"} {
+		require.NotNil(t, byName[name], name)
+		assert.NotEmpty(t, byName[name].BlockedPackageUrl, name)
+		assert.True(t, isNpmLogWaivable(byName[name]), "%s has a version and a tarball URL, so it can be waived", name)
+	}
+	assert.False(t, isNpmLogWaivable(byName["plain"]), "waivers are not allowed for this row")
+	assert.False(t, isNpmLogWaivable(byName["allblocked"]), "an all-versions-blocked row has no version or URL")
+
+	assert.True(t, shouldOfferWaiver(report, false))
+	assert.False(t, shouldOfferWaiver(report, true), "never prompt in CI")
+
+	// Row numbers are the table's, "all" covers only the offered rows, and a non-offered row is rejected.
+	selected, ok := selectWaiverPackages("all", report.packagesStatus, waiverSelectable(report))
+	require.True(t, ok)
+	assert.Len(t, selected, 2)
+	for _, ps := range selected {
+		assert.True(t, ps.PackageName == "curl" || ps.PackageName == "vitest", ps.PackageName)
+	}
+	for i, ps := range report.packagesStatus {
+		if ps.PackageName == "allblocked" || ps.PackageName == "plain" {
+			_, ok = selectWaiverPackages(strconv.Itoa(i+1), report.packagesStatus, waiverSelectable(report))
+			assert.False(t, ok, "row %d (%s) must not be selectable", i+1, ps.PackageName)
+		}
+	}
+}
+
+func Test_shouldOfferWaiver(t *testing.T) {
+	waivable := &PackageStatus{PackageName: "curl", PackageVersion: "0.1.2", WaiverAllowed: true, BlockedPackageUrl: "https://rt/api/npm/repo/curl/-/curl-0.1.2.tgz"}
+	noURL := &PackageStatus{PackageName: "noURL", PackageVersion: "1.0.0", WaiverAllowed: true}
+	allVersions := &PackageStatus{PackageName: "blocked", PackageVersion: allVersionsBlockedText, WaiverAllowed: true, BlockedPackageUrl: "https://rt/x"}
+	notAllowed := &PackageStatus{PackageName: "plain", PackageVersion: "1.0.0", BlockedPackageUrl: "https://rt/y"}
+
+	tests := []struct {
+		name   string
+		report *CurationReport
+		isCI   bool
+		want   bool
+	}{
+		{name: "full report with a waivable row", report: &CurationReport{packagesStatus: []*PackageStatus{notAllowed, waivable}}, want: true},
+		{name: "full report without a waivable row", report: &CurationReport{packagesStatus: []*PackageStatus{notAllowed}}},
+		{name: "full report in CI", report: &CurationReport{packagesStatus: []*PackageStatus{waivable}}, isCI: true},
+		{name: "cvs fallback report is skipped", report: &CurationReport{isPartial: true, packagesStatus: []*PackageStatus{waivable}}},
+		{name: "npm log report with a waivable row", report: &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: []*PackageStatus{allVersions, waivable}}, want: true},
+		{name: "npm log report in CI", report: &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: []*PackageStatus{waivable}}, isCI: true},
+		{name: "npm log report with only an all-versions row", report: &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: []*PackageStatus{allVersions}}},
+		{name: "npm log report with a row without URL", report: &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: []*PackageStatus{noURL}}},
+		{name: "npm log report with waivers not allowed", report: &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: []*PackageStatus{notAllowed}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldOfferWaiver(tt.report, tt.isCI))
+		})
+	}
+}
+
+func Test_selectWaiverPackages(t *testing.T) {
+	curl := &PackageStatus{PackageName: "curl", PackageVersion: "0.1.2", WaiverAllowed: true, BlockedPackageUrl: "https://rt/curl"}
+	allVersions := &PackageStatus{PackageName: "blocked", PackageVersion: allVersionsBlockedText}
+	vitest := &PackageStatus{PackageName: "vitest", PackageVersion: "5.1.0", WaiverAllowed: true, BlockedPackageUrl: "https://rt/vitest"}
+	rows := []*PackageStatus{curl, allVersions, vitest}
+	npmLogReport := &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: rows}
+
+	tests := []struct {
+		name          string
+		requestedRows string
+		selectable    func(*PackageStatus) bool
+		want          []*PackageStatus
+		wantOk        bool
+	}{
+		{name: "all selects only the offered rows", requestedRows: "all", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{curl, vitest}, wantOk: true},
+		{name: "row numbers match the table", requestedRows: "3", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{vitest}, wantOk: true},
+		{name: "offered rows by list", requestedRows: "1,3", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{curl, vitest}, wantOk: true},
+		{name: "non-offered row is rejected", requestedRows: "2", selectable: waiverSelectable(npmLogReport), wantOk: false},
+		{name: "range with a non-offered row is rejected", requestedRows: "1-3", selectable: waiverSelectable(npmLogReport), wantOk: false},
+		{name: "out of range is rejected", requestedRows: "4", selectable: waiverSelectable(npmLogReport), wantOk: false},
+		{name: "invalid format is rejected", requestedRows: "x", selectable: waiverSelectable(npmLogReport), wantOk: false},
+		{name: "full report keeps every row selectable", requestedRows: "all", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), want: rows, wantOk: true},
+		{name: "full report keeps explicit rows selectable", requestedRows: "2", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), want: []*PackageStatus{allVersions}, wantOk: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := selectWaiverPackages(tt.requestedRows, rows, tt.selectable)
+			assert.Equal(t, tt.wantOk, ok)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_selectableRowNumbers(t *testing.T) {
+	curl := &PackageStatus{PackageName: "curl", PackageVersion: "0.1.2", WaiverAllowed: true, BlockedPackageUrl: "https://rt/curl"}
+	allVersions := &PackageStatus{PackageName: "blocked", PackageVersion: allVersionsBlockedText}
+	vitest := &PackageStatus{PackageName: "vitest", PackageVersion: "5.1.0", WaiverAllowed: true, BlockedPackageUrl: "https://rt/vitest"}
+	rows := []*PackageStatus{curl, allVersions, vitest}
+
+	npmLogReport := &CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: rows}
+	assert.Equal(t, []string{"1", "3"}, selectableRowNumbers(rows, waiverSelectable(npmLogReport)), "numbers must match the table rows")
+	assert.Empty(t, selectableRowNumbers([]*PackageStatus{allVersions}, waiverSelectable(npmLogReport)))
+}
