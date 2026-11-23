@@ -4813,6 +4813,79 @@ func TestPureUvProjectNotReportedAsPip(t *testing.T) {
 	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
 }
 
+// TestTechsToAuditRecognisesCustomRequirementsFile: jf ca must detect pip from the file
+// named by --requirements-file, the same way jf audit does.
+func TestTechsToAuditRecognisesCustomRequirementsFile(t *testing.T) {
+	// Isolate the home dir so a machine-global ~/.config/uv/uv.toml cannot promote pip to uv.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetPipRequirementsFile("constraints.txt")
+	ca.OriginPath = projectDir
+
+	assert.Contains(t, ca.techsToAudit(), techutils.Pip.String(), "the file named by --requirements-file must be audited as pip")
+}
+
+// A machine-global uv config must not turn a directory whose --requirements-file exists into uv.
+func TestTechsToAuditRequirementsFileIgnoresGlobalUvConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	uvCfgDir := filepath.Join(home, ".config", "uv")
+	require.NoError(t, os.MkdirAll(uvCfgDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.com/simple\"\n"), 0o644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetPipRequirementsFile("constraints.txt")
+	ca.OriginPath = projectDir
+
+	techs := ca.techsToAudit()
+	assert.Contains(t, techs, techutils.Pip.String(), "the requirements file must keep the directory as pip")
+	assert.NotContains(t, techs, techutils.Uv.String(), "the global uv config must not override the requirements file")
+}
+
+// TestRunSucceedsWhenOneWorkingDirIsAudited: an empty directory alongside an audited one
+// must not fail the run.
+func TestRunSucceedsWhenOneWorkingDirIsAudited(t *testing.T) {
+	var tt testCase
+	for _, candidate := range getTestCasesForDoCurationAudit() {
+		if candidate.name == "python tree - one blocked package" {
+			tt = candidate
+		}
+	}
+	require.NotEmpty(t, tt.name, "the pip curation case must exist")
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+	mockServer, serverDetails := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
+	defer mockServer.Close()
+	cleanUp := createCurationTestEnv(t, basePathToTests, tt, serverDetails)
+	defer cleanUp()
+	require.NoError(t, os.Mkdir("empty-dir", 0755))
+
+	ca := NewCurationAuditCommand()
+	ca.SetIsCurationCmd(true)
+	ca.parallelRequests = 3
+	ca.SetInsecureTls(tt.allowInsecureTls)
+	ca.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	ca.SetWorkingDirs([]string{".", "empty-dir"})
+	if defaultServer, confErr := config.GetDefaultServerConf(); confErr == nil {
+		ca.SetServerDetails(defaultServer)
+	}
+
+	assert.NoError(t, ca.Run(), "a run where one directory is audited must succeed")
+}
+
 // TestTechsToAuditQueuesPep723HintForDeferredLogging: the PEP 723 hint must be queued in pendingWarnings.
 func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
 	projectDir := t.TempDir()
@@ -8187,9 +8260,11 @@ func TestRunNpmLogFallback_WaiverEligibility(t *testing.T) {
 	for _, ps := range report.packagesStatus {
 		byName[ps.PackageName] = ps
 	}
+	wantVersions := map[string]string{"curl": "0.1.2", "vitest": "5.1.0"}
 	for _, name := range []string{"curl", "vitest"} {
 		require.NotNil(t, byName[name], name)
 		assert.NotEmpty(t, byName[name].BlockedPackageUrl, name)
+		assert.Equal(t, wantVersions[name], byName[name].PackageVersion, name)
 		assert.True(t, isNpmLogWaivable(byName[name]), "%s has a version and a tarball URL, so it can be waived", name)
 	}
 	assert.False(t, isNpmLogWaivable(byName["plain"]), "waivers are not allowed for this row")
@@ -8199,7 +8274,7 @@ func TestRunNpmLogFallback_WaiverEligibility(t *testing.T) {
 	assert.False(t, shouldOfferWaiver(report, true), "never prompt in CI")
 
 	// Row numbers are the table's, "all" covers only the offered rows, and a non-offered row is rejected.
-	selected, ok := selectWaiverPackages("all", report.packagesStatus, waiverSelectable(report))
+	selected, ok := selectWaiverPackages("all", report.packagesStatus, waiverSelectable(report), report.npmLogPartial)
 	require.True(t, ok)
 	assert.Len(t, selected, 2)
 	for _, ps := range selected {
@@ -8207,7 +8282,7 @@ func TestRunNpmLogFallback_WaiverEligibility(t *testing.T) {
 	}
 	for i, ps := range report.packagesStatus {
 		if ps.PackageName == "allblocked" || ps.PackageName == "plain" {
-			_, ok = selectWaiverPackages(strconv.Itoa(i+1), report.packagesStatus, waiverSelectable(report))
+			_, ok = selectWaiverPackages(strconv.Itoa(i+1), report.packagesStatus, waiverSelectable(report), report.npmLogPartial)
 			assert.False(t, ok, "row %d (%s) must not be selectable", i+1, ps.PackageName)
 		}
 	}
@@ -8253,22 +8328,56 @@ func Test_selectWaiverPackages(t *testing.T) {
 		name          string
 		requestedRows string
 		selectable    func(*PackageStatus) bool
+		npmLog        bool
 		want          []*PackageStatus
 		wantOk        bool
 	}{
-		{name: "all selects only the offered rows", requestedRows: "all", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{curl, vitest}, wantOk: true},
-		{name: "row numbers match the table", requestedRows: "3", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{vitest}, wantOk: true},
-		{name: "offered rows by list", requestedRows: "1,3", selectable: waiverSelectable(npmLogReport), want: []*PackageStatus{curl, vitest}, wantOk: true},
-		{name: "non-offered row is rejected", requestedRows: "2", selectable: waiverSelectable(npmLogReport), wantOk: false},
-		{name: "range with a non-offered row is rejected", requestedRows: "1-3", selectable: waiverSelectable(npmLogReport), wantOk: false},
-		{name: "out of range is rejected", requestedRows: "4", selectable: waiverSelectable(npmLogReport), wantOk: false},
-		{name: "invalid format is rejected", requestedRows: "x", selectable: waiverSelectable(npmLogReport), wantOk: false},
+		{name: "all selects only the offered rows", requestedRows: "all", selectable: waiverSelectable(npmLogReport), npmLog: true, want: []*PackageStatus{curl, vitest}, wantOk: true},
+		{name: "row numbers match the table", requestedRows: "3", selectable: waiverSelectable(npmLogReport), npmLog: true, want: []*PackageStatus{vitest}, wantOk: true},
+		{name: "offered rows by list", requestedRows: "1,3", selectable: waiverSelectable(npmLogReport), npmLog: true, want: []*PackageStatus{curl, vitest}, wantOk: true},
+		{name: "non-offered row is rejected", requestedRows: "2", selectable: waiverSelectable(npmLogReport), npmLog: true, wantOk: false},
+		{name: "range with a non-offered row is rejected", requestedRows: "1-3", selectable: waiverSelectable(npmLogReport), npmLog: true, wantOk: false},
+		{name: "out of range is rejected", requestedRows: "4", selectable: waiverSelectable(npmLogReport), npmLog: true, wantOk: false},
+		{name: "invalid format is rejected", requestedRows: "x", selectable: waiverSelectable(npmLogReport), npmLog: true, wantOk: false},
 		{name: "full report keeps every row selectable", requestedRows: "all", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), want: rows, wantOk: true},
 		{name: "full report keeps explicit rows selectable", requestedRows: "2", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), want: []*PackageStatus{allVersions}, wantOk: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := selectWaiverPackages(tt.requestedRows, rows, tt.selectable)
+			got, ok := selectWaiverPackages(tt.requestedRows, rows, tt.selectable, tt.npmLog)
+			assert.Equal(t, tt.wantOk, ok)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// A row range that selects nothing (e.g. "3-1") is rejected for npm debug-log reports so the prompt repeats; other reports keep their behaviour.
+func Test_selectWaiverPackages_emptySelection(t *testing.T) {
+	curl := &PackageStatus{PackageName: "curl", PackageVersion: "0.1.2", WaiverAllowed: true, BlockedPackageUrl: "https://rt/curl"}
+	vitest := &PackageStatus{PackageName: "vitest", PackageVersion: "5.1.0", WaiverAllowed: true, BlockedPackageUrl: "https://rt/vitest"}
+	rows := []*PackageStatus{curl, vitest}
+	npmLogSelectable := waiverSelectable(&CurationReport{isPartial: true, npmLogPartial: true, packagesStatus: rows})
+	noneSelectable := func(*PackageStatus) bool { return false }
+
+	tests := []struct {
+		name          string
+		requestedRows string
+		selectable    func(*PackageStatus) bool
+		npmLog        bool
+		want          []*PackageStatus
+		wantOk        bool
+	}{
+		{name: "npm log reversed range is rejected", requestedRows: "2-1", selectable: npmLogSelectable, npmLog: true},
+		{name: "npm log valid range is accepted", requestedRows: "1-2", selectable: npmLogSelectable, npmLog: true, want: rows, wantOk: true},
+		{name: "npm log all with nothing selectable is not rejected, so the prompt cannot loop", requestedRows: "all", selectable: noneSelectable, npmLog: true, wantOk: true},
+		{name: "npm log reversed range in a list is rejected", requestedRows: "1,2-1", selectable: npmLogSelectable, npmLog: true},
+		{name: "npm log reversed range after a valid one is rejected", requestedRows: "1-2,2-1", selectable: npmLogSelectable, npmLog: true},
+		{name: "other reports keep accepting a reversed range", requestedRows: "2-1", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), wantOk: true},
+		{name: "other reports keep accepting a reversed range in a list", requestedRows: "1,2-1", selectable: waiverSelectable(&CurationReport{packagesStatus: rows}), want: []*PackageStatus{curl}, wantOk: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := selectWaiverPackages(tt.requestedRows, rows, tt.selectable, tt.npmLog)
 			assert.Equal(t, tt.wantOk, ok)
 			assert.Equal(t, tt.want, got)
 		})

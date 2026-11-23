@@ -102,7 +102,6 @@ const (
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
 		"This package manager however isn't supported by this command."
-
 	WaiverRequestForbidden = "One or more policies blocking this package do not allow waiver requests."
 	WaiverRequestApproved  = "The waiver request was automatically granted; you can use this package.\nNOTE: The policy owner may review this waiver more thoroughly and contact you if issues are found."
 	WaiverRequestPending   = "A waiver request was opened for review, and the owner was notified.\nYou will receive an email with an update once the status changes."
@@ -560,7 +559,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 
 		// If at least one row allows a waiver request, ask the user whether to request one.
 		if shouldOfferWaiver(packagesStatus, utils.IsCI()) {
-			err = errors.Join(err, ca.requestWaiver(packagesStatus))
+			err = errors.Join(ca.requestWaiver(packagesStatus))
 		}
 	}
 	for _, w := range allWarnings {
@@ -758,6 +757,32 @@ func promotePipToUvIn(techs []string, dir string) []string {
 	return result
 }
 
+// promotePipToUvForRequest keeps the pip signal from --requirements-file. When that file exists in
+// the working dir, only project-local uv signals apply, as in 'jf audit'; a machine-global uv config
+// must not override it. Otherwise it behaves as promotePipToUvIn.
+func (ca *CurationAuditCommand) promotePipToUvForRequest(techs []string) []string {
+	if !ca.pipRequirementsFileExists() {
+		return promotePipToUvIn(techs, ca.OriginPath)
+	}
+	promoted := techutils.PromotePipToUv(techutils.ToTechnologies(techs), ca.OriginPath)
+	result := make([]string, 0, len(promoted))
+	for _, t := range promoted {
+		result = append(result, t.String())
+	}
+	return result
+}
+
+// pipRequirementsFileExists reports whether --requirements-file names an existing file in the
+// working dir. Absolute paths are not checked.
+func (ca *CurationAuditCommand) pipRequirementsFileExists() bool {
+	file := ca.PipRequirementsFile()
+	if file == "" || ca.OriginPath == "" || filepath.IsAbs(file) {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(ca.OriginPath, file))
+	return err == nil && !info.IsDir()
+}
+
 // dedupeDotnetFromNuget drops Dotnet from techs, since Nuget alone already covers it.
 func dedupeDotnetFromNuget(techs []string) []string {
 	return removeTech(techs, techutils.Dotnet.String())
@@ -789,9 +814,9 @@ func (ca *CurationAuditCommand) techsToAudit() []string {
 		log.Debug(fmt.Sprintf("Docker image name '%s' was provided, running Docker curation audit.", ca.DockerImageName()))
 		return []string{techutils.Docker.String()}
 	default:
-		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAudit())
+		techs := promotePnpmWorkspaceMember(techutils.DetectedTechnologiesListForCurationAuditWithRequirementsFile(ca.PipRequirementsFile()))
 		techs = promoteYarnWorkspaceMember(techs)
-		techs = promotePipToUvIn(techs, ca.OriginPath)
+		techs = ca.promotePipToUvForRequest(techs)
 		techs = dedupeDotnetFromNuget(techs)
 		// Auto-discovery: if HF_ENDPOINT is set and .py/.ipynb files exist, append HF to the tech list.
 		if os.Getenv("HF_ENDPOINT") != "" && hasPythonFiles(ca.OriginPath) {
@@ -1535,10 +1560,10 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 	return requestStatuses, nil
 }
 
-func getWaiverRequestParams(blockedPackages []*PackageStatus, selectable func(*PackageStatus) bool) (selectedPackages []*PackageStatus, requestMsg string) {
+func getWaiverRequestParams(blockedPackages []*PackageStatus, selectable func(*PackageStatus) bool, npmLog bool) (selectedPackages []*PackageStatus, requestMsg string) {
 	for {
 		requestedRows := ioutils.AskStringWithDefault("", "Please enter the row number(s) for which you want to request a waiver (comma-separated for multiple, range, or “all”)", "all")
-		if pkgs, ok := selectWaiverPackages(requestedRows, blockedPackages, selectable); ok {
+		if pkgs, ok := selectWaiverPackages(requestedRows, blockedPackages, selectable, npmLog); ok {
 			selectedPackages = pkgs
 			break
 		}
@@ -1581,7 +1606,8 @@ func shouldOfferWaiver(report *CurationReport, isCI bool) bool {
 }
 
 // selectWaiverPackages parses the requested rows, numbered as in the table. "all" keeps only selectable rows; naming any other row is rejected.
-func selectWaiverPackages(requestedRows string, rows []*PackageStatus, selectable func(*PackageStatus) bool) (selected []*PackageStatus, ok bool) {
+// For npm debug-log reports (npmLog), a reversed row range anywhere in the list, such as "3-1" or "1,3-1", is also rejected so the prompt repeats.
+func selectWaiverPackages(requestedRows string, rows []*PackageStatus, selectable func(*PackageStatus) bool, npmLog bool) (selected []*PackageStatus, ok bool) {
 	requested, ok := getSelectedPackages(requestedRows, rows)
 	if !ok {
 		return nil, false
@@ -1596,7 +1622,30 @@ func selectWaiverPackages(requestedRows string, rows []*PackageStatus, selectabl
 			return nil, false
 		}
 	}
+	if npmLog {
+		if reversed, found := reversedRange(requestedRows); found {
+			log.Error(fmt.Sprintf("Invalid row range %s: the first row must not be after the last row.", reversed))
+			return nil, false
+		}
+	}
 	return selected, true
+}
+
+// reversedRange returns the first "a-b" range in requestedRows whose start is after its end, such as "3-1".
+// requestedRows has already passed getSelectedPackages, so every range part is well formed.
+func reversedRange(requestedRows string) (string, bool) {
+	for _, part := range strings.Split(requestedRows, ",") {
+		if !strings.Contains(part, "-") {
+			continue
+		}
+		bounds := strings.Split(part, "-")
+		start, _ := strconv.Atoi(bounds[0])
+		end, _ := strconv.Atoi(bounds[1])
+		if start > end {
+			return part, true
+		}
+	}
+	return "", false
 }
 
 // selectableRowNumbers lists the table row numbers that selectable accepts.
@@ -1618,7 +1667,7 @@ func (ca *CurationAuditCommand) requestWaiver(report *CurationReport) error {
 	if report.npmLogPartial {
 		log.Output(fmt.Sprintf("Waiver requests can be made for row(s): %s", strings.Join(selectableRowNumbers(blockedPackages, selectable), ", ")))
 	}
-	selectedPackages, requestMsg := getWaiverRequestParams(blockedPackages, selectable)
+	selectedPackages, requestMsg := getWaiverRequestParams(blockedPackages, selectable, report.npmLogPartial)
 	if len(selectedPackages) == 0 {
 		return nil
 	}
