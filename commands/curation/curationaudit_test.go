@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 
 	"github.com/google/uuid"
+	"github.com/jedib0t/go-pretty/v6/text"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -2604,6 +2605,7 @@ func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testin
 		wantReason   string
 		wantPolicies []Policy
 		wantWaiver   bool
+		wantCatalog  string
 	}{
 		{
 			name:         "old server: package not found in catalog",
@@ -2627,7 +2629,8 @@ func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testin
 				Explanation:    "The JFrog Catalog has no data for this package yet so the policy cannot be evaluated against it. This policy is set to block while a package is pending Catalog analysis.",
 				Recommendation: "Request a waiver for this package or wait for the JFrog Catalog to analyze it.",
 			}},
-			wantWaiver: true,
+			wantWaiver:  true,
+			wantCatalog: "http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true",
 		},
 		{
 			name:       "new server: policy group wins over on-demand",
@@ -2639,12 +2642,19 @@ func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testin
 				Explanation:    "This package is still being scanned so the policy cannot be evaluated against it. This policy is set to block until the scan finishes.",
 				Recommendation: "Retry the download once the scan completes. No waiver is needed.",
 			}},
+			wantCatalog: "http://localhost:8083/ui/catalog/onDemand/packages/details/npm/@milkio%2Fstargate-worker/1.3.65?ecosystem=generic",
 		},
 		{
-			name:       "curation block with neither policy groups nor a pending substring",
-			message:    `package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the following policies violated . For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]`,
+			name:        "curation block with neither policy groups nor a pending substring",
+			message:     `package @milkio/stargate-worker:1.3.65 download was blocked by jfrog packages curation service due to the following policies violated . For details and alternatives, visit: http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true [waivers allowed]`,
+			wantReason:  BlockingReasonUnknown,
+			wantWaiver:  true,
+			wantCatalog: "http://localhost:8083/ui/catalog/packages/details/npm/@milkio%2Fstargate-worker?ecosystem=generic&showVersions=true",
+		},
+		{
+			name:       "all-versions message with a reworded tail",
+			message:    "All versions of '@milkio/stargate-worker' (npm-remote) are blocked from download by JFrog Curation.\nBlocked by these policies:\n1. P (C)",
 			wantReason: BlockingReasonUnknown,
-			wantWaiver: true,
 		},
 	}
 
@@ -2679,6 +2689,7 @@ func TestGetBlockedPackageDetails_PolicyGroupsPreemptPendingSubstrings(t *testin
 			assert.Equal(t, tt.wantReason, got.BlockingReason)
 			assert.Equal(t, tt.wantPolicies, got.Policy)
 			assert.Equal(t, tt.wantWaiver, got.WaiverAllowed)
+			assert.Equal(t, tt.wantCatalog, got.CatalogURL)
 		})
 	}
 }
@@ -3691,6 +3702,49 @@ func TestRunNpmLogFallback_MissingPackageJsonStillRecoversReport(t *testing.T) {
 	require.NotEmpty(t, report.packagesStatus, "blockedpkg must still surface as a row even when package.json can't be read")
 	assert.Equal(t, "blockedpkg", report.packagesStatus[0].PackageName)
 	assert.True(t, directDepNamesContains(report, "blockedpkg"), "blockedpkg is a direct dependency of the real (log-recovered) root, so its recommendation must say so, not treat it as transitive")
+}
+
+func TestRunNpmLogFallback_AllVersionsOfNotice(t *testing.T) {
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected HEAD-check for a whole-package-blocked entry: %s", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer serverMock.Close()
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails),
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+	const action = "Waivers are allowed for some versions only. Please use a different package, or request a waiver for a version whose policies allow it."
+	logsDir := filepath.Join(t.TempDir(), "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"43 notice All versions of 'blockedpkg' (my-npm-remote) are blocked from download by JFrog Curation. " +
+		"Blocked by one or more of these policies: 1. Block Immature Packages (immature-7) 2. Block Malicious Packages (Malicious package) " +
+		"Note: Some versions are pending JFrog Catalog analysis. Action: " + action + " Details: https://example.jfrog.io/ui/catalog/blockedpkg\n" +
+		"44 http fetch GET 403 https://z0test.jfrogdev.org/artifactory/api/npm/my-npm-remote/blockedpkg 100ms (cache skip)\n" +
+		"45 silly placeDep ROOT blockedpkg@ OK for: realproj@9.9.9 want: ^1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+	projectDir := t.TempDir()
+	orig := osGetwd
+	osGetwd = func() (string, error) { return projectDir, nil }
+	t.Cleanup(func() { osGetwd = orig })
+	results := map[string]*CurationReport{}
+
+	err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, errors.New("error while running 'npm install': exit status 1"), false, 0)
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	for _, report := range results {
+		require.Len(t, report.packagesStatus, 1)
+		got := report.packagesStatus[0]
+		assert.Equal(t, "blockedpkg", got.PackageName)
+		assert.Equal(t, allVersionsBlockedText, got.PackageVersion)
+		assert.Equal(t, "https://example.jfrog.io/ui/catalog/blockedpkg", got.CatalogURL)
+		assert.Equal(t, []Policy{
+			{Policy: "Block Immature Packages", Condition: "immature-7", Explanation: allVersionsBlockedText, Recommendation: "Some versions are pending JFrog Catalog analysis. " + action},
+			{Policy: "Block Malicious Packages", Condition: "Malicious package", Explanation: allVersionsBlockedText, Recommendation: "Some versions are pending JFrog Catalog analysis. " + action},
+		}, got.Policy)
+	}
 }
 
 // directDepNamesContains checks pkgName's recommendation uses the direct, not transitive, wording.
@@ -6236,6 +6290,55 @@ func TestFetchCvsBlockedStatusRangedWholePackageBlocked(t *testing.T) {
 	assert.Equal(t, expectedRecTemplate, s.Policy[0].Recommendation, "direct dependency must get the 'remove and replace' recommendation")
 }
 
+func TestFetchCvsBlockedStatusRangedWholePackageBlockedAllVersionsOfMessage(t *testing.T) {
+	const action = "Please use a different package or request a waiver to use this one."
+	blockResponse := `{"errors":[{"status":403,"message":"All versions of 'urllib3' (test-pip-repo) are blocked from download by JFrog Curation.\n` +
+		`Blocked by one or more of these policies:\n1. p1 (c1 (fix version available))\n2. p2 (package pending JFrog Catalog analysis)\n` +
+		`Note: Some versions are pending JFrog Catalog analysis.\nAction: ` + action + `\nDetails: https://example.jfrog.io/ui/catalog"}]}`
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(blockResponse))
+	})
+	defer serverMock.Close()
+	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 0, 0, false)
+	require.NoError(t, err)
+	rtAuth := rtManager.GetConfig().GetServiceDetails()
+	tests := []struct {
+		name               string
+		parent             string
+		wantRecommendation string
+	}{
+		{name: "direct", parent: "urllib3", wantRecommendation: "Some versions are pending JFrog Catalog analysis. " + action},
+		{name: "transitive", parent: "requests",
+			wantRecommendation: "urllib3 is a transitive dependency of requests and cannot be removed directly. Some versions are pending JFrog Catalog analysis. " + action},
+	}
+	for _, tech := range []techutils.Technology{techutils.Pip, techutils.Poetry, techutils.Pipenv, techutils.Uv} {
+		for _, tt := range tests {
+			t.Run(tech.String()+"/"+tt.name, func(t *testing.T) {
+				analyzer := treeAnalyzer{
+					rtManager:            rtManager,
+					extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+					rtAuth:               rtAuth,
+					httpClientDetails:    rtAuth.CreateHttpClientDetails(),
+					url:                  rtAuth.GetUrl(),
+					repo:                 "test-pip-repo",
+					tech:                 tech,
+				}
+				statuses := analyzer.fetchCvsBlockedStatus([]python.PinnedRequirement{{Name: "urllib3", VersionRange: ">=2.0.0", ParentName: tt.parent}})
+
+				require.Len(t, statuses, 1)
+				assert.Equal(t, allVersionsBlockedText, statuses[0].PackageVersion)
+				assert.Equal(t, BlockingReasonPolicy, statuses[0].BlockingReason)
+				assert.Equal(t, []Policy{
+					{Policy: "p1", Condition: "c1 (fix version available)", Explanation: allVersionsBlockedText, Recommendation: tt.wantRecommendation},
+					{Policy: "p2", Condition: "package pending JFrog Catalog analysis", Explanation: allVersionsBlockedText, Recommendation: tt.wantRecommendation},
+				}, statuses[0].Policy)
+				assert.Equal(t, "https://example.jfrog.io/ui/catalog", statuses[0].CatalogURL)
+			})
+		}
+	}
+}
+
 // TestFetchCvsBlockedStatusPinnedWholePackageBlockedDifferentPolicyThanAggregate covers a
 // pinned version blocked by a DIFFERENT policy than Step 0's aggregate check. The
 // per-version detail must be preserved, not overwritten with the unrelated generic text.
@@ -6329,14 +6432,15 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *
 		whlRelativePath = "packages/ca/25/urllib3-2.0.0-py3-none-any.whl"
 	)
 	// Step 0's aggregate probe: confirmed whole-package block under policy openssf-jfca-test/openssf.
-	wholePackageBlockResponse := fmt.Sprintf(
-		`{"errors":[{"status":403,"message":"All versions blocked - {policy:%s,condition:%s}"}]}`,
-		policyName, condName,
+	wholePackageBlockMsg := fmt.Sprintf(
+		"All versions of '%s' (%s) are blocked from download by JFrog Curation.\nBlocked by one or more of these policies:\n1. %s (%s)\nDetails: https://x/pkg",
+		blockedPkg, repo, policyName, condName,
 	)
+	wholePackageBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, wholePackageBlockMsg)
 	// Steps 1-3's per-version probe: the SAME policy+condition, but with the raw,
 	// inconsistently-worded backend message (as opposed to Step 0's generic phrasing).
 	blockMsg := fmt.Sprintf(
-		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}.",
+		"Package %s:%s download was blocked by JFrog Packages Curation service due to the following policies violated {%s, %s, %s, %s}. For details and alternatives, visit: https://x/version",
 		blockedPkg, blockedVer, policyName, condName, rawExpl, rawRec,
 	)
 	versionBlockResponse := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
@@ -6391,6 +6495,7 @@ func TestFetchCvsBlockedStatusPinnedWholePackageBlockedSamePolicyAsAggregate(t *
 		"same policy as aggregate must be normalized to the generic text, not leak the raw inconsistent backend message")
 	assert.Equal(t, "Remove this package from your project and replace with an alternate package", s.Policy[0].Recommendation,
 		"direct pinned dependency, same policy as aggregate, must get the generic npm-parity recommendation")
+	assert.Equal(t, "https://x/pkg", s.CatalogURL)
 }
 
 // TestFetchCvsBlockedStatusPinnedWholePackageBlockedMultiPolicyPartialMatch verifies that
@@ -8011,5 +8116,85 @@ func TestCredentialFallbackServerDetailsHostCheck(t *testing.T) {
 				assert.NotContains(t, err.Error(), tc.forbiddenInErr)
 			}
 		})
+	}
+}
+
+func TestCatalogLinks(t *testing.T) {
+	tests := []struct {
+		name     string
+		statuses []*PackageStatus
+		want     string
+	}{
+		{name: "no links", statuses: []*PackageStatus{{PackageName: "axios"}}},
+		{
+			name: "versions of one package",
+			statuses: []*PackageStatus{
+				{PackageName: "vm2", PackageVersion: "3.9.18", CatalogURL: "https://v18"},
+				{PackageName: "vm2", PackageVersion: "3.9.19", CatalogURL: "https://v19"},
+				{PackageName: "axios", PackageVersion: allVersionsBlockedText, CatalogURL: "https://a"},
+			},
+			want: "\nFor more details, visit:\n  vm2    https://v18\n  axios  https://a",
+		},
+		{
+			name: "one line per link, names aligned",
+			statuses: []*PackageStatus{
+				{PackageName: "axios", CatalogURL: "https://a"},
+				{PackageName: "axios", CatalogURL: "https://a"},
+				{PackageName: "left-pad"},
+				{PackageName: "urllib3", CatalogURL: "https://u"},
+			},
+			want: "\nFor more details, visit:\n  axios    https://a\n  urllib3  https://u",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, catalogLinks(tt.statuses))
+		})
+	}
+}
+
+func TestPackageStatusTableMergesSharedText(t *testing.T) {
+	policies := []Policy{{Policy: "p1", Explanation: "expl", Recommendation: "rec"}, {Policy: "p2", Explanation: "expl", Recommendation: "rec"}}
+	statuses := []*PackageStatus{{PackageName: "a", Policy: policies}, {PackageName: "b", Policy: policies}}
+	tw, err := coreutils.PrepareTable(convertToPackageStatusTable(statuses, false), "", false)
+	require.NoError(t, err)
+	got := tw.Render()
+	if n := strings.Count(got, "rec"); n != 2 {
+		t.Errorf("PrepareTable(two packages with two policies each) shows the recommendation %d times, want 2:\n%s", n, got)
+	}
+}
+
+func TestConvertToPackageStatusTableLinkColumn(t *testing.T) {
+	statuses := []*PackageStatus{
+		{PackageName: "axios", CatalogURL: "https://a"},
+		{PackageName: "left-pad"},
+	}
+	tests := []struct {
+		name      string
+		withLinks bool
+		want      []string
+	}{
+		{name: "terminal", withLinks: true, want: []string{catalogLinkStyle.Render(text.Hyperlink("https://a", "Open ↗")) + " ", ""}},
+		{name: "not a terminal", withLinks: false, want: []string{"", ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, row := range convertToPackageStatusTable(statuses, tt.withLinks) {
+				got = append(got, row.Link)
+				if row.PackageName != "axios " && row.PackageName != "left-pad" {
+					t.Errorf("PackageName = %q, want the plain name", row.PackageName)
+				}
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPackageStatusTableOmitsEmptyLinkColumn(t *testing.T) {
+	tw, err := coreutils.PrepareTable(convertToPackageStatusTable([]*PackageStatus{{PackageName: "axios", CatalogURL: "https://a"}}, false), "", false)
+	require.NoError(t, err)
+	if got := tw.Render(); strings.Contains(got, "LINK") {
+		t.Errorf("PrepareTable(rows without links) has a link column:\n%s", got)
 	}
 }
