@@ -4813,6 +4813,79 @@ func TestPureUvProjectNotReportedAsPip(t *testing.T) {
 	assert.NotContains(t, techs, techutils.Pip.String(), "must not also report pip for a plain uv-only project")
 }
 
+// TestTechsToAuditRecognisesCustomRequirementsFile: jf ca must detect pip from the file
+// named by --requirements-file, the same way jf audit does.
+func TestTechsToAuditRecognisesCustomRequirementsFile(t *testing.T) {
+	// Isolate the home dir so a machine-global ~/.config/uv/uv.toml cannot promote pip to uv.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetPipRequirementsFile("constraints.txt")
+	ca.OriginPath = projectDir
+
+	assert.Contains(t, ca.techsToAudit(), techutils.Pip.String(), "the file named by --requirements-file must be audited as pip")
+}
+
+// A machine-global uv config must not turn a directory whose --requirements-file exists into uv.
+func TestTechsToAuditRequirementsFileIgnoresGlobalUvConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	uvCfgDir := filepath.Join(home, ".config", "uv")
+	require.NoError(t, os.MkdirAll(uvCfgDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(uvCfgDir, "uv.toml"), []byte("[[index]]\nurl = \"https://example.com/simple\"\n"), 0o644))
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+	t.Chdir(projectDir)
+
+	ca := NewCurationAuditCommand()
+	ca.SetPipRequirementsFile("constraints.txt")
+	ca.OriginPath = projectDir
+
+	techs := ca.techsToAudit()
+	assert.Contains(t, techs, techutils.Pip.String(), "the requirements file must keep the directory as pip")
+	assert.NotContains(t, techs, techutils.Uv.String(), "the global uv config must not override the requirements file")
+}
+
+// TestRunSucceedsWhenOneWorkingDirIsAudited: an empty directory alongside an audited one
+// must not fail the run.
+func TestRunSucceedsWhenOneWorkingDirIsAudited(t *testing.T) {
+	var tt testCase
+	for _, candidate := range getTestCasesForDoCurationAudit() {
+		if candidate.name == "python tree - one blocked package" {
+			tt = candidate
+		}
+	}
+	require.NotEmpty(t, tt.name, "the pip curation case must exist")
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	require.NoError(t, err)
+
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+	mockServer, serverDetails := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
+	defer mockServer.Close()
+	cleanUp := createCurationTestEnv(t, basePathToTests, tt, serverDetails)
+	defer cleanUp()
+	require.NoError(t, os.Mkdir("empty-dir", 0755))
+
+	ca := NewCurationAuditCommand()
+	ca.SetIsCurationCmd(true)
+	ca.parallelRequests = 3
+	ca.SetInsecureTls(tt.allowInsecureTls)
+	ca.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	ca.SetWorkingDirs([]string{".", "empty-dir"})
+	if defaultServer, confErr := config.GetDefaultServerConf(); confErr == nil {
+		ca.SetServerDetails(defaultServer)
+	}
+
+	assert.NoError(t, ca.Run(), "a run where one directory is audited must succeed")
+}
+
 // TestTechsToAuditQueuesPep723HintForDeferredLogging: the PEP 723 hint must be queued in pendingWarnings.
 func TestTechsToAuditQueuesPep723HintForDeferredLogging(t *testing.T) {
 	projectDir := t.TempDir()

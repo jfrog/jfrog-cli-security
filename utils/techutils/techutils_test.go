@@ -1278,6 +1278,38 @@ func TestPep723Hint_UvSibling_HintFires(t *testing.T) {
 	assert.True(t, found, "the sibling script's inline deps are out of scope for the project's own audit")
 }
 
+// TestDetectedTechnologiesListForCurationAuditWithRequirementsFile: a custom-named file
+// named by the requirements flag must make the directory pip, as jf audit does.
+func TestDetectedTechnologiesListForCurationAuditWithRequirementsFile(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAuditWithRequirementsFile("constraints.txt")
+
+	assert.Contains(t, techs, Pip.String(), "the file named by --requirements-file must make the directory pip")
+}
+
+// TestDetectedTechnologiesListForCurationAuditWithoutRequirementsFile: without the flag a
+// custom-named file is not a pip indicator, so nothing is detected.
+func TestDetectedTechnologiesListForCurationAuditWithoutRequirementsFile(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "constraints.txt"), []byte("requests==2.31.0\n"), 0644))
+
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+
+	techs := DetectedTechnologiesListForCurationAuditWithRequirementsFile("")
+
+	assert.Empty(t, techs, "a custom-named file must not be detected as pip when the flag is unset")
+}
+
 func TestHasPep723ScriptMetadata(t *testing.T) {
 	tests := []struct {
 		name     string
