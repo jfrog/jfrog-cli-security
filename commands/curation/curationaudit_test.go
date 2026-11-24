@@ -3530,6 +3530,74 @@ func TestRunNpmLogFallback_ETARGETConfirmedBlockAppearsInReport(t *testing.T) {
 	assert.Equal(t, "9.9.9", report.packagesStatus[0].PackageVersion)
 }
 
+// npm logs a blank parent unless package.json has both name and version.
+// The CVS-hidden exact pin must still be reported as a direct dependency.
+func TestRunNpmLogFallback_BlankParentConfirmedBlockAppearsInReport(t *testing.T) {
+	blockMsg := "Package typescript:7.1.0-dev.20261115.1 download was blocked by jfrog packages curation service due to the following policies violated " +
+		"{package-cooling-3-days, Package version is immature (strict), Package version is 9 days old, Use an older version}."
+	blockJSON := fmt.Sprintf(`{"errors":[{"status":403,"message":%q}]}`, blockMsg)
+
+	serverMock, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/typescript-7.1.0-dev.20261115.1.tgz") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(blockJSON))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer serverMock.Close()
+
+	repoConfig := (&project.RepositoryConfig{}).SetTargetRepo("my-npm-remote").SetServerDetails(serverDetails)
+	ca := &CurationAuditCommand{
+		PackageManagerConfig: repoConfig,
+		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
+	}
+
+	logsDir := filepath.Join(t.TempDir(), "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "0 verbose cli node npm\n" +
+		"46 silly placeDep ROOT typescript@ OK for:  want: 7.1.0-dev.20261115.1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	const deps = `"dependencies":{"typescript":"7.1.0-dev.20261115.1"}`
+	for _, tc := range []struct {
+		name        string
+		packageJSON string
+	}{
+		{name: "no name or version", packageJSON: `{` + deps + `}`},
+		{name: "name only", packageJSON: `{"name":"myproj",` + deps + `}`},
+		{name: "version only", packageJSON: `{"version":"1.0.0",` + deps + `}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(tc.packageJSON), 0644))
+			orig := osGetwd
+			osGetwd = func() (string, error) { return projectDir, nil }
+			t.Cleanup(func() { osGetwd = orig })
+
+			results := map[string]*CurationReport{}
+			originalErr := errors.New("error while running 'npm install': exit status 1")
+
+			err := ca.runNpmLogFallback(logsDir, techutils.Npm, results, originalErr, false, 0)
+			require.NoError(t, err, "a blank parent must not make the fallback return the raw npm error")
+			require.Len(t, results, 1)
+
+			var report *CurationReport
+			for _, r := range results {
+				report = r
+			}
+			require.Len(t, report.packagesStatus, 1, "the confirmed-blocked package must appear as a row")
+			got := report.packagesStatus[0]
+			assert.Equal(t, "typescript", got.PackageName)
+			assert.Equal(t, "7.1.0-dev.20261115.1", got.PackageVersion)
+			assert.Equal(t, directRelation, got.DepRelation)
+			assert.Equal(t, "typescript", got.ParentName)
+			require.Len(t, got.Policy, 1)
+			assert.Equal(t, "package-cooling-3-days", got.Policy[0].Policy)
+		})
+	}
+}
+
 // An advisory-only entry must not claim the shared dedup key and skip a same-name probeable entry.
 func TestRunNpmLogFallback_SeenKeysDoesNotSkipCrossCategoryEntry(t *testing.T) {
 	blockMsg := "Package widget:2.0.0 download was blocked by jfrog packages curation service due to the following policies violated " +

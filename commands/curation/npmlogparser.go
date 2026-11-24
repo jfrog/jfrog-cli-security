@@ -65,8 +65,9 @@ var (
 	npmFetch403Regex = regexp.MustCompile(`^\d+\s+http fetch GET 403\s+\S*/api/npm/[^/\s]+/((?:@[^/\s]+/)?[^/\s]+)\s`)
 	// Matches: 110 silly placeDep ROOT accepts@2.0.0 OK for: express@5.2.1 want: ^2.0.0
 	// want is `.+?` since OR-ranges ("1.0.0 || 2.0.0") and hyphen-ranges contain spaces.
+	// The parent is optional (blank when package.json lacks a name or a version); a blank version is accepted defensively.
 	npmPlaceDepRegex = regexp.MustCompile(
-		`^\d+\s+silly\s+placeDep\s+(\S+)\s+((?:@[^@\s]+/)?[^@\s]+)@(\S*)\s+OK for:\s+((?:@[^@\s]+/)?[^@\s]+)@(\S+)\s+want:\s+(.+?)\s*$`)
+		`^\d+\s+silly\s+placeDep\s+(\S+)\s+((?:@[^@\s]+/)?[^@\s]+)@(\S*)\s+OK for:\s+(?:((?:@[^@\s]+/)?[^@\s]+)@(\S*))?\s*want:\s+(.+?)\s*$`)
 )
 
 // parseNpmDebugLog reads every chunk of the newest npm run under logsDir newer than afterKey
@@ -474,14 +475,18 @@ func npmNodeId(name, version string) string {
 // direct-dependency ancestor is fillGraphRelations's job, reused unmodified.
 func buildGraphFromLogEntries(entries []npmLogEntry, rootName, rootVersion string, blockedPackages map[string]npmBlockedInfo) *xrayUtils.GraphNode {
 	treeMap := make(map[string]xray.DepTreeNode)
+	rootId := npmNodeId(rootName, rootVersion)
 	for _, entry := range entries {
 		childId := npmNodeId(entry.Name, effectiveGraphVersion(entry, blockedPackages))
 		parentId := npmNodeId(entry.ParentName, entry.ParentVersion)
+		// npm logs a blank parent when package.json lacks a name or a version, and only the root can be blank.
+		if entry.ParentName == "" {
+			parentId = rootId
+		}
 		depTreeNode := treeMap[parentId]
 		depTreeNode.Children = appendUniqueChildId(depTreeNode.Children, childId)
 		treeMap[parentId] = depTreeNode
 	}
-	rootId := npmNodeId(rootName, rootVersion)
 	graph, _ := xray.BuildXrayDependencyTree(treeMap, rootId)
 	return graph
 }
