@@ -50,15 +50,17 @@ const (
 	npmEntryETARGET
 )
 
-// npmBlockedInfo carries the policy/condition parsed from a whole-package-block notice line.
+// npmBlockedInfo carries the policies and Catalog link parsed from a whole-package-block notice line.
 type npmBlockedInfo struct {
-	Policy    string
-	Condition string
+	Policies   []Policy
+	CatalogURL string
 }
 
 var (
 	// Matches: 42 notice All versions blocked - {policy:X,condition:Y}
 	npmNoticeBlockedRegex = regexp.MustCompile(`^\d+\s+notice\s+All versions blocked - \{policy:([^,]+),condition:([^}]+)\}`)
+	// Matches: 42 notice All versions of 'X' (repo) are blocked from download by JFrog Curation. Blocked by ...
+	npmNoticeAllVersionsOfRegex = regexp.MustCompile(`^\d+\s+notice\s+` + allVersionsOfPattern)
 	// Matches: 43 http fetch GET 403 https://.../api/npm/<repo>/<name> ... — excludes tarball fetches (path has /-/).
 	npmFetch403Regex = regexp.MustCompile(`^\d+\s+http fetch GET 403\s+\S*/api/npm/[^/\s]+/((?:@[^/\s]+/)?[^/\s]+)\s`)
 	// Matches: 110 silly placeDep ROOT accepts@2.0.0 OK for: express@5.2.1 want: ^2.0.0
@@ -96,7 +98,37 @@ func parseNpmDebugLog(logsDir string, afterKey int64) (entries []npmLogEntry, bl
 
 // npmUnknownBlockedInfo replaces a guessed policy/condition when the notice→403 FIFO pairing
 // is ambiguous — a wrong guess is worse than an honest "unknown".
-var npmUnknownBlockedInfo = npmBlockedInfo{Policy: "unknown", Condition: "unknown"}
+var npmUnknownBlockedInfo = npmBlockedInfo{Policies: []Policy{{Policy: "unknown", Condition: "unknown"}}}
+
+// parseNpmBlockedNotice returns the policies of a whole-package-block notice line, in either message format.
+func parseNpmBlockedNotice(line string) (npmBlockedInfo, bool) {
+	if m := npmNoticeBlockedRegex.FindStringSubmatch(line); m != nil {
+		return npmBlockedInfo{Policies: []Policy{{Policy: strings.TrimSpace(m[1]), Condition: strings.TrimSpace(m[2])}}}, true
+	}
+	if m := npmNoticeAllVersionsOfRegex.FindStringSubmatch(line); m != nil {
+		return npmBlockedInfo{Policies: allVersionsOfPolicies(m), CatalogURL: m[4]}, true
+	}
+	return npmBlockedInfo{}, false
+}
+
+// allVersionsOfPolicies returns the policies of a match of allVersionsOfPattern. Every policy gets the
+// Action line, preceded by the Note line, as its Recommendation.
+func allVersionsOfPolicies(m []string) []Policy {
+	recommendation := m[3]
+	if recommendation != "" && m[2] != "" {
+		recommendation = m[2] + " " + recommendation
+	}
+	var policies []Policy
+	for _, item := range allVersionsOfPolicyNumberRegex.Split(m[1], -1) {
+		if p := allVersionsOfPolicyItemRegex.FindStringSubmatch(item); p != nil {
+			policies = append(policies, Policy{Policy: p[1], Condition: p[2], Recommendation: recommendation})
+		}
+	}
+	if len(policies) == 0 {
+		return []Policy{{Recommendation: recommendation}}
+	}
+	return policies
+}
 
 // pendingNotice is a queued "notice" awaiting its matching 403. ambiguous is set once it has
 // ever overlapped with another unresolved notice, since FIFO order can no longer be trusted
@@ -123,8 +155,8 @@ func scanNpmDebugLogChunk(logFile string, entries []npmLogEntry, blockedPackages
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if m := npmNoticeBlockedRegex.FindStringSubmatch(line); m != nil {
-			next := pendingNotice{info: npmBlockedInfo{Policy: strings.TrimSpace(m[1]), Condition: strings.TrimSpace(m[2])}}
+		if info, ok := parseNpmBlockedNotice(line); ok {
+			next := pendingNotice{info: info}
 			if len(pendingNotices) > 0 {
 				// A prior notice is still unresolved — both it and this one become ambiguous,
 				// since same-relative-order with their eventual 403s is no longer provable.

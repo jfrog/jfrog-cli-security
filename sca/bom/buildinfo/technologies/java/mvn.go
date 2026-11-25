@@ -32,7 +32,7 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.2.0"
+	mavenDepTreeVersion = "1.2.1"
 	settingsXmlFile     = "settings.xml"
 
 	// curationSettingsID is the stable XML id for server/mirror/profile entries injected

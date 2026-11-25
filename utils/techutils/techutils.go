@@ -476,7 +476,13 @@ func DetectedTechnologiesList() (technologies []string) {
 	return detectedTechnologiesListInPath(wd, false)
 }
 
-// DetectedTechnologiesListForCurationAudit is the curation-audit variant of
+// DetectedTechnologiesListForCurationAudit is DetectedTechnologiesListForCurationAuditWithRequirementsFile
+// with no requirements file.
+func DetectedTechnologiesListForCurationAudit() (technologies []string) {
+	return DetectedTechnologiesListForCurationAuditWithRequirementsFile("")
+}
+
+// DetectedTechnologiesListForCurationAuditWithRequirementsFile is the curation-audit variant of
 // DetectedTechnologiesList that additionally re-routes any working directory
 // detected as Npm to Yarn whenever a parent directory is a yarn workspace
 // root that claims it. The promotion is curation-only by design — the
@@ -484,21 +490,27 @@ func DetectedTechnologiesList() (technologies []string) {
 // commands ('jf audit', 'jf scan', etc.) keep the legacy npm-fallback
 // behaviour for yarn workspace members so this change cannot regress them.
 //
+// pipRequirementsFile is the --requirements-file value; it is matched as jf audit matches it.
+//
 // Unlike DetectedTechnologiesList, this does not log the result: the caller still has
 // more promotions to apply (pnpm/yarn, pip→uv) before the list is final, and logging
 // early could show a technology immediately superseded (e.g. "Detected: pip." right
 // before "...treating as uv.").
 //
-// Used by doCurateAudit so 'jf ca --working-dirs=<workspace member>'
+// Used by techsToAudit so 'jf ca --working-dirs=<workspace member>'
 // resolves through yarn (matching how the project's lockfile was produced)
 // instead of npm (which would synthesise a different dependency set and
 // produce curation answers that don't match what yarn would have resolved).
-func DetectedTechnologiesListForCurationAudit() (technologies []string) {
+func DetectedTechnologiesListForCurationAuditWithRequirementsFile(pipRequirementsFile string) (technologies []string) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
-	detected, err := DetectTechnologiesDescriptors(wd, false, []string{}, map[Technology][]string{}, "")
+	requestedDescriptors := map[Technology][]string{}
+	if pipRequirementsFile != "" {
+		requestedDescriptors[Pip] = []string{pipRequirementsFile}
+	}
+	detected, err := DetectTechnologiesDescriptors(wd, false, []string{}, requestedDescriptors, "")
 	if err != nil {
 		return
 	}
