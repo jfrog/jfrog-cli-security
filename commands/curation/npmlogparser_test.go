@@ -95,6 +95,36 @@ func TestParseNpmDebugLog_WantSpecifierWithSpaceStillMatches(t *testing.T) {
 	assert.Equal(t, "1.0.0 - 2.0.0", byName["hyphen-range-pkg"].Specifier)
 }
 
+// npm logs a blank parent ("OK for:  want: <spec>") unless package.json has name and version.
+// The "<name>@" parent is a defensive shape; real npm logs did not show it.
+func TestParseNpmDebugLog_BlankParentStillMatches(t *testing.T) {
+	dir := t.TempDir()
+	logsDir := filepath.Join(dir, "_logs")
+	require.NoError(t, os.MkdirAll(logsDir, 0755))
+	logContent := "1 verbose cli npm\n" +
+		"10 silly placeDep ROOT typescript@ OK for:  want: 7.1.0-dev.20261115.1\n" +
+		"11 silly placeDep ROOT named-only@ OK for: myproj@ want: 2.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "2026-01-01T00_00_00_000Z-debug-0.log"), []byte(logContent), 0644))
+
+	entries, _, _, err := parseNpmDebugLog(logsDir, 0)
+	require.NoError(t, err)
+	byName := map[string]npmLogEntry{}
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+
+	require.Contains(t, byName, "typescript", "a blank-parent placeDep line must not be dropped")
+	assert.Equal(t, "ROOT", byName["typescript"].Location)
+	assert.Empty(t, byName["typescript"].ParentName)
+	assert.Empty(t, byName["typescript"].ParentVersion)
+	assert.Equal(t, "7.1.0-dev.20261115.1", byName["typescript"].Specifier)
+
+	require.Contains(t, byName, "named-only", "a parent with a blank version must not be dropped")
+	assert.Equal(t, "myproj", byName["named-only"].ParentName)
+	assert.Empty(t, byName["named-only"].ParentVersion)
+	assert.Equal(t, "2.0.0", byName["named-only"].Specifier)
+}
+
 // A tarball-fetch 403 must not be mistaken for a packument-fetch 403 and desync the pendingNotices FIFO.
 func TestParseNpmDebugLog_TarballFetch403DoesNotConsumePendingNotice(t *testing.T) {
 	dir := t.TempDir()
