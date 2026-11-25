@@ -354,14 +354,14 @@ type CurationReport struct {
 	// (e.g. CVS blocked a pip version from the simple index) and the report
 	// was produced via the metadata-API fallback. The partial-report warning
 	// is printed after the spinner stops so it is not swallowed by the spinner.
+	// The waiver flow is skipped for isPartial reports, except npmLogPartial ones (see shouldOfferWaiver).
 	isPartial bool
 	// hfPartial marks unresolved (404) HF nodes excluded from totalNumberOfPackages.
 	// Kept separate from isPartial, which also triggers the CVS-specific warning
-	// and skips the waiver flow.
+	// and, unless npmLogPartial is set, skips the waiver flow.
 	hfPartial bool
-	// npmLogPartial marks a report produced by runNpmLogFallback. Set alongside isPartial
-	// (to reuse its waiver-skip gate), but kept distinct for its own warning text and
-	// partialReason.
+	// npmLogPartial marks a report produced by runNpmLogFallback. Set alongside isPartial,
+	// but waivers are still offered for its waivable rows; kept distinct for its own warning text and partialReason.
 	npmLogPartial bool
 	// npmLogOriginalErr is the real install error, surfaced alongside npmLogPartialReportWarning.
 	npmLogOriginalErr string
@@ -559,18 +559,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		}
 		allWarnings = append(allWarnings, packagesStatus.warnings...)
 
-		// A partial report comes from the CVS fallback: the dependency tree could
-		// not be fully resolved. Never offers a waiver when the full tree wasn't built.
-		if packagesStatus.isPartial {
-			continue
-		}
-
-		for _, ps := range packagesStatus.packagesStatus {
-			if ps.WaiverAllowed && !utils.IsCI() {
-				// If at least one package allows waiver requests, we will ask the user if they want to request a waiver
-				err = errors.Join(ca.requestWaiver(packagesStatus.packagesStatus))
-				break
-			}
+		// If at least one row allows a waiver request, ask the user whether to request one.
+		if shouldOfferWaiver(packagesStatus, utils.IsCI()) {
+			err = errors.Join(ca.requestWaiver(packagesStatus))
 		}
 	}
 	for _, w := range allWarnings {
@@ -589,9 +580,8 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 		}
 		var partialReason string
 		switch {
-		// npmLogPartial is checked before isPartial: an npm-log-fallback report sets both
-		// (isPartial to reuse the existing waiver-skip gate below), so npmLogPartial must
-		// win here or it would incorrectly report "cvs_fallback".
+		// npmLogPartial is checked before isPartial: an npm-log-fallback report sets both,
+		// so npmLogPartial must win here or it would incorrectly report "cvs_fallback".
 		case packagesStatus.npmLogPartial:
 			// jfrog-ignore: categorical tag, not hardcoded credentials
 			partialReason = "npm_log_fallback"
@@ -1573,10 +1563,10 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 	return requestStatuses, nil
 }
 
-func getWaiverRequestParams(blockedPackages []*PackageStatus) (selectedPackages []*PackageStatus, requestMsg string) {
+func getWaiverRequestParams(blockedPackages []*PackageStatus, selectable func(*PackageStatus) bool, npmLog bool) (selectedPackages []*PackageStatus, requestMsg string) {
 	for {
 		requestedRows := ioutils.AskStringWithDefault("", "Please enter the row number(s) for which you want to request a waiver (comma-separated for multiple, range, or “all”)", "all")
-		if pkgs, ok := getSelectedPackages(requestedRows, blockedPackages); ok {
+		if pkgs, ok := selectWaiverPackages(requestedRows, blockedPackages, selectable, npmLog); ok {
 			selectedPackages = pkgs
 			break
 		}
@@ -1591,11 +1581,96 @@ func getWaiverRequestParams(blockedPackages []*PackageStatus) (selectedPackages 
 	return selectedPackages, requestMsg
 }
 
-func (ca *CurationAuditCommand) requestWaiver(blockedPackages []*PackageStatus) error {
+// isNpmLogWaivable: Xray builds the waiver from the tarball URL (name, repo, version), so a row needs a version and that URL.
+func isNpmLogWaivable(ps *PackageStatus) bool {
+	return ps.WaiverAllowed && ps.BlockedPackageUrl != "" && ps.PackageVersion != allVersionsBlockedText
+}
+
+// waiverSelectable returns which rows a waiver request may target. Reports other than npm debug-log ones keep every row selectable.
+func waiverSelectable(report *CurationReport) func(*PackageStatus) bool {
+	if report.npmLogPartial {
+		return isNpmLogWaivable
+	}
+	return func(*PackageStatus) bool { return true }
+}
+
+// shouldOfferWaiver reports whether to prompt for a waiver. The CVS fallback report is skipped, as its tree is incomplete.
+func shouldOfferWaiver(report *CurationReport, isCI bool) bool {
+	if isCI || (report.isPartial && !report.npmLogPartial) {
+		return false
+	}
+	selectable := waiverSelectable(report)
+	for _, ps := range report.packagesStatus {
+		if ps.WaiverAllowed && selectable(ps) {
+			return true
+		}
+	}
+	return false
+}
+
+// selectWaiverPackages parses the requested rows, numbered as in the table. "all" keeps only selectable rows; naming any other row is rejected.
+// For npm debug-log reports (npmLog), a reversed row range anywhere in the list, such as "3-1" or "1,3-1", is also rejected so the prompt repeats.
+func selectWaiverPackages(requestedRows string, rows []*PackageStatus, selectable func(*PackageStatus) bool, npmLog bool) (selected []*PackageStatus, ok bool) {
+	requested, ok := getSelectedPackages(requestedRows, rows)
+	if !ok {
+		return nil, false
+	}
+	for _, ps := range requested {
+		if selectable(ps) {
+			selected = append(selected, ps)
+			continue
+		}
+		if requestedRows != "all" {
+			log.Error(fmt.Sprintf("Row %d cannot be requested for a waiver.", slices.Index(rows, ps)+1))
+			return nil, false
+		}
+	}
+	if npmLog {
+		if reversed, found := reversedRange(requestedRows); found {
+			log.Error(fmt.Sprintf("Invalid row range %s: the first row must not be after the last row.", reversed))
+			return nil, false
+		}
+	}
+	return selected, true
+}
+
+// reversedRange returns the first "a-b" range in requestedRows whose start is after its end, such as "3-1".
+// requestedRows has already passed getSelectedPackages, so every range part is well formed.
+func reversedRange(requestedRows string) (string, bool) {
+	for _, part := range strings.Split(requestedRows, ",") {
+		if !strings.Contains(part, "-") {
+			continue
+		}
+		bounds := strings.Split(part, "-")
+		start, _ := strconv.Atoi(bounds[0])
+		end, _ := strconv.Atoi(bounds[1])
+		if start > end {
+			return part, true
+		}
+	}
+	return "", false
+}
+
+// selectableRowNumbers lists the table row numbers that selectable accepts.
+func selectableRowNumbers(rows []*PackageStatus, selectable func(*PackageStatus) bool) []string {
+	var numbers []string
+	for i, ps := range rows {
+		if selectable(ps) {
+			numbers = append(numbers, strconv.Itoa(i+1))
+		}
+	}
+	return numbers
+}
+
+func (ca *CurationAuditCommand) requestWaiver(report *CurationReport) error {
 	if !coreutils.AskYesNo("Do you want to request a waiver for any of the listed packages?", false) {
 		return nil
 	}
-	selectedPackages, requestMsg := getWaiverRequestParams(blockedPackages)
+	blockedPackages, selectable := report.packagesStatus, waiverSelectable(report)
+	if report.npmLogPartial {
+		log.Output(fmt.Sprintf("Waiver requests can be made for row(s): %s", strings.Join(selectableRowNumbers(blockedPackages, selectable), ", ")))
+	}
+	selectedPackages, requestMsg := getWaiverRequestParams(blockedPackages, selectable, report.npmLogPartial)
 	if len(selectedPackages) == 0 {
 		return nil
 	}
