@@ -887,18 +887,26 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 			if techutils.Technology(tech) == techutils.HuggingFaceML && ca.HuggingFaceModel() == "" && len(techs) > 1 {
 				// HF auto-discovery is additive — config/connectivity failures must not abort other techs.
 				log.Warn(fmt.Sprintf("Hugging Face curation audit skipped: %v", err))
-				ca.setPackageManagerConfig(nil)
-				ca.AuditParamsInterface = ca.SetDepsRepo("")
+				ca.clearResolvedRepo()
 				continue
 			}
+			// Also on failure: Run goes on to the next working dir, which must not reuse this one's repo and credentials.
+			ca.clearResolvedRepo()
 			return err
 		}
 		// clear the package manager config to avoid using the same config for the next tech
-		ca.setPackageManagerConfig(nil)
-		ca.AuditParamsInterface = ca.SetDepsRepo("")
+		ca.clearResolvedRepo()
 
 	}
 	return nil
+}
+
+// clearResolvedRepo drops the repo, server details and credential-fallback flag resolved for one tech, so that the next tech
+// or working dir resolves its own.
+func (ca *CurationAuditCommand) clearResolvedRepo() {
+	ca.setPackageManagerConfig(nil)
+	ca.AuditParamsInterface = ca.SetDepsRepo("")
+	ca.yarnCredentialsFromFallback = false
 }
 
 // isWarningsOnlyReport is true for HF unresolved-reference placeholders that carry

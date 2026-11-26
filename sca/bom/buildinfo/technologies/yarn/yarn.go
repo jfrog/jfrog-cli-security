@@ -2,7 +2,9 @@ package yarn
 
 import (
 	"bytes"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,11 +58,12 @@ const (
 	//#nosec G101
 	yarnrcNpmAuthIdentKey  = "npmAuthIdent"
 	yarnrcNpmAlwaysAuthKey = "npmAlwaysAuth"
-	// Env var carrying the fallback credential; .yarnrc.yml only references it as ${...}, so the secret never touches disk.
+	// Prefix of the per-run env var that carries the fallback token (only referenced as ${...} in the rc, never written to disk).
+	// The random suffix stops a project from guessing the name and reading the token back, e.g. via a proxy URL.
 	//#nosec G101
-	yarnFallbackAuthEnv = "JFROG_CLI_CURATION_YARN_FALLBACK_AUTH"
-	yarnV2Version       = "2.0.0"
-	yarnV3Version       = "3.0.0"
+	yarnFallbackAuthEnvPrefix = "JFROG_CLI_CURATION_YARN_AUTH_"
+	yarnV2Version             = "2.0.0"
+	yarnV3Version             = "3.0.0"
 	// YarnV4Version is the lowest version treated as Yarn V4 (native .yarnrc.yml mode).
 	YarnV4Version       = "4.0.0"
 	nodeModulesRepoName = "node_modules"
@@ -589,8 +592,6 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 	}
 	if useNativeInstall {
 		if params.IsCurationCmd && depsRepo != "" && params.YarnCredentialsFromFallback {
-			// No token in .yarnrc.yml: bind the fallback credential to the verified registries in the temp .yarnrc.yml,
-			// never as Yarn's global auth. Skipped when .yarnrc.yml has its own token.
 			restoreAuth, authErr := bindCurationFallbackAuthInYarnrc(curWd, params.ServerDetails, depsRepo)
 			if authErr != nil {
 				return authErr
@@ -665,6 +666,10 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 	if authValue == "" {
 		authKey, authValue = yarnrcNpmAuthIdentKey, npmAuthIdent
 	}
+	authEnv, nameErr := newFallbackAuthEnvName()
+	if nameErr != nil {
+		return noOpRestore, nameErr
+	}
 	targets, targetsErr := curationAuthRegistryTargets(curWd, verifiedRegistry, serverDetails.ArtifactoryUrl)
 	if targetsErr != nil {
 		return noOpRestore, targetsErr
@@ -680,20 +685,14 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 		}
 		delete(entry, yarnrcNpmAuthTokenKey)
 		delete(entry, yarnrcNpmAuthIdentKey)
-		entry[authKey] = "${" + yarnFallbackAuthEnv + "}"
+		entry[authKey] = "${" + authEnv + "}"
 		entry[yarnrcNpmAlwaysAuthKey] = true
 		registries[target] = entry
 	}
 	rc[yarnrcNpmRegistriesKey] = registries
 
-	previousEnv, hadEnv := os.LookupEnv(yarnFallbackAuthEnv)
-	restoreEnv := func() error {
-		if hadEnv {
-			return os.Setenv(yarnFallbackAuthEnv, previousEnv)
-		}
-		return os.Unsetenv(yarnFallbackAuthEnv)
-	}
-	if err = os.Setenv(yarnFallbackAuthEnv, authValue); err != nil {
+	restoreEnv := func() error { return os.Unsetenv(authEnv) }
+	if err = os.Setenv(authEnv, authValue); err != nil {
 		return noOpRestore, err
 	}
 	if err = writeYarnrcFromMap(yarnrcPath, rc); err != nil {
@@ -729,6 +728,15 @@ func bindCurationFallbackAuthInYarnrc(curWd string, serverDetails *config.Server
 		return writeYarnrcFromMap(yarnrcPath, current)
 	}
 	return func() error { return errors.Join(stripBinding(), restoreEnv()) }, nil
+}
+
+// newFallbackAuthEnvName returns a fresh, unguessable env var name for this run's credential.
+func newFallbackAuthEnvName() (string, error) {
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", fmt.Errorf("could not generate the credential env var name: %w", err)
+	}
+	return yarnFallbackAuthEnvPrefix + strings.ToUpper(hex.EncodeToString(suffix)), nil
 }
 
 // curationAuthRegistryTargets returns the registries to bind the credential to: the verified one plus same-host scope registries.
