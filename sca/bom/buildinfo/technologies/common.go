@@ -102,7 +102,12 @@ type BuildInfoBomGeneratorParams struct {
 	// name when auditing multiple --working-dirs entries that share a basename.
 	HFProjectName string
 	// NuGet params
+	// Path to the '.sln'/'.slnx' file to use ('--solution-path'). It may point outside the scanned directory.
+	// A relative path is resolved against the scanned directory first, then against SolutionPathBaseDir.
 	SolutionFilePath string
+	// The directory the command was run from, used as a fallback base for a relative SolutionFilePath.
+	// It is needed because the command may change into each scanned (working) directory. Optional.
+	SolutionPathBaseDir string
 	// Uv params
 	ScriptPath string
 }

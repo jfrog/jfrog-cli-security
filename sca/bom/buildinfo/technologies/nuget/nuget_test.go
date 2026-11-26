@@ -147,7 +147,7 @@ func TestRunDotnetRestoreAndLoadSolution(t *testing.T) {
 		assert.Empty(t, sol.GetProjects())
 		assert.Empty(t, sol.GetDependenciesSources())
 
-		sol, err = runDotnetRestoreAndLoadSolution(technologies.BuildInfoBomGeneratorParams{}, tempDirPath, "", true)
+		sol, err = runDotnetRestoreAndLoadSolution(technologies.BuildInfoBomGeneratorParams{}, tempDirPath, "", "", true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, sol.GetProjects())
 		assert.NotEmpty(t, sol.GetDependenciesSources())
@@ -374,6 +374,229 @@ func TestSolutionFilePathValidation(t *testing.T) {
 			assert.Contains(t, err.Error(), filepath.Base(test.solutionFilePath))
 			assert.Nil(t, dependencyTrees)
 			assert.Nil(t, uniqueDeps)
+		})
+	}
+}
+
+func TestResolveSolutionFilePath(t *testing.T) {
+	root := t.TempDir()
+	scanned := filepath.Join(root, "WebApi", "App")
+	invoked := filepath.Join(root, "Elsewhere")
+	require.NoError(t, os.MkdirAll(scanned, 0o750))
+	require.NoError(t, os.MkdirAll(invoked, 0o750))
+	touch := func(path string) string {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+		require.NoError(t, os.WriteFile(path, []byte{}, 0o600))
+		return path
+	}
+	parentSln := touch(filepath.Join(root, "Parent.sln"))
+	touch(filepath.Join(root, "Parent.slnx"))
+	scannedSln := touch(filepath.Join(scanned, "Local.sln"))
+	invokedSln := touch(filepath.Join(invoked, "Invoked.sln"))
+	touch(filepath.Join(invoked, "Local.sln"))
+	touch(filepath.Join(root, "Readme.txt"))
+	upperSln := touch(filepath.Join(root, "Upper.SLN"))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "NotASolution"), 0o750))
+	require.NoError(t, os.MkdirAll(filepath.Join(scanned, "Mixed.sln"), 0o750))
+	touch(filepath.Join(invoked, "Mixed.sln"))
+
+	testCases := []struct {
+		name         string
+		path         string
+		searchDirs   []string
+		expected     string
+		errorContain []string
+	}{
+		{name: "bare name in scanned dir", path: "Local.sln", searchDirs: []string{scanned, invoked}, expected: scannedSln},
+		{name: "relative path to a parent directory", path: filepath.Join("..", "..", "Parent.sln"), searchDirs: []string{scanned}, expected: parentSln},
+		{name: "relative path to a parent directory, slnx", path: filepath.Join("..", "..", "Parent.slnx"), searchDirs: []string{scanned}, expected: filepath.Join(root, "Parent.slnx")},
+		{name: "backslash separators, as written on Windows", path: `..\..\Parent.sln`, searchDirs: []string{scanned}, expected: parentSln},
+		{name: "solution extension is case-insensitive", path: filepath.Join("..", "..", "Upper.SLN"), searchDirs: []string{scanned}, expected: upperSln},
+		{name: "falls back to the invocation directory", path: "Invoked.sln", searchDirs: []string{scanned, invoked}, expected: invokedSln},
+		{name: "scanned dir wins over the invocation directory", path: "Local.sln", searchDirs: []string{invoked, scanned}, expected: filepath.Join(invoked, "Local.sln")},
+		{name: "absolute path ignores search dirs", path: parentSln, searchDirs: []string{scanned}, expected: parentSln},
+		{name: "empty search dirs entries are skipped", path: "Invoked.sln", searchDirs: []string{"", invoked}, expected: invokedSln},
+		{
+			name: "missing file names the flag, the file and every searched directory", path: filepath.Join("..", "..", "Missing.sln"), searchDirs: []string{scanned, invoked},
+			errorContain: []string{"--solution-path", "Missing.sln", scanned, invoked, "then the directory the command was run from"},
+		},
+		{
+			name: "missing absolute path", path: filepath.Join(root, "Missing.sln"), searchDirs: []string{scanned},
+			errorContain: []string{"--solution-path", "Missing.sln", "the file does not exist"},
+		},
+		{
+			name: "directory is not a solution file", path: filepath.Join("..", "..", "NotASolution"), searchDirs: []string{scanned},
+			errorContain: []string{"--solution-path", "is a directory, not a solution file", filepath.Join(root, "NotASolution")},
+		},
+		{
+			name: "existing file that is not a solution file", path: filepath.Join("..", "..", "Readme.txt"), searchDirs: []string{scanned},
+			errorContain: []string{"--solution-path", "is not a solution file", filepath.Join(root, "Readme.txt")},
+		},
+		{
+			name: "directory path such as '../..'", path: filepath.Join("..", ".."), searchDirs: []string{scanned},
+			errorContain: []string{"--solution-path", "is a directory, not a solution file", root},
+		},
+		{
+			name: "absolute path to a directory", path: filepath.Join(root, "NotASolution"), searchDirs: []string{scanned},
+			errorContain: []string{"--solution-path", "is a directory, not a solution file"},
+		},
+		{
+			name: "a file in a later search dir wins over a directory of the same name in an earlier one", path: "Mixed.sln", searchDirs: []string{scanned, invoked},
+			expected: filepath.Join(invoked, "Mixed.sln"),
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			resolved, err := ResolveSolutionFilePath(test.path, test.searchDirs...)
+			if len(test.errorContain) > 0 {
+				require.Error(t, err)
+				for _, expected := range test.errorContain {
+					assert.Contains(t, err.Error(), expected)
+				}
+				assert.Empty(t, resolved)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, resolved)
+		})
+	}
+}
+
+// A solution in a parent of the scanned directory ('.sln' and '.slnx') is restored as a whole, without touching the original files.
+func TestBuildDependencyTreeWithSolutionOutsideWorkingDir(t *testing.T) {
+	testCases := []struct {
+		name         string
+		solutionPath func(root string) string
+		baseDir      func(root string) string
+		curation     bool
+	}{
+		{name: "sln relative to the scanned directory", solutionPath: func(string) string { return filepath.Join("..", "..", "Parent.sln") }},
+		{name: "slnx relative to the scanned directory", solutionPath: func(string) string { return filepath.Join("..", "..", "Parent.slnx") }},
+		{
+			name:         "sln relative to the invocation directory",
+			solutionPath: func(string) string { return "Parent.sln" },
+			baseDir:      func(root string) string { return root },
+		},
+		{name: "sln absolute", solutionPath: func(root string) string { return filepath.Join(root, "Parent.sln") }},
+		{name: "sln with backslashes", solutionPath: func(string) string { return `..\..\Parent.sln` }},
+		{name: "sln in a curation command", solutionPath: func(string) string { return filepath.Join("..", "..", "Parent.sln") }, curation: true},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			workDir, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "nuget", "parent-solution"))
+			defer cleanUp()
+			require.NoError(t, os.Chdir(filepath.Join(workDir, "WebApi", "App")))
+
+			params := technologies.BuildInfoBomGeneratorParams{SolutionFilePath: test.solutionPath(workDir), IsCurationCmd: test.curation}
+			if test.baseDir != nil {
+				params.SolutionPathBaseDir = test.baseDir(workDir)
+			}
+			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+			require.NoError(t, err)
+
+			var moduleIds []string
+			for _, tree := range dependencyTrees {
+				moduleIds = append(moduleIds, tree.Id)
+			}
+			joinedIds := strings.Join(moduleIds, " ")
+			assert.Contains(t, joinedIds, "App")
+			assert.Contains(t, joinedIds, "Lib")
+			assert.NotContains(t, joinedIds, "Other")
+			assert.Contains(t, uniqueDeps, nugetPackageTypeIdentifier+"Newtonsoft.Json:13.0.3")
+			assert.NotContains(t, uniqueDeps, nugetPackageTypeIdentifier+"Serilog:3.1.1")
+
+			for _, dir := range []string{"Lib", filepath.Join("WebApi", "App")} {
+				assert.NoDirExists(t, filepath.Join(workDir, dir, "obj"), "restore must not write into the original tree")
+			}
+		})
+	}
+}
+
+func TestResolveSolutionFilePathNotFoundMessage(t *testing.T) {
+	scanned, invoked := t.TempDir(), t.TempDir()
+
+	_, err := ResolveSolutionFilePath("Missing.sln", scanned, invoked)
+	require.Error(t, err)
+	assert.Equal(t, 1, strings.Count(err.Error(), scanned), "each searched directory is listed once")
+	assert.Equal(t, 1, strings.Count(err.Error(), invoked))
+
+	_, err = ResolveSolutionFilePath("Missing.sln", scanned, scanned, "")
+	require.Error(t, err)
+	assert.Equal(t, 1, strings.Count(err.Error(), scanned), "a repeated directory (no --working-dirs) is listed once")
+
+	absolute := filepath.Join(scanned, "Missing.sln")
+	_, err = ResolveSolutionFilePath(absolute, scanned, invoked)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "'"+absolute+"'", "the path is printed as is, without escaped backslashes")
+	assert.NotContains(t, err.Error(), "relative", "an absolute path is not resolved against any directory")
+	assert.NotContains(t, err.Error(), invoked)
+}
+
+// When the tool can't be detected for an explicit solution, the error names the solution and the detection rule.
+func TestToolDetectionFailureNamesSolution(t *testing.T) {
+	dir := t.TempDir()
+	// A project without 'PackageReference Include' and no packages.config: nothing to detect the tool from.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "App.fsproj"), []byte("<Project/>"), 0o600))
+
+	_, err := runDotnetRestoreAndLoadSolution(technologies.BuildInfoBomGeneratorParams{SolutionFilePath: filepath.Join("..", "My.sln")}, dir, "", "", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "solution file 'My.sln'")
+	assert.Contains(t, err.Error(), packageReferenceSyntax)
+	assert.Contains(t, err.Error(), packagesConfigFileName)
+
+	_, err = runDotnetRestoreAndLoadSolution(technologies.BuildInfoBomGeneratorParams{}, dir, "", "", false)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "solution file", "without --solution-path the message is unchanged")
+}
+
+func TestScannedSubDirOf(t *testing.T) {
+	root := t.TempDir()
+	scanned := filepath.Join(root, "WebApi", "App")
+	require.NoError(t, os.MkdirAll(scanned, 0o750))
+	other := t.TempDir()
+	link := filepath.Join(other, "link")
+	if err := os.Symlink(root, link); err != nil {
+		t.Skipf("symlinks are not supported here: %s", err)
+	}
+
+	assert.Equal(t, filepath.Join("WebApi", "App"), scannedSubDirOf(root, scanned))
+	assert.Equal(t, filepath.Join("WebApi", "App"), scannedSubDirOf(link, scanned), "solution dir reached through a symlink")
+	assert.Equal(t, filepath.Join("WebApi", "App"), scannedSubDirOf(root, filepath.Join(link, "WebApi", "App")), "scanned dir reached through a symlink")
+	assert.Empty(t, scannedSubDirOf(scanned, scanned), "same directory")
+	assert.Empty(t, scannedSubDirOf(scanned, root), "scanned dir is above the solution dir")
+	assert.Empty(t, scannedSubDirOf(other, scanned), "unrelated directories")
+}
+
+// The tool is detected from the scanned directory first, so an unrelated SDK-style project elsewhere in the solution
+// directory can't override a 'packages.config' one; it falls back to the whole copy only if nothing is found there.
+func TestDetectProjectToolNamePrefersScannedSubDir(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		path := filepath.Join(root, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	}
+	write(filepath.Join("Legacy", "App", "App.csproj"), `<Project ToolsVersion="15.0"></Project>`)
+	write(filepath.Join("Legacy", "App", "packages.config"), `<packages><package id="Newtonsoft.Json" version="12.0.1" /></packages>`)
+	write(filepath.Join("Modern", "Lib", "Lib.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Serilog" Version="3.1.1" /></ItemGroup></Project>`)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "Empty"), 0o750))
+
+	testCases := []struct {
+		name     string
+		subDir   string
+		expected string
+	}{
+		{name: "no sub dir scans the whole copy, as before", subDir: "", expected: dotnetToolType},
+		{name: "legacy scanned dir is not overridden by an unrelated SDK project", subDir: filepath.Join("Legacy", "App"), expected: nugetToolType},
+		{name: "SDK scanned dir", subDir: filepath.Join("Modern", "Lib"), expected: dotnetToolType},
+		{name: "scanned dir without project files falls back to the whole copy", subDir: "Empty", expected: dotnetToolType},
+		{name: "scanned dir missing from the copy falls back to the whole copy", subDir: "Missing", expected: dotnetToolType},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			toolName, err := detectProjectToolName(root, test.subDir)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, toolName)
 		})
 	}
 }

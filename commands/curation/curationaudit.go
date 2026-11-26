@@ -325,6 +325,7 @@ type CurationAuditCommand struct {
 	extractPoliciesRegex *regexp.Regexp
 	workingDirs          []string
 	OriginPath           string
+	invocationDir        string
 	parallelRequests     int
 	dockerImageName      string
 	huggingFaceModel     string
@@ -471,6 +472,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
+	ca.invocationDir = rootDir
 	if len(ca.workingDirs) > 0 {
 		defer func() {
 			if e := errorutils.CheckError(os.Chdir(rootDir)); err == nil {
@@ -1138,7 +1140,8 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		HFWorkingDirectory: ca.OriginPath,
 		HFProjectName:      ca.hfProjectNameHint,
 		// NuGet params
-		SolutionFilePath: ca.SolutionFilePath(),
+		SolutionFilePath:    ca.SolutionFilePath(),
+		SolutionPathBaseDir: ca.invocationDir,
 		// Uv params
 		ScriptPath: ca.scriptPath,
 	}, err

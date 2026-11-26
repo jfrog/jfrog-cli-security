@@ -2308,6 +2308,29 @@ func TestRunGeneratesAuditIdForHttpDetails(t *testing.T) {
 	assert.Equal(t, ca.auditId, clientDetails.Headers[utils.CurationAuditIdHeader])
 }
 
+// Run records the directory it was started from, even though it changes into each working directory.
+func TestRunSetsInvocationDirWithMultipleWorkingDirs(t *testing.T) {
+	invocationDir := t.TempDir()
+	firstDir, secondDir := filepath.Join(invocationDir, "first"), filepath.Join(invocationDir, "second")
+	require.NoError(t, os.Mkdir(firstDir, 0o750))
+	require.NoError(t, os.Mkdir(secondDir, 0o750))
+	t.Chdir(invocationDir)
+	startDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	ca := NewCurationAuditCommand().SetWorkingDirs([]string{firstDir, secondDir})
+	ca.SetSolutionFilePath(filepath.Join("..", "Parent.sln"))
+	require.NoError(t, ca.Run())
+
+	assert.Equal(t, startDir, ca.invocationDir)
+	params, err := ca.getBuildInfoParamsByTech(techutils.Nuget)
+	require.NoError(t, err)
+	assert.Equal(t, startDir, params.SolutionPathBaseDir)
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	assert.Equal(t, startDir, currentDir, "the working directory is restored after the run")
+}
+
 func TestCreateHttpClientDetails_AuditIdHeaderOmittedWhenEmpty(t *testing.T) {
 	rtAuth, err := (&config.ServerDetails{ArtifactoryUrl: "http://localhost/artifactory/"}).CreateArtAuthConfig()
 	require.NoError(t, err)
@@ -8315,6 +8338,19 @@ func TestPackageStatusTableOmitsEmptyLinkColumn(t *testing.T) {
 	if got := tw.Render(); strings.Contains(got, "LINK") {
 		t.Errorf("PrepareTable(rows without links) has a link column:\n%s", got)
 	}
+}
+
+// The curation command changes into every scanned (--working-dirs) directory, so a relative --solution-path
+// can only be resolved against the directory the command was run from if it is handed down to the NuGet flow.
+func TestGetBuildInfoParamsByTechSolutionPath(t *testing.T) {
+	ca := NewCurationAuditCommand()
+	ca.SetSolutionFilePath(filepath.Join("..", "..", "MyApp.sln"))
+	ca.invocationDir = filepath.Join("repo", "src", "MyApp")
+
+	params, err := ca.getBuildInfoParamsByTech(techutils.Nuget)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join("..", "..", "MyApp.sln"), params.SolutionFilePath)
+	assert.Equal(t, filepath.Join("repo", "src", "MyApp"), params.SolutionPathBaseDir)
 }
 
 // Waiver offer for the npm debug-log report: only rows with a version-scoped tarball URL and the waiver marker are offered.
