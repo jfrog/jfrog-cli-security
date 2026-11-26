@@ -103,9 +103,6 @@ func TestYarnCurationAudit(t *testing.T) {
 			name:    "Yarn V3 (registry from .yarnrc.yml)",
 			project: "yarn-v3",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// Native mode: the registry lives in .yarnrc.yml. jf ca injects this
-				// http mock registry directly; Yarn Berry only accepts a plain-http
-				// registry when its host is whitelisted.
 				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf(
 					"\nnpmRegistryServer: \"%sapi/npm/npms/\"\nunsafeHttpWhitelist:\n  - \"127.0.0.1\"\n  - \"localhost\"\n",
 					config.ArtifactoryUrl))
@@ -115,8 +112,6 @@ func TestYarnCurationAudit(t *testing.T) {
 			name:    "Yarn V4 (registry from .yarnrc.yml)",
 			project: "yarn-v4",
 			configureRegistry: func(t *testing.T, tempDirPath string, config *config.ServerDetails) {
-				// Native mode: the registry lives in .yarnrc.yml (the http whitelist is
-				// already committed in the yarn-v4 fixture).
 				appendToFile(t, filepath.Join(tempDirPath, ".yarnrc.yml"), fmt.Sprintf("\nnpmRegistryServer: \"%sapi/npm/npms/\"\n", config.ArtifactoryUrl))
 			},
 		},
