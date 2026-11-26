@@ -9,6 +9,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/npm"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -26,6 +27,8 @@ const (
 	IgnoreScriptsFlag     = "--ignore-scripts"
 	LegacyPeerDepsFlag    = "--legacy-peer-deps"
 	disableWorkspacesFlag = "--workspaces=false"
+	prodFlag              = "--prod"
+	omitDevFlag           = "--omit=dev"
 	// npmConfigEnvPrefix is the env var prefix npm itself defines for overriding any of its config keys
 	// (e.g. npm_config_registry); a key name, not a credential or secret value. Built from two
 	// fragments rather than one literal, since a SAST scanner (JFrog SAST rule go-hardcoded-credentials)
@@ -64,7 +67,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
-	treeDepsParam := createTreeDepsParam(&params)
+	treeDepsParam := buildTreeDepsParam(&params, npmVersion)
 
 	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(&params)
 	if err != nil {
@@ -312,6 +315,33 @@ func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biuti
 		OverwritePackageLock: params.NpmOverwritePackageLock,
 	}
 	return npmTreeDepParam
+}
+
+// buildTreeDepsParam builds the npm tree params for BuildDependencyTree and adapts
+// them to the installed npm version.
+func buildTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams, npmVersion *version.Version) biutils.NpmTreeDepListParam {
+	treeDepsParam := createTreeDepsParam(params)
+	treeDepsParam.Args = replaceProdFlag(treeDepsParam.Args, npmVersion)
+	return treeDepsParam
+}
+
+// replaceProdFlag replaces the abbreviated --prod flag (set for --dep-type prodOnly)
+// with --omit=dev. npm 12 rejects --prod with 'Invalid abbreviated flag "--prod"';
+// --omit=dev has the same meaning and is supported since npm 7.
+// Only the exact --prod flag that SetNpmScope writes is rewritten; --production
+// and an existing --omit=dev are left unchanged.
+func replaceProdFlag(npmArgs []string, npmVersion *version.Version) []string {
+	if npmVersion == nil || !npmVersion.AtLeast("7.0.0") || !slices.Contains(npmArgs, prodFlag) {
+		return npmArgs
+	}
+	replaced := make([]string, 0, len(npmArgs))
+	for _, arg := range npmArgs {
+		if arg == prodFlag {
+			arg = omitDevFlag
+		}
+		replaced = append(replaced, arg)
+	}
+	return replaced
 }
 
 // Add the --ignore-scripts to prevent execution of npm scripts during npm install.

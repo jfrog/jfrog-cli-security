@@ -6,12 +6,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -904,5 +906,53 @@ func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
 			assert.Equal(t, expected, field.Tag.Get("json"),
 				"BlockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
 		}
+	}
+}
+
+func TestReplaceProdFlag(t *testing.T) {
+	tests := []struct {
+		name       string
+		npmVersion string
+		args       []string
+		want       []string
+	}{
+		{"npm 12 prodOnly", "12.2.2", []string{"--prod", "--ignore-scripts"}, []string{"--omit=dev", "--ignore-scripts"}},
+		{"npm 7 prodOnly", "7.0.0", []string{"--prod"}, []string{"--omit=dev"}},
+		{"npm 12 prerelease prodOnly", "12.0.0-pre.0", []string{"--prod"}, []string{"--omit=dev"}},
+		{"npm 6 keeps --prod", "6.14.18", []string{"--prod"}, []string{"--prod"}},
+		// --dev is left as-is here. On npm 7 and later it aliases --include=dev, so
+		// --dep-type devOnly still returns production dependencies; see #949.
+		{"devOnly unchanged", "12.2.2", []string{"--dev"}, []string{"--dev"}},
+		{"no scope", "12.2.2", []string{"--ignore-scripts"}, []string{"--ignore-scripts"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := slices.Clone(tt.args)
+			assert.Equal(t, tt.want, replaceProdFlag(args, version.NewVersion(tt.npmVersion)))
+			assert.Equal(t, tt.args, args, "input slice must not be modified")
+		})
+	}
+	assert.Equal(t, []string{"--prod"}, replaceProdFlag([]string{"--prod"}, nil))
+}
+
+func TestBuildTreeDepsParamDepType(t *testing.T) {
+	tests := []struct {
+		name       string
+		depType    string
+		npmVersion string
+		want       []string
+	}{
+		{"prodOnly on npm 12", "prodOnly", "12.2.2", []string{"--omit=dev", IgnoreScriptsFlag}},
+		{"prodOnly on npm 7", "prodOnly", "7.0.0", []string{"--omit=dev", IgnoreScriptsFlag}},
+		{"prodOnly on npm 6", "prodOnly", "6.14.18", []string{"--prod", IgnoreScriptsFlag}},
+		{"devOnly on npm 12", "devOnly", "12.2.2", []string{"--dev", IgnoreScriptsFlag}},
+		{"all on npm 12", "", "12.2.2", []string{IgnoreScriptsFlag}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := (&technologies.BuildInfoBomGeneratorParams{}).SetNpmScope(tt.depType)
+			got := buildTreeDepsParam(params, version.NewVersion(tt.npmVersion))
+			assert.Equal(t, tt.want, got.Args)
+		})
 	}
 }
