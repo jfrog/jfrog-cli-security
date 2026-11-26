@@ -2,10 +2,13 @@ package npm
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -905,4 +908,212 @@ func TestBlockedDepJSONRowTagsMatchPackageStatus(t *testing.T) {
 				"BlockedDepPolicyJSON.%s json tag mismatch — keep in sync with commands/curation.Policy", field.Name)
 		}
 	}
+}
+
+func TestIsNpmAuthEnvName(t *testing.T) {
+	for name, expected := range map[string]bool{
+		"npm_config_//host.example/artifactory/api/npm/repo/:_authToken": true,
+		"npm_config_//host.example/artifactory/api/npm/repo/:_auth":      true,
+		"npm_config__auth":                             true,
+		"npm_config_registry":                          false,
+		"npm_config_//host.example/:username":          false,
+		"JFROG_CLI_CURATION_NPM_AUTH_0011223344556677": false,
+		"HOME": false,
+	} {
+		assert.Equal(t, expected, isNpmAuthEnvName(name), name)
+	}
+}
+
+// authEnvNameInNpmrc returns the env var a "<key>=${VAR}" line of the .npmrc points to.
+func authEnvNameInNpmrc(t *testing.T, npmrc, key string) string {
+	for _, line := range strings.Split(npmrc, "\n") {
+		if value, found := strings.CutPrefix(line, key+"="); found {
+			require.True(t, strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}"), "expected an env reference, got %q", value)
+			return strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		}
+	}
+	require.Failf(t, "key not found", "no %q line in %q", key, npmrc)
+	return ""
+}
+
+// The credentials npm was handed under its predictable env var name move to a random one that only the generated
+// .npmrc references; the predictable name is gone, nothing secret hits the disk, and restore unsets the random var.
+func TestRebindNpmAuthEnvMovesTokenToRandomEnvVar(t *testing.T) {
+	const secret = "s3cr3t-token-value"
+	const scopedKey = "//host.example/artifactory/api/npm/repo/:_authToken"
+	predictable := npmConfigEnvPrefix + scopedKey
+	dir := t.TempDir()
+	t.Chdir(dir)
+	npmrcPath := filepath.Join(dir, ".npmrc")
+	require.NoError(t, os.WriteFile(npmrcPath, []byte("registry = https://host.example/artifactory/api/npm/repo/\n"), 0600))
+	t.Setenv(predictable, "")
+	require.NoError(t, os.Unsetenv(predictable))
+
+	before := npmAuthEnvSnapshot()
+	t.Setenv(predictable, secret) // what npm.SetArtifactoryAsResolutionServer does
+	restore, err := rebindNpmAuthEnv(before)
+	require.NoError(t, err)
+	require.NotNil(t, restore)
+
+	_, exists := os.LookupEnv(predictable)
+	assert.False(t, exists, "the predictable env var name must not carry the token")
+	content, err := os.ReadFile(npmrcPath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(content), secret)
+	assert.Contains(t, string(content), "registry = https://host.example/artifactory/api/npm/repo/")
+	authEnv := authEnvNameInNpmrc(t, string(content), scopedKey)
+	assert.True(t, strings.HasPrefix(authEnv, npmAuthEnvPrefix))
+	assert.Equal(t, secret, os.Getenv(authEnv))
+
+	require.NoError(t, restore())
+	_, exists = os.LookupEnv(authEnv)
+	assert.False(t, exists, "the random env var must be unset after the run")
+}
+
+func TestRebindNpmAuthEnvUsesAFreshNameEachRun(t *testing.T) {
+	const scopedKey = "//host.example/artifactory/api/npm/repo/:_authToken"
+	predictable := npmConfigEnvPrefix + scopedKey
+	names := map[string]bool{}
+	for i := 0; i < 5; i++ {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		before := npmAuthEnvSnapshot()
+		t.Setenv(predictable, "token")
+		restore, err := rebindNpmAuthEnv(before)
+		require.NoError(t, err)
+		content, err := os.ReadFile(filepath.Join(dir, ".npmrc"))
+		require.NoError(t, err)
+		names[authEnvNameInNpmrc(t, string(content), scopedKey)] = true
+		require.NoError(t, restore())
+	}
+	assert.Len(t, names, 5)
+}
+
+// Older npm versions get the un-scoped "_auth" key.
+func TestRebindNpmAuthEnvLegacyAuth(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv(npmConfigEnvPrefix+npmLegacyAuthKey, "")
+	require.NoError(t, os.Unsetenv(npmConfigEnvPrefix+npmLegacyAuthKey))
+	before := npmAuthEnvSnapshot()
+	t.Setenv(npmConfigEnvPrefix+npmLegacyAuthKey, "legacy-secret")
+	restore, err := rebindNpmAuthEnv(before)
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(dir, ".npmrc"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(content), "legacy-secret")
+	authEnv := authEnvNameInNpmrc(t, string(content), npmLegacyAuthKey)
+	assert.Equal(t, "legacy-secret", os.Getenv(authEnv))
+	_, exists := os.LookupEnv(npmConfigEnvPrefix + npmLegacyAuthKey)
+	assert.False(t, exists)
+	require.NoError(t, restore())
+}
+
+// A credential env var the user already had is left as it was; one that was overwritten gets its old value back.
+func TestRebindNpmAuthEnvKeepsUserEnv(t *testing.T) {
+	const keep = "//keep.example/:_authToken"
+	const overwritten = "//over.example/:_authToken"
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv(npmConfigEnvPrefix+keep, "users-own")
+	t.Setenv(npmConfigEnvPrefix+overwritten, "users-old")
+	before := npmAuthEnvSnapshot()
+	t.Setenv(npmConfigEnvPrefix+overwritten, "ours")
+	restore, err := rebindNpmAuthEnv(before)
+	require.NoError(t, err)
+	assert.Equal(t, "users-own", os.Getenv(npmConfigEnvPrefix+keep))
+	assert.Equal(t, "users-old", os.Getenv(npmConfigEnvPrefix+overwritten))
+	content, err := os.ReadFile(filepath.Join(dir, ".npmrc"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(content), keep)
+	assert.Equal(t, "ours", os.Getenv(authEnvNameInNpmrc(t, string(content), overwritten)))
+	require.NoError(t, restore())
+}
+
+// Without credentials (nothing set by npm) the .npmrc is not touched.
+func TestRebindNpmAuthEnvNoCredentials(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	restore, err := rebindNpmAuthEnv(npmAuthEnvSnapshot())
+	require.NoError(t, err)
+	_, statErr := os.Stat(filepath.Join(dir, ".npmrc"))
+	assert.True(t, os.IsNotExist(statErr))
+	require.NoError(t, restore())
+}
+
+// If the library fails after exporting the credential (e.g. the .npmrc can't be written), nothing is left under the
+// predictable name, so the next project of a multi-dir run doesn't inherit it.
+func TestSetCurationNpmResolutionServerFailureLeavesNoCredentialEnv(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a directory that can't be written to")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+	t.Chdir(dir)
+	const keep = "//keep.example/:_authToken"
+	t.Setenv(npmConfigEnvPrefix+keep, "users-own")
+	server := fakeArtifactoryServerDetails(t)
+	restore, err := setCurationNpmResolutionServer(server, "npm-repo")
+	require.Error(t, err)
+	assert.Nil(t, restore)
+	assert.Equal(t, map[string]npmEnvValue{npmConfigEnvPrefix + keep: {value: "users-own", exists: true}}, npmAuthEnvSnapshot())
+}
+
+// A minimal Artifactory that answers every request, so the resolver setup only fails where a test makes it fail.
+func fakeArtifactoryServerDetails(t *testing.T) *config.ServerDetails {
+	artifactory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"key":"npm-repo","packageType":"npm","rclass":"remote"}`))
+	}))
+	t.Cleanup(artifactory.Close)
+	return &config.ServerDetails{Url: artifactory.URL + "/", ArtifactoryUrl: artifactory.URL + "/artifactory/", AccessToken: testNpmToken}
+}
+
+const testNpmToken = "s3cr3t-curation-token"
+
+// End to end through configNpmResolutionServerIfNeeded: for a curation run, the token ends up only in a random env var
+// that the generated .npmrc references, never under a predictable npm_config_* name or on disk; restore cleans it all.
+func TestConfigNpmResolutionServerCurationHidesTokenFromPredictableEnv(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	original := "registry=https://registry.example/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".npmrc"), []byte(original), 0600))
+	params := &technologies.BuildInfoBomGeneratorParams{
+		ServerDetails:          fakeArtifactoryServerDetails(t),
+		DependenciesRepository: "npm-repo",
+		IsCurationCmd:          true,
+	}
+	restore, err := configNpmResolutionServerIfNeeded(params)
+	require.NoError(t, err)
+	require.NotNil(t, restore)
+	restored := false
+	defer func() {
+		if !restored {
+			_ = restore()
+		}
+	}()
+
+	assert.Empty(t, npmAuthEnvSnapshot())
+	var randomEnvs []string
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, npmAuthEnvPrefix) {
+			randomEnvs = append(randomEnvs, name)
+			assert.Equal(t, testNpmToken, value)
+		}
+	}
+	require.Len(t, randomEnvs, 1)
+
+	content, err := os.ReadFile(filepath.Join(dir, ".npmrc"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "=${"+randomEnvs[0]+"}\n")
+	assert.NotContains(t, string(content), testNpmToken)
+
+	require.NoError(t, restore())
+	restored = true
+	assert.Empty(t, os.Getenv(randomEnvs[0]))
+	assert.Empty(t, npmAuthEnvSnapshot())
+	content, err = os.ReadFile(filepath.Join(dir, ".npmrc"))
+	require.NoError(t, err)
+	assert.Equal(t, original, string(content))
 }
