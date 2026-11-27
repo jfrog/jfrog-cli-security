@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	secutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -57,7 +59,7 @@ func readRepoCache(cacheDir, repo string, maxAge time.Duration) *repoScanResult 
 	if maxAge <= 0 {
 		return nil
 	}
-	path := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
+	path := repoCacheFilePath(cacheDir, repo)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// File simply doesn't exist yet — not an error worth logging.
@@ -66,6 +68,10 @@ func readRepoCache(cacheDir, repo string, maxAge time.Duration) *repoScanResult 
 	var entry repoCacheFile
 	if err = json.Unmarshal(data, &entry); err != nil {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to parse cache file %s: %v", path, err))
+		return nil
+	}
+	if entry.Repo != repo {
+		log.Debug(fmt.Sprintf("Contributors cache: file %s belongs to repo %q, not %q. Ignoring it.", path, entry.Repo, repo))
 		return nil
 	}
 	scannedAt, err := time.Parse(time.RFC3339, entry.ScannedAt)
@@ -99,7 +105,7 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 		uniqueEntries = append(uniqueEntries, cacheContributorEntry{Key: k, Value: v})
 	}
 	entry := repoCacheFile{
-		Repo:                 result.repo,
+		Repo:                 repo,
 		ScannedAt:            time.Now().UTC().Format(time.RFC3339),
 		Months:               months,
 		UniqueContributors:   uniqueEntries,
@@ -113,7 +119,8 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to marshal cache for repo %q: %v", repo, err))
 		return
 	}
-	finalPath := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
+	finalPath := repoCacheFilePath(cacheDir, repo)
+	removeLegacyRepoCacheFile(cacheDir, repo)
 	tmpPath := finalPath + ".tmp"
 	if err = os.WriteFile(tmpPath, data, 0600); err != nil {
 		log.Warn(fmt.Sprintf("Contributors cache: failed to write tmp file %s: %v", tmpPath, err))
@@ -125,16 +132,52 @@ func writeRepoCache(cacheDir, repo string, result repoScanResult, months int) {
 	}
 }
 
-// sanitizeFilename replaces characters that are unsafe in file names (e.g. '/' in repo paths).
+// maxCacheFileNamePrefixLength bounds the readable part of a cache file name. Together with the digest, ".json" and
+// the ".tmp" suffix of the temporary file, the resulting names stay well below the 255 byte limit of common file systems,
+// whatever the length of the repository path (GitLab allows deeply nested subgroups).
+const maxCacheFileNamePrefixLength = 100
+
+// repoCacheFilePath returns the cache file for a repository. The name keeps a (sanitized, bounded) prefix of the
+// repository path for readability and ends with a digest of the exact path, so that repositories whose sanitized
+// names are identical (for example the GitLab subgroup project "team-a/repo" and the project "team-a_repo") or
+// whose names only differ beyond the bounded prefix get different files. The digest is truncated, so a collision
+// is still possible in theory. readRepoCache compares the stored repository with the requested one, which turns
+// such a collision into a cache miss instead of serving the data of another repository.
+func repoCacheFilePath(cacheDir, repo string) string {
+	prefix := sanitizeFilename(repo)
+	if len(prefix) > maxCacheFileNamePrefixLength {
+		prefix = prefix[:maxCacheFileNamePrefixLength]
+		// sanitizeFilename returns valid UTF-8, so at most the last (now incomplete) character has to go.
+		for !utf8.ValidString(prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	digest := sha256.Sum256([]byte(repo))
+	return filepath.Join(cacheDir, fmt.Sprintf("%s-%x.json", prefix, digest[:8]))
+}
+
+// removeLegacyRepoCacheFile deletes the cache file written by versions that named it after the sanitized
+// repository path only. Those files are never read anymore. Best effort: a missing file is the normal case.
+func removeLegacyRepoCacheFile(cacheDir, repo string) {
+	legacyPath := filepath.Join(cacheDir, sanitizeFilename(repo)+".json")
+	if err := os.Remove(legacyPath); err != nil && !os.IsNotExist(err) {
+		log.Debug(fmt.Sprintf("Contributors cache: failed to remove legacy cache file %s: %v", legacyPath, err))
+	}
+}
+
+// sanitizeFilename replaces characters that are unsafe in file names (e.g. '/' in repo paths, control characters)
+// and invalid UTF-8 sequences, so the result is always a valid file name.
 func sanitizeFilename(name string) string {
 	safe := make([]byte, len(name))
-	for i := range name {
+	// Iterate over bytes, not runes: ranging over the string would skip the continuation bytes of
+	// multi-byte characters and leave them as NUL.
+	for i := 0; i < len(name); i++ {
 		c := name[i]
-		if c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' {
+		if c < 0x20 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' {
 			safe[i] = '_'
 		} else {
 			safe[i] = c
 		}
 	}
-	return string(safe)
+	return strings.ToValidUTF8(string(safe), "_")
 }

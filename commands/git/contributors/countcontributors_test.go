@@ -586,6 +586,63 @@ func TestScanAndCollectCommitsInfo_Parallel(t *testing.T) {
 	assert.Contains(t, uniqueContributors, BasicContributor{Email: "email3@example.com", Repo: "repo2"})
 }
 
+func TestScanRepo_SubgroupRepoPath(t *testing.T) {
+	// GitLab projects in subgroups are listed as their path relative to the owner group ("team-a/repo").
+	// The owner and that path must be passed through unchanged to the VCS client, used as-is in the results,
+	// and survive a round trip through the on-disk cache.
+	const owner = "my-group"
+	const repo = "team-a/nested/repo"
+	ts := convertDateStrToTimestamp(t, "2024-03-10T10:00:00Z")
+	calls := 0
+	mock := &mockVcsClient{
+		getCommitsWithQueryOptionsFn: func(_ context.Context, gotOwner, gotRepo string, opts vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
+			calls++
+			assert.Equal(t, owner, gotOwner)
+			assert.Equal(t, repo, gotRepo)
+			if opts.Page == 1 {
+				return []vcsclient.CommitInfo{{AuthorEmail: "dev@example.com", AuthorName: "Dev", Hash: "abc", Timestamp: ts}}, nil
+			}
+			return nil, nil
+		},
+	}
+	vcc := VcsCountContributors{
+		vcsClient: mock,
+		params: CountContributorsParams{
+			BasicGitServerParams: BasicGitServerParams{Owner: owner, ScmType: vcsutils.GitLab},
+			MonthsNum:            1,
+			DetailedSummery:      true,
+		},
+	}
+	baseOptions := vcsclient.GitCommitsQueryOptions{
+		Since:       time.Now().AddDate(0, -1, 0),
+		ListOptions: vcsclient.ListOptions{Page: 1, PerPage: vcsutils.NumberOfCommitsToFetch},
+	}
+	cacheDir := t.TempDir()
+
+	result := vcc.scanRepo(repo, baseOptions, cacheDir, 24*time.Hour, 0)
+	assert.False(t, result.skipped)
+	assert.Equal(t, repo, result.repo)
+	assert.Equal(t, 1, result.totalCommits)
+	assert.Contains(t, result.uniqueContributors, BasicContributor{Email: "dev@example.com", Repo: repo})
+	assert.Equal(t, repo, result.detailedContributors["dev@example.com"][repo].RepoPath)
+	assert.Contains(t, result.detailedRepos, repo)
+	assert.Equal(t, 2, calls, "page 1 with commits and an empty page 2")
+
+	// The second scan is served from the cache written by the first one.
+	cached := vcc.scanRepo(repo, baseOptions, cacheDir, 24*time.Hour, 0)
+	assert.Equal(t, 2, calls, "cached scan must not call the VCS client")
+	assert.Equal(t, repo, cached.repo)
+	assert.Equal(t, 1, cached.totalCommits)
+	assert.Contains(t, cached.uniqueContributors, BasicContributor{Email: "dev@example.com", Repo: repo})
+
+	// The repo path is reported unchanged.
+	cmd := CountContributorsCommand{CountContributorsParams: vcc.params}
+	report := cmd.aggregateReportResults(cached.uniqueContributors, cached.detailedContributors, cached.detailedRepos)
+	assert.Equal(t, repo, report.UniqueContributorsList[0].RepoLastCommit.Repo)
+	assert.Equal(t, repo, report.DetailedContributorsList["dev@example.com"][0].RepoPath)
+	assert.Contains(t, report.DetailedReposList, repo)
+}
+
 // ---- helpers ----
 
 func convertDateStrToTimestamp(t *testing.T, dateStr string) int64 {
