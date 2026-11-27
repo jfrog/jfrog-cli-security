@@ -1,10 +1,13 @@
 package npm
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	biutils "github.com/jfrog/build-info-go/build/utils"
@@ -41,6 +44,13 @@ const (
 	// npmAuthTokenSuffix is the npm config-key suffix used to look up a registry's auth token in .npmrc
 	// (e.g. //registry.example.com/:_authToken=...). It is a key name, not a credential value.
 	npmAuthTokenSuffix = ":_authToken" // #nosec G101 -- Not credentials, this is the npm config-key suffix.
+	// npmAuthKeySuffix is the npm config-key suffix of the basic-auth variant (e.g. //host/:_auth). Key name only.
+	npmAuthKeySuffix = ":_auth" // #nosec G101 -- Not credentials, this is the npm config-key suffix.
+	// npmLegacyAuthKey is the un-scoped npm auth key, used by older npm versions. Key name only.
+	npmLegacyAuthKey = "_auth" // #nosec G101 -- Not credentials, this is the npm config-key name.
+	// npmAuthEnvPrefix is the prefix of the per-run env var that carries the resolver credentials (a name, not a value).
+	// The random suffix keeps a project's .npmrc from referencing the token through a name it could know in advance.
+	npmAuthEnvPrefix = "JFROG_CLI_CURATION_NPM_AUTH_" // #nosec G101 -- Not credentials, this is an env var name prefix.
 )
 
 // NpmrcRegistryConfig holds Artifactory connection details parsed from the native npm registry config.
@@ -102,8 +112,150 @@ func configNpmResolutionServerIfNeeded(params *technologies.BuildInfoBomGenerato
 	if params.IsCurationCmd && isAnonymousServer(params.ServerDetails) {
 		return setAnonymousNpmRegistry(params.ServerDetails, params.DependenciesRepository)
 	}
+	if params.IsCurationCmd {
+		return setCurationNpmResolutionServer(params.ServerDetails, params.DependenciesRepository)
+	}
 	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(params.ServerDetails, params.DependenciesRepository)
 	return
+}
+
+// setCurationNpmResolutionServer sets up the npm resolver, passing the credentials through a random per-run env var
+// instead of the predictable npm_config_* one, so a project's .npmrc can't read them back with ${...}.
+func setCurationNpmResolutionServer(server *config.ServerDetails, repo string) (restore func() error, err error) {
+	before := npmAuthEnvSnapshot()
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, restoreNpmAuthEnv(before))
+		}
+	}()
+	restoreNpmrc, err := npm.SetArtifactoryAsResolutionServer(server, repo)
+	if err != nil {
+		return
+	}
+	restoreEnv, err := rebindNpmAuthEnv(before)
+	restore = func() error {
+		var restoreErr error
+		if restoreEnv != nil {
+			restoreErr = restoreEnv()
+		}
+		if restoreNpmrc != nil {
+			restoreErr = errors.Join(restoreErr, restoreNpmrc())
+		}
+		return restoreErr
+	}
+	if err != nil {
+		err = errors.Join(err, restore())
+		return nil, err
+	}
+	return
+}
+
+// isNpmAuthEnvName reports whether name is an env var npm reads a registry credential from:
+// npm_config_//<registry>:_authToken, npm_config_//<registry>:_auth or the legacy npm_config__auth.
+func isNpmAuthEnvName(name string) bool {
+	if name == npmConfigEnvPrefix+npmLegacyAuthKey {
+		return true
+	}
+	if !strings.HasPrefix(name, npmConfigEnvPrefix+"//") {
+		return false
+	}
+	return strings.HasSuffix(name, npmAuthTokenSuffix) || strings.HasSuffix(name, npmAuthKeySuffix)
+}
+
+type npmEnvValue struct {
+	value  string
+	exists bool
+}
+
+// npmAuthEnvSnapshot records the npm credential env vars that are set right now.
+func npmAuthEnvSnapshot() map[string]npmEnvValue {
+	snapshot := make(map[string]npmEnvValue)
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=")
+		if isNpmAuthEnvName(name) {
+			snapshot[name] = npmEnvValue{value: value, exists: true}
+		}
+	}
+	return snapshot
+}
+
+// restoreNpmAuthEnv puts every npm credential env var back to its value in 'before', or unsets it if it wasn't set.
+func restoreNpmAuthEnv(before map[string]npmEnvValue) (err error) {
+	for name := range npmAuthEnvSnapshot() {
+		if _, existed := before[name]; !existed {
+			err = errors.Join(err, os.Unsetenv(name))
+		}
+	}
+	for name, prev := range before {
+		err = errors.Join(err, os.Setenv(name, prev.value))
+	}
+	return errorutils.CheckError(err)
+}
+
+// rebindNpmAuthEnv moves the npm credential env vars set since 'before' to random ones, referenced from the generated .npmrc.
+// The returned func unsets them; it is non-nil whenever a var was created, even if err is set.
+func rebindNpmAuthEnv(before map[string]npmEnvValue) (restoreEnv func() error, err error) {
+	var added []string
+	restoreEnv = func() error {
+		var unsetErr error
+		for _, name := range added {
+			unsetErr = errors.Join(unsetErr, os.Unsetenv(name))
+		}
+		return errorutils.CheckError(unsetErr)
+	}
+	workingDir, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return
+	}
+	var npmrcLines strings.Builder
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=")
+		if !isNpmAuthEnvName(name) || before[name] == (npmEnvValue{value: value, exists: true}) {
+			continue
+		}
+		var authEnv string
+		if authEnv, err = newNpmAuthEnvName(); err != nil {
+			return
+		}
+		if err = os.Setenv(authEnv, value); err != nil {
+			return restoreEnv, errorutils.CheckError(err)
+		}
+		added = append(added, authEnv)
+		if prev, existed := before[name]; existed {
+			err = os.Setenv(name, prev.value)
+		} else {
+			err = os.Unsetenv(name)
+		}
+		if err != nil {
+			return restoreEnv, errorutils.CheckError(err)
+		}
+		fmt.Fprintf(&npmrcLines, "%s=${%s}\n", strings.TrimPrefix(name, npmConfigEnvPrefix), authEnv)
+	}
+	if npmrcLines.Len() == 0 {
+		return
+	}
+	err = appendToNpmrc(filepath.Join(workingDir, ".npmrc"), npmrcLines.String())
+	return
+}
+
+// appendToNpmrc appends text to the .npmrc at path, starting on a new line.
+func appendToNpmrc(path, text string) (err error) {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	defer func() { err = errors.Join(err, errorutils.CheckError(file.Close())) }()
+	_, err = file.WriteString("\n" + text)
+	return errorutils.CheckError(err)
+}
+
+// newNpmAuthEnvName returns an env var name with an unpredictable suffix.
+func newNpmAuthEnvName() (string, error) {
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", errorutils.CheckErrorf("failed to generate a random name for the npm credentials env var: %s", err.Error())
+	}
+	return npmAuthEnvPrefix + hex.EncodeToString(suffix), nil
 }
 
 func isAnonymousServer(server *config.ServerDetails) bool {
