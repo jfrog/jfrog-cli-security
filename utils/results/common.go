@@ -43,6 +43,8 @@ const (
 	ApplicabilityStatusPropertyName             = "jfrog:contextual-analysis:status"
 	ApplicabilityEvidenceReasonPropertyTemplate = "jfrog:contextual-analysis:evidence:reason:" + LocationIdTemplate
 	ApplicabilityEvidencePropertyTemplate       = "jfrog:contextual-analysis:evidence:" + LocationIdTemplate
+	// The "extra:" form must not match Xray's evidence regex, so Xray versions that don't read it ignore it.
+	ApplicabilityEvidenceTransitivePathsPropertyTemplate = "jfrog:contextual-analysis:evidence:extra:" + LocationIdTemplate + ":transitive-paths"
 )
 
 var (
@@ -627,7 +629,8 @@ func getEvidence(result *sarif.Result, location *sarif.Location, invocations ...
 			EndColumn:   sarifutils.GetLocationEndColumn(location),
 			Snippet:     sarifutils.GetLocationSnippetText(location),
 		},
-		Reason: sarifutils.GetResultMsgText(result),
+		Reason:          sarifutils.GetResultMsgText(result),
+		TransitivePaths: sarifutils.GetResultPropertyTransitivePaths(result),
 	}
 }
 
@@ -1401,17 +1404,24 @@ func AttachApplicabilityToVulnerability(destination *cyclonedx.BOM, vulnerabilit
 	for _, evidence := range applicability.Evidence {
 		// Get or create the file component from the BOM
 		fileComponent := GetOrCreateFileComponent(destination, evidence.File)
-		// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-		AddFileIssueAffects(vulnerability, *fileComponent,
-			cyclonedx.Property{
+		properties := []cyclonedx.Property{
+			{
 				Name:  fmt.Sprintf(ApplicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
 				Value: evidence.Snippet,
 			},
-			cyclonedx.Property{
+			{
 				Name:  fmt.Sprintf(ApplicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
 				Value: evidence.Reason,
 			},
-		)
+		}
+		if evidence.TransitivePaths != "" {
+			properties = append(properties, cyclonedx.Property{
+				Name:  fmt.Sprintf(ApplicabilityEvidenceTransitivePathsPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+				Value: evidence.TransitivePaths,
+			})
+		}
+		// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
+		AddFileIssueAffects(vulnerability, *fileComponent, properties...)
 	}
 }
 

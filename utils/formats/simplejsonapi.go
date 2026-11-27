@@ -171,6 +171,8 @@ type Applicability struct {
 type Evidence struct {
 	Location
 	Reason string `json:"reason,omitempty"`
+	// The call path from the project's call to the vulnerable function in an indirect dependency, as a JSON string.
+	TransitivePaths string `json:"transitivePaths,omitempty"`
 }
 
 type SimpleJsonError struct {
